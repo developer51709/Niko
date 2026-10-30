@@ -3,9 +3,17 @@ Economy — bank commands (deposit, withdraw, upgrade).
 """
 from discord.ext import commands
 from ..data import (
-    _info_view, _check_achievements, _log_tx, get_emoji,
+    _info_view, _reply, _check_achievements, _log_tx, locale_t,
     BANK_TIERS, bank_info, bank_cap, bank_name, bank_rate, max_bank_tier,
 )
+from utils.i18n import get_lang
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+T = locale_t(load_locales("cogs.economy", "bank"))
 
 
 class BankMixin:
@@ -14,35 +22,33 @@ class BankMixin:
 
     @commands.hybrid_group(
         name="bank",
-        description="Manage your vault: deposit, withdraw, upgrade",
-        help="{ 'en': 'manage your vault 🏦', 'de': 'verwalte deinen Tresor', 'es': 'gestiona tu bóveda 🏦' }",
+        description=CMDS.text("bank.description"),
+        help=CMDS.help("bank"),
         invoke_without_command=True
     )
     async def bank(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         tier = int(data.get("bank_tier", 0))
         cap  = bank_cap(tier)
         rate = bank_rate(tier)
-        body = (
-            f"**{bank_name(tier)}** — tier **{tier+1}/{len(BANK_TIERS)}**\n"
-            f"• Stored: **{int(data['bank']):,}** / **{cap:,}** 🏦\n"
-            f"• Daily interest: **{rate*100:.2f}%** (auto-credited every 24h)\n\n"
-            f"-# Use `bank deposit`, `bank withdraw` or `bank upgrade` to manage."
+        body = T(
+            lang, "body",
+            tier=bank_name(tier), n=tier + 1, total=len(BANK_TIERS),
+            stored=f"{int(data['bank']):,}", cap=f"{cap:,}", rate=f"{rate*100:.2f}",
         )
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("🏦 Your Vault", body))
-        else:
-            await ctx.send(view=_info_view("🏦 Your Vault", body))
+        await _reply(ctx, _info_view(T(lang, "title"), body))
 
 
-    @bank.command(name="deposit", description="Move cash from wallet into the vault")
+    @bank.command(name="deposit", description=CMDS.text("bank.deposit.description"))
     async def bank_deposit(self, ctx: commands.Context, amount: str):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         cap  = bank_cap(int(data.get("bank_tier", 0)))
         free = max(0, cap - int(data["bank"]))
@@ -53,51 +59,42 @@ class BankMixin:
             try:
                 amt = int(amount)
             except ValueError:
-                if ctx.interaction:
-                    return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
-                else:
-                    return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
+                return await _reply(ctx, _info_view(
+                    T(lang, "bad_amount_title"), T(lang, "bad_amount_body")))
 
         if amt <= 0:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to deposit", "Either your wallet is empty or your vault is full."))
+            return await _reply(ctx, _info_view(
+                T(lang, "nothing_deposit_title"), T(lang, "nothing_deposit_body")))
 
         if amt > data["balance"]:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("💸 Not enough cash", "Your wallet doesn't have that much."))
-            else:
-                return await ctx.send(view=_info_view("💸 Not enough cash", "Your wallet doesn't have that much."))
+            return await _reply(ctx, _info_view(
+                T(lang, "no_cash_title"), T(lang, "no_cash_body")))
 
         if amt > free:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    "🏦 Vault full",
-                    f"You can store at most **{free:,}** more 🪙 in a **{bank_name(data['bank_tier'])}**.\n-# Upgrade with `bank upgrade`.",
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    "🏦 Vault full",
-                    f"You can store at most **{free:,}** more 🪙 in a **{bank_name(data['bank_tier'])}**.\n-# Upgrade with `bank upgrade`.",
-                ))
+            return await _reply(ctx, _info_view(
+                T(lang, "vault_full_title"),
+                T(lang, "vault_full_body",
+                  free=f"{free:,}", tier=bank_name(data["bank_tier"])),
+            ))
 
         data["balance"] -= amt
         data["bank"]    += amt
-        _log_tx(data, "deposit", amt, "wallet → vault")
+        _log_tx(data, "deposit", amt, T(lang, "note_deposit"))
         _check_achievements(data)
         await self.save_user_economy_data(ctx.author.id)
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🪙 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
-        else:
-            await ctx.send(view=_info_view("🏦 Deposited", f"Stored **{amt:,}** 🪙 in your vault.\n-# Vault: **{data['bank']:,}** / **{cap:,}**"))
+        await _reply(ctx, _info_view(
+            T(lang, "deposited_title"),
+            T(lang, "deposited_body",
+              amount=f"{amt:,}", vault=f"{data['bank']:,}", cap=f"{cap:,}"),
+        ))
 
 
-    @bank.command(name="withdraw", description="Move coins from the vault back to your wallet")
+    @bank.command(name="withdraw", description=CMDS.text("bank.withdraw.description"))
     async def bank_withdraw(self, ctx: commands.Context, amount: str):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         if amount.lower() == "all":
             amt = int(data["bank"])
@@ -105,78 +102,59 @@ class BankMixin:
             try:
                 amt = int(amount)
             except ValueError:
-                if ctx.interaction:
-                    return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
-                else:
-                    return await ctx.send(view=_info_view(f"{get_emoji('cross')} Bad amount", "Use a number or `all`."))
+                return await _reply(ctx, _info_view(
+                    T(lang, "bad_amount_title"), T(lang, "bad_amount_body")))
 
         if amt <= 0:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('cross')} Nothing to withdraw", "Your vault is empty."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('cross')} Nothing to withdraw", "Your vault is empty."))
+            return await _reply(ctx, _info_view(
+                T(lang, "nothing_withdraw_title"), T(lang, "nothing_withdraw_body")))
 
         if amt > data["bank"]:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("🏦 Not enough", "You don't have that much stored."))
-            else:
-                return await ctx.send(view=_info_view("🏦 Not enough", "You don't have that much stored."))
+            return await _reply(ctx, _info_view(
+                T(lang, "vault_low_title"), T(lang, "vault_low_body")))
 
         data["bank"]    -= amt
         data["balance"] += amt
-        _log_tx(data, "withdraw", amt, "vault → wallet")
+        _log_tx(data, "withdraw", amt, T(lang, "note_withdraw"))
         await self.save_user_economy_data(ctx.author.id)
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view("🪙 Withdrawn", f"Took **{amt:,}** 🪙 from your vault.\n-# Wallet: **{data['balance']:,}** 🪙"))
-        else:
-            await ctx.send(view=_info_view("🪙 Withdrawn", f"Took **{amt:,}** 🪙 from your vault.\n-# Wallet: **{data['balance']:,}** 🪙"))
+        await _reply(ctx, _info_view(
+            T(lang, "withdrawn_title"),
+            T(lang, "withdrawn_body", amount=f"{amt:,}", wallet=f"{data['balance']:,}"),
+        ))
 
 
-    @bank.command(name="upgrade", description="Pay to upgrade your vault to the next tier")
+    @bank.command(name="upgrade", description=CMDS.text("bank.upgrade.description"))
     async def bank_upgrade(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         cur  = int(data.get("bank_tier", 0))
         if cur >= max_bank_tier():
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("🏆 Maxed out", "Your vault is already a **Diamond Vault** — the highest tier."))
-            else:
-                return await ctx.send(view=_info_view("🏆 Maxed out", "Your vault is already a **Diamond Vault** — the highest tier."))
+            return await _reply(ctx, _info_view(
+                T(lang, "maxed_title"), T(lang, "maxed_body")))
 
         next_tier = cur + 1
         cost = bank_cap(next_tier) // 2
         if data["balance"] + data["bank"] < cost:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    "💸 Not enough net worth",
-                    f"Upgrading to **{bank_name(next_tier)}** costs **{cost:,}** 🪙 (paid from wallet first, then vault).",
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    "💸 Not enough net worth",
-                    f"Upgrading to **{bank_name(next_tier)}** costs **{cost:,}** 🪙 (paid from wallet first, then vault).",
-                ))
+            return await _reply(ctx, _info_view(
+                T(lang, "no_worth_title"),
+                T(lang, "no_worth_body",
+                  tier=bank_name(next_tier), cost=f"{cost:,}"),
+            ))
 
         from_wallet = min(int(data["balance"]), cost)
         from_bank   = cost - from_wallet
         data["balance"] -= from_wallet
         data["bank"]    -= from_bank
         data["bank_tier"] = next_tier
-        _log_tx(data, "upgrade", -cost, f"vault → {bank_name(next_tier)}")
+        _log_tx(data, "upgrade", -cost, T(lang, "note_upgrade", tier=bank_name(next_tier)))
         await self.save_user_economy_data(ctx.author.id)
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(
-                "🏦 Vault upgraded",
-                f"Welcome to your shiny new **{bank_name(next_tier)}**!\n"
-                f"• New cap: **{bank_cap(next_tier):,}** 🪙\n"
-                f"• Daily interest: **{bank_rate(next_tier)*100:.2f}%**",
-            ))
-        else:
-            await ctx.send(view=_info_view(
-                "🏦 Vault upgraded",
-                f"Welcome to your shiny new **{bank_name(next_tier)}**!\n"
-                f"• New cap: **{bank_cap(next_tier):,}** 🪙\n"
-                f"• Daily interest: **{bank_rate(next_tier)*100:.2f}%**",
-            ))
+        await _reply(ctx, _info_view(
+            T(lang, "upgraded_title"),
+            T(lang, "upgraded_body",
+              tier=bank_name(next_tier),
+              cap=f"{bank_cap(next_tier):,}",
+              rate=f"{bank_rate(next_tier)*100:.2f}"),
+        ))

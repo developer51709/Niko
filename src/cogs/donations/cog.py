@@ -22,6 +22,8 @@ from config.emojis import get_emoji
 from config.ids import SUPPORT_GUILD
 from cogs.staff.support_server import support_role
 from utils import logging
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from utils.donations import (
     DONATION_MAX_AMOUNT,
     DONATION_MIN_AMOUNT,
@@ -37,9 +39,26 @@ from utils.donations import (
 )
 from .oxapay import OxaPayClient
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 # OxaPay key type: use your MERCHANT API key (Dashboard → Merchant → API Key).
 # NOT the Sandbox key (testing only) and NOT the Payout API key (for sending crypto).
 OXAPAY_KEY: str = os.getenv("OXAPAY_API_KEY", "")
+
+MESSAGES = load_locales(__package__, "cog")
+msg = make_flat_msg(MESSAGES)
+
+#: OxaPay's status values, shown under their translated label.
+_STATE_KEYS = {
+    "Paid": "state_paid",
+    "Waiting": "state_waiting",
+    "Paying": "state_paying",
+    "Confirming": "state_confirming",
+    "Expired": "state_expired",
+    "Failed": "state_failed",
+}
 
 
 def _site_base() -> str:
@@ -125,6 +144,11 @@ class DonationCog(commands.Cog, name="DonationCog"):
         amount = float(invoice["amount"])
         currency = str(invoice.get("pay_currency") or invoice.get("currency") or "USD")
         channel_id = invoice.get("channel_id")
+        channel = self.bot.get_channel(channel_id) if channel_id else None
+        # The thank-you follows the language of the server the donation started
+        # in; a DM has no guild of its own.
+        ctx = getattr(channel, "guild", None)
+        amount_label = f"${amount:.2f} USD"
 
         try:
             await add_donor(self.bot, user_id, amount, currency, track_id)
@@ -141,11 +165,15 @@ class DonationCog(commands.Cog, name="DonationCog"):
                 discord.ui.Container(
                     discord.ui.TextDisplay(
                         content=(
-                            f"### {get_emoji('heart')} Thank you for donating!\n"
-                            f"Your donation of **${amount:.2f} USD** in **{currency}** "
-                            f"has been confirmed. You've been granted the "
-                            f"{get_emoji('badge_supporter_role')} **Supporter** badge!\n\n"
-                            f"-# Track ID: `{track_id}`"
+                            f"### {get_emoji('heart')} {msg(ctx, 'dm_title')}\n"
+                            + msg(
+                                ctx,
+                                "dm_body",
+                                amount=amount_label,
+                                currency=currency,
+                                badge=get_emoji("badge_supporter_role"),
+                                track=track_id,
+                            )
                         )
                     )
                 )
@@ -155,23 +183,27 @@ class DonationCog(commands.Cog, name="DonationCog"):
             pass
 
         # Public thank-you in the originating channel
-        if channel_id:
+        if channel:
             try:
-                channel = self.bot.get_channel(channel_id)
-                if channel:
-                    pub_view = discord.ui.LayoutView()
-                    pub_view.add_item(
-                        discord.ui.Container(
-                            discord.ui.TextDisplay(
-                                content=(
-                                    f"### {get_emoji('heart')} New Supporter!\n"
-                                    f"<@{user_id}> just donated **${amount:.2f} USD** in **{currency}**! "
-                                    f"Thank you for supporting Niko! {get_emoji('badge_supporter_role')}"
+                pub_view = discord.ui.LayoutView()
+                pub_view.add_item(
+                    discord.ui.Container(
+                        discord.ui.TextDisplay(
+                            content=(
+                                f"### {get_emoji('heart')} {msg(ctx, 'public_title')}\n"
+                                + msg(
+                                    ctx,
+                                    "public_body",
+                                    user=user_id,
+                                    amount=amount_label,
+                                    currency=currency,
+                                    badge=get_emoji("badge_supporter_role"),
                                 )
                             )
                         )
                     )
-                    await channel.send(view=pub_view)
+                )
+                await channel.send(view=pub_view)
             except Exception:
                 pass
 
@@ -202,22 +234,22 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
     @commands.hybrid_command(
         name="donate",
-        description="Support Niko with a crypto donation",
-        help="{ 'en': 'support niko with crypto ☕', 'de': 'unterstütze niko mit krypto', 'es': 'apoya a niko con cripto' }",
+        description=CMDS.text("donate.description"),
+        help=CMDS.help("donate"),
     )
-    @app_commands.describe(amount="Amount in USD to donate (e.g. 5.00, minimum $1)")
+    @app_commands.describe(amount=CMDS.arg("donate", "amount"))
     async def donate(self, ctx: commands.Context, amount: float = 5.0):
         if ctx.interaction:
             await ctx.defer(ephemeral=True)
 
         if amount < 1.0:
             return await ctx.send(
-                f"{get_emoji('danger')} Minimum donation is `$1.00 USD`.",
+                f"{get_emoji('danger')} {msg(ctx, 'min_donation', min='$1.00 USD')}",
                 ephemeral=bool(ctx.interaction),
             )
         if amount > 10_000.0:
             return await ctx.send(
-                f"{get_emoji('danger')} Maximum single donation is `$10,000.00 USD`.",
+                f"{get_emoji('danger')} {msg(ctx, 'max_donation', max='$10,000.00 USD')}",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -228,19 +260,18 @@ class DonationCog(commands.Cog, name="DonationCog"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('heart')} Donate to Niko\n"
-                        f"**Amount:** `${amount:.2f} USD`\n\n"
-                        f"Your donation helps cover hosting costs and keeps Niko running! "
-                        f"As a thank-you you'll receive the "
-                        f"{get_emoji('badge_supporter_role')} **Supporter** badge "
-                        f"and role in the support server.\n\n"
-                        f"Choose a cryptocurrency on the checkout page, send the exact "
-                        f"amount shown, and your badge arrives as soon as it confirms."
+                        f"### {get_emoji('heart')} {msg(ctx, 'donate_title')}\n"
+                        + msg(
+                            ctx,
+                            "donate_body",
+                            amount=f"${amount:.2f} USD",
+                            badge=get_emoji("badge_supporter_role"),
+                        )
                     )
                 ),
                 discord.ui.ActionRow(
                     discord.ui.Button(
-                        label="Open checkout",
+                        label=msg(ctx, "open_checkout"),
                         style=discord.ButtonStyle.link,
                         url=donation_checkout_url(ctx.author.id, amount),
                         emoji=get_emoji("oxapay"),
@@ -258,9 +289,14 @@ class DonationCog(commands.Cog, name="DonationCog"):
                 ]),
                 discord.ui.TextDisplay(
                     content=(
-                        f"-# Any amount from ${DONATION_MIN_AMOUNT:,.0f} to "
-                        f"${DONATION_MAX_AMOUNT:,.0f} works too: `/donate amount:`\n"
-                        f"-# {get_emoji('oxapay')} Powered by OxaPay"
+                        msg(
+                            ctx,
+                            "limits_note",
+                            min=f"${DONATION_MIN_AMOUNT:,.0f}",
+                            max=f"${DONATION_MAX_AMOUNT:,.0f}",
+                        )
+                        + "\n"
+                        + msg(ctx, "powered_by", oxapay=get_emoji("oxapay"))
                     )
                 )
             )
@@ -273,10 +309,10 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
     @commands.hybrid_command(
         name="donationstatus",
-        description="Check the status of a pending donation by Track ID",
-        help="{ 'en': 'check donation status', 'de': 'spendenstatus prüfen', 'es': 'ver estado de donación' }",
+        description=CMDS.text("donationstatus.description"),
+        help=CMDS.help("donationstatus"),
     )
-    @app_commands.describe(track_id="The Track ID shown on your invoice")
+    @app_commands.describe(track_id=CMDS.arg("donationstatus", "track_id"))
     async def donationstatus(self, ctx: commands.Context, track_id: str):
         if ctx.interaction:
             await ctx.defer(ephemeral=True)
@@ -284,7 +320,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
         invoice = await get_invoice(self.bot, track_id=track_id)
         if invoice is not None and str(invoice["user_id"]) != str(ctx.author.id):
             return await ctx.send(
-                f"{get_emoji('danger')} That track ID belongs to another donation.",
+                f"{get_emoji('danger')} {msg(ctx, 'invalid_track')}",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -297,7 +333,7 @@ class DonationCog(commands.Cog, name="DonationCog"):
                 await update_invoice_status(self.bot, track_id, status)
         elif invoice is None:
             return await ctx.send(
-                f"{get_emoji('danger')} Donations are not configured.",
+                f"{get_emoji('danger')} {msg(ctx, 'not_configured')}",
                 ephemeral=bool(ctx.interaction),
             )
 
@@ -310,22 +346,28 @@ class DonationCog(commands.Cog, name="DonationCog"):
             "Failed":  get_emoji("danger"),
         }
         icon = icons.get(status, "❓")
+        status_label = msg(ctx, _STATE_KEYS[status]) if status in _STATE_KEYS else status
         details = ""
         if invoice is not None:
             pay_currency = invoice.get("pay_currency") or "USD"
-            details = f"\n**Amount:** `${float(invoice['amount']):.2f} USD` in **{pay_currency}**"
+            details = msg(
+                ctx,
+                "status_amount_line",
+                amount=f"${float(invoice['amount']):.2f} USD",
+                currency=pay_currency,
+            )
             created = invoice.get("created_at")
             if hasattr(created, "timestamp"):
-                details += f"\n**Created:** <t:{int(created.timestamp())}:R>"
+                details += msg(ctx, "status_created_line", when=f"<t:{int(created.timestamp())}:R>")
 
         view = discord.ui.LayoutView()
         view.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('heart')} Donation Status\n"
-                        f"**Track ID:** `{track_id}`\n"
-                        f"**Status:** {icon} `{status}`{details}"
+                        f"### {get_emoji('heart')} {msg(ctx, 'status_title')}\n"
+                        f"**{msg(ctx, 'status_track')}:** `{track_id}`\n"
+                        f"**{msg(ctx, 'status_status')}:** {icon} `{status_label}`{details}"
                     )
                 )
             )
@@ -334,8 +376,8 @@ class DonationCog(commands.Cog, name="DonationCog"):
 
     @commands.hybrid_command(
         name="donorinfo",
-        description="Check donor/supporter status for a user",
-        help="{ 'en': 'check supporter status', 'de': 'spenderstatus', 'es': 'estado de donador' }",
+        description=CMDS.text("donorinfo.description"),
+        help=CMDS.help("donorinfo"),
     )
     async def donorinfo(self, ctx: commands.Context, member: discord.Member = None):
         if ctx.interaction:
@@ -344,16 +386,19 @@ class DonationCog(commands.Cog, name="DonationCog"):
         total = await get_total_donated(self.bot, target.id)
         supporter = await is_supporter(self.bot, target.id)
         badge_line = (
-            f"{get_emoji('badge_supporter_role')} Supporter" if supporter else "None"
+            f"{get_emoji('badge_supporter_role')} {msg(ctx, 'supporter')}"
+            if supporter
+            else msg(ctx, "none")
         )
         view = discord.ui.LayoutView()
         view.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('heart')} Donor Info — {target.display_name}\n"
-                        f"**Total Donated:** `${total:.2f} USD`\n"
-                        f"**Badge:** {badge_line}"
+                        f"### {get_emoji('heart')} "
+                        + msg(ctx, "donor_title", user=target.display_name)
+                        + f"\n**{msg(ctx, 'donor_total')}:** `${total:.2f} USD`"
+                        + f"\n**{msg(ctx, 'donor_badge')}:** {badge_line}"
                     )
                 )
             )

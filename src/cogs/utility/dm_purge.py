@@ -21,6 +21,26 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils.ratelimit import dm_purge_limiter
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "misc")
+msg = make_flat_msg(MESSAGES, {
+    "tick": get_emoji("tick"),
+    "cross": get_emoji("cross"),
+    "trash": get_emoji("trash"),
+    "scroll": get_emoji("scroll"),
+    "loading": get_emoji("loading"),
+    "danger": get_emoji("danger"),
+})
+
+
+def _plural(count: int) -> str:
+    """English plural suffix; other languages simply ignore the token."""
+    return "" if count == 1 else "s"
+
 # How many deletions happen between progress edits of the status message. A
 # status edit is a second request on the same channel, so the progress panel is
 # refreshed in batches rather than after every single delete.
@@ -120,19 +140,19 @@ async def purge_bot_messages(
 class PurgeConfirmView(discord.ui.LayoutView):
     """Confirm/cancel buttons for a DM purge, gated to the person who asked."""
 
-    def __init__(self, count: int, *, invoker_id: int, timeout: float = CONFIRM_TIMEOUT):
+    def __init__(self, count: int, *, invoker_id: int, timeout: float = CONFIRM_TIMEOUT, locale=None):
         super().__init__(timeout=timeout)
         self.invoker_id = invoker_id
         self.confirmed: bool | None = None
         self._answered = asyncio.Event()
 
         self._confirm = discord.ui.Button(
-            label="Delete them",
+            label=msg(locale, "purge_btn_delete"),
             style=discord.ButtonStyle.danger,
             emoji=get_emoji("trash"),
         )
         self._cancel = discord.ui.Button(
-            label="Cancel",
+            label=msg(locale, "purge_btn_cancel"),
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("cross"),
         )
@@ -140,14 +160,13 @@ class PurgeConfirmView(discord.ui.LayoutView):
         self._cancel.callback = self._on_cancel
 
         self.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('trash')} Purge this conversation?"),
+            discord.ui.TextDisplay(content=msg(locale, "purge_confirm_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content=(
-                f"Niko will delete **{count}** message{'' if count == 1 else 's'} it sent here. "
-                "Your own messages stay untouched, and deleted messages cannot be brought back."
+            discord.ui.TextDisplay(content=msg(
+                locale, "purge_confirm_body", count=count, s=_plural(count)
             )),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content="-# This prompt expires in 60 seconds."),
+            discord.ui.TextDisplay(content=msg(locale, "purge_confirm_footer")),
             discord.ui.ActionRow(self._confirm, self._cancel),
             accent_colour=discord.Colour.orange(),
         ))
@@ -155,7 +174,7 @@ class PurgeConfirmView(discord.ui.LayoutView):
     async def _gate(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.invoker_id:
             await interaction.response.send_message(
-                "Only the person who ran `.dmpurge` can answer this prompt.",
+                msg(interaction, "purge_gate"),
             )
             return False
         return True
@@ -183,7 +202,7 @@ class PurgeConfirmView(discord.ui.LayoutView):
         try:
             await interaction.response.edit_message(
                 view=panel(
-                    f"### {get_emoji('cross')} Purge cancelled\nNothing was deleted.",
+                    msg(interaction, "purge_cancelled"),
                     accent=discord.Colour.greyple(),
                 ),
             )
@@ -210,63 +229,50 @@ class DMPurge(commands.Cog):
     @commands.command(
         name="dmpurge",
         hidden=True,
-        help="Purge the messages Niko sent you in this DM.",
+        help=CMDS.help("dmpurge"),
     )
     async def dmpurge(self, ctx: commands.Context, limit: int = None):
         """Delete Niko's own messages in this direct message."""
         # DMs only: a guild has real purge tooling and its own permissions, and
         # this command must never be a hidden way around them.
         if not isinstance(ctx.channel, discord.DMChannel):
-            await ctx.send("`.dmpurge` only works in a direct message with Niko.")
+            await ctx.send(msg(ctx, "purge_dm_only"))
             return
 
         bot_id = getattr(getattr(self.bot, "user", None), "id", None)
         if bot_id is None:
-            await ctx.send("Niko is still starting up — try again in a moment.")
+            await ctx.send(msg(ctx, "purge_starting"))
             return
         if limit is not None and limit < 1:
-            await ctx.send("Give a positive number of messages to purge, or leave it out to purge everything.")
+            await ctx.send(msg(ctx, "purge_positive"))
             return
 
-        status = await ctx.send(view=panel(
-            f"### {get_emoji('scroll')} Scanning this conversation…\n"
-            "Looking for messages Niko sent.",
-        ))
+        status = await ctx.send(view=panel(msg(ctx, "purge_scanning")))
         skip_ids = {status.id}
         total = await count_bot_messages(ctx.channel, bot_id=bot_id, skip_ids=skip_ids, limit=limit)
         if not total:
-            await _replace(
-                status,
-                f"### {get_emoji('tick')} Nothing to purge\n"
-                "Niko has not sent anything in this conversation.",
-            )
+            await _replace(status, msg(ctx, "purge_empty"))
             return
 
         planned = total if limit is None else min(total, limit)
-        prompt = PurgeConfirmView(planned, invoker_id=ctx.author.id)
+        prompt = PurgeConfirmView(planned, invoker_id=ctx.author.id, locale=ctx)
         try:
             await status.edit(view=prompt)
         except discord.HTTPException:
             # No visible prompt means nothing can be confirmed, and waiting out
             # the timeout would just look like a hang.
-            await ctx.send("Niko could not show the confirmation prompt, so nothing was deleted.")
+            await ctx.send(msg(ctx, "purge_prompt_failed"))
             return
         if not await prompt.wait_for_response():
-            await _replace(
-                status,
-                f"### {get_emoji('cross')} Purge cancelled\nNothing was deleted.",
-            )
+            await _replace(status, msg(ctx, "purge_cancelled"))
             return
 
         async def on_progress(deleted: int, failed: int) -> None:
             if deleted % PROGRESS_STEP:
                 return
-            line = (
-                f"### {get_emoji('loading')} Purging…\n"
-                f"Deleted **{deleted}** of **{planned}**."
-            )
+            line = msg(ctx, "purge_progress", deleted=deleted, planned=planned)
             if failed:
-                line += f"\nSkipped **{failed}** that Discord refused to delete."
+                line += msg(ctx, "purge_progress_failed", failed=failed)
             await _replace(status, line)
 
         deleted, failed = await purge_bot_messages(
@@ -278,17 +284,14 @@ class DMPurge(commands.Cog):
         )
 
         summary = [
-            f"### {get_emoji('tick')} DM purge complete",
-            f"Deleted **{deleted}** of **{planned}** message{'' if planned == 1 else 's'} from Niko.",
+            msg(ctx, "purge_done_title"),
+            msg(ctx, "purge_done_body", deleted=deleted, planned=planned, s=_plural(planned)),
         ]
         if failed:
-            summary.append(
-                f"{get_emoji('danger')} **{failed}** message{'' if failed == 1 else 's'} "
-                "could not be deleted — run `.dmpurge` again to retry."
-            )
+            summary.append(msg(ctx, "purge_done_failed", failed=failed, s=_plural(failed)))
         remaining = max(0, planned - deleted - failed)
         if remaining:
-            summary.append(f"-# {remaining} message{'' if remaining == 1 else 's'} left untouched.")
+            summary.append(msg(ctx, "purge_left", count=remaining, s=_plural(remaining)))
         await _replace(status, "\n".join(summary))
 
 

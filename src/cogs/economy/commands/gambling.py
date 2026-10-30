@@ -6,12 +6,20 @@ import random
 import discord
 from discord.ext import commands
 from ..data import (
-    _info_view, _check_achievements,
+    _info_view, _reply, _check_achievements, locale_t,
     COOLDOWN_CRIME, COOLDOWN_ROB,
     get_emoji,
     ACCENT_GOLD, ACCENT_RED,
 )
 from utils.cooldown import cooldown_ready_at, cooldown_view
+from utils.i18n import get_lang
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+T = locale_t(load_locales("cogs.economy", "gambling"))
 
 
 class GamblingMixin:
@@ -20,26 +28,25 @@ class GamblingMixin:
 
     @commands.hybrid_command(
         name="crime",
-        description="Try to steal some extra coins",
-        help="{ 'en': 'try to steal some extra coins 😈', 'de': 'versuch, etwas zu stibitzen', 'es': 'intenta robar unas monedas extra 😈' }"
+        description=CMDS.text("crime.description"),
+        help=CMDS.help("crime"),
     )
     async def crime(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
         import time
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         now = int(time.time())
         if now - int(data.get("last_crime", 0)) < COOLDOWN_CRIME:
             view = cooldown_view(
-                "try a heist",
+                T(lang, "crime_cd_action"),
                 cooldown_ready_at(data.get("last_crime"), COOLDOWN_CRIME),
-                title="👮 Lay low",
-                note="The shopkeeper's watching.",
+                title=T(lang, "crime_cd_title"),
+                note=T(lang, "crime_cd_note"),
             )
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=view)
-            return await ctx.send(view=view)
+            return await _reply(ctx, view)
 
         effects = data.setdefault("effects", {})
         boost   = 0.25 if effects.pop("crime_boost", 0) else 0.0
@@ -49,13 +56,15 @@ class GamblingMixin:
             reward = random.randint(200, 500)
             if effects.pop("gambling_boost", 0):
                 reward = int(reward * 1.5)
-            self._credit(data, reward, "crime", "successful heist")
-            title, subtitle, amount, accent = ("😈 Got away!", "You swiped from the till.", reward, ACCENT_GOLD)
+            self._credit(data, reward, "crime", T(lang, "note_crime_win"))
+            title, subtitle, amount, accent = (
+                T(lang, "crime_win_title"), T(lang, "crime_win_sub"), reward, ACCENT_GOLD)
         else:
             loss = random.randint(100, 300)
             loss = min(loss, int(data.get("balance", 0)))
-            self._credit(data, -loss, "crime_fine", "caught and fined")
-            title, subtitle, amount, accent = ("👮 Caught!", "You had to pay a fine.", -loss, ACCENT_RED)
+            self._credit(data, -loss, "crime_fine", T(lang, "note_crime_loss"))
+            title, subtitle, amount, accent = (
+                T(lang, "crime_loss_title"), T(lang, "crime_loss_sub"), -loss, ACCENT_RED)
 
         data["last_crime"] = now
         _check_achievements(data)
@@ -63,73 +72,59 @@ class GamblingMixin:
 
         await self._send_reward_card(
             ctx, title=title, subtitle=subtitle, amount=amount, accent=accent,
-            footer="Tip: use a lockpick before your next attempt for +25% success.",
+            footer=T(lang, "crime_tip"),
         )
 
 
     @commands.hybrid_command(
         name="rob",
-        description="Try to rob another user",
-        help="{ 'en': 'try to rob another user 🔫', 'de': 'rauber jemanden aus', 'es': 'intenta robar a otro 🔫' }"
+        description=CMDS.text("rob.description"),
+        help=CMDS.help("rob"),
     )
     async def rob(self, ctx: commands.Context, member: discord.Member):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
         import time
+        lang = get_lang(ctx)
         if member.id == ctx.author.id:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("🤨 Really?", "You can't rob yourself, silly!"))
-            else:
-                return await ctx.send(view=_info_view("🤨 Really?", "You can't rob yourself, silly!"))
+            return await _reply(ctx, _info_view(
+                T(lang, "rob_self_title"), T(lang, "rob_self_body")))
 
         if member.bot:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(f"{get_emoji('bot')} No can do", "Bots have nothing in their pockets."))
-            else:
-                return await ctx.send(view=_info_view(f"{get_emoji('bot')} No can do", "Bots have nothing in their pockets."))
+            return await _reply(ctx, _info_view(
+                T(lang, "rob_bot_title", bot=get_emoji("bot")),
+                T(lang, "rob_bot_body")))
 
         data   = await self.get_user_economy_data(ctx.author.id)
         target = await self.get_user_economy_data(member.id)
         now = int(time.time())
 
         if data["balance"] < 100:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("💸 Broke", "You need at least **100** coins to plan a robbery."))
-            else:
-                return await ctx.send(view=_info_view("💸 Broke", "You need at least **100** coins to plan a robbery."))
+            return await _reply(ctx, _info_view(
+                T(lang, "rob_broke_title"), T(lang, "rob_broke_body")))
 
         if target["balance"] < 100:
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view("🥺 Mercy", "They don't have enough to rob — leave them alone!"))
-            else:
-                return await ctx.send(view=_info_view("🥺 Mercy", "They don't have enough to rob — leave them alone!"))
+            return await _reply(ctx, _info_view(
+                T(lang, "rob_mercy_title"), T(lang, "rob_mercy_body")))
 
         if now - int(data.get("last_rob", 0)) < COOLDOWN_ROB:
             view = cooldown_view(
-                "plan another robbery",
+                T(lang, "rob_cd_action"),
                 cooldown_ready_at(data.get("last_rob"), COOLDOWN_ROB),
-                title="🕵️ Lay low",
+                title=T(lang, "rob_cd_title"),
             )
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=view)
-            return await ctx.send(view=view)
+            return await _reply(ctx, view)
 
         target_effects = target.setdefault("effects", {})
         if target_effects.pop("rob_shield", 0):
             data["last_rob"] = now
             await self.save_user_economy_data(ctx.author.id)
             await self.save_user_economy_data(member.id)
-            if ctx.interaction:
-                return await ctx.interaction.followup.send(view=_info_view(
-                    "🛡️ Blocked!",
-                    f"{member.display_name} had a **Cash Box Lock** active. The robbery failed and they kept everything.",
-                ))
-            else:
-                return await ctx.send(view=_info_view(
-                    "🛡️ Blocked!",
-                    f"{member.display_name} had a **Cash Box Lock** active. The robbery failed and they kept everything.",
-                ))
+            return await _reply(ctx, _info_view(
+                T(lang, "rob_shield_title"),
+                T(lang, "rob_shield_body", name=member.display_name),
+            ))
 
         success = random.random() < 0.4
         effects = data.setdefault("effects", {})
@@ -137,16 +132,28 @@ class GamblingMixin:
             amount = random.randint(10, min(target["balance"], 500))
             if effects.pop("gambling_boost", 0):
                 amount = int(amount * 1.5)
-            self._credit(data, amount, "rob", f"from {member.display_name}")
-            self._credit(target, -amount, "robbed", f"by {ctx.author.display_name}")
-            title, subtitle, accent = ("💰 Score!", f"You robbed {member.display_name}.", ACCENT_GOLD)
+            self._credit(data, amount, "rob",
+                         T(lang, "note_rob_win", name=member.display_name))
+            self._credit(target, -amount, "robbed",
+                         T(lang, "note_robbed", name=ctx.author.display_name))
+            title, subtitle, accent = (
+                T(lang, "rob_win_title"),
+                T(lang, "rob_win_sub", name=member.display_name),
+                ACCENT_GOLD,
+            )
             shown_amount = amount
         else:
             loss = 150
             loss = min(loss, int(data.get("balance", 0)))
-            self._credit(data, -loss, "rob_fail", f"caught by {member.display_name}")
-            self._credit(target, loss, "rob_apology", f"from {ctx.author.display_name}")
-            title, subtitle, accent = ("👮 Caught!", f"You had to pay {member.display_name} as apology.", ACCENT_RED)
+            self._credit(data, -loss, "rob_fail",
+                         T(lang, "note_rob_fail", name=member.display_name))
+            self._credit(target, loss, "rob_apology",
+                         T(lang, "note_rob_apology", name=ctx.author.display_name))
+            title, subtitle, accent = (
+                T(lang, "rob_fail_title"),
+                T(lang, "rob_fail_sub", name=member.display_name),
+                ACCENT_RED,
+            )
             shown_amount = -loss
 
         data["last_rob"] = now
@@ -158,53 +165,54 @@ class GamblingMixin:
 
     @commands.hybrid_command(
         name="coinflip", aliases=["cf"],
-        description="Flip a coin — double or nothing",
-        help="{ 'en': 'flip a coin for double or nothing 🪙', 'de': 'wirf eine Münze', 'es': 'lanza una moneda 🪙' }"
+        description=CMDS.text("coinflip.description"),
+        help=CMDS.help("coinflip"),
     )
     async def coinflip(self, ctx: commands.Context, amount: int, call: str = "heads"):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         if amount <= 0:
-            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🪙.")
+            return await self._send_err(ctx, T(lang, "bad_amount_title"), T(lang, "bad_bet_body"))
 
         data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
-            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🪙 but only have **{data['balance']:,}**.")
+            return await self._send_err(
+                ctx, T(lang, "no_cash_title"),
+                T(lang, "no_cash_body", amount=f"{amount:,}", balance=f"{data['balance']:,}"))
 
         call = call.lower().strip()
         if call not in ("heads", "h", "tails", "t"):
-            return await self._send_err(ctx, f"{get_emoji('cross')} Invalid call", "Pick **heads** or **tails**.")
+            return await self._send_err(
+                ctx, T(lang, "cf_bad_call_title"), T(lang, "cf_bad_call_body"))
         call = "heads" if call in ("heads", "h") else "tails"
+        call_name = T(lang, "cf_heads" if call == "heads" else "cf_tails")
 
         effects = data.setdefault("effects", {})
         has_booster = effects.pop("coin_booster", 0)
         # Booster gives 60/40 odds instead of 50/50
         success = random.random() < (0.60 if has_booster else 0.50)
         result = "heads" if random.random() < 0.5 else "tails"
+        result_name = T(lang, "cf_heads" if result == "heads" else "cf_tails")
         won = success and result == call
 
         if won:
             profit = amount
-            self._credit(data, profit, "coinflip_win", f"won {call}")
-            title, subtitle, accent = (
-                "🪙 Heads!" if result == "heads" else "🪙 Tails!",
-                f"You called **{call}** and won!",
-                ACCENT_GOLD,
-            )
-            shown = profit
+            self._credit(data, profit, "coinflip_win",
+                         T(lang, "note_cf_win", call=call_name))
+            title = T(lang, "cf_heads_title" if result == "heads" else "cf_tails_title")
+            subtitle, accent, shown = (
+                T(lang, "cf_win_sub", call=call_name), ACCENT_GOLD, profit)
         else:
-            self._credit(data, -amount, "coinflip_loss", f"lost — landed {result}")
-            title, subtitle, accent = (
-                "🪙 Heads!" if result == "heads" else "🪙 Tails!",
-                f"You called **{call}** but it landed **{result}**.",
-                ACCENT_RED,
-            )
-            shown = -amount
+            self._credit(data, -amount, "coinflip_loss",
+                         T(lang, "note_cf_loss", result=result_name))
+            title = T(lang, "cf_heads_title" if result == "heads" else "cf_tails_title")
+            subtitle, accent, shown = (
+                T(lang, "cf_loss_sub", call=call_name, result=result_name),
+                ACCENT_RED, -amount)
 
-        footer = ""
-        if has_booster:
-            footer = "-# 🍀 Coin Booster gave you 60/40 odds!"
+        footer = T(lang, "cf_booster") if has_booster else ""
 
         _check_achievements(data)
         await self.save_user_economy_data(ctx.author.id)
@@ -214,22 +222,26 @@ class GamblingMixin:
 
     @commands.hybrid_command(
         name="dice", aliases=["roll"],
-        description="Roll a die — pick a number and hope for the best",
-        help="{ 'en': 'roll a die and bet on the outcome 🎲', 'de': 'würfle und setze auf eine Zahl', 'es': 'lanza un dado 🎲' }"
+        description=CMDS.text("dice.description"),
+        help=CMDS.help("dice"),
     )
     async def dice(self, ctx: commands.Context, amount: int, target: int = 50):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         if amount <= 0:
-            return await self._send_err(ctx, f"{get_emoji('cross')} Bad amount", "Bet must be at least **1** 🪙.")
+            return await self._send_err(ctx, T(lang, "bad_amount_title"), T(lang, "bad_bet_body"))
 
         data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
-            return await self._send_err(ctx, "💸 Not enough cash", f"You need **{amount:,}** 🪙 but only have **{data['balance']:,}**.")
+            return await self._send_err(
+                ctx, T(lang, "no_cash_title"),
+                T(lang, "no_cash_body", amount=f"{amount:,}", balance=f"{data['balance']:,}"))
 
         if not 1 <= target <= 99:
-            return await self._send_err(ctx, f"{get_emoji('cross')} Invalid target", "Target must be between **1** and **99**.")
+            return await self._send_err(
+                ctx, T(lang, "dice_bad_target_title"), T(lang, "dice_bad_target_body"))
 
         roll = random.randint(1, 100)
         won = roll >= target
@@ -243,15 +255,15 @@ class GamblingMixin:
             profit = int(amount * multiplier)
             if effects.pop("gambling_boost", 0):
                 profit = int(profit * 1.5)
-            self._credit(data, profit, "dice_win", f"rolled {roll} (target {target}+)")
-            title = "🎲 Great roll!"
-            subtitle = f"Rolled **{roll}** — needed **{target}+** (×{multiplier:.1f})"
+            self._credit(data, profit, "dice_win", T(lang, "note_dice", roll=roll, target=target))
+            title = T(lang, "dice_win_title")
+            subtitle = T(lang, "dice_win_sub", roll=roll, target=target, mult=f"{multiplier:.1f}")
             accent = ACCENT_GOLD
             shown = profit
         else:
-            self._credit(data, -amount, "dice_loss", f"rolled {roll} (target {target}+)")
-            title = "🎲 Bust!"
-            subtitle = f"Rolled **{roll}** — needed **{target}+**. Better luck next time!"
+            self._credit(data, -amount, "dice_loss", T(lang, "note_dice", roll=roll, target=target))
+            title = T(lang, "dice_loss_title")
+            subtitle = T(lang, "dice_loss_sub", roll=roll, target=target)
             accent = ACCENT_RED
             shown = -amount
 
@@ -262,7 +274,4 @@ class GamblingMixin:
         )
 
     async def _send_err(self, ctx, title: str, body: str):
-        if ctx.interaction:
-            await ctx.interaction.followup.send(view=_info_view(title, body))
-        else:
-            await ctx.send(view=_info_view(title, body))
+        await _reply(ctx, _info_view(title, body))

@@ -17,6 +17,8 @@ from config.links import WEBSITE
 from utils import logging
 from utils.ai.debugging import send_debug_report
 from utils.blacklist_manager import BlacklistManager
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 
 # ── Prefix-command errors ───────────────────────────────────────────────
 from discord.ext.commands import (
@@ -61,6 +63,9 @@ from discord.app_commands import (
 from discord.errors import Forbidden, HTTPException
 
 colorama_init(autoreset=True)
+
+MESSAGES = load_locales(__package__, "errors")
+msg = make_flat_msg(MESSAGES)
 _ERROR_REPORT_CODE: ContextVar[str | None] = ContextVar("error_report_code", default=None)
 
 
@@ -76,12 +81,10 @@ def under_development(feature = None):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### {get_emoji('settings')} Under Development"
+                    content=f"### {get_emoji('settings')} {msg(ctx, 'under_development_title')}"
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content="This feature is currently under development. Please feel free to check back later for updates or send some suggestions in the support server."
-                )
+                discord.ui.TextDisplay(content=msg(ctx, "under_development_body"))
             )
             view.add_item(container)
             await ctx.send(view=view)
@@ -98,12 +101,10 @@ def is_premium():
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('warning')} Premium Required"
+                content=f"### {get_emoji('warning')} {msg(ctx, 'premium_title')}"
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="This feature is only available to premium users. Contact a bot owner to request access."
-            ),
+            discord.ui.TextDisplay(content=msg(ctx, "premium_body")),
             accent_colour=discord.Color.red(),
         ))
         await ctx.send(view=view)
@@ -115,12 +116,16 @@ def is_blacklisted():
         bm = BlacklistManager()
         user_entry = bm.get_user_entry(ctx.author.id)
         if user_entry:
-            reason = user_entry.get("reason") or "No reason provided."
+            reason = user_entry.get("reason") or msg(ctx, "no_reason")
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
+                discord.ui.TextDisplay(content=f"### {get_emoji('warning')} {msg(ctx, 'blacklisted_title')}"),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(content=f"You have been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, submit a blacklist appeal at {WEBSITE}/appeals/blacklist."),
+                discord.ui.TextDisplay(content=msg(
+                    ctx, "blacklisted_user",
+                    reason=reason,
+                    appeal=f"{WEBSITE}/appeals/blacklist",
+                )),
                 accent_colour=discord.Color.red()
             ))
             await ctx.send(view=view)
@@ -128,12 +133,16 @@ def is_blacklisted():
         if ctx.guild:
             guild_entry = bm.get_guild_entry(ctx.guild.id)
             if guild_entry:
-                reason = guild_entry.get("reason") or "No reason provided."
+                reason = guild_entry.get("reason") or msg(ctx, "no_reason")
                 view = discord.ui.LayoutView()
                 view.add_item(discord.ui.Container(
-                    discord.ui.TextDisplay(content=f"### {get_emoji('warning')} Blacklisted"),
+                    discord.ui.TextDisplay(content=f"### {get_emoji('warning')} {msg(ctx, 'blacklisted_title')}"),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(content=f"This server has been blacklisted from using this bot.\n**Reason:** {reason}\n\nIf you believe this is a mistake, contact Niko support at {WEBSITE}/support."),
+                    discord.ui.TextDisplay(content=msg(
+                        ctx, "blacklisted_guild",
+                        reason=reason,
+                        support=f"{WEBSITE}/support",
+                    )),
                     accent_colour=discord.Color.red()
                 ))
                 await ctx.send(view=view)
@@ -244,8 +253,8 @@ class ErrorHandler(commands.Cog):
         # ── Permission errors ──────────────────────────────────────────────
         if isinstance(error, PfxMissingPermissions):
             view = self.error_embed(
-                "Missing Permissions",
-                f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"
+                msg(ctx, "missing_permissions_title"),
+                msg(ctx, "missing_permissions_body", perms=", ".join(error.missing_permissions)),
             )
             await ctx.reply(view=view)
             logging.warning("error_handler", f"{ctx.author} tried {ctx.command} without permissions")
@@ -253,8 +262,8 @@ class ErrorHandler(commands.Cog):
 
         if isinstance(error, PfxBotMissingPermissions):
             view = self.error_embed(
-                "Bot Missing Permissions",
-                f"I need these permissions to run this command: `{', '.join(error.missing_permissions)}`"
+                msg(ctx, "bot_missing_permissions_title"),
+                msg(ctx, "bot_missing_permissions_body", perms=", ".join(error.missing_permissions)),
             )
             await ctx.reply(view=view)
             logging.warning("error_handler", f"Bot missing permissions for {ctx.command}")
@@ -262,8 +271,7 @@ class ErrorHandler(commands.Cog):
 
         if isinstance(error, Forbidden):
             view = self.error_embed(
-                "Forbidden Action",
-                "I don't have permission to perform this action. Please check my roles and permissions."
+                msg(ctx, "forbidden_title"), msg(ctx, "forbidden_body")
             )
             await ctx.reply(view=view)
             logging.warning("error_handler", f"403 Forbidden in {ctx.command}")
@@ -271,8 +279,8 @@ class ErrorHandler(commands.Cog):
 
         if isinstance(error, PfxMissingRole):
             view = self.error_embed(
-                "Missing Role",
-                f"You must have the `{error.missing_role}` role to use this command."
+                msg(ctx, "missing_role_title"),
+                msg(ctx, "missing_role_body", role=error.missing_role),
             )
             await ctx.reply(view=view)
             logging.warning("error_handler", f"{ctx.author} missing role {error.missing_role}")
@@ -280,8 +288,8 @@ class ErrorHandler(commands.Cog):
 
         if isinstance(error, PfxMissingAnyRole):
             view = self.error_embed(
-                "Missing Required Roles",
-                f"You need **one** of these roles: `{', '.join(str(r) for r in error.missing_roles)}`"
+                msg(ctx, "missing_any_role_title"),
+                msg(ctx, "missing_any_role_body", roles=", ".join(str(r) for r in error.missing_roles)),
             )
             await ctx.reply(view=view)
             logging.warning("error_handler", f"{ctx.author} missing any of roles {error.missing_roles}")
@@ -290,8 +298,8 @@ class ErrorHandler(commands.Cog):
         # ── Cooldown ───────────────────────────────────────────────────────
         if isinstance(error, PfxCommandOnCooldown):
             view = self.error_embed(
-                "Cooldown Active",
-                f"Try again in `{error.retry_after:.1f}` seconds."
+                msg(ctx, "cooldown_title"),
+                msg(ctx, "cooldown_body", seconds=f"{error.retry_after:.1f}"),
             )
             await ctx.reply(view=view)
             logging.info("error_handler", f"{ctx.author} hit cooldown on {ctx.command}")
@@ -300,8 +308,8 @@ class ErrorHandler(commands.Cog):
         # ── Argument errors ────────────────────────────────────────────────
         if isinstance(error, MissingRequiredArgument):
             view = self.error_embed(
-                "Missing Argument",
-                f"You're missing a required argument: `{error.param.name}`"
+                msg(ctx, "missing_argument_title"),
+                msg(ctx, "missing_argument_body", arg=error.param.name),
             )
             await ctx.reply(view=view)
             logging.warning("error_handler", f"{ctx.author} missing arg {error.param.name}")
@@ -311,29 +319,29 @@ class ErrorHandler(commands.Cog):
             # Build a helpful message: what went wrong + how to call it right.
             cmd = ctx.command
             if isinstance(error, MemberNotFound):
-                reason = f"I couldn't find a member matching `{error.argument}`. Try mentioning them (e.g. `@user`) or using their exact ID."
+                reason = msg(ctx, "bad_member", value=error.argument)
             elif isinstance(error, UserNotFound):
-                reason = f"I couldn't find a user matching `{error.argument}`. Try mentioning them (e.g. `@user`) or using their exact ID."
+                reason = msg(ctx, "bad_user", value=error.argument)
             elif isinstance(error, ChannelNotFound):
-                reason = f"I couldn't find a channel matching `{error.argument}`. Try mentioning it (e.g. `#channel`) or using its exact ID."
+                reason = msg(ctx, "bad_channel", value=error.argument)
             elif isinstance(error, RoleNotFound):
-                reason = f"I couldn't find a role matching `{error.argument}`. Try mentioning it (e.g. `@role`) or using its exact ID."
+                reason = msg(ctx, "bad_role", value=error.argument)
             elif isinstance(error, BadBoolArgument):
-                reason = f"`{error.argument}` isn't a valid yes/no value. Try `true`, `false`, `yes`, `no`, `on`, or `off`."
+                reason = msg(ctx, "bad_bool", value=error.argument)
             elif isinstance(error, BadColourArgument):
-                reason = f"`{error.argument}` isn't a valid colour. Try a hex code like `#5865F2`."
+                reason = msg(ctx, "bad_colour", value=error.argument)
             elif isinstance(error, BadInviteArgument):
-                reason = f"`{error.argument}` isn't a valid invite link or code."
+                reason = msg(ctx, "bad_invite", value=error.argument)
             else:
-                reason = f"One of the arguments couldn't be understood: {error}"
+                reason = msg(ctx, "bad_generic", error=error)
 
             usage = cmd.qualified_name if cmd else None
             sig = cmd.signature if cmd else None
-            usage_line = f"**Usage:** `.{usage} {sig}`" if sig else f"**Usage:** `.{usage}`"
+            usage_line = msg(ctx, "usage_line", usage=f".{usage} {sig}" if sig else f".{usage}")
 
             view = self.error_embed(
-                "Invalid Argument",
-                f"{reason}\n{usage_line}"
+                msg(ctx, "invalid_argument_title"),
+                msg(ctx, "invalid_argument_body", reason=reason, usage=usage_line),
             )
             await ctx.reply(view=view)
             logging.warning("error_handler", f"Bad argument from {ctx.author} in {ctx.command}: {error}")
@@ -341,7 +349,7 @@ class ErrorHandler(commands.Cog):
 
         # ── Channel restrictions ───────────────────────────────────────────
         if isinstance(error, PfxNoPrivateMessage):
-            view = self.error_embed("Not Allowed in DMs", "This command can only be used in a server.")
+            view = self.error_embed(msg(ctx, "dm_only_title"), msg(ctx, "dm_only_body"))
             try:
                 await ctx.author.send(view=view)
             except discord.HTTPException:
@@ -350,20 +358,20 @@ class ErrorHandler(commands.Cog):
             return
 
         if isinstance(error, PrivateMessageOnly):
-            view = self.error_embed("DM Only Command", "This command can only be used in private messages.")
+            view = self.error_embed(msg(ctx, "pm_only_title"), msg(ctx, "pm_only_body"))
             await ctx.reply(view=view)
             logging.info("error_handler", f"{ctx.author} tried DM-only command in guild")
             return
 
         if isinstance(error, PfxNSFWChannelRequired):
-            view = self.error_embed("NSFW Required", "This command can only be used in an NSFW channel.")
+            view = self.error_embed(msg(ctx, "nsfw_title"), msg(ctx, "nsfw_body"))
             await ctx.reply(view=view)
             logging.warning("error_handler", f"{ctx.author} used NSFW command in non-NSFW channel")
             return
 
         # ── Owner only ─────────────────────────────────────────────────────
         if isinstance(error, NotOwner):
-            view = self.error_embed("Owner Only", "Only the bot owner can use this command.")
+            view = self.error_embed(msg(ctx, "owner_title"), msg(ctx, "owner_body"))
             await ctx.reply(view=view)
             logging.warning("error_handler", f"{ctx.author} attempted owner-only command")
             return
@@ -374,7 +382,7 @@ class ErrorHandler(commands.Cog):
             MessageNotFound, GuildNotFound, EmojiNotFound
         )
         if isinstance(error, lookup_errors):
-            view = self.error_embed("Not Found", str(error))
+            view = self.error_embed(msg(ctx, "not_found_title"), str(error))
             await ctx.reply(view=view)
             logging.warning("error_handler", f"Lookup error: {error}")
             return
@@ -382,8 +390,8 @@ class ErrorHandler(commands.Cog):
         # ── HTTP / API errors ──────────────────────────────────────────────
         if isinstance(error, HTTPException):
             view = self.error_embed(
-                "Discord API Error",
-                f"A Discord API error occurred (HTTP {error.status}). Please try again.\n-# {error.text}"
+                msg(ctx, "api_title"),
+                msg(ctx, "api_body", status=error.status, text=error.text),
             )
             try:
                 await ctx.reply(view=view)
@@ -393,10 +401,7 @@ class ErrorHandler(commands.Cog):
             return
 
         if isinstance(error, json.JSONDecodeError):
-            view = self.error_embed(
-                "API Error",
-                "There was an issue decoding the API response. Please try again later."
-            )
+            view = self.error_embed(msg(ctx, "decode_title"), msg(ctx, "decode_body"))
             await ctx.reply(view=view)
             logging.error("error_handler", f"JSONDecodeError in {ctx.command}: {error}")
             return
@@ -413,17 +418,14 @@ class ErrorHandler(commands.Cog):
             MaxConcurrencyReached,
         )
         if isinstance(error, other_known):
-            view = self.error_embed("Error", str(error))
+            view = self.error_embed(msg(ctx, "error_title"), str(error))
             await ctx.reply(view=view)
             logging.warning("error_handler", f"Known error in {ctx.command}: {error}")
             return
 
         # ── Check failure (generic) ────────────────────────────────────────
         if isinstance(error, PfxCheckFailure):
-            view = self.error_embed(
-                "Check Failed",
-                "You don't meet the requirements to use this command."
-            )
+            view = self.error_embed(msg(ctx, "check_failed_title"), msg(ctx, "check_failed_body"))
             await ctx.reply(view=view)
             logging.warning("error_handler", f"Check failed for {ctx.author} in {ctx.command}")
             return
@@ -432,10 +434,7 @@ class ErrorHandler(commands.Cog):
         logging.error("error_handler", f"Unexpected error in command {ctx.command} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
-        view = self.error_embed(
-            "Unexpected Error",
-            "An unexpected error occurred. The developers have been notified."
-        )
+        view = self.error_embed(msg(ctx, "unexpected_title"), msg(ctx, "unexpected_body"))
         try:
             await ctx.reply(view=view)
         except discord.HTTPException:
@@ -481,59 +480,80 @@ class ErrorHandler(commands.Cog):
             return
 
         if isinstance(error, Forbidden):
-            await _reply(self.error_embed("Forbidden Action", "I don't have permission to perform this action. Please check my roles and permissions."))
+            await _reply(self.error_embed(msg(interaction, "forbidden_title"), msg(interaction, "forbidden_body")))
             logging.warning("error_handler", f"403 Forbidden in slash {interaction.command}")
             return
 
         if isinstance(error, SlashMissingPermissions):
-            await _reply(self.error_embed("Missing Permissions", f"You lack the required permissions: `{', '.join(error.missing_permissions)}`"))
+            await _reply(self.error_embed(
+                msg(interaction, "missing_permissions_title"),
+                msg(interaction, "missing_permissions_body", perms=", ".join(error.missing_permissions)),
+            ))
             logging.warning("error_handler", f"{interaction.user} missing perms for slash {interaction.command}")
             return
 
         if isinstance(error, SlashBotMissingPermissions):
-            await _reply(self.error_embed("Bot Missing Permissions", f"I need these permissions: `{', '.join(error.missing_permissions)}`"))
+            await _reply(self.error_embed(
+                msg(interaction, "bot_missing_permissions_title"),
+                msg(interaction, "bot_missing_permissions_short", perms=", ".join(error.missing_permissions)),
+            ))
             logging.warning("error_handler", f"Bot missing perms for slash {interaction.command}")
             return
 
         if isinstance(error, SlashMissingRole):
-            await _reply(self.error_embed("Missing Role", f"You must have the `{error.missing_role}` role to use this command."))
+            await _reply(self.error_embed(
+                msg(interaction, "missing_role_title"),
+                msg(interaction, "missing_role_body", role=error.missing_role),
+            ))
             logging.warning("error_handler", f"{interaction.user} missing role {error.missing_role}")
             return
 
         if isinstance(error, SlashMissingAnyRole):
-            await _reply(self.error_embed("Missing Required Roles", f"You need **one** of these roles: `{', '.join(str(r) for r in error.missing_roles)}`"))
+            await _reply(self.error_embed(
+                msg(interaction, "missing_any_role_title"),
+                msg(interaction, "missing_any_role_body", roles=", ".join(str(r) for r in error.missing_roles)),
+            ))
             logging.warning("error_handler", f"{interaction.user} missing any roles {error.missing_roles}")
             return
 
         if isinstance(error, SlashCommandOnCooldown):
-            await _reply(self.error_embed("Cooldown Active", f"Try again in `{error.retry_after:.1f}` seconds."))
+            await _reply(self.error_embed(
+                msg(interaction, "cooldown_title"),
+                msg(interaction, "cooldown_body", seconds=f"{error.retry_after:.1f}"),
+            ))
             logging.info("error_handler", f"{interaction.user} hit cooldown on slash {interaction.command}")
             return
 
         if isinstance(error, SlashNoPrivateMessage):
-            await _reply(self.error_embed("Not Allowed in DMs", "This command can only be used in a server."))
+            await _reply(self.error_embed(msg(interaction, "dm_only_title"), msg(interaction, "dm_only_body")))
             logging.info("error_handler", f"{interaction.user} tried slash {interaction.command} in DMs")
             return
 
         if isinstance(error, SlashCheckFailure):
-            await _reply(self.error_embed("Check Failed", "You don't meet the requirements to use this command."))
+            await _reply(self.error_embed(msg(interaction, "check_failed_title"), msg(interaction, "check_failed_body")))
             logging.warning("error_handler", f"Slash check failed for {interaction.user} in {interaction.command}")
             return
 
         if isinstance(error, TransformerError):
-            await _reply(self.error_embed("Invalid Argument", f"Couldn't convert `{error.value}` to the expected type."))
+            await _reply(self.error_embed(
+                msg(interaction, "invalid_argument_title"),
+                msg(interaction, "transformer_body", value=error.value),
+            ))
             logging.warning("error_handler", f"TransformerError in slash {interaction.command}: {error}")
             return
 
         if isinstance(error, HTTPException):
-            await _reply(self.error_embed("Discord API Error", f"A Discord API error occurred (HTTP {error.status}). Please try again."))
+            await _reply(self.error_embed(
+                msg(interaction, "api_title"),
+                msg(interaction, "api_short", status=error.status),
+            ))
             logging.error("error_handler", f"HTTPException in slash {interaction.command}: {error}")
             return
 
         # ── Unexpected critical ────────────────────────────────────────────
         logging.error("error_handler", f"Unexpected error in slash {interaction.command} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
-        await _reply(self.error_embed("Unexpected Error", "An unexpected error occurred. The developers have been notified."))
+        await _reply(self.error_embed(msg(interaction, "unexpected_title"), msg(interaction, "unexpected_body")))
 
         cog_name = None
         command = interaction.command

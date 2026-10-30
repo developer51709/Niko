@@ -22,6 +22,8 @@ import discord
 import database
 from config.emojis import get_emoji
 from utils import logging
+from utils.i18n import get_lang
+from utils.locales import load_locales
 
 #: A snapshot only has to outlive the log entry that offers its button, so old
 #: rows are pruned whenever a new one is written instead of growing forever.
@@ -31,6 +33,15 @@ SNAPSHOT_TTL = timedelta(days=30)
 #: rather than on every snapshot a busy server writes.
 PRUNE_INTERVAL = 3600.0
 _last_prune = 0.0
+
+MESSAGES = load_locales("cogs.logging", "revert")
+
+
+def _t(lang: str, key: str, **kwargs) -> str:
+    """A restore-button string, with the bot's tick available to every line."""
+    text = MESSAGES.get(lang, {}).get(key) or MESSAGES["en"].get(key, key)
+    return text.format(tick=get_emoji("tick"), **kwargs)
+
 
 _ROLE_TEMPLATE = r"log:role-restore:(?P<snapshot>[0-9a-f]{12})"
 _CHANNEL_TEMPLATE = r"log:channel-restore:(?P<snapshot>[0-9a-f]{12})"
@@ -212,12 +223,21 @@ def _notice(text: str) -> discord.ui.LayoutView:
     return view
 
 
-async def _has_permission(interaction: discord.Interaction, attribute: str, label: str) -> bool:
+async def _has_permission(interaction: discord.Interaction, attribute: str,
+                         permission_key: str) -> bool:
+    """Refuse the click unless the member holds *attribute*.
+
+    ``permission_key`` names the permission in the catalogue, so the refusal
+    says which one is missing in the reader's own language.
+    """
     permissions = getattr(interaction.user, "guild_permissions", None)
     if permissions is not None and getattr(permissions, attribute, False):
         return True
+    lang = get_lang(interaction.guild)
     await interaction.followup.send(
-        view=_notice(f"You need **{label}** to use this button."), ephemeral=True)
+        view=_notice(_t(lang, "need_permission",
+                        permission=_t(lang, permission_key))),
+        ephemeral=True)
     return False
 
 
@@ -229,10 +249,7 @@ async def _snapshot_for(interaction: discord.Interaction, snapshot_id: str,
     if state is None or state["kind"] != kind or guild is None \
             or state["guild_id"] != guild.id:
         await interaction.followup.send(
-            view=_notice(
-                "This restore is no longer available — its snapshot expired, "
-                "or it belongs to another server."
-            ),
+            view=_notice(_t(get_lang(guild), "snapshot_gone")),
             ephemeral=True,
         )
         return None
@@ -253,12 +270,11 @@ async def _announce(interaction: discord.Interaction, category: str, title: str,
 
 
 async def _fail(interaction: discord.Interaction, error: Exception, what: str) -> None:
+    """Report a failed restore, naming the attempt in the reader's language."""
     logging.error("logging_cog", f"Quick action '{what}' failed: {error!r}")
+    lang = get_lang(interaction.guild)
     await interaction.followup.send(
-        view=_notice(
-            f"I couldn't {what}. Check that I still have the permissions and "
-            "that the target still exists."
-        ),
+        view=_notice(_t(lang, "failed", what=_t(lang, what))),
         ephemeral=True,
     )
 
@@ -268,9 +284,9 @@ async def _fail(interaction: discord.Interaction, error: Exception, what: str) -
 class RestoreRoleButton(discord.ui.DynamicItem[discord.ui.Button], template=_ROLE_TEMPLATE):
     """Recreates a deleted role from the snapshot taken at deletion time."""
 
-    def __init__(self, snapshot_id: str):
+    def __init__(self, snapshot_id: str, lang: str = "en"):
         super().__init__(discord.ui.Button(
-            label="Restore Role",
+            label=_t(lang, "btn_restore_role"),
             style=discord.ButtonStyle.success,
             emoji=get_emoji("refresh"),
             custom_id=f"log:role-restore:{snapshot_id}",
@@ -285,17 +301,20 @@ class RestoreRoleButton(discord.ui.DynamicItem[discord.ui.Button], template=_ROL
         # The snapshot read and the role creation are both round trips; ack
         # first so a slow one never reads as "This interaction failed".
         await interaction.response.defer(ephemeral=True)
+        # The click resolves the language, not the message: an entry posted
+        # before the server switched language still answers in the current one.
+        lang = get_lang(interaction.guild)
         if interaction.guild is None:
             return await interaction.followup.send(
-                view=_notice("This button only works inside a server."), ephemeral=True)
-        if not await _has_permission(interaction, "manage_roles", "Manage Roles"):
+                view=_notice(_t(lang, "guild_only")), ephemeral=True)
+        if not await _has_permission(interaction, "manage_roles", "perm_manage_roles"):
             return
         state = await _snapshot_for(interaction, self.snapshot_id, "role")
         if state is None:
             return
         payload = state["payload"]
         guild = interaction.guild
-        reason = f"Restored from a log entry by {interaction.user}"
+        reason = _t(lang, "audit_restored", user=interaction.user)
         try:
             role = await guild.create_role(
                 name=payload.get("name") or "Restored role",
@@ -306,7 +325,7 @@ class RestoreRoleButton(discord.ui.DynamicItem[discord.ui.Button], template=_ROL
                 reason=reason,
             )
         except (discord.Forbidden, discord.HTTPException) as error:
-            return await _fail(interaction, error, "restore that role")
+            return await _fail(interaction, error, "what_restore_role")
 
         # The old position may no longer exist, so it is a best-effort extra.
         position = int(payload.get("position") or 0)
@@ -325,15 +344,12 @@ class RestoreRoleButton(discord.ui.DynamicItem[discord.ui.Button], template=_ROL
                 f"**Restored By:** {interaction.user.mention}\n"
                 f"**Colour:** `{role.colour}` · **Permissions:** `{granted}` · "
                 f"**Position:** `{role.position}`\n"
-                f"-# Members who held the deleted role are not re-added automatically."
+                + _t(lang, "note_role_members")
             ),
             target_id=role.id,
         )
         await interaction.followup.send(
-            view=_notice(
-                f"{get_emoji('tick')} Restored {role.mention}. "
-                "Members who held it before its deletion need it assigned again."
-            ),
+            view=_notice(_t(lang, "restored_role", role=role.mention)),
             ephemeral=True,
         )
 
@@ -341,9 +357,9 @@ class RestoreRoleButton(discord.ui.DynamicItem[discord.ui.Button], template=_ROL
 class RestoreChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_CHANNEL_TEMPLATE):
     """Recreates a deleted channel, including its category and overwrites."""
 
-    def __init__(self, snapshot_id: str):
+    def __init__(self, snapshot_id: str, lang: str = "en"):
         super().__init__(discord.ui.Button(
-            label="Restore Channel",
+            label=_t(lang, "btn_restore_channel"),
             style=discord.ButtonStyle.success,
             emoji=get_emoji("refresh"),
             custom_id=f"log:channel-restore:{snapshot_id}",
@@ -356,10 +372,11 @@ class RestoreChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        lang = get_lang(interaction.guild)
         if interaction.guild is None:
             return await interaction.followup.send(
-                view=_notice("This button only works inside a server."), ephemeral=True)
-        if not await _has_permission(interaction, "manage_channels", "Manage Channels"):
+                view=_notice(_t(lang, "guild_only")), ephemeral=True)
+        if not await _has_permission(interaction, "manage_channels", "perm_manage_channels"):
             return
         state = await _snapshot_for(interaction, self.snapshot_id, "channel")
         if state is None:
@@ -378,7 +395,7 @@ class RestoreChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_
             "name": payload.get("name") or "restored-channel",
             "overwrites": _create_overwrites(guild, payload.get("overwrites") or []),
             "category": category,
-            "reason": f"Restored from a log entry by {interaction.user}",
+            "reason": _t(lang, "audit_restored", user=interaction.user),
         }
         try:
             if kind == "category":
@@ -412,7 +429,7 @@ class RestoreChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_
                     **common,
                 )
         except (discord.Forbidden, discord.HTTPException) as error:
-            return await _fail(interaction, error, "restore that channel")
+            return await _fail(interaction, error, "what_restore_channel")
 
         # The old position may no longer be free, so it is a best-effort extra.
         position = int(payload.get("position") or 0)
@@ -424,7 +441,7 @@ class RestoreChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_
 
         await drop_snapshot(self.snapshot_id)
         note = "" if kind in ("text", "voice", "category", "stage", "forum", "media") else (
-            f"\n-# It was a {kind} channel; Discord only allows it back as text."
+            "\n" + _t(lang, "note_foreign_channel", kind=kind)
         )
         await _announce(
             interaction, "channels", "Channel Restored",
@@ -438,7 +455,7 @@ class RestoreChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_
             channel_id=channel.id,
         )
         await interaction.followup.send(
-            view=_notice(f"{get_emoji('tick')} Restored {channel.mention}."),
+            view=_notice(_t(lang, "restored_channel", channel=channel.mention)),
             ephemeral=True,
         )
 
@@ -446,9 +463,9 @@ class RestoreChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_
 class RevertChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_CHANNEL_REVERT_TEMPLATE):
     """Puts a channel's settings and overwrites back to their before values."""
 
-    def __init__(self, snapshot_id: str):
+    def __init__(self, snapshot_id: str, lang: str = "en"):
         super().__init__(discord.ui.Button(
-            label="Revert Changes",
+            label=_t(lang, "btn_revert_changes"),
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("refresh"),
             custom_id=f"log:channel-revert:{snapshot_id}",
@@ -461,10 +478,11 @@ class RevertChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_C
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        lang = get_lang(interaction.guild)
         if interaction.guild is None:
             return await interaction.followup.send(
-                view=_notice("This button only works inside a server."), ephemeral=True)
-        if not await _has_permission(interaction, "manage_channels", "Manage Channels"):
+                view=_notice(_t(lang, "guild_only")), ephemeral=True)
+        if not await _has_permission(interaction, "manage_channels", "perm_manage_channels"):
             return
         state = await _snapshot_for(interaction, self.snapshot_id, "channel-update")
         if state is None:
@@ -474,9 +492,9 @@ class RevertChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_C
         channel = guild.get_channel(int(payload.get("channel_id") or 0))
         if channel is None:
             return await interaction.followup.send(
-                view=_notice("That channel no longer exists."), ephemeral=True)
+                view=_notice(_t(lang, "channel_gone")), ephemeral=True)
 
-        reason = f"Reverted from a log entry by {interaction.user}"
+        reason = _t(lang, "audit_reverted", user=interaction.user)
         before = payload.get("before") or {}
         options: dict = {}
         if "name" in before:
@@ -511,7 +529,7 @@ class RevertChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_C
                 await channel.set_permissions(target, overwrite=overwrite, reason=reason)
                 restored += 1
         except (discord.Forbidden, discord.HTTPException) as error:
-            return await _fail(interaction, error, "revert that channel")
+            return await _fail(interaction, error, "what_revert_channel")
 
         await drop_snapshot(self.snapshot_id)
         fields = ", ".join(sorted(options)) or "none"
@@ -526,9 +544,7 @@ class RevertChannelButton(discord.ui.DynamicItem[discord.ui.Button], template=_C
             channel_id=channel.id,
         )
         await interaction.followup.send(
-            view=_notice(
-                f"{get_emoji('tick')} Reverted {channel.mention} to its previous settings."
-            ),
+            view=_notice(_t(lang, "reverted_channel", channel=channel.mention)),
             ephemeral=True,
         )
 

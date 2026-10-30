@@ -34,7 +34,7 @@ export type CommandType = "slash" | "prefix" | "hybrid" | "context";
 
 export type CommandParameter = {
   name: string;
-  description?: string;
+  description?: string | Record<string, string>;
   required?: boolean;
   type?: string;
 };

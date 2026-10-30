@@ -11,6 +11,14 @@ import asyncio
 from cogs.casino.replay import InteractionContext
 from utils.cooldown import cooldown_ready_at, cooldown_view
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "messages")
+msg = make_flat_msg(MESSAGES)
+
 # ============================
 #  CONSTANTS
 # ============================
@@ -109,19 +117,19 @@ class ChoiceButton(discord.ui.Button):
 def build_bet_type_view(ctx) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose your bet type."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_bet")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            ChoiceButton("Red / Black", discord.ButtonStyle.red, "color"),
-            ChoiceButton("Odd / Even", discord.ButtonStyle.blurple, "parity"),
-            ChoiceButton("High / Low", discord.ButtonStyle.green, "range"),
+            ChoiceButton(msg(ctx, "roulette_btn_red_black"), discord.ButtonStyle.red, "color"),
+            ChoiceButton(msg(ctx, "roulette_btn_odd_even"), discord.ButtonStyle.blurple, "parity"),
+            ChoiceButton(msg(ctx, "roulette_btn_high_low"), discord.ButtonStyle.green, "range"),
         ),
         discord.ui.ActionRow(
-            ChoiceButton("Dozens", discord.ButtonStyle.gray, "dozen"),
-            ChoiceButton("Columns", discord.ButtonStyle.gray, "column"),
-            ChoiceButton("Inside Bets", discord.ButtonStyle.green, "inside"),
+            ChoiceButton(msg(ctx, "roulette_btn_dozens"), discord.ButtonStyle.gray, "dozen"),
+            ChoiceButton(msg(ctx, "roulette_btn_columns"), discord.ButtonStyle.gray, "column"),
+            ChoiceButton(msg(ctx, "roulette_btn_inside"), discord.ButtonStyle.green, "inside"),
         ),
         accent_colour=ACCENT_GREEN
     )
@@ -136,13 +144,13 @@ def build_bet_type_view(ctx) -> RouletteLayoutView:
 def build_color_view(ctx) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose Red or Black."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_color")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            ChoiceButton("Red", discord.ButtonStyle.red, "red"),
-            ChoiceButton("Black", discord.ButtonStyle.gray, "black"),
+            ChoiceButton(msg(ctx, "roulette_red"), discord.ButtonStyle.red, "red"),
+            ChoiceButton(msg(ctx, "roulette_black"), discord.ButtonStyle.gray, "black"),
         ),
         accent_colour=ACCENT_GREEN
     )
@@ -153,13 +161,13 @@ def build_color_view(ctx) -> RouletteLayoutView:
 def build_parity_view(ctx) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose Odd or Even."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_parity")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            ChoiceButton("Odd", discord.ButtonStyle.blurple, "odd"),
-            ChoiceButton("Even", discord.ButtonStyle.blurple, "even"),
+            ChoiceButton(msg(ctx, "roulette_odd"), discord.ButtonStyle.blurple, "odd"),
+            ChoiceButton(msg(ctx, "roulette_even"), discord.ButtonStyle.blurple, "even"),
         ),
         accent_colour=ACCENT_GREEN
     )
@@ -170,13 +178,13 @@ def build_parity_view(ctx) -> RouletteLayoutView:
 def build_range_view(ctx) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose High (19–36) or Low (1–18)."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_range")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            ChoiceButton("Low (1–18)", discord.ButtonStyle.green, "low"),
-            ChoiceButton("High (19–36)", discord.ButtonStyle.green, "high"),
+            ChoiceButton(msg(ctx, "roulette_low"), discord.ButtonStyle.green, "low"),
+            ChoiceButton(msg(ctx, "roulette_high"), discord.ButtonStyle.green, "high"),
         ),
         accent_colour=ACCENT_GREEN
     )
@@ -187,14 +195,14 @@ def build_range_view(ctx) -> RouletteLayoutView:
 def build_dozen_view(ctx) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose a dozen."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_dozen")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            ChoiceButton("1st Dozen (1–12)", discord.ButtonStyle.gray, "dozen1"),
-            ChoiceButton("2nd Dozen (13–24)", discord.ButtonStyle.gray, "dozen2"),
-            ChoiceButton("3rd Dozen (25–36)", discord.ButtonStyle.gray, "dozen3"),
+            ChoiceButton(msg(ctx, "roulette_dozen1"), discord.ButtonStyle.gray, "dozen1"),
+            ChoiceButton(msg(ctx, "roulette_dozen2"), discord.ButtonStyle.gray, "dozen2"),
+            ChoiceButton(msg(ctx, "roulette_dozen3"), discord.ButtonStyle.gray, "dozen3"),
         ),
         accent_colour=ACCENT_GREEN
     )
@@ -205,14 +213,14 @@ def build_dozen_view(ctx) -> RouletteLayoutView:
 def build_column_view(ctx) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose a column."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_column")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            ChoiceButton("Column 1", discord.ButtonStyle.gray, "column1"),
-            ChoiceButton("Column 2", discord.ButtonStyle.gray, "column2"),
-            ChoiceButton("Column 3", discord.ButtonStyle.gray, "column3"),
+            ChoiceButton(msg(ctx, "roulette_column1"), discord.ButtonStyle.gray, "column1"),
+            ChoiceButton(msg(ctx, "roulette_column2"), discord.ButtonStyle.gray, "column2"),
+            ChoiceButton(msg(ctx, "roulette_column3"), discord.ButtonStyle.gray, "column3"),
         ),
         accent_colour=ACCENT_GREEN
     )
@@ -225,15 +233,15 @@ def build_column_view(ctx) -> RouletteLayoutView:
 # ============================
 
 class InsideBetSelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, ctx):
         options = [
-            discord.SelectOption(label="Straight (Single Number)", value="straight"),
-            discord.SelectOption(label="Split (2 Numbers)", value="split"),
-            discord.SelectOption(label="Street (3 Numbers)", value="street"),
-            discord.SelectOption(label="Corner (4 Numbers)", value="corner"),
-            discord.SelectOption(label="Line (6 Numbers)", value="line"),
+            discord.SelectOption(label=msg(ctx, "roulette_straight"), value="straight"),
+            discord.SelectOption(label=msg(ctx, "roulette_split"), value="split"),
+            discord.SelectOption(label=msg(ctx, "roulette_street"), value="street"),
+            discord.SelectOption(label=msg(ctx, "roulette_corner"), value="corner"),
+            discord.SelectOption(label=msg(ctx, "roulette_line"), value="line"),
         ]
-        super().__init__(placeholder="Choose inside bet type", options=options)
+        super().__init__(placeholder=msg(ctx, "roulette_inside_placeholder"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.choice = self.values[0]
@@ -244,11 +252,11 @@ class InsideBetSelect(discord.ui.Select):
 def build_inside_view(ctx) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx)
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose an inside bet type."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_inside")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.ActionRow(InsideBetSelect()),
+        discord.ui.ActionRow(InsideBetSelect(ctx)),
         accent_colour=ACCENT_GREEN
     )
     view.add_item(container)
@@ -260,10 +268,10 @@ def build_inside_view(ctx) -> RouletteLayoutView:
 # ============================
 
 class NumberDropdownLow(discord.ui.Select):
-    def __init__(self, count):
+    def __init__(self, ctx, count):
         options = [discord.SelectOption(label=str(i), value=str(i)) for i in range(0, 19)]
         super().__init__(
-            placeholder=f"Numbers 0–18 (pick up to {count})",
+            placeholder=msg(ctx, "roulette_low_placeholder", count=count),
             min_values=0,
             max_values=count,
             options=options
@@ -279,10 +287,10 @@ class NumberDropdownLow(discord.ui.Select):
 
 
 class NumberDropdownHigh(discord.ui.Select):
-    def __init__(self, count):
+    def __init__(self, ctx, count):
         options = [discord.SelectOption(label=str(i), value=str(i)) for i in range(19, 37)]
         super().__init__(
-            placeholder=f"Numbers 19–36 (pick up to {count})",
+            placeholder=msg(ctx, "roulette_high_placeholder", count=count),
             min_values=0,
             max_values=count,
             options=options
@@ -303,12 +311,12 @@ def build_number_view(ctx, count: int) -> RouletteLayoutView:
     view.selected_low = []
     view.selected_high = []
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content=f"Select **{count}** number(s). Use both dropdowns if needed."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_select_numbers", count=count)),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.ActionRow(NumberDropdownLow(count)),
-        discord.ui.ActionRow(NumberDropdownHigh(count)),
+        discord.ui.ActionRow(NumberDropdownLow(ctx, count)),
+        discord.ui.ActionRow(NumberDropdownHigh(ctx, count)),
         accent_colour=ACCENT_GREEN
     )
     view.add_item(container)
@@ -333,9 +341,9 @@ def build_chip_view(ctx) -> RouletteLayoutView:
             await interaction.response.defer()
 
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Choose your chip amount."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_choose_chip")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
             ChipBtn("10", 10),
@@ -353,12 +361,12 @@ def build_chip_view(ctx) -> RouletteLayoutView:
 #  SPINNING VIEW (no buttons)
 # ============================
 
-def build_spinning_view() -> discord.ui.LayoutView:
+def build_spinning_view(ctx) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### 🎰 Roulette"),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="Spinning the wheel..."),
+        discord.ui.TextDisplay(content=msg(ctx, "roulette_spinning")),
         accent_colour=ACCENT_GOLD
     )
     view.add_item(container)
@@ -369,13 +377,14 @@ def build_spinning_view() -> discord.ui.LayoutView:
 #  RESULT VIEW
 # ============================
 
-def _roulette_cooldown_view(last_spin) -> discord.ui.LayoutView:
+def _roulette_cooldown_view(ctx, last_spin) -> discord.ui.LayoutView:
     """The shared cooldown notice, used by the command and by Spin Again."""
     return cooldown_view(
-        "spin the wheel",
+        msg(ctx, "roulette_cooldown_action"),
         cooldown_ready_at(last_spin, ROULETTE_COOLDOWN),
-        title="🎡 Slow down",
-        note=f"Roulette allows one spin every **{ROULETTE_COOLDOWN}** seconds.",
+        title=msg(ctx, "roulette_cooldown_title"),
+        note=msg(ctx, "roulette_cooldown_note", seconds=ROULETTE_COOLDOWN),
+        template=msg(ctx, "roulette_cooldown_sentence"),
     )
 
 
@@ -389,9 +398,9 @@ class SpinAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_SPIN_
     the same flow for the same person after a restart.
     """
 
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, label: str = "Spin Again"):
         super().__init__(discord.ui.Button(
-            label="Spin Again",
+            label=label,
             style=discord.ButtonStyle.green,
             custom_id=f"casino:roulette:again:{int(user_id)}",
         ))
@@ -399,18 +408,21 @@ class SpinAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_SPIN_
 
     @classmethod
     async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
-        return cls(int(match["user_id"]))
+        return cls(
+            int(match["user_id"]),
+            label=msg(interaction, "roulette_spin_again"),
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message(
-                "This wheel belongs to someone else. Start your own with `/roulette`.",
+                msg(interaction, "roulette_wrong_player"),
                 ephemeral=True,
             )
         cog = interaction.client.get_cog("Roulette")
         if cog is None:
             return await interaction.response.send_message(
-                "Roulette is unavailable right now.", ephemeral=True
+                msg(interaction, "roulette_unavailable"), ephemeral=True
             )
         economy = interaction.client.get_cog("EconomyCog")
         if economy is not None:
@@ -420,7 +432,7 @@ class SpinAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_SPIN_
                 # Answer the cooldown privately so a spammed button cannot
                 # flood the channel with notices.
                 return await interaction.response.send_message(
-                    view=_roulette_cooldown_view(last_spin), ephemeral=True
+                    view=_roulette_cooldown_view(interaction, last_spin), ephemeral=True
                 )
         await interaction.response.defer()
         await cog.play(InteractionContext(interaction))
@@ -429,18 +441,27 @@ class SpinAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_SPIN_
 def build_result_view(ctx, win: bool, result: int, color_str: str, bet_type: str, amount: int, winnings: int) -> RouletteLayoutView:
     view = RouletteLayoutView(ctx, timeout=None)
 
-    title = "🎉 You Win!" if win else "💀 You Lose"
-    result_line = f"**Result:** {result} ({color_str})"
+    title = msg(ctx, "roulette_win_title") if win else msg(ctx, "roulette_lose_title")
+    result_line = msg(ctx, "roulette_result", number=result, color=color_str)
     # `winnings` is the net profit, so the card matches what the wallet gained.
-    outcome_line = f"You won **{winnings}** coins." if win else f"You lost **{amount}** coins."
-    bet_label = bet_type.replace("dozen", "Dozen ").replace("column", "Column ").title()
+    outcome_line = (
+        msg(ctx, "roulette_outcome_win", amount=winnings)
+        if win
+        else msg(ctx, "roulette_outcome_lose", amount=amount)
+    )
+    bet_label = msg(ctx, f"roulette_bet_{bet_type}")
 
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=f"### {title}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content=f"{result_line}\n{outcome_line}\n**Bet:** {bet_label}"),
+        discord.ui.TextDisplay(
+            content=(
+                f"{result_line}\n{outcome_line}\n"
+                + msg(ctx, "roulette_bet_line", bet=bet_label)
+            )
+        ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.ActionRow(SpinAgainButton(ctx.author.id)),
+        discord.ui.ActionRow(SpinAgainButton(ctx.author.id, label=msg(ctx, "roulette_spin_again"))),
         accent_colour=ACCENT_GREEN if win else ACCENT_RED
     )
     view.add_item(container)
@@ -462,7 +483,8 @@ class Roulette(commands.Cog):
         registry.add_item(discord.ui.Container(discord.ui.ActionRow(SpinAgainButton(0))))
         self.bot.add_view(registry)
 
-    @commands.hybrid_command(name="roulette", description="Play interactive European roulette", help="{ 'en': 'play interactive European roulette 🎡', 'de': 'spiele interaktives europäisches Roulette 🎡', 'es': 'juega ruleta europea interactiva 🎡' }")
+    @commands.hybrid_command(name="roulette", description=CMDS.text("roulette.description"), help=CMDS.help("roulette"),
+    )
     async def roulette(self, ctx):
         """Play interactive European roulette."""
         await self.play(ctx)
@@ -473,63 +495,63 @@ class Roulette(commands.Cog):
         user_data = await economy.get_user_economy_data(ctx.author.id)
 
         if user_data["last_roulette"] + ROULETTE_COOLDOWN > time.time():
-            return await ctx.send(view=_roulette_cooldown_view(user_data["last_roulette"]))
+            return await ctx.send(view=_roulette_cooldown_view(ctx, user_data["last_roulette"]))
 
         # STEP 1 — CHOOSE BET TYPE
         view = build_bet_type_view(ctx)
-        msg = await ctx.send(view=view)
+        message = await ctx.send(view=view)
         await view.wait()
 
         bet_category = view.choice
         if bet_category is None:
-            return await ctx.send("Timed out.")
+            return await ctx.send(msg(ctx, "roulette_timed_out"))
 
         # STEP 2 — SPECIFIC BET
         numbers = None
 
         if bet_category == "color":
             view = build_color_view(ctx)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await view.wait()
             bet_type = view.choice
 
         elif bet_category == "parity":
             view = build_parity_view(ctx)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await view.wait()
             bet_type = view.choice
 
         elif bet_category == "range":
             view = build_range_view(ctx)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await view.wait()
             bet_type = view.choice
 
         elif bet_category == "dozen":
             view = build_dozen_view(ctx)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await view.wait()
             bet_type = view.choice
 
         elif bet_category == "column":
             view = build_column_view(ctx)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await view.wait()
             bet_type = view.choice
 
         elif bet_category == "inside":
             view = build_inside_view(ctx)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await view.wait()
             inside_type = view.choice
             if inside_type is None:
-                return await ctx.send("Timed out.")
+                return await ctx.send(msg(ctx, "roulette_timed_out"))
 
             count_map = {"straight": 1, "split": 2, "street": 3, "corner": 4, "line": 6}
             count = count_map[inside_type]
 
             view = build_number_view(ctx, count)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await view.wait()
 
             bet_type = inside_type
@@ -537,41 +559,41 @@ class Roulette(commands.Cog):
             # An abandoned number pick would otherwise resolve as a loss and
             # quietly take the stake without ever spinning.
             if numbers is None:
-                return await ctx.send("Timed out.")
+                return await ctx.send(msg(ctx, "roulette_timed_out"))
 
         else:
-            return await ctx.send("Invalid bet type.")
+            return await ctx.send(msg(ctx, "roulette_invalid_bet"))
 
         # Every sub-step is a 30 second menu. If the player let one expire,
         # `bet_type` is None; ending here keeps the rest of the round from
         # running with no bet and crashing the result card.
         if bet_type is None:
-            return await ctx.send("Timed out.")
+            return await ctx.send(msg(ctx, "roulette_timed_out"))
 
         # STEP 3 — CHIP AMOUNT
         view = build_chip_view(ctx)
-        await msg.edit(view=view)
+        await message.edit(view=view)
         await view.wait()
 
         amount = view.amount
         if amount is None:
-            return await ctx.send("Timed out.")
+            return await ctx.send(msg(ctx, "roulette_timed_out"))
 
         if amount > user_data["balance"]:
-            return await ctx.send("You don't have enough coins.")
+            return await ctx.send(msg(ctx, "roulette_not_enough"))
 
         # STEP 4 — SPIN
-        await msg.edit(view=build_spinning_view())
+        await message.edit(view=build_spinning_view(ctx))
         await asyncio.sleep(1)
 
         result = random.choice(EUROPEAN_WHEEL)
 
         if result == 0:
-            color_str = "🟢 Green"
+            color_str = msg(ctx, "roulette_color_green")
         elif result in RED_NUMBERS:
-            color_str = "🔴 Red"
+            color_str = msg(ctx, "roulette_color_red")
         else:
-            color_str = "⚫ Black"
+            color_str = msg(ctx, "roulette_color_black")
 
         # STEP 5 — PAYOUT LOGIC
         win, returned = resolve_bet(bet_type, numbers, result, amount)
@@ -588,7 +610,7 @@ class Roulette(commands.Cog):
             economy.record_gamble(
                 user_data, net,
                 "roulette_win" if net > 0 else "roulette_loss",
-                f"{bet_type} · {result} ({color_str})",
+                f"{msg(ctx, f'roulette_bet_{bet_type}')} · {result} ({color_str})",
             )
 
         user_data["last_roulette"] = time.time()
@@ -596,7 +618,7 @@ class Roulette(commands.Cog):
 
         # STEP 7 — RESULT
         view = build_result_view(ctx, win, result, color_str, bet_type, amount, net)
-        await msg.edit(view=view)
+        await message.edit(view=view)
 
 
 # ============================

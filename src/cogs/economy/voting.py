@@ -33,7 +33,25 @@ from utils.economy_jobs import (
     vote_earnings_multiplier,
     vote_reward_multiplier,
 )
-from .data import ACCENT_GOLD, _check_achievements, _info_view, _log_tx, topgg_emoji
+from .data import ACCENT_GOLD, _check_achievements, _info_view, _log_tx, locale_t, topgg_emoji
+from utils.i18n import get_lang
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+T = locale_t(load_locales("cogs.economy", "vote"))
+
+
+def _member_lang(user) -> str:
+    """A DM carries no guild, so fall back to the recipient's own locale."""
+    locale = str(getattr(user, "locale", "") or "").lower()
+    if locale.startswith("de"):
+        return "de"
+    if locale.startswith("es"):
+        return "es"
+    return "en"
 
 
 #: Heading every voting card with the listing site's own logo: the logo is an
@@ -107,7 +125,7 @@ def apply_vote(data: dict, *, now: int | None = None, weekend: bool = False) -> 
     data["last_vote"] = current
     data["balance"] = _as_int(data.get("balance")) + reward
     data["total_earned"] = _as_int(data.get("total_earned")) + reward
-    _log_tx(data, "vote", reward, f"top.gg vote · streak {streak}")
+    _log_tx(data, "vote", reward, T("en", "note_vote", streak=streak))
     unlocked = _check_achievements(data, now=current)
 
     return {
@@ -136,23 +154,27 @@ async def record_vote(bot, user_id, *, weekend: bool = False) -> dict:
     return result
 
 
-def vote_dm_view(result: dict) -> discord.ui.LayoutView:
+def vote_dm_view(result: dict, lang: str = "en") -> discord.ui.LayoutView:
     """Build the thank-you DM for a recorded vote."""
     streak = _as_int(result.get("streak"))
     body = [
-        f"You voted for **Niko** on top.gg and earned **{_as_int(result.get('reward')):,}** 🪙.",
-        f"Vote streak: **{streak}** · vote reward **x{result.get('reward_multiplier', 1)}**"
-        f" · earnings bonus **x{result.get('earnings_multiplier', 1)}**",
+        T(lang, "dm_reward", reward=f"{_as_int(result.get('reward')):,}"),
+        T(
+            lang, "dm_streak",
+            streak=streak,
+            mult=result.get("reward_multiplier", 1),
+            earn=result.get("earnings_multiplier", 1),
+        ),
     ]
     if result.get("weekend"):
-        body.append("-# Weekend votes pay double — thanks for the extra push!")
+        body.append(T(lang, "dm_weekend"))
     unlocked = result.get("unlocked") or []
     if unlocked:
-        body.append("**New achievements** " + ", ".join(unlocked))
-    body.append(f"-# Vote again in 12 hours to keep the streak alive: {TOPGG_VOTE_URL}")
+        body.append(T(lang, "dm_unlocked", items=", ".join(unlocked)))
+    body.append(T(lang, "dm_again", url=TOPGG_VOTE_URL))
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=_vote_title("Thank you for voting!")),
+        discord.ui.TextDisplay(content=_vote_title(T(lang, "dm_title"))),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content="\n".join(body)),
         accent_colour=ACCENT_GOLD,
@@ -168,7 +190,7 @@ async def send_vote_thanks(bot, user_id, result: dict) -> bool:
             user = await bot.fetch_user(int(user_id))
         if user is None:
             return False
-        await user.send(view=vote_dm_view(result))
+        await user.send(view=vote_dm_view(result, _member_lang(user)))
         return True
     except Exception as exc:
         log.error("Economy", f"Could not send the vote thank-you DM to {user_id}: {exc}")
@@ -181,33 +203,39 @@ class VoteMixin:
     @commands.hybrid_command(
         name="vote",
         aliases=["upvote"],
-        description="Vote for Niko on top.gg for coins and a streak bonus",
-        help="{ 'en': 'vote for Niko on top.gg 🗳️✨', 'de': 'stimme für Niko auf top.gg', 'es': 'vota por Niko en top.gg 🗳️✨' }",
+        description=CMDS.text("vote.description"),
+        help=CMDS.help("vote"),
     )
     async def vote(self, ctx: commands.Context):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
+        lang = get_lang(ctx)
         data = await self.get_user_economy_data(ctx.author.id)
         standing = vote_standing(data)
         lines = [
-            f"**Rewards** — every vote pays **{VOTE_BASE_REWARD:,}** 🪙, doubled on weekends.",
-            f"**Your streak** — **{standing['streak']}** votes in a row"
-            f" (best **{standing['best_streak']}**).",
-            f"**Multipliers** — vote payout **x{standing['reward_multiplier']}**,"
-            f" daily/work earnings **x{standing['earnings_multiplier']}**.",
-            f"**Total votes** — **{standing['votes']}**.",
+            T(lang, "cmd_rewards", base=f"{VOTE_BASE_REWARD:,}"),
+            T(lang, "cmd_streak", streak=standing["streak"], best=standing["best_streak"]),
+            T(
+                lang, "cmd_multipliers",
+                mult=standing["reward_multiplier"],
+                earn=standing["earnings_multiplier"],
+            ),
+            T(lang, "cmd_total", count=standing["votes"]),
         ]
         if standing["can_vote"]:
-            lines.append(f"Vote again any time — one vote every 12 hours counts.")
+            lines.append(T(lang, "cmd_can_vote"))
         else:
             remaining = max(0, standing["next_vote_at"] - int(time.time()))
             hours, rest = divmod(remaining, 3600)
             minutes = rest // 60
-            lines.append(f"Next countable vote in **{hours}h {minutes}m**.")
-        lines.append(f"[Vote on top.gg]({standing['vote_url']})")
+            lines.append(T(lang, "cmd_next_vote", hours=hours, minutes=minutes))
+        lines.append(T(lang, "cmd_link", url=standing["vote_url"]))
 
-        view = _info_view(f"{topgg_emoji() or VOTE_ICON} Vote for Niko", "\n".join(lines))
+        view = _info_view(
+            T(lang, "cmd_title", icon=topgg_emoji() or VOTE_ICON),
+            "\n".join(lines),
+        )
         if ctx.interaction:
             await ctx.interaction.followup.send(view=view)
         else:

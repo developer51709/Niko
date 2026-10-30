@@ -20,6 +20,8 @@ from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
 from utils import logging
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from utils.premium import (
     KIND_GIFT,
     PREMIUM_REMINDER_DAYS,
@@ -33,7 +35,24 @@ from utils.premium import (
     subscriptions_due_for_reminder,
 )
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 ACCENT = 0xC8A882
+
+MESSAGES = load_locales(__package__, "cog")
+msg = make_flat_msg(MESSAGES)
+
+
+def _duration(ctx, count: int) -> str:
+    """``1 month`` / ``3 months`` in the reader's language."""
+    return msg(ctx, "months_one" if count == 1 else "months_many", count=count)
+
+
+def _days(ctx, count: int) -> str:
+    """``1 day`` / ``3 days`` in the reader's language."""
+    return msg(ctx, "days_one" if count == 1 else "days_many", count=count)
 
 
 def site_base() -> str:
@@ -51,21 +70,22 @@ def billing_url(guild_id: int | str, *, gift: bool = False) -> str:
     return f"{site_base()}/billing?guild={guild_id}"
 
 
-def _expiry_label(value) -> str:
+def _expiry_label(value, ctx=None) -> str:
+    """A Discord date, so every reader sees the expiry in their own locale."""
     moment = parse_ts(value)
     if moment is None:
-        return "unknown"
-    return moment.strftime("%d %b %Y")
+        return msg(ctx, "unknown_date")
+    return f"<t:{int(moment.timestamp())}:D>"
 
 
-def _status_line(row) -> str:
+def _status_line(row, ctx=None) -> str:
     if subscription_is_active(row):
-        return f"Active · renews by **{_expiry_label(row.get('expires_at'))}**"
+        return msg(ctx, "status_active", date=_expiry_label(row.get("expires_at"), ctx))
     if row and row.get("status") == "cancelled":
-        return "Cancelled · premium perks are paused"
+        return msg(ctx, "status_cancelled")
     if row:
-        return f"Expired on **{_expiry_label(row.get('expires_at'))}**"
-    return "No subscription"
+        return msg(ctx, "status_expired", date=_expiry_label(row.get("expires_at"), ctx))
+    return msg(ctx, "status_none")
 
 
 def _premium_view() -> discord.ui.LayoutView:
@@ -106,25 +126,28 @@ async def notify_gift(
         except Exception:
             owner = None
 
-    gifter = gifted_by_name or f"<@{gifted_by_id}>" if gifted_by_id else "A community member"
+    gifter = gifted_by_name or (f"<@{gifted_by_id}>" if gifted_by_id else msg(guild, "community_member"))
+    server_name = guild.name if guild else f"Server {guild_id}"
     view = _premium_view()
     view.add_item(
         discord.ui.Container(
             discord.ui.TextDisplay(
                 content=(
-                    f"### {get_emoji('heart')} Your server was gifted premium\n"
-                    f"**{guild.name if guild else f'Server {guild_id}'}** now has Niko Premium "
-                    f"for **{months} month{'s' if months != 1 else ''}**.\n\n"
-                    f"**Gifted by:** {gifter}\n"
-                    f"**Active until:** **{_expiry_label(expires_at)}**\n\n"
-                    f"Premium includes AI image moderation, powered by fal.ai. "
-                    f"You can turn it on in the dashboard under Moderation."
+                    f"### {get_emoji('heart')} {msg(guild, 'gift_dm_title')}\n"
+                    + msg(
+                        guild,
+                        "gift_dm_body",
+                        server=server_name,
+                        duration=_duration(guild, months),
+                        gifter=gifter,
+                        until=_expiry_label(expires_at, guild),
+                    )
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Open server dashboard",
+                    label=msg(guild, "open_dashboard"),
                     style=discord.ButtonStyle.link,
                     url=f"{site_base()}/dashboard/{guild_id}/moderation",
                 )
@@ -163,17 +186,17 @@ async def notify_purchase(
         discord.ui.Container(
             discord.ui.TextDisplay(
                 content=(
-                    f"### {get_emoji('tick')} Payment confirmed\n"
-                    f"**{price_label(amount_cents)}** for **{months} month{'s' if months != 1 else ''}** "
-                    f"of Niko Premium.\n"
-                    f"**Server:** {guild_name}\n"
-                    f"**Active until:** **{_expiry_label(expires_at)}**\n\n"
-                    + (
-                        "The server owner has been notified about your gift."
-                        if gifted
-                        else "Thanks for supporting Niko — this pays for the moderation API, "
-                             "hosting, and the upcoming domain."
+                    f"### {get_emoji('tick')} {msg(guild, 'payment_title')}\n"
+                    + msg(
+                        guild,
+                        "payment_body",
+                        price=price_label(amount_cents),
+                        duration=_duration(guild, months),
+                        server=guild_name,
+                        until=_expiry_label(expires_at, guild),
                     )
+                    + "\n\n"
+                    + msg(guild, "payment_gift_note" if gifted else "payment_thanks")
                 )
             )
         )
@@ -236,23 +259,27 @@ class PremiumCog(commands.Cog, name="Premium"):
 
         expires = parse_ts(row.get("expires_at"))
         days_left = max(0, (expires - datetime.utcnow()).days) if expires else PREMIUM_REMINDER_DAYS
+        ctx = guild or owner
         view = _premium_view()
         view.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('loading')} Premium expires soon\n"
-                        f"**{guild.name if guild else f'Server {guild_id}'}**'s Niko Premium ends "
-                        f"**{_expiry_label(row.get('expires_at'))}** "
-                        f"(in {max(1, days_left)} day{'s' if days_left != 1 else ''}).\n\n"
-                        f"Renewing keeps AI image moderation running without a gap. "
-                        f"The monthly plan is **{price_label(int(row.get('price_cents') or 1500))}**."
+                        f"### {get_emoji('loading')} {msg(ctx, 'reminder_title')}\n"
+                        + msg(
+                            ctx,
+                            "reminder_body",
+                            server=guild.name if guild else f"Server {guild_id}",
+                            until=_expiry_label(row.get("expires_at"), ctx),
+                            duration=_days(ctx, max(1, days_left)),
+                            price=price_label(int(row.get("price_cents") or 1500)),
+                        )
                     )
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.ActionRow(
                     discord.ui.Button(
-                        label="Renew premium",
+                        label=msg(ctx, "renew_button"),
                         style=discord.ButtonStyle.link,
                         url=billing_url(guild_id),
                     )
@@ -272,13 +299,16 @@ class PremiumCog(commands.Cog, name="Premium"):
     # `.premium` prefix group for user grants, so a hybrid command here would
     # replace that prefix handler depending on cog load order.
 
-    premium = app_commands.Group(name="premium", description="Manage Niko Premium for a server")
+    premium = app_commands.Group(
+        name="premium",
+        description=CMDS.text("premium.description"),
+    )
 
-    @premium.command(name="status", description="Show this server's premium subscription")
+    @premium.command(name="status", description=CMDS.text("premium.status.description"))
     async def premium_status(self, interaction: discord.Interaction):
         if interaction.guild is None:
             return await interaction.response.send_message(
-                f"{get_emoji('danger')} Use this command inside a server.", ephemeral=True
+                f"{get_emoji('danger')} {msg(interaction, 'guild_only')}", ephemeral=True
             )
         await interaction.response.defer(ephemeral=True)
         row = None
@@ -291,27 +321,24 @@ class PremiumCog(commands.Cog, name="Premium"):
         container = discord.ui.Container(
             discord.ui.TextDisplay(
                 content=(
-                    f"### {get_emoji('heart')} Niko Premium\n"
-                    f"**Server:** {interaction.guild.name}\n"
-                    f"**Status:** {_status_line(row)}\n"
-                    f"**Plan:** {price_label(int((row or {}).get('price_cents') or 1500))} / month\n"
-                    f"**AI image moderation:** {'enabled with premium' if subscription_is_active(row) else 'paused'}"
+                    f"### {get_emoji('heart')} {msg(interaction, 'status_title')}\n"
+                    f"**{msg(interaction, 'status_server')}:** {interaction.guild.name}\n"
+                    f"**{msg(interaction, 'status_status')}:** {_status_line(row, interaction)}\n"
+                    f"**{msg(interaction, 'status_plan')}:** "
+                    f"{msg(interaction, 'plan_price', price=price_label(int((row or {}).get('price_cents') or 1500)))}\n"
+                    f"**{msg(interaction, 'status_ai_moderation')}:** "
+                    f"{msg(interaction, 'status_enabled' if subscription_is_active(row) else 'status_paused')}"
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=(
-                    "Premium is per server and renews monthly. It pays for the fal.ai "
-                    "moderation credits, bot hosting, and the upcoming niko domain."
-                )
-            ),
+            discord.ui.TextDisplay(content=msg(interaction, "status_blurb")),
             accent_colour=discord.Colour(ACCENT),
         )
         if not subscription_is_active(row):
             container.add_item(
                 discord.ui.ActionRow(
                     discord.ui.Button(
-                        label="Upgrade this server",
+                        label=msg(interaction, "upgrade_button"),
                         style=discord.ButtonStyle.link,
                         url=billing_url(interaction.guild.id),
                     )
@@ -320,17 +347,17 @@ class PremiumCog(commands.Cog, name="Premium"):
         view.add_item(container)
         await interaction.followup.send(view=view, ephemeral=True)
 
-    @premium.command(name="upgrade", description="Get the checkout link for this server")
+    @premium.command(name="upgrade", description=CMDS.text("premium.upgrade.description"))
     @app_commands.default_permissions(manage_guild=True)
     async def premium_upgrade(self, interaction: discord.Interaction):
         if interaction.guild is None:
             return await interaction.response.send_message(
-                f"{get_emoji('danger')} Use this command inside a server.", ephemeral=True
+                f"{get_emoji('danger')} {msg(interaction, 'guild_only')}", ephemeral=True
             )
         permissions = interaction.permissions
         if not (permissions.manage_guild or permissions.administrator):
             return await interaction.response.send_message(
-                f"{get_emoji('danger')} Only members who can manage this server can upgrade it.",
+                f"{get_emoji('danger')} {msg(interaction, 'manage_only')}",
                 ephemeral=True,
             )
         await interaction.response.defer(ephemeral=True)
@@ -339,17 +366,19 @@ class PremiumCog(commands.Cog, name="Premium"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('heart')} Upgrade {interaction.guild.name}\n"
-                        f"**{price_label()} / month** — cancel by simply not renewing.\n\n"
-                        f"Checkout opens our white-label payment page: choose a cryptocurrency, "
-                        f"send it to the address shown, and premium activates the moment the "
-                        f"transaction confirms.\n\n"
-                        f"-# Card payments are coming soon."
+                        f"### {get_emoji('heart')} "
+                        + msg(interaction, "upgrade_title", server=interaction.guild.name)
+                        + "\n"
+                        + msg(interaction, "upgrade_price", price=price_label())
+                        + "\n\n"
+                        + msg(interaction, "upgrade_blurb")
+                        + "\n\n"
+                        + msg(interaction, "upgrade_cards_note")
                     )
                 ),
                 discord.ui.ActionRow(
                     discord.ui.Button(
-                        label="Open checkout",
+                        label=msg(interaction, "open_checkout"),
                         style=discord.ButtonStyle.link,
                         url=billing_url(interaction.guild.id),
                     )
@@ -359,20 +388,20 @@ class PremiumCog(commands.Cog, name="Premium"):
         )
         await interaction.followup.send(view=view, ephemeral=True)
 
-    @premium.command(name="gift", description="Gift premium to a server you are a member of")
-    @app_commands.describe(server_id="Server ID to gift (defaults to this server)")
+    @premium.command(name="gift", description=CMDS.text("premium.gift.description"))
+    @app_commands.describe(server_id=CMDS.arg("premium.gift", "server_id"))
     async def premium_gift(self, interaction: discord.Interaction, server_id: str | None = None):
         await interaction.response.defer(ephemeral=True)
         target = interaction.guild
         if server_id:
             if not server_id.strip().isdigit():
                 return await interaction.followup.send(
-                    f"{get_emoji('danger')} That is not a valid server ID.", ephemeral=True
+                    f"{get_emoji('danger')} {msg(interaction, 'invalid_server_id')}", ephemeral=True
                 )
             target = self.bot.get_guild(int(server_id.strip()))
         if target is None:
             return await interaction.followup.send(
-                f"{get_emoji('danger')} Choose a server Niko is in to gift premium to.",
+                f"{get_emoji('danger')} {msg(interaction, 'choose_server')}",
                 ephemeral=True,
             )
         member = target.get_member(interaction.user.id)
@@ -383,7 +412,7 @@ class PremiumCog(commands.Cog, name="Premium"):
                 member = None
         if member is None:
             return await interaction.followup.send(
-                f"{get_emoji('danger')} You have to be a member of **{target.name}** to gift it premium.",
+                f"{get_emoji('danger')} {msg(interaction, 'not_member', server=target.name)}",
                 ephemeral=True,
             )
 
@@ -398,18 +427,17 @@ class PremiumCog(commands.Cog, name="Premium"):
             discord.ui.Container(
                 discord.ui.TextDisplay(
                     content=(
-                        f"### {get_emoji('heart')} Gift premium\n"
+                        f"### {get_emoji('heart')} {msg(interaction, 'gift_title')}\n"
                         f"**{target.name}**\n"
-                        f"**{price_label()} / month**"
-                        + ("\n\n-# This adds another month on top of the current subscription." if already else "")
-                        + "\n\nYou can gift one, three, six or twelve months on the "
-                        "next screen. Your gift stays active even if you leave the "
-                        "server, and the owner is told who sent it."
+                        + msg(interaction, "plan_price", price=price_label())
+                        + ("\n\n" + msg(interaction, "gift_active_note") if already else "")
+                        + "\n\n"
+                        + msg(interaction, "gift_blurb")
                     )
                 ),
                 discord.ui.ActionRow(
                     discord.ui.Button(
-                        label="Continue to payment",
+                        label=msg(interaction, "continue_payment"),
                         style=discord.ButtonStyle.link,
                         url=billing_url(target.id, gift=True),
                     )

@@ -7,6 +7,10 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from ._messages import _divider, cv2_image, cv2_text, key_permission_names, msg
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 # Discord's verification levels, in the order they escalate. The translated
 # label comes from the catalogue, the level itself is the key.
 _VERIFICATION_KEYS = {
@@ -67,8 +71,8 @@ class ServerMixin:
     @commands.hybrid_command(
         name="serverinfo",
         aliases=["si", "server"],
-        description="View server info",
-        help="{ 'en': 'show server stats', 'de': 'zeigt server-infos', 'es': 'muestra la información del servidor' }"
+        description=CMDS.text("serverinfo.description"),
+        help=CMDS.help("serverinfo"),
     )
     async def serverinfo(self, ctx):
         server = ctx.guild
@@ -186,8 +190,8 @@ class ServerMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="roleinfo",
-        description="View role info",
-        help="{ 'en': 'see role details', 'de': 'rollen-infos anzeigen', 'es': 'mira los detalles del rol' }"
+        description=CMDS.text("roleinfo.description"),
+        help=CMDS.help("roleinfo"),
     )
     async def roleinfo(self, ctx, role: discord.Role = None):
         if role is None:
@@ -266,8 +270,8 @@ class ServerMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="servericon",
-        description="Show the server's icon",
-        help="{ 'en': 'show the servers cute icon 📍', 'de': 'server-icon anzeigen', 'es': 'muestra el icono del servidor 📍' }"
+        description=CMDS.text("servericon.description"),
+        help=CMDS.help("servericon"),
     )
     async def servericon(self, ctx):
         server = ctx.guild
@@ -280,8 +284,8 @@ class ServerMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="serverbanner",
-        description="Show the server's banner",
-        help="{ 'en': 'show the servers banner 🖼', 'de': 'server-banner anzeigen', 'es': 'muestra el banner del servidor 🖼' }"
+        description=CMDS.text("serverbanner.description"),
+        help=CMDS.help("serverbanner"),
     )
     async def serverbanner(self, ctx):
         server = ctx.guild
@@ -295,8 +299,8 @@ class ServerMixin:
     # -------------------------------
     @commands.hybrid_command(
         name="booststats",
-        description="View the server's boost stats",
-        help="{ 'en': 'see the boost stats of this server', 'de': 'boost-infos anzeigen', 'es': 'mira las estadísticas de boost del servidor' }"
+        description=CMDS.text("booststats.description"),
+        help=CMDS.help("booststats"),
     )
     async def booststats(self, ctx):
         server = ctx.guild

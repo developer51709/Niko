@@ -350,7 +350,7 @@ async def _refresh_captcha_panel(
     if channel is None:
         raise RuntimeError("The configured verification panel channel is unavailable.")
 
-    panel_view = CaptchaPanelView(guild_id, mode=cfg.captcha_mode)
+    panel_view = CaptchaPanelView(guild_id, mode=cfg.captcha_mode, locale=guild)
     message = None
     if previous_channel_id == cfg.captcha_channel_id and previous_message_id:
         try:

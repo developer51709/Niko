@@ -233,7 +233,7 @@ def api_commands():
             "parameters": [
                 {
                     "name": str(item.get("name") or ""),
-                    "description": str(item.get("description") or ""),
+                    "description": _description_value(item.get("description")),
                     "required": bool(item.get("required", False)),
                     "type": str(item.get("type") or "string"),
                 }

@@ -4,6 +4,10 @@ from discord.ext import tasks
 
 from .views import *
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 # The webhook used to repost censored messages. Matching it by name lets an
 # existing one be reused instead of a new webhook per restart.
 _CENSOR_WEBHOOK_NAME = "Niko Censor"
@@ -254,9 +258,12 @@ class AutoMod(commands.Cog):
                     await message.delete()
                 except Exception:
                     pass
+                lang = get_lang(message.guild)
                 await utils.log_action(
                     message.guild, "Anti-Spam",
-                    f"{message.author.mention} triggered anti-spam in {message.channel.mention}.")
+                    _log_t(lang, "spam_body",
+                           mention=message.author.mention, channel=message.channel.mention),
+                    display_title=_log_t(lang, "title_spam"))
                 try:
                     user = message.guild.get_member(message.author.id)
                     await utils.mute_member(message.guild, user, duration=60, reason="Auto-mute: spam")
@@ -275,10 +282,13 @@ class AutoMod(commands.Cog):
                     await message.delete()
                 except Exception:
                     pass
+                lang = get_lang(message.guild)
                 await utils.log_action(
                     message.guild, "Anti-Link",
-                    f"{message.author.mention} posted an invite link in {message.channel.mention}.\n\n"
-                    f"**Message:**\n{content}")
+                    _log_t(lang, "link_body",
+                           mention=message.author.mention,
+                           channel=message.channel.mention, content=content),
+                    display_title=_log_t(lang, "title_link"))
                 return
 
         if cfg["automod"].get("badwords", True):
@@ -293,9 +303,13 @@ class AutoMod(commands.Cog):
                     await message.delete()
                 except Exception:
                     pass
+                lang = get_lang(message.guild)
                 await utils.log_action(
                     message.guild, "Mass Mention",
-                    f"{message.author.mention} mass-mentioned `{mentions}` users in {message.channel.mention}.")
+                    _log_t(lang, "mention_body",
+                           mention=message.author.mention, count=mentions,
+                           channel=message.channel.mention),
+                    display_title=_log_t(lang, "title_mention"))
                 try:
                     await utils.mute_member(message.guild, message.author, duration=120, reason="Auto-mute: mass mention")
                 except discord.Forbidden:
@@ -319,10 +333,15 @@ class AutoMod(commands.Cog):
                     await message.delete()
                 except Exception:
                     pass
+                lang = get_lang(message.guild)
                 await utils.log_action(
                     message.guild, "NSFW Filter",
-                    f"{message.author.mention} posted a flagged image in {message.channel.mention}.\n\n"
-                    f"**File:** `{filename or 'unknown'}`  •  Confidence: `{score:.0%}`")
+                    _log_t(lang, "nsfw_body",
+                           mention=message.author.mention,
+                           channel=message.channel.mention,
+                           file=filename or _log_t(lang, "unknown_file"),
+                           score=f"{score:.0%}"),
+                    display_title=_log_t(lang, "title_nsfw"))
                 return
 
     @commands.Cog.listener()
@@ -370,10 +389,13 @@ class AutoMod(commands.Cog):
             await message.delete()
         except Exception:
             pass
+        lang = get_lang(message.guild)
         await utils.log_action(
             message.guild, "Bad Word Filter",
-            f"{message.author.mention} used a blocked word in {message.channel.mention}.\n\n"
-            f"**Message:**\n{content}")
+            _log_t(lang, "badword_body",
+                   mention=message.author.mention,
+                   channel=message.channel.mention, content=content),
+            display_title=_log_t(lang, "title_badwords"))
 
     def _remember_censor_webhook(self, channel_id: int, webhook) -> discord.Webhook:
         """Cache a channel's censor webhook and remember its id."""
@@ -460,10 +482,13 @@ class AutoMod(commands.Cog):
                 log.warning("Bad Words", f"Censored message was not posted in {message.channel.mention}: {error}")
                 return False
 
+        lang = get_lang(message.guild)
         await utils.log_action(
             message.guild, "Bad Word Filter",
-            f"{message.author.mention} used a blocked word in {message.channel.mention}. "
-            f"The message was censored and reposted.\n\n**Censored message:**\n{censored}")
+            _log_t(lang, "badword_censored_body",
+                   mention=message.author.mention,
+                   channel=message.channel.mention, content=censored),
+            display_title=_log_t(lang, "title_badwords"))
         return True
 
     async def _premium_active(self, guild_id: int) -> bool:
@@ -539,13 +564,19 @@ class AutoMod(commands.Cog):
                 f"{triggering_user} used a user-installed app (ID {message.application_id}) "
                 f"in {message.guild.name}."
             )
+            lang = get_lang(message.guild)
             await utils.log_action(
                 message.guild,
                 "User-Installed App Detected",
-                f"{triggering_user.mention} used a **user-installed** external application "
-                f"command in {message.channel.mention}.\n"
-                f"App ID: `{message.application_id}`\n"
-                f"-# Count: {count}/{threshold} before action is taken."
+                _log_t(
+                    lang, "app_detected_body",
+                    mention=triggering_user.mention,
+                    channel=message.channel.mention,
+                    app=message.application_id,
+                    count=count,
+                    threshold=threshold,
+                ),
+                display_title=_log_t(lang, "title_app_detected"),
             )
 
         # Threshold reached → take action
@@ -558,13 +589,19 @@ class AutoMod(commands.Cog):
                 f"Threshold reached for {triggering_user} in {message.guild.name} — "
                 f"action: {action}"
             )
+            lang = get_lang(message.guild)
             await utils.log_action(
                 message.guild,
                 "User-Installed App Action Taken",
-                f"**{triggering_user.mention}** fired `{count}` user-installed app commands "
-                f"within `{window}s`.\n"
-                f"App ID: `{message.application_id}`\n"
-                f"Action taken: `{action}`"
+                _log_t(
+                    lang, "app_action_body",
+                    mention=triggering_user.mention,
+                    count=count,
+                    window=window,
+                    app=message.application_id,
+                    action=action,
+                ),
+                display_title=_log_t(lang, "title_app_action"),
             )
 
             if member:
@@ -646,16 +683,21 @@ class AutoMod(commands.Cog):
 
         operator = await self._identify_operator(guild)
 
-        op_mention = operator.mention if operator else "*could not be determined*"
+        lang = get_lang(guild)
+        op_mention = operator.mention if operator else _log_t(lang, "unknown_operator")
         raider_mentions = ", ".join(f"<@{uid}>" for uid in raider_ids)
         await self.utils().log_action(
             guild,
             "Interaction Flood Raid Detected",
-            f"**{len(raider_ids)}** recently-joined members fired bot interactions "
-            f"simultaneously — consistent with an external raid tool.\n\n"
-            f"**Suspected Operator:** {op_mention}\n"
-            f"**Raiding Accounts:** {raider_mentions}\n\n"
-            f"Raider action: `{raider_action}`  •  Operator action: `{op_action}`"
+            _log_t(
+                lang, "flood_body",
+                count=len(raider_ids),
+                operator=op_mention,
+                raiders=raider_mentions,
+                raider=raider_action,
+                operator_action=op_action,
+            ),
+            display_title=_log_t(lang, "title_flood"),
         )
 
         for uid in raider_ids:
@@ -680,7 +722,6 @@ class AutoMod(commands.Cog):
             except Exception:
                 pass
 
-        lang = get_lang(guild)
         try:
             await guild.owner.send(
                 f"{get_emoji('danger')} "
@@ -851,8 +892,15 @@ class AutoMod(commands.Cog):
             await self.utils().log_action(
                 guild,
                 "Anti-Nuke Triggered",
-                f"**{offender.mention}** performed `{threshold}` `{action_key}` actions "
-                f"within `{interval}s`.\n**Action:** `{nuke_action}`",
+                _log_t(
+                    lang, "nuke_body",
+                    offender=offender.mention,
+                    threshold=threshold,
+                    action=action_key,
+                    interval=interval,
+                    taken=nuke_action,
+                ),
+                display_title=_log_t(lang, "title_nuke"),
             )
 
         async def _do_dm():
@@ -933,8 +981,14 @@ class AutoMod(commands.Cog):
             await self.utils().log_action(
                 guild,
                 "Anti-Raid Triggered",
-                f"**{join_count}** members joined within `{interval}s`. "
-                f"Actioned `{len(recent_members)}` member(s). Executing `{action}`.",
+                _log_t(
+                    lang, "raid_body",
+                    count=join_count,
+                    interval=interval,
+                    actioned=len(recent_members),
+                    action=action,
+                ),
+                display_title=_log_t(lang, "title_raid"),
             )
 
         async def _do_dm():
@@ -980,8 +1034,8 @@ class AutoMod(commands.Cog):
 
     @commands.hybrid_command(
         name="automod",
-        description="Open the AutoMod settings panel",
-        help="{ 'en': 'Open the AutoMod settings panel.', 'de': 'Öffne das AutoMod-Einstellungsmenü.', 'es': 'Abre el panel de ajustes de AutoMod.' }",
+        description=CMDS.text("automod.description"),
+        help=CMDS.help("automod"),
     )
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)

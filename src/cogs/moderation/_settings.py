@@ -7,6 +7,10 @@ import discord
 from discord.ext import commands
 from ._messages import msg, _cv2
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 #: A user/role mention, or a bare snowflake.
 _MENTION = re.compile(r"^<@[!&]?(\d+)>$")
 _SNOWFLAKE = re.compile(r"^\d{15,20}$")
@@ -37,8 +41,8 @@ class SettingsMixin:
 
     # ── BADWORDS ─────────────────────────────────────────────────────────────
     @commands.hybrid_group(name="badwords", invoke_without_command=True,
-                           description="Manage the blocked word list",
-                           help="{ 'en': 'Manage the blocked word list.', 'de': 'Verwalte die Liste blockierter Wörter.', 'es': 'Gestiona la lista de palabras bloqueadas.' }")
+                           description=CMDS.text("badwords.description"),
+                           help=CMDS.help("badwords"))
     @commands.has_permissions(manage_guild=True)
     async def badwords(self, ctx):
         """The interactive blocked-words panel: word list, preset filters,
@@ -50,10 +54,10 @@ class SettingsMixin:
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
-    @badwords.command(name="add", description="Add a blocked word")
+    @badwords.command(name="add", description=CMDS.text("badwords.add.description"))
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
-    async def badwords_add(self, ctx, *, word: str = commands.parameter(default=None, description="The word or phrase to block.")):
+    async def badwords_add(self, ctx, *, word: str = commands.parameter(default=None, description=CMDS.arg("badwords.add", "word"))):
         utils = self.utils()
         if not word:
             return await ctx.send(msg(ctx, "no_word"))
@@ -64,8 +68,8 @@ class SettingsMixin:
             f"**Action:** Word added\n**Word:** `{word}`", moderator=ctx.author)
 
     @commands.has_permissions(manage_guild=True)
-    @badwords.command(name="remove", description="Remove a blocked word")
-    async def badwords_remove(self, ctx, *, word: str = commands.parameter(default=None, description="The blocked word or phrase to remove.")):
+    @badwords.command(name="remove", description=CMDS.text("badwords.remove.description"))
+    async def badwords_remove(self, ctx, *, word: str = commands.parameter(default=None, description=CMDS.arg("badwords.remove", "word"))):
         utils = self.utils()
         if not word:
             return await ctx.send(msg(ctx, "no_word"))
@@ -76,7 +80,7 @@ class SettingsMixin:
             f"**Action:** Word removed\n**Word:** `{word}`", moderator=ctx.author)
 
     @commands.has_permissions(manage_guild=True)
-    @badwords.command(name="clear", description="Clear all blocked words")
+    @badwords.command(name="clear", description=CMDS.text("badwords.clear.description"))
     async def badwords_clear(self, ctx):
         utils = self.utils()
         utils.clear_blocked_words(ctx.guild.id)
@@ -87,8 +91,8 @@ class SettingsMixin:
 
     # ── WHITELIST ─────────────────────────────────────────────────────────────
     @commands.hybrid_group(name="whitelist", aliases=["wl"], invoke_without_command=True,
-                           description="Manage the automod whitelist",
-                           help="{ 'en': 'Manage the automod whitelist.', 'de': 'Verwalte die Automod-Whitelist.', 'es': 'Gestiona la lista blanca de automod.' }")
+                           description=CMDS.text("whitelist.description"),
+                           help=CMDS.help("whitelist"))
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def whitelist(self, ctx):
@@ -116,14 +120,14 @@ class SettingsMixin:
         )
         await ctx.send(view=_cv2(text), allowed_mentions=discord.AllowedMentions.none())
 
-    @whitelist.command(name="add", description="Exempt a user or role from automod")
+    @whitelist.command(name="add", description=CMDS.text("whitelist.add.description"))
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def whitelist_add(
         self,
         ctx,
-        target_type: str = commands.parameter(default=None, description="Whether the target is a user or a role."),
-        target: str = commands.parameter(default=None, description="The user or role mention, or its numeric ID."),
+        target_type: str = commands.parameter(default=None, description=CMDS.arg("whitelist.add", "target_type")),
+        target: str = commands.parameter(default=None, description=CMDS.arg("whitelist.add", "target")),
     ):
         utils = self.utils()
         kind = str(target_type or "").strip().lower()
@@ -158,14 +162,14 @@ class SettingsMixin:
             ctx.guild, "AutoMod Whitelist",
             f"**Action:** Added {kind}\n**Target:** {mention}", moderator=ctx.author)
 
-    @whitelist.command(name="remove", aliases=["rm"], description="Stop exempting a user or role from automod")
+    @whitelist.command(name="remove", aliases=["rm"], description=CMDS.text("whitelist.remove.description"))
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def whitelist_remove(
         self,
         ctx,
-        target_type: str = commands.parameter(default=None, description="Whether the target is a user or a role."),
-        target: str = commands.parameter(default=None, description="The user or role mention, or its numeric ID."),
+        target_type: str = commands.parameter(default=None, description=CMDS.arg("whitelist.remove", "target_type")),
+        target: str = commands.parameter(default=None, description=CMDS.arg("whitelist.remove", "target")),
     ):
         utils = self.utils()
         kind = str(target_type or "").strip().lower()

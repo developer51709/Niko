@@ -6,6 +6,8 @@ before a restart still resolves the right person after it.
 
 import discord
 
+from ._messages import msg
+
 # The avatar panel's buttons carry the target's user id in their custom id, so
 # they resolve the right person after a restart without any message state.
 _AVATAR_SERVER_TEMPLATE = r"avatar:server:(?P<user_id>\d+)"
@@ -46,9 +48,9 @@ async def _avatar_member(interaction: discord.Interaction, user_id: int):
 
 
 class _ServerAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_SERVER_TEMPLATE):
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, ctx=None):
         super().__init__(discord.ui.Button(
-            label="Server Avatar",
+            label=msg(ctx, "avatar_server_button"),
             style=discord.ButtonStyle.success,
             custom_id=f"avatar:server:{int(user_id)}",
         ))
@@ -56,7 +58,7 @@ class _ServerAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_A
 
     @classmethod
     async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
-        return cls(int(match["user_id"]))
+        return cls(int(match["user_id"]), interaction)
 
     async def callback(self, interaction: discord.Interaction):
         # Acknowledge before anything else: resolving the member and the user is
@@ -66,21 +68,23 @@ class _ServerAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_A
         member = await _avatar_member(interaction, self.user_id)
         if member is None:
             return await interaction.followup.send(
-                "This user is no longer in this server.", ephemeral=True
+                msg(interaction, "avatar_member_gone"), ephemeral=True
             )
         if not member.guild_avatar:
             return await interaction.followup.send(
-                "This user doesn't have a different server avatar.", ephemeral=True
+                msg(interaction, "avatar_no_server_avatar"), ephemeral=True
             )
         await interaction.followup.send(
-            view=_avatar_image_view("Server Avatar", member.guild_avatar.url), ephemeral=True
+            view=_avatar_image_view(
+                msg(interaction, "avatar_server_button"), member.guild_avatar.url),
+            ephemeral=True,
         )
 
 
 class _UserAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_USER_TEMPLATE):
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, ctx=None):
         super().__init__(discord.ui.Button(
-            label="Profile Picture",
+            label=msg(ctx, "avatar_user_button"),
             style=discord.ButtonStyle.secondary,
             custom_id=f"avatar:user:{int(user_id)}",
         ))
@@ -88,7 +92,7 @@ class _UserAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
 
     @classmethod
     async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
-        return cls(int(match["user_id"]))
+        return cls(int(match["user_id"]), interaction)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -100,23 +104,26 @@ class _UserAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
                 user = None
         if user is None:
             return await interaction.followup.send(
-                "I couldn't find that user anymore.", ephemeral=True
+                msg(interaction, "avatar_user_gone"), ephemeral=True
             )
         # display_avatar is never empty, so a user without an uploaded picture
         # still gets the default avatar Discord draws for them.
         await interaction.followup.send(
-            view=_avatar_image_view("Profile Picture", user.display_avatar.url), ephemeral=True
+            view=_avatar_image_view(
+                msg(interaction, "avatar_user_button"), user.display_avatar.url),
+            ephemeral=True,
         )
 
 
 class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVATAR_BANNER_TEMPLATE):
-    def __init__(self, user_id: int, style: discord.ButtonStyle = discord.ButtonStyle.success):
+    def __init__(self, user_id: int, style: discord.ButtonStyle = discord.ButtonStyle.success,
+                 ctx=None):
         # The /avatar panel posts its controls green and keeps the default; the
         # userinfo card passes the secondary style. The style only matters when
         # the panel is sent: an item rebuilt from a custom id handles the click
         # on a message that already carries the colours it was posted with.
         super().__init__(discord.ui.Button(
-            label="User Banner",
+            label=msg(ctx, "avatar_banner_button"),
             style=style,
             custom_id=f"avatar:banner:{int(user_id)}",
         ))
@@ -124,7 +131,7 @@ class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
 
     @classmethod
     async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
-        return cls(int(match["user_id"]))
+        return cls(int(match["user_id"]), ctx=interaction)
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -136,36 +143,39 @@ class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
                 user = None
         if user is None:
             return await interaction.followup.send(
-                "I couldn't find that user anymore.", ephemeral=True
+                msg(interaction, "avatar_user_gone"), ephemeral=True
             )
         if not user.banner:
             return await interaction.followup.send(
-                "This user doesn't have a banner.", ephemeral=True
+                msg(interaction, "avatar_no_banner"), ephemeral=True
             )
         await interaction.followup.send(
-            view=_avatar_image_view("User Banner", user.banner.url), ephemeral=True
+            view=_avatar_image_view(
+                msg(interaction, "avatar_banner_button"), user.banner.url),
+            ephemeral=True,
         )
 
 
 class AvatarButtons(discord.ui.ActionRow):
     """Avatar panel controls, keyed to the user the panel is showing."""
 
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, ctx=None):
         super().__init__()
         self.user_id = int(user_id)
-        self.add_item(_ServerAvatarButton(self.user_id))
-        self.add_item(_UserBannerButton(self.user_id))
+        self.add_item(_ServerAvatarButton(self.user_id, ctx))
+        self.add_item(_UserBannerButton(self.user_id, ctx=ctx))
 
 
 class UserInfoButtons(discord.ui.ActionRow):
     """Userinfo card controls: the profile picture and the banner of the user
     the card is showing, keyed to them so they survive a restart."""
 
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, ctx=None):
         super().__init__()
         self.user_id = int(user_id)
-        self.add_item(_UserAvatarButton(self.user_id))
-        self.add_item(_UserBannerButton(self.user_id, style=discord.ButtonStyle.secondary))
+        self.add_item(_UserAvatarButton(self.user_id, ctx))
+        self.add_item(_UserBannerButton(
+            self.user_id, style=discord.ButtonStyle.secondary, ctx=ctx))
 
 
 def register_avatar_persistent_views(bot) -> None:

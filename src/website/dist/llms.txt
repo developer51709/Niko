@@ -25,6 +25,7 @@
 - [Voting Rewards & Streaks](https://niko.sryze.cc/docs/economy-voting.md)
 - [Giveaway System](https://niko.sryze.cc/docs/giveaway-overview.md)
 - [Inviting Niko to Your Server](https://niko.sryze.cc/docs/invite.md)
+- [Languages & Localization](https://niko.sryze.cc/docs/language-support.md)
 - [Leveling Configuration Guide](https://niko.sryze.cc/docs/leveling-configuration.md)
 - [Leveling System Overview](https://niko.sryze.cc/docs/leveling-overview.md)
 - [Logging System](https://niko.sryze.cc/docs/logging-overview.md)
@@ -55,6 +56,7 @@
 
 ## Changelog
 
+- [Niko Now Speaks German and Spanish — Everywhere](https://niko.sryze.cc/changelog/multi-language-everywhere.md) — Niko is trilingual. Command help lines, replies, the help menu, and the website's command reference now exist in English, German, and Spanish, and Discord itself receives translated slash command and option descriptions so each member sees the `/` picker in their own language. Every cog keeps its wording in a `locales` folder next to the code, which makes adding the next language a translation job rather than a refactor.
 - [Faster Cards, Live Server Leaderboards & Voice XP](https://niko.sryze.cc/changelog/loading-cards-live-leaderboards-voice-xp.md) — Image cards no longer leave you staring at a spinner: economy, leveling, and Spotify commands open with an animated card-shaped placeholder and edit it into the finished render. The leveling leaderboard moved to a live page at /levels/<server id>, servers can exclude channels from XP and opt into passive voice XP, and the support server got clearer panels and a rules page that prints all twenty rules in one message.
 - [Booster Roles and Boost Announcements](https://niko.sryze.cc/changelog/booster-roles-and-notifications.md) — Server admins can now customize boost and unboost announcements in the dashboard and enable personal roles for active boosters. Boosters can rename, recolor, add an eligible role icon, choose gradient colors when Discord unlocks them, and share or unshare their role.
 - [Niko Premium Is Here — Real AI Image Moderation, Plus a Legal Update](https://niko.sryze.cc/changelog/premium-subscriptions.md) — Some things are worth doing properly. Niko Premium is a $15/month server subscription that puts every image posted in your server in front of fal.ai's NSFW model and deletes the ones that should never have been posted. Everything else — the scam image filter, bot profile customization, economy, leveling, tickets, giveaways, and the rest — stays free, exactly as it is today. This same release ships a legal update: a stricter, owner-verified data-removal process, protected moderation records, and a formal route for court-ordered requests.

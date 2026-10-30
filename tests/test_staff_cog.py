@@ -14,6 +14,7 @@ from cogs.staff.staff import (  # noqa: E402
     OWNER_ONLY_COMMANDS,
     STAFF_ROLES,
     StaffCog,
+    build_staff_help,
     command_allowed_for_role,
     get_staff_role,
 )
@@ -109,6 +110,33 @@ def test_non_staff_and_unknown_roles_are_denied():
     for role in (None, ""):
         for command in ("ping", "getreport", "blacklist", "exec"):
             assert not command_allowed_for_role(role, command), f"{role!r} must not reach .staff {command}"
+
+
+def _help_panel_text(locale: str) -> str:
+    """Render ``.staff help`` for a guild whose preferred locale is ``locale``."""
+    bot = commands.Bot(command_prefix=".", intents=discord.Intents.none())
+    asyncio.run(bot.add_cog(StaffCog(bot)))
+    guild = types.SimpleNamespace(preferred_locale=discord.Locale(locale), id=1)
+    ctx = types.SimpleNamespace(guild=guild, author=types.SimpleNamespace(id=1))
+    view = build_staff_help(bot, ctx, "owner")
+    return "\n".join(
+        child.content for child in view.walk_children()
+        if isinstance(child, discord.ui.TextDisplay)
+    )
+
+
+def test_staff_help_reads_the_localised_description_maps():
+    """``command.help`` holds a ``{language: text}`` map, not a plain string."""
+    expected = {
+        "en-US": "Announce the latest Niko update",
+        "de": "Kündige das neueste Niko-Update",
+        "es-ES": "Anuncia la última actualización de Niko",
+    }
+    for locale, wording in expected.items():
+        text = _help_panel_text(locale)
+        assert f"**`.staff announce`** — {wording}" in text, locale
+        # The serialised map itself must never reach the panel.
+        assert '"de"' not in text and '"es"' not in text, locale
 
 
 def test_unknown_users_are_not_staff():

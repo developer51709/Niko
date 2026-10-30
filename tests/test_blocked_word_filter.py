@@ -257,8 +257,8 @@ class _UtilsStub:
     def contains_blocked_word(self, guild_id, content):
         return self.blocked_word in content
 
-    async def log_action(self, guild, title, description):
-        self.logged.append((title, description))
+    async def log_action(self, guild, title, description, display_title=None):
+        self.logged.append((display_title or title, description))
 
 
 def make_automod(blocked_word):
@@ -415,8 +415,8 @@ class _CensorUtils:
     def contains_blocked_word(self, guild_id, content):
         return self.store.contains_blocked_word(guild_id, content)
 
-    async def log_action(self, guild, title, description):
-        self.logged.append((title, description))
+    async def log_action(self, guild, title, description, display_title=None):
+        self.logged.append((display_title or title, description))
 
 
 def make_censor_automod(blocked_words, action="censor", mask="*", presets=None):

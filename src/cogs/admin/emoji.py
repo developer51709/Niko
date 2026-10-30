@@ -15,153 +15,17 @@ from typing import Optional
 from config.emojis import get_emoji
 from utils import logging as log
 from utils.archive_safety import scan_zip
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
 from utils.prefix_manager import resolve_prefix
+from utils.locales import load_locales
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "emojimanager_title": "Emoji Manager",
-            "emojimanager_description": "Manage your server's emojis!",
-            "steal_description": "steal an emoji, a link or a whole pack",
-            "sm_description": "steal many emojis",
-            "surl_description": "add from url",
-            "enlarge_description": "big emoji view",
-            "emojistats_description": "view slots",
-            "re_description": "remove emoji",
-            "emoji_added": "Successfully added emoji: {emoji} (`:{name}:`)",
-            "server_full": "This server has reached its maximum emoji limit of {limit}.",
-            "no_perms": "I don't have the permissions to manage emojis.",
-            "error": "An error occurred: {error}",
-            "not_found": "Could not find or download the emoji. Please ensure you provided the full emoji string (e.g., `<:name:id>`).",
-            "timeout": "You took too long. Operation cancelled.",
-            "invalid_name": "Invalid name. Please use alphanumeric characters (2-32 chars).",
-            "no_emojis": "This server has no custom emojis.",
-            "steal_usage": "**Usage:** `{prefix}steal <emoji | link> [...]`\nYou can paste several emojis or links at once, or link a `.zip` emoji pack.",
-            "stealing_title": "Stealing emojis",
-            "steal_added": "Added **{count}** emoji(s).",
-            "steal_none_added": "No emojis were added.",
-            "steal_skip_line": "-# Skipped {count} ({reason}): {names}",
-            "steal_fail_line": "-# Failed {count} ({reason}): {names}",
-            "reason_too_large": "bigger than 256 KB",
-            "reason_unsupported": "not a png, gif or jpeg",
-            "reason_no_slots": "no emoji slots left",
-            "reason_invalid": "not an emoji or link",
-            "reason_download": "could not be downloaded",
-            "reason_zip_invalid": "not a valid zip",
-            "reason_zip_empty": "zip has no usable images",
-            "reason_zip_too_large": "download is too large",
-            "reason_zip_bomb": "looks like a zip bomb",
-            "reason_too_many": "too many files in one pack",
-            "rate_limited": "Discord is limiting emoji uploads — resuming automatically once the limit clears.",
-            "rate_limited_wait": "Discord is limiting emoji uploads — resuming automatically in {seconds}s.",
-            "steal_done": "Emojis stolen",
-            "steal_progress_count": "**{done}** of **{total}** processed",
-            "steal_progress_tally": "Added {added} · Skipped {skipped} · Failed {failed}",
-            "steal_overview_title": "Emoji steal complete",
-            "steal_overview_subtitle": "{guild} · {checked} processed",
-            "steal_overview_added": "Emoji added: **{count}**",
-            "steal_overview_slots": "Static {static}/{limit} · Animated {animated}/{limit} slots left",
-            "steal_aborted": "Uploading stopped — I can no longer manage emojis.",
-            "steal_nothing_title": "Nothing stolen",
-            "steal_full_title": "No emoji slots left"
-        },
-        "de": {
-            "emojimanager_title": "Emoji-Verwaltung",
-            "emojimanager_description": "Verwalte die Emojis deines Servers!",
-            "steal_description": "stiehl ein Emoji, einen Link oder ein ganzes Paket",
-            "sm_description": "stiehl viele Emojis",
-            "surl_description": "von URL hinzufügen",
-            "enlarge_description": "Emoji groß anzeigen",
-            "emojistats_description": "Emoji-Slots ansehen",
-            "re_description": "Emoji entfernen",
-            "emoji_added": "Emoji erfolgreich hinzugefügt: {emoji} (`:{name}:`)",
-            "server_full": "Dieser Server hat das Limit von {limit} Emojis erreicht.",
-            "no_perms": "Ich habe keine Berechtigung, Emojis zu verwalten.",
-            "error": "Ein Fehler ist aufgetreten: {error}",
-            "not_found": "Emoji konnte nicht gefunden oder heruntergeladen werden. Bitte gib den vollständigen Emoji-String an (z.B. `<:name:id>`).",
-            "timeout": "Zeit abgelaufen. Vorgang abgebrochen.",
-            "invalid_name": "Ungültiger Name. Bitte nutze alphanumerische Zeichen (2-32 Zeichen).",
-            "no_emojis": "Dieser Server hat keine benutzerdefinierten Emojis.",
-            "steal_usage": "**Verwendung:** `{prefix}steal <Emoji | Link> [...]`\nDu kannst mehrere Emojis oder Links gleichzeitig einfügen oder ein `.zip`-Emoji-Paket verlinken.",
-            "stealing_title": "Emojis werden gestohlen",
-            "steal_added": "**{count}** Emoji(s) hinzugefügt.",
-            "steal_none_added": "Es wurden keine Emojis hinzugefügt.",
-            "steal_skip_line": "-# Übersprungen {count} ({reason}): {names}",
-            "steal_fail_line": "-# Fehlgeschlagen {count} ({reason}): {names}",
-            "reason_too_large": "größer als 256 KB",
-            "reason_unsupported": "kein png, gif oder jpeg",
-            "reason_no_slots": "keine Emoji-Slots mehr",
-            "reason_invalid": "kein Emoji oder Link",
-            "reason_download": "konnte nicht heruntergeladen werden",
-            "reason_zip_invalid": "keine gültige Zip",
-            "reason_zip_empty": "Zip enthält keine nutzbaren Bilder",
-            "reason_zip_too_large": "Download ist zu groß",
-            "reason_zip_bomb": "sieht wie eine Zip-Bombe aus",
-            "reason_too_many": "zu viele Dateien in einem Paket",
-            "rate_limited": "Discord limitiert Emoji-Uploads — es geht automatisch weiter, sobald das Limit abgelaufen ist.",
-            "rate_limited_wait": "Discord limitiert Emoji-Uploads — es geht automatisch in {seconds}s weiter.",
-            "steal_done": "Emojis gestohlen",
-            "steal_progress_count": "**{done}** von **{total}** verarbeitet",
-            "steal_progress_tally": "Hinzugefügt {added} · Übersprungen {skipped} · Fehlgeschlagen {failed}",
-            "steal_overview_title": "Emoji-Diebstahl abgeschlossen",
-            "steal_overview_subtitle": "{guild} · {checked} verarbeitet",
-            "steal_overview_added": "Emojis hinzugefügt: **{count}**",
-            "steal_overview_slots": "Statisch {static}/{limit} · Animiert {animated}/{limit} Slots frei",
-            "steal_aborted": "Upload gestoppt — ich kann keine Emojis mehr verwalten.",
-            "steal_nothing_title": "Nichts gestohlen",
-            "steal_full_title": "Keine Emoji-Slots mehr"
-        },
-        "es": {
-            "emojimanager_title": "Gestor de Emojis",
-            "emojimanager_description": "¡Gestiona los emojis de tu servidor!",
-            "steal_description": "robar un emoji, un enlace o un paquete completo",
-            "sm_description": "robar varios emojis",
-            "surl_description": "añadir desde URL",
-            "enlarge_description": "ver emoji grande",
-            "emojistats_description": "ver espacios",
-            "re_description": "quitar emoji",
-            "emoji_added": "Emoji añadido correctamente: {emoji} (`:{name}:`)",
-            "server_full": "Este servidor ha alcanzado el límite máximo de {limit} emojis.",
-            "no_perms": "No tengo permisos para gestionar emojis.",
-            "error": "Ha ocurrido un error: {error}",
-            "not_found": "No pude encontrar o descargar el emoji. Asegúrate de proporcionar el texto completo del emoji (p. ej. `<:nombre:id>`).",
-            "timeout": "Tardaste demasiado. Operación cancelada.",
-            "invalid_name": "Nombre inválido. Usa caracteres alfanuméricos (2-32 caracteres).",
-            "no_emojis": "Este servidor no tiene emojis personalizados.",
-            "steal_usage": "**Uso:** `{prefix}steal <emoji | enlace> [...]`\nPuedes pegar varios emojis o enlaces a la vez, o enlazar un paquete `.zip`.",
-            "stealing_title": "Robando emojis",
-            "steal_added": "Se añadieron **{count}** emoji(s).",
-            "steal_none_added": "No se añadió ningún emoji.",
-            "steal_skip_line": "-# Omitidos {count} ({reason}): {names}",
-            "steal_fail_line": "-# Fallaron {count} ({reason}): {names}",
-            "reason_too_large": "más de 256 KB",
-            "reason_unsupported": "no es png, gif o jpeg",
-            "reason_no_slots": "no quedan espacios de emoji",
-            "reason_invalid": "no es un emoji ni un enlace",
-            "reason_download": "no se pudo descargar",
-            "reason_zip_invalid": "no es un zip válido",
-            "reason_zip_empty": "el zip no tiene imágenes utilizables",
-            "reason_zip_too_large": "la descarga es demasiado grande",
-            "reason_zip_bomb": "parece una bomba zip",
-            "reason_too_many": "demasiados archivos en un paquete",
-            "rate_limited": "Discord está limitando las subidas de emojis — continuará automáticamente cuando pase el límite.",
-            "rate_limited_wait": "Discord está limitando las subidas de emojis — continuará automáticamente en {seconds}s.",
-            "steal_done": "Emojis robados",
-            "steal_progress_count": "**{done}** de **{total}** procesados",
-            "steal_progress_tally": "Añadidos {added} · Omitidos {skipped} · Fallidos {failed}",
-            "steal_overview_title": "Robo de emojis completado",
-            "steal_overview_subtitle": "{guild} · {checked} procesados",
-            "steal_overview_added": "Emojis añadidos: **{count}**",
-            "steal_overview_slots": "Estáticos {static}/{limit} · Animados {animated}/{limit} espacios libres",
-            "steal_aborted": "Subida detenida — ya no puedo gestionar emojis.",
-            "steal_nothing_title": "No se robó nada",
-            "steal_full_title": "No quedan espacios de emoji"
-        }
-    },
-}
+from utils.command_locales import command_texts
 
-msg = make_msg(MESSAGES)
+CMDS = command_texts(__package__)
+
+MESSAGES = load_locales("cogs.admin", "emoji")
+
+msg = make_flat_msg(MESSAGES)
 
 EMOJI_REGEX = re.compile(r"<(?P<animated>a?):(?P<name>[a-zA-Z0-9_]+):(?P<id>[0-9]+)>")
 
@@ -736,7 +600,8 @@ class EmojiManagerCog(commands.Cog):
             accent=STEAL_ACCENT_WARN,
         )
 
-    @commands.command(name="emojimanager", aliases=["em"], help="{ 'en': 'show emoji helper menu 🎨✨', 'de': 'zeige das Emoji-Hilfemenü' }")
+    @commands.command(name="emojimanager", aliases=["em"], help=CMDS.help("emojimanager"),
+    )
     async def emojimanager_help(self, ctx):
         prefix = await _resolve_prefix(self.bot, ctx)
         view = discord.ui.LayoutView()
@@ -772,8 +637,7 @@ class EmojiManagerCog(commands.Cog):
     @commands.command(
         name="steal",
         aliases=["sm", "stealall", "steal-multiple"],
-        help="{ 'en': 'steal an emoji, a link or a whole pack 🎨✨', 'de': 'stiehl ein Emoji, einen Link oder ein ganzes Paket', 'es': 'robar un emoji, un enlace o un paquete completo' }"
-    )
+        help=CMDS.help("steal"))
     @has_permissions(manage_guild=True)
     async def steal_emoji(self, ctx, *items: str):
         """Steal one emoji, several emojis, image links or a whole zip pack."""
@@ -793,7 +657,8 @@ class EmojiManagerCog(commands.Cog):
         await ctx.typing()
         await self._steal(ctx, list(items), attachment_zips)
 
-    @commands.command(name="steal-from-url", aliases=["surl"], help="{ 'en': 'add emoji from a link 🔗✨', 'de': 'Emoji von einem Link hinzufügen' }")
+    @commands.command(name="steal-from-url", aliases=["surl"], help=CMDS.help("steal-from-url"),
+    )
     @has_permissions(manage_guild=True)
     async def steal_from_url(self, ctx, url: str, name: Optional[str] = None):
         if not _is_http_url(url):
@@ -801,7 +666,8 @@ class EmojiManagerCog(commands.Cog):
         await ctx.typing()
         await self._steal(ctx, [url], override_name=name)
 
-    @commands.command(name="enlarge", help="{ 'en': 'see an emoji in big size 🔍✨', 'de': 'sieh ein Emoji in groß an' }")
+    @commands.command(name="enlarge", help=CMDS.help("enlarge"),
+    )
     async def enlarge_emoji(self, ctx, emoji_string: str):
         name, data, _, url = await self._get_emoji_info(emoji_string)
         if not url:
@@ -821,7 +687,8 @@ class EmojiManagerCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="emojistats", help="{ 'en': 'check how many emoji slots you have 📊', 'de': 'sieh nach, wie viele Emojis noch passen' }")
+    @commands.command(name="emojistats", help=CMDS.help("emojistats"),
+    )
     async def emoji_stats(self, ctx):
         guild = ctx.guild
         static = len([e for e in guild.emojis if not e.animated])
@@ -840,7 +707,8 @@ class EmojiManagerCog(commands.Cog):
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.command(name="remove-emoji", aliases=["re"], help="{ 'en': 'remove an emoji from the server 🗑️', 'de': 'entferne ein Emoji vom Server' }")
+    @commands.command(name="remove-emoji", aliases=["re"], help=CMDS.help("remove-emoji"),
+    )
     @has_permissions(manage_guild=True)
     async def remove_emoji(self, ctx, emoji: discord.Emoji):
         try:

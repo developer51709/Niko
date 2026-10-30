@@ -30,7 +30,21 @@ from discord.ui import Modal, TextInput
 
 from config.emojis import get_emoji
 from utils.blacklist_manager import BlacklistManager
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from utils.prefix_manager import resolve_prefix
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "messages")
+msg = make_flat_msg(MESSAGES, {
+    "tick": get_emoji("tick"),
+    "cross": get_emoji("cross"),
+    "loading": get_emoji("loading"),
+    "danger": get_emoji("danger"),
+    "megaphone": get_emoji("megaphone"),
+    "link": get_emoji("link"),
+})
 from utils.social.youtube import (
     fetch_latest_youtube,
     validate_youtube_channel,
@@ -238,11 +252,18 @@ def validation_hint(platform: str) -> str:
     owner knows exists.
     """
     if platform == "twitch" and not twitch_configured():
-        return (
-            "Twitch tracking needs TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET, "
-            "and this bot has neither configured."
-        )
+        return msg("en", "twitch_hint")
     return ""
+
+
+def _t(locale, key: str, **kwargs) -> str:
+    """Translated string for a guild, interaction or context.
+
+    Accepts anything :func:`utils.i18n.get_lang` understands (a context, an
+    interaction, a guild) so views built away from a command still follow the
+    server's language. ``None`` yields English.
+    """
+    return msg(locale, key, **kwargs)
 
 
 async def validate_account(platform: str, raw: str) -> tuple[bool, str]:
@@ -283,6 +304,8 @@ def build_notification_view(
     platform: str,
     username: str,
     post: dict,
+    *,
+    locale=None,
 ) -> discord.ui.LayoutView:
     meta      = PLATFORMS.get(platform, {})
     icon      = meta.get("icon", get_emoji("megaphone"))
@@ -294,30 +317,30 @@ def build_notification_view(
 
     # Header line
     if platform == "youtube":
-        header = f"### {icon} New YouTube Video"
-        body   = f"**{dname}** just uploaded a new video!"
+        header = _t(locale, "notif_youtube_title", icon=icon)
+        body   = _t(locale, "notif_youtube_body", name=dname)
     elif platform == "twitch":
         if str(post.get("id", "")).startswith("stream:"):
-            header = f"### {icon} New Twitch Stream"
-            body   = f"**{dname}** is live right now!"
+            header = _t(locale, "notif_twitch_stream_title", icon=icon)
+            body   = _t(locale, "notif_twitch_stream_body", name=dname)
         else:
-            header = f"### {icon} New Twitch Broadcast"
-            body   = f"**{dname}** just uploaded a new broadcast!"
+            header = _t(locale, "notif_twitch_broadcast_title", icon=icon)
+            body   = _t(locale, "notif_twitch_broadcast_body", name=dname)
     elif platform == "twitter":
-        header = f"### {icon} New Tweet"
-        body   = f"**{dname}** just posted on Twitter/X!"
+        header = _t(locale, "notif_twitter_title", icon=icon)
+        body   = _t(locale, "notif_twitter_body", name=dname)
     elif platform == "tiktok":
-        header = f"### {icon} New TikTok"
-        body   = f"**{dname}** just posted a new TikTok!"
+        header = _t(locale, "notif_tiktok_title", icon=icon)
+        body   = _t(locale, "notif_tiktok_body", name=dname)
     elif platform == "bluesky":
-        header = f"### {icon} New Bluesky Post"
-        body   = f"**{dname}** just posted on Bluesky!"
+        header = _t(locale, "notif_bluesky_title", icon=icon)
+        body   = _t(locale, "notif_bluesky_body", name=dname)
     elif platform == "reddit":
-        header = f"### {icon} New Reddit Post — {dname}"
+        header = _t(locale, "notif_reddit_title", icon=icon, name=dname)
         body   = ""
     else:
-        header = f"### {icon} New Post"
-        body   = f"**{dname}** just posted!"
+        header = _t(locale, "notif_generic_title", icon=icon)
+        body   = _t(locale, "notif_generic_body", name=dname)
 
     if text:
         preview = text[:280] + ("…" if len(text) > 280 else "")
@@ -330,7 +353,8 @@ def build_notification_view(
         else:
             body = quoted
 
-    body += f"\n\n{get_emoji('link')} [View{'  Video' if platform == 'youtube' else ' Post'}]({url})"
+    link_key = "notif_link_video" if platform == "youtube" else "notif_link_post"
+    body += "\n\n" + _t(locale, link_key, url=url)
 
     # Build container items
     items: list = [
@@ -412,16 +436,12 @@ async def _save_follow(
 
     follows = await list_follows(cxn, guild.id)
     if len(follows) >= MAX_FOLLOWS_PER_GUILD:
-        return False, (
-            f"This server already follows {MAX_FOLLOWS_PER_GUILD} accounts. "
-            "Remove one before adding another."
-        )
+        return False, msg(guild, "limit_guild", max=MAX_FOLLOWS_PER_GUILD)
     same_platform = sum(1 for follow in follows if follow["platform"] == platform)
     if same_platform >= MAX_FOLLOWS_PER_PLATFORM:
         label = PLATFORMS.get(platform, {}).get("label", platform.capitalize())
-        return False, (
-            f"This server already follows {MAX_FOLLOWS_PER_PLATFORM} {label}s. "
-            "Remove one before adding another."
+        return False, msg(
+            guild, "limit_platform", max=MAX_FOLLOWS_PER_PLATFORM, label=label
         )
 
     await create_follow(
@@ -442,7 +462,7 @@ async def _save_follow(
 class AddFollowModal(Modal):
     def __init__(self, platform: str, guild: discord.Guild, default_channel: discord.TextChannel):
         meta = PLATFORMS[platform]
-        super().__init__(title=f"Follow a {meta['label']}")
+        super().__init__(title=msg(guild, "modal_title", label=meta["label"]))
         self.platform        = platform
         self.guild           = guild
         self.default_channel = default_channel
@@ -453,8 +473,8 @@ class AddFollowModal(Modal):
             max_length=100,
         )
         self.channel_input = TextInput(
-            label="Notification Channel",
-            placeholder="Leave blank to use this channel",
+            label=msg(guild, "modal_channel_label"),
+            placeholder=msg(guild, "modal_channel_placeholder"),
             required=False,
             max_length=100,
         )
@@ -471,7 +491,7 @@ class AddFollowModal(Modal):
             channel = _resolve_channel(self.guild, channel_text)
             if channel is None:
                 await interaction.followup.send(
-                    "Couldn't find that channel. Try a #mention or channel name.",
+                    msg(interaction, "channel_not_found"),
                     ephemeral=True,
                 )
                 return
@@ -481,8 +501,8 @@ class AddFollowModal(Modal):
         # Show checking status
         checking = discord.ui.LayoutView()
         checking.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('loading')} Checking…"),
-            discord.ui.TextDisplay(content=f"Verifying this account exists. One moment…"),
+            discord.ui.TextDisplay(content=msg(self.guild, "checking_title")),
+            discord.ui.TextDisplay(content=msg(self.guild, "checking_body")),
             accent_colour=discord.Colour(0xFEE75C),
         ))
         message = await interaction.followup.send(view=checking, ephemeral=True)
@@ -493,12 +513,13 @@ class AddFollowModal(Modal):
             meta = PLATFORMS[self.platform]
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Not Found"),
+                discord.ui.TextDisplay(content=msg(self.guild, "not_found_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=(
-                        f"Could not find **{raw}** as a {meta['label']}.\n"
-                        f"{validation_hint(self.platform) or 'Double-check the name and try again.'}"
+                        msg(self.guild, "not_found_as", query=raw, label=meta["label"])
+                        + "\n"
+                        + (validation_hint(self.platform) or msg(self.guild, "not_found_hint"))
                     )
                 ),
                 accent_colour=discord.Colour(0xED4245),
@@ -522,7 +543,7 @@ class AddFollowModal(Modal):
         if save_error:
             limited = discord.ui.LayoutView()
             limited.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Not Added"),
+                discord.ui.TextDisplay(content=msg(self.guild, "not_added_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content=save_error),
                 accent_colour=discord.Colour(0xED4245),
@@ -531,24 +552,28 @@ class AddFollowModal(Modal):
             return
 
         dname = _display(self.platform, stored)
-        summary = (
-            f"Now tracking **{dname}** on **{self.platform.capitalize()}**.\n"
-            f"New posts will be announced in {channel.mention}."
-        )
         if moved:
-            summary = (
-                f"**{dname}** was already followed, so it now posts in {channel.mention} "
-                "instead of its previous channel."
+            summary = msg(
+                self.guild,
+                "moved_body",
+                name=dname,
+                channel=channel.mention,
+            )
+        else:
+            summary = msg(
+                self.guild,
+                "added_body",
+                name=dname,
+                platform=self.platform.capitalize(),
+                channel=channel.mention,
             )
         success = discord.ui.LayoutView()
         success.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Now Following"),
+            discord.ui.TextDisplay(content=msg(self.guild, "added_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=summary),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="-# Pause, ping a role, or write a custom message from the dashboard notifications tab."
-            ),
+            discord.ui.TextDisplay(content=msg(self.guild, "added_footer")),
             accent_colour=discord.Colour(0x57F287),
         ))
         await interaction.followup.edit_message(view=success, message_id=message.id)
@@ -574,9 +599,7 @@ class _AddFollowBtn(discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Manage Server** permissions to do that."
-                ),
+                discord.ui.TextDisplay(content=msg(interaction, "need_permission")),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
@@ -587,17 +610,15 @@ class _AddFollowBtn(discord.ui.Button):
 
 
 class _ViewFollowsBtn(discord.ui.Button):
-    def __init__(self, guild_id: int):
-        super().__init__(label="View Follows", style=discord.ButtonStyle.secondary, emoji="📋")
+    def __init__(self, guild_id: int, label: str):
+        super().__init__(label=label, style=discord.ButtonStyle.secondary, emoji="📋")
         self.guild_id = guild_id
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_guild:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You need **Manage Server** permissions to do that."
-                ),
+                discord.ui.TextDisplay(content=msg(interaction, "need_permission")),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
@@ -611,11 +632,14 @@ class _ViewFollowsBtn(discord.ui.Button):
 #  Follow management selects
 # ─────────────────────────────────────────
 
-def _follow_option(row, *, verb: str) -> discord.SelectOption:
+def _follow_option(row, *, verb: str, locale=None) -> discord.SelectOption:
     platform = row["platform"]
+    state = msg(locale, "state_active" if row["enabled"] else "state_paused")
     return discord.SelectOption(
         label=f"{row['display']} ({platform.capitalize()})",
-        description=f"#{row['channel_id']} · {'paused' if not row['enabled'] else 'active'} · {verb}",
+        description=msg(
+            locale, "option_body", channel=row["channel_id"], state=state, verb=verb
+        ),
         value=f"{platform}:{row['username']}",
         emoji=PLATFORMS.get(platform, {}).get("icon", get_emoji("megaphone")),
     )
@@ -624,14 +648,19 @@ def _follow_option(row, *, verb: str) -> discord.SelectOption:
 class _ToggleFollowSelect(discord.ui.Select):
     """Pause or resume follows straight from the Discord panel."""
 
-    def __init__(self, guild_id: int, follows: list):
+    def __init__(self, guild_id: int, follows: list, *, locale=None):
         self.guild_id = guild_id
+        self.locale = locale
         self.state = {f"{row['platform']}:{row['username']}": bool(row["enabled"]) for row in follows[:25]}
         options = [
-            _follow_option(row, verb="pause it" if row["enabled"] else "resume it")
+            _follow_option(
+                row,
+                verb=msg(locale, "verb_pause" if row["enabled"] else "verb_resume"),
+                locale=locale,
+            )
             for row in follows[:25]
         ]
-        super().__init__(placeholder="Pause or resume an account…", options=options)
+        super().__init__(placeholder=msg(locale, "toggle_placeholder"), options=options)
 
     async def callback(self, interaction: discord.Interaction):
         platform, username = self.values[0].split(":", 1)
@@ -645,20 +674,24 @@ class _ToggleFollowSelect(discord.ui.Select):
         )
         if updated is None:
             return await interaction.response.send_message(
-                f"{get_emoji('cross')} That account is no longer followed.", ephemeral=True
+                msg(interaction, "toggle_gone"), ephemeral=True
             )
-        verb = "paused" if not updated["enabled"] else "active again"
+        state = msg(interaction, "word_active_again" if updated["enabled"] else "word_paused")
         await interaction.response.send_message(
-            f"{get_emoji('tick')} **{updated['display']}** is {verb}.", ephemeral=True
+            msg(interaction, "toggle_changed", name=updated["display"], state=state),
+            ephemeral=True,
         )
 
 
 class _RemoveFollowSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, follows: list):
+    def __init__(self, guild_id: int, follows: list, *, locale=None):
         self.guild_id = guild_id
         super().__init__(
-            placeholder="Select an account to unfollow…",
-            options=[_follow_option(row, verb="remove it") for row in follows[:25]],
+            placeholder=msg(locale, "remove_placeholder"),
+            options=[
+                _follow_option(row, verb=msg(locale, "verb_remove"), locale=locale)
+                for row in follows[:25]
+            ],
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -670,20 +703,19 @@ class _RemoveFollowSelect(discord.ui.Select):
             username=username,
         )
         dname = _display(platform, username)
+        if removed:
+            title = msg(interaction, "removed_title")
+            body = msg(
+                interaction, "removed_body", name=dname, platform=platform.capitalize()
+            )
+        else:
+            title = msg(interaction, "already_gone_title")
+            body = msg(interaction, "already_gone_body", name=dname)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### {get_emoji('tick') if removed else get_emoji('cross')} "
-                f"{'Unfollowed' if removed else 'Already gone'}"
-            ),
+            discord.ui.TextDisplay(content=title),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=(
-                    f"Stopped tracking **{dname}** on **{platform.capitalize()}**."
-                    if removed
-                    else f"**{dname}** was not being followed any more."
-                )
-            ),
+            discord.ui.TextDisplay(content=body),
             accent_colour=discord.Colour(0x57F287),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -702,16 +734,16 @@ def _follow_channel(follow: dict) -> discord.TextChannel | None:
     return guild.get_channel(int(channel_id))
 
 
-def _follow_summary(follows: list) -> str:
+def _follow_summary(follows: list, locale=None) -> str:
     """One-line health summary for the setup panel."""
     active = sum(1 for row in follows if row["enabled"])
     paused = len(follows) - active
     unhealthy = [row for row in follows if row["enabled"] and int(row["failures"] or 0) > 0]
-    summary = f"**Currently tracking:** {active} active"
+    summary = msg(locale, "summary_active", count=active)
     if paused:
-        summary += f" · {paused} paused"
+        summary += msg(locale, "summary_paused", count=paused)
     if unhealthy:
-        summary += f"\n**Needs a look:** {len(unhealthy)} account(s) failed the last check"
+        summary += msg(locale, "summary_unhealthy", count=len(unhealthy))
     return summary
 
 
@@ -735,20 +767,24 @@ def build_setup_view(
             _AddFollowBtn("bluesky",  guild, channel),
             _AddFollowBtn("reddit",   guild, channel),
         ),
-        discord.ui.ActionRow(_ViewFollowsBtn(guild.id)),
+        discord.ui.ActionRow(_ViewFollowsBtn(guild.id, msg(guild, "btn_view_follows"))),
     ]
     if has_unhealthy:
-        rows.insert(0, discord.ui.ActionRow(_ToggleFollowSelect(guild.id, [row for row in follows if row["enabled"]])))
+        rows.insert(0, discord.ui.ActionRow(_ToggleFollowSelect(
+            guild.id,
+            [row for row in follows if row["enabled"]],
+            locale=guild,
+        )))
 
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"### {get_emoji('megaphone')} Social Media Notifier"),
+        discord.ui.TextDisplay(content=msg(guild, "panel_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(
-                f"Get notified when your favourite creators post new content.\n"
-                f"Supports: {icons}\n\n"
-                f"{_follow_summary(follows)}"
+                msg(guild, "panel_body", icons=icons)
+                + "\n\n"
+                + _follow_summary(follows, guild)
             )
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -756,8 +792,9 @@ def build_setup_view(
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(
-                f"-# You can also use `{prefix}follow <platform> <name> [#channel]`\n"
-                f"-# Pause, ping a role, or write a custom message on the dashboard → Notifications"
+                msg(guild, "panel_footer_command", prefix=prefix)
+                + "\n"
+                + msg(guild, "panel_footer_dashboard")
             )
         ),
         accent_colour=discord.Colour(0x5865F2),
@@ -771,15 +808,22 @@ def _follow_line(guild: discord.Guild, follow: dict) -> str:
     icon = PLATFORMS.get(platform, {}).get("icon", get_emoji("megaphone"))
     channel = guild.get_channel(int(follow["channel_id"])) if follow["channel_id"] else None
     ch_text = channel.mention if channel else f"<#{follow['channel_id']}>"
-    parts = [f"{icon} **{follow['display']}** ({platform.capitalize()}) → {ch_text}"]
+    parts = [msg(
+        guild,
+        "line_main",
+        icon=icon,
+        name=follow["display"],
+        platform=platform.capitalize(),
+        channel=ch_text,
+    )]
     if not follow["enabled"]:
-        parts.append("⏸ paused")
+        parts.append(msg(guild, "line_paused"))
     elif int(follow["failures"] or 0) > 0:
-        parts.append(f"⚠️ {follow['failures']} failed check(s)")
+        parts.append(msg(guild, "line_failures", count=follow["failures"]))
     if follow["ping_role_id"]:
-        parts.append(f"pings <@&{follow['ping_role_id']}>")
+        parts.append(msg(guild, "line_pings", role_id=follow["ping_role_id"]))
     if follow["template"]:
-        parts.append("custom message")
+        parts.append(msg(guild, "line_custom"))
     return " · ".join(parts)
 
 
@@ -788,23 +832,21 @@ def _build_follows_list_view(guild: discord.Guild, follows: list) -> discord.ui.
 
     if not follows:
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### 📋 Followed Accounts"),
+            discord.ui.TextDisplay(content=msg(guild, "list_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="Nothing is being tracked yet. Open the setup panel to add accounts!"
-            ),
+            discord.ui.TextDisplay(content=msg(guild, "list_empty")),
             accent_colour=discord.Colour(0x5865F2),
         ))
         return view
 
     items: list = [
-        discord.ui.TextDisplay(content="### 📋 Followed Accounts"),
+        discord.ui.TextDisplay(content=msg(guild, "list_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content="\n".join(_follow_line(guild, follow) for follow in follows)),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="-# Pause or resume an account below, or remove it entirely."),
-        discord.ui.ActionRow(_ToggleFollowSelect(guild.id, follows)),
-        discord.ui.ActionRow(_RemoveFollowSelect(guild.id, follows)),
+        discord.ui.TextDisplay(content=msg(guild, "list_footer")),
+        discord.ui.ActionRow(_ToggleFollowSelect(guild.id, follows, locale=guild)),
+        discord.ui.ActionRow(_RemoveFollowSelect(guild.id, follows, locale=guild)),
     ]
     view.add_item(discord.ui.Container(*items, accent_colour=discord.Colour(0x5865F2)))
     return view
@@ -827,7 +869,11 @@ class Notifier(commands.Cog):
 
     # ── Official staff notification channel ───────────────────────────────
 
-    @commands.hybrid_command(name="notification-channel")
+    @commands.hybrid_command(
+        name="notification-channel",
+        help=CMDS.help("notification-channel"),
+        description=CMDS.text("notification-channel.description"),
+    )
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def notification_channel(
@@ -847,13 +893,10 @@ class Notifier(commands.Cog):
         )
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Notifications configured"),
+            discord.ui.TextDisplay(content=msg(ctx, "channel_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    f"Official staff announcements will now be posted in {channel.mention}.\n"
-                    "You can run this command again to move them."
-                )
+                content=msg(ctx, "channel_body", channel=channel.mention)
             ),
             accent_colour=discord.Colour(0x57F287),
         ))
@@ -861,7 +904,12 @@ class Notifier(commands.Cog):
 
     # ── Command group ─────────────────────
 
-    @commands.group(name="notifier", aliases=["notify"], invoke_without_command=True)
+    @commands.group(
+        name="notifier",
+        aliases=["notify"],
+        invoke_without_command=True,
+        help=CMDS.help("notifier"),
+    )
     @commands.has_permissions(manage_guild=True)
     async def notifier(self, ctx: commands.Context):
         """Open the social media notifier setup panel."""
@@ -870,7 +918,7 @@ class Notifier(commands.Cog):
         view = build_setup_view(ctx.guild, ctx.channel, follows, prefix)
         await ctx.send(view=view)
 
-    @notifier.command(name="list")
+    @notifier.command(name="list", help=CMDS.help("notifier.list"))
     @commands.has_permissions(manage_guild=True)
     async def notifier_list(self, ctx: commands.Context):
         """List all followed accounts for this server."""
@@ -878,13 +926,13 @@ class Notifier(commands.Cog):
         view = _build_follows_list_view(ctx.guild, follows)
         await ctx.send(view=view)
 
-    @notifier.command(name="pause")
+    @notifier.command(name="pause", help=CMDS.help("notifier.pause"))
     @commands.has_permissions(manage_guild=True)
     async def notifier_pause(self, ctx: commands.Context, platform: str, *, query: str):
         """Pause announcements for one followed account."""
         await self._set_follow_state(ctx, platform, query, enabled=False)
 
-    @notifier.command(name="resume")
+    @notifier.command(name="resume", help=CMDS.help("notifier.resume"))
     @commands.has_permissions(manage_guild=True)
     async def notifier_resume(self, ctx: commands.Context, platform: str, *, query: str):
         """Resume announcements for one paused account."""
@@ -897,7 +945,7 @@ class Notifier(commands.Cog):
         platform = platform.lower()
         if platform not in PLATFORMS:
             return await ctx.send(
-                f"Unknown platform. Valid options: `{'`, `'.join(ALL_PLATFORMS)}`"
+                msg(ctx, "unknown_platform", options="`, `".join(ALL_PLATFORMS))
             )
         follows = await list_follows(self.bot.cxn, ctx.guild.id)
         needle = query.strip().lstrip("@").lower()
@@ -914,8 +962,13 @@ class Notifier(commands.Cog):
         )
         if target is None:
             return await ctx.send(
-                f"{get_emoji('cross')} No follow found for **{query}** on "
-                f"**{platform.capitalize()}**. Try `{ctx.clean_prefix}notifier list`."
+                msg(
+                    ctx,
+                    "no_follow",
+                    query=query,
+                    platform=platform.capitalize(),
+                    prefix=ctx.clean_prefix,
+                )
             )
         updated = await update_follow(
             self.bot.cxn,
@@ -924,55 +977,66 @@ class Notifier(commands.Cog):
             username=target["username"],
             enabled=enabled,
         )
-        state = "active again" if enabled else "paused"
+        state = msg(ctx, "word_active_again" if enabled else "word_paused")
+        title = msg(ctx, "state_active_title" if enabled else "state_paused_title")
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} {state.capitalize()}"),
+            discord.ui.TextDisplay(content=msg(ctx, "state_title", state=title)),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    f"**{updated['display'] if updated else target['display']}** on "
-                    f"**{platform.capitalize()}** is {state}."
+                content=msg(
+                    ctx,
+                    "state_body",
+                    name=updated["display"] if updated else target["display"],
+                    platform=platform.capitalize(),
+                    state=state,
                 )
             ),
             accent_colour=discord.Colour(0x57F287),
         ))
         await ctx.send(view=view)
 
-    @notifier.command(name="test")
+    @notifier.command(name="test", help=CMDS.help("notifier.test"))
     @commands.has_permissions(manage_guild=True)
     async def notifier_test(self, ctx: commands.Context, platform: str, *, query: str):
         """Test-fetch a platform account to verify it works."""
         platform = platform.lower()
         if platform not in PLATFORMS:
             return await ctx.send(
-                f"Unknown platform. Valid options: `{'`, `'.join(ALL_PLATFORMS)}`"
+                msg(ctx, "unknown_platform", options="`, `".join(ALL_PLATFORMS))
             )
 
         status = discord.ui.LayoutView()
         status.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### ⏳ Testing…"),
-            discord.ui.TextDisplay(content=f"Fetching from **{platform}** for `{query}`…"),
+            discord.ui.TextDisplay(content=msg(ctx, "testing_title")),
+            discord.ui.TextDisplay(
+                content=msg(ctx, "testing_body", platform=platform, query=query)
+            ),
             accent_colour=discord.Colour(0xFEE75C),
         ))
-        msg = await ctx.send(view=status)
+        status_msg = await ctx.send(view=status)
 
         ok, stored = await _validate(platform, query)
         if not ok:
             hint = validation_hint(platform)
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Account Not Found"),
+                discord.ui.TextDisplay(content=msg(ctx, "account_not_found_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=(
-                        f"Could not validate **{query}** on **{platform.capitalize()}**."
+                        msg(
+                            ctx,
+                            "account_not_found_body",
+                            query=query,
+                            platform=platform.capitalize(),
+                        )
                         + (f"\n{hint}" if hint else "")
                     )
                 ),
                 accent_colour=discord.Colour(0xED4245),
             ))
-            await msg.edit(view=fail)
+            await status_msg.edit(view=fail)
             return
 
         post = await _fetch(platform, stored)
@@ -981,36 +1045,32 @@ class Notifier(commands.Cog):
             # (no uploads, or offline with no VODs). That is not a failure.
             quiet = discord.ui.LayoutView()
             quiet.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Account Verified"),
+                discord.ui.TextDisplay(content=msg(ctx, "verified_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=(
-                        f"**{_display(platform, stored)}** exists and can be read, "
-                        "but has nothing to announce right now — it may not have "
-                        "uploaded anything yet."
-                    )
+                    content=msg(ctx, "verified_body", name=_display(platform, stored))
                 ),
                 accent_colour=discord.Colour(0x57F287),
             ))
-            await msg.edit(view=quiet)
+            await status_msg.edit(view=quiet)
             return
 
         dname   = _display(platform, stored)
         preview = (post.get("text") or post.get("title") or "")[:200]
         result  = discord.ui.LayoutView()
         result.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Fetch Successful — {dname}"),
+            discord.ui.TextDisplay(content=msg(ctx, "fetch_title", name=dname)),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**Latest:** {preview}\n**Link:** {post['url']}"
+                content=msg(ctx, "fetch_body", preview=preview, url=post["url"])
             ),
             accent_colour=discord.Colour(0x57F287),
         ))
-        await msg.edit(view=result)
+        await status_msg.edit(view=result)
 
     # ── Shortcut commands ─────────────────
 
-    @commands.command(name="follow")
+    @commands.command(name="follow", help=CMDS.help("follow"))
     @commands.has_permissions(manage_guild=True)
     async def follow(
         self,
@@ -1023,35 +1083,39 @@ class Notifier(commands.Cog):
         platform = platform.lower()
         if platform not in PLATFORMS:
             return await ctx.reply(
-                f"Unknown platform. Valid options: `{'`, `'.join(ALL_PLATFORMS)}`"
+                msg(ctx, "unknown_platform", options="`, `".join(ALL_PLATFORMS))
             )
 
         channel = channel or ctx.channel
 
         status = discord.ui.LayoutView()
         status.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('loading')} Checking…"),
-            discord.ui.TextDisplay(content="Validating the account, one moment…"),
+            discord.ui.TextDisplay(content=msg(ctx, "checking_title")),
+            discord.ui.TextDisplay(content=msg(ctx, "validating_body")),
             accent_colour=discord.Colour(0xFEE75C),
         ))
-        msg = await ctx.send(view=status)
-
+        status_msg = await ctx.send(view=status)
         ok, stored = await _validate(platform, username)
         if not ok:
             hint = validation_hint(platform)
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Not Found"),
+                discord.ui.TextDisplay(content=msg(ctx, "not_found_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
                     content=(
-                        f"Could not find **{username}** on **{platform.capitalize()}**."
+                        msg(
+                            ctx,
+                            "not_found_on",
+                            query=username,
+                            platform=platform.capitalize(),
+                        )
                         + (f"\n{hint}" if hint else "")
                     )
                 ),
                 accent_colour=discord.Colour(0xED4245),
             ))
-            await msg.edit(view=fail)
+            await status_msg.edit(view=fail)
             return
 
         # Seed last_post_id
@@ -1069,32 +1133,35 @@ class Notifier(commands.Cog):
         if save_error:
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Not Added"),
+                discord.ui.TextDisplay(content=msg(ctx, "not_added_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(content=save_error),
                 accent_colour=discord.Colour(0xED4245),
             ))
-            await msg.edit(view=fail)
+            await status_msg.edit(view=fail)
             return
 
-        dname   = _display(platform, stored)
+        dname = _display(platform, stored)
+        if moved:
+            summary = msg(ctx, "moved_body_short", name=dname, channel=channel.mention)
+        else:
+            summary = msg(
+                ctx,
+                "added_body_short",
+                name=dname,
+                platform=platform.capitalize(),
+                channel=channel.mention,
+            )
         success = discord.ui.LayoutView()
         success.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Now Following"),
+            discord.ui.TextDisplay(content=msg(ctx, "added_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=(
-                    f"**{dname}** was already followed, now posting in {channel.mention}."
-                    if moved
-                    else f"Now tracking **{dname}** on **{platform.capitalize()}**.\n"
-                    f"New posts → {channel.mention}"
-                )
-            ),
+            discord.ui.TextDisplay(content=summary),
             accent_colour=discord.Colour(0x57F287),
         ))
-        await msg.edit(view=success)
+        await status_msg.edit(view=success)
 
-    @commands.command(name="unfollow")
+    @commands.command(name="unfollow", help=CMDS.help("unfollow"))
     @commands.has_permissions(manage_guild=True)
     async def unfollow(self, ctx: commands.Context, platform: str, *, username: str):
         """Stop tracking a social media account."""
@@ -1114,10 +1181,15 @@ class Notifier(commands.Cog):
         if target is None:
             fail = discord.ui.LayoutView()
             fail.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(content=f"### {get_emoji('cross')} Not Found"),
+                discord.ui.TextDisplay(content=msg(ctx, "not_found_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"No follow found for **{username}** on **{platform.capitalize()}**."
+                    content=msg(
+                        ctx,
+                        "no_follow_plain",
+                        query=username,
+                        platform=platform.capitalize(),
+                    )
                 ),
                 accent_colour=discord.Colour(0xED4245),
             ))
@@ -1133,10 +1205,12 @@ class Notifier(commands.Cog):
         dname = _display(platform, target)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('tick')} Unfollowed"),
+            discord.ui.TextDisplay(content=msg(ctx, "removed_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"Stopped tracking **{dname}** on **{platform.capitalize()}**."
+                content=msg(
+                    ctx, "removed_body", name=dname, platform=platform.capitalize()
+                )
             ),
             accent_colour=discord.Colour(0x57F287),
         ))
@@ -1212,19 +1286,20 @@ class Notifier(commands.Cog):
         channel = _follow_channel(follow)
         if channel is None:
             return
+        locale = follow.get("guild") or getattr(channel, "guild", None)
         notice = discord.ui.LayoutView()
         notice.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### {get_emoji('danger')} Paused {follow['display']}"
+                content=msg(locale, "autopause_title", name=follow["display"])
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    f"Niko could not read **{follow['display']}** "
-                    f"({follow['platform'].capitalize()}) for {FAILURE_LIMIT} checks in a row, "
-                    "so this follow is paused to stop pointless requests.\n"
-                    f"Use `/notifier resume {follow['platform']} {follow['display'].lstrip('@')}` "
-                    "once it is reachable again."
+                content=msg(
+                    locale,
+                    "autopause_body",
+                    name=follow["display"],
+                    platform=follow["platform"].capitalize(),
+                    limit=FAILURE_LIMIT,
                 )
             ),
             accent_colour=discord.Colour(0xFEE75C),
@@ -1288,7 +1363,9 @@ class Notifier(commands.Cog):
         try:
             await channel.send(
                 content=content,
-                view=build_notification_view(platform, username, post),
+                view=build_notification_view(
+                    platform, username, post, locale=follow["guild"]
+                ),
                 allowed_mentions=allowed_mentions,
             )
         except Exception:

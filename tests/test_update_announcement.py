@@ -88,14 +88,14 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
     # The update announcement carries exactly the two links it is announced
     # with: the docs page and the changelog entry. (The Support Server button
     # belongs to the policy notice, which ``_policy_view`` still carries.)
-    assert view_labels(view) == ["Leveling docs", "What's new"]
+    assert view_labels(view) == ["Language docs", "What's new"]
 
     text = view_text(view)
-    assert "Faster cards" in text
-    assert "animated card-shaped placeholder" in text
-    assert "config exclude" in text
-    assert "voicexp" in text
-    assert "own live board" in text
+    assert "German and Spanish" in text
+    assert "`.help` menu" in text
+    assert "argument hints" in text
+    assert "commands page" in text
+    assert "locales/en.json" in text
     # The update stays free, and the announcement says so up front.
     assert "The bot stays free" in text
     assert "ships for every server" in text
@@ -104,14 +104,26 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
 def test_changelog_entry_covers_the_current_update():
     """The announced entry must describe the features the announcement names."""
     changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
-    entry = changelog.split('slug: "loading-cards-live-leaderboards-voice-xp"', 1)[1].split("\n  },", 1)[0]
+    entry = changelog.split('slug: "multi-language-everywhere"', 1)[1].split("\n  },", 1)[0]
     lowered = entry.lower()
 
-    assert "loading card" in lowered
-    assert "/levels/" in entry
-    assert "voice xp" in lowered
-    assert "excluded channels" in lowered
-    assert "scam-reports" in entry
+    assert "german" in lowered
+    assert "spanish" in lowered
+    assert "description_localizations" in entry
+    assert "/api/commands" in entry
+    assert "locales" in lowered
+    assert "argument" in lowered
+
+
+def test_changelog_entry_is_the_newest_release():
+    """The announcement announces the latest entry, so it must sit first."""
+    changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
+    body = changelog.split("CHANGELOG: ChangelogEntry[] = [", 1)[1]
+    assert body.lstrip().startswith("{")
+    first_slug = body.split('slug: "', 1)[1].split('"', 1)[0]
+    announced = OwnerCog.UPDATE_CHANGELOG_URL.rsplit("/", 1)[-1]
+
+    assert first_slug == announced
 
 
 def test_changelog_entry_covers_the_legal_update():

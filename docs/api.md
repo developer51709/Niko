@@ -33,6 +33,12 @@ but admin login intentionally remains unavailable.
 | POST | `/api/donations/webhook` | OxaPay donation callback, verified the same way |
 | GET | `/bot/card.svg` | Live SVG profile card for the README; accepts `?theme=dark\|light` and `?accent=RRGGBB`, and is served `no-store` so every load shows current figures |
 
+`/api/commands` returns the registry the bot writes at startup. A command's
+`description`, and each entry in `parameters[].description`, is a
+`{locale: text}` map taken from the cogs' `locales/commands` namespace, so the
+website can render the visitor's language; a command with no catalogue entry
+falls back to a plain string. Commands owned by private cogs never appear.
+
 The interactions endpoint is public for the same reason it exists: Discord has
 no session. The Ed25519 signature over the raw body is what proves the caller is
 Discord, and a request without it is answered `401`. It is the *Interactions

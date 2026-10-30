@@ -246,6 +246,13 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/invite.png"
     },
+    "/docs/language-support": {
+      "title": "Languages & Localization — Niko docs",
+      "description": "Niko speaks English, German, and Spanish — in Discord's command UI, in the bot's own wording, and on the website.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/language-support.png"
+    },
     "/docs/leveling-configuration": {
       "title": "Leveling Configuration Guide — Niko docs",
       "description": "Detailed guide to configuring every aspect of the leveling system.",
@@ -434,6 +441,13 @@
       "section": "Documentation",
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/welcome.png"
+    },
+    "/changelog/multi-language-everywhere": {
+      "title": "Niko Now Speaks German and Spanish — Everywhere — Niko changelog",
+      "description": "Niko is trilingual. Command help lines, replies, the help menu, and the website's command reference now exist in English, German, and Spanish, and Discord itself receives translated slash command and option descriptions so each member sees the `/` picker in their own language. Every cog keeps its wording in a `locales` folder next to the code, which makes adding the next language a translation job rather than a refactor.",
+      "section": "Changelog",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/multi-language-everywhere.png"
     },
     "/changelog/loading-cards-live-leaderboards-voice-xp": {
       "title": "Faster Cards, Live Server Leaderboards & Voice XP — Niko changelog",

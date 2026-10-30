@@ -7,6 +7,7 @@ consistent entry point.
 
 from __future__ import annotations
 
+import json
 import time
 import io
 import asyncio
@@ -25,6 +26,11 @@ from cogs.staff.support_server import (
 from cogs.staff.owner import OwnerCog, _StatusPanelCog
 from cogs.staff.development import Development
 from utils.error_reports import get_error_report
+from utils.i18n import get_lang
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 
 STAFF_ROLES = {
@@ -431,7 +437,31 @@ def command_allowed_for_role(role: str | None, command_name: str) -> bool:
     return command_name in _command_names_for_role(role)
 
 
+def _help_line(command, lang: str) -> str:
+    """A command's help line, read from its ``{language: text}`` map.
+
+    ``CMDS.help`` serialises every translation of a command's wording onto
+    ``command.help``, so the panel has to pick one language out of that map
+    instead of printing the map itself.
+    """
+    raw = getattr(command, "help", None)
+    if not raw:
+        return "No description."
+    if isinstance(raw, dict):
+        values = raw
+    else:
+        try:
+            values = json.loads(raw)
+        except (TypeError, ValueError):
+            # A command that only declared a plain help string.
+            return str(raw)
+    if not isinstance(values, dict):
+        return str(raw)
+    return values.get(lang) or values.get("en") or "No description."
+
+
 def build_staff_help(bot, ctx_or_interaction, selected_role: str = "all") -> discord.ui.LayoutView:
+    lang = get_lang(ctx_or_interaction)
     role = selected_role
     if role == "all":
         role_label = "All staff"
@@ -446,7 +476,7 @@ def build_staff_help(bot, ctx_or_interaction, selected_role: str = "all") -> dis
             continue
         short_name = command.name
         if names == {"*"} or short_name in names:
-            lines.append(f"**`.staff {short_name}`** — {command.help or 'No description.'}")
+            lines.append(f"**`.staff {short_name}`** — {_help_line(command, lang)}")
     if not lines:
         lines.append("No commands are assigned to this role yet.")
 
@@ -480,20 +510,24 @@ class StaffCog(commands.Cog):
         if roles:
             await apply_role_icons(after, roles)
 
-    @commands.group(name="staff", invoke_without_command=True, hidden=True)
+    @commands.group(
+        name="staff",
+        invoke_without_command=True,
+        hidden=True,
+        help=CMDS.help("staff"),
+    )
     async def staff(self, ctx: commands.Context):
-        """Private Niko staff tools."""
         if not await is_staff_member(ctx):
             return await ctx.send("This command is restricted to official Niko staff.")
         await ctx.send(view=build_staff_help(self.bot, ctx, "all"))
 
-    @staff.command(name="help", help="Show staff commands available to your role.", hidden=True)
+    @staff.command(name="help", help=CMDS.help("staff.help"), hidden=True)
     async def staff_help(self, ctx: commands.Context):
         if not await is_staff_member(ctx):
             return await ctx.send("This command is restricted to official Niko staff.")
         await ctx.send(view=build_staff_help(self.bot, ctx, "all"))
 
-    @staff.command(name="supportsetup", help="Rebuild the official support server after an explicit confirmation.", hidden=True)
+    @staff.command(name="supportsetup", help=CMDS.help("staff.supportsetup"), hidden=True)
     @commands.guild_only()
     async def support_setup(self, ctx: commands.Context):
         if not _is_owner_user(ctx.author, ctx.bot):
@@ -574,7 +608,7 @@ class StaffCog(commands.Cog):
         except discord.HTTPException:
             await ctx.author.send(report)
 
-    @staff.command(name="supportupdate", help="Repair the support server structure and refresh its panels.", hidden=True)
+    @staff.command(name="supportupdate", help=CMDS.help("staff.supportupdate"), hidden=True)
     @commands.guild_only()
     async def support_update(self, ctx: commands.Context):
         if not _is_owner_user(ctx.author, ctx.bot):
@@ -594,7 +628,7 @@ class StaffCog(commands.Cog):
             return
         await progress.edit(content=f"✅ Support server reconciled: **{len(roles)} roles** and **{len(channels)} channels** verified; panels and member roles refreshed.")
 
-    @staff.command(name="getreport", help="Fetch a full error report using its six-character code.", hidden=True)
+    @staff.command(name="getreport", help=CMDS.help("staff.getreport"), hidden=True)
     async def get_report(self, ctx: commands.Context, code: str):
         """Fetch an error report by its six-character code."""
         if not await is_staff_member(ctx):
@@ -616,7 +650,7 @@ class StaffCog(commands.Cog):
             return await ctx.send("I couldn't DM you the report. Please enable DMs from this server and try again.")
         await ctx.send(f"Sent error report `{code.strip().upper()}` to your DMs.")
 
-    @staff.command(name="manage", help="Assign or revoke a staff role for a member.", hidden=True)
+    @staff.command(name="manage", help=CMDS.help("staff.manage"), hidden=True)
     async def staff_manage(self, ctx: commands.Context, target: discord.Member):
         if not _is_owner_user(ctx.author, ctx.bot):
             return await ctx.send("Only the bot owner can manage staff access.")

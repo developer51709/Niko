@@ -3,7 +3,9 @@ Help System — fully trilingual (EN / DE / ES)
 ─────────────────────────────────────────────
 All UI strings, category descriptions, category headers, pagination labels,
 and command detail labels are localised to the guild's preferred locale.
-Command help strings use the existing { 'en': '…', 'de': '…', 'es': '…' } JSON format.
+Command wording comes from each cog's ``locales/commands`` namespace; the
+decorators serialise it into ``{ 'en': '…', 'de': '…', 'es': '…' }`` on
+``command.help``, which is what this menu reads.
 """
 
 from typing import List, Tuple
@@ -14,7 +16,9 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from config import links
+from utils.command_locales import description_map
 from utils.prefix_manager import resolve_prefix
+from utils.locales import load_locales
 
 PAGE_SIZE = 8
 
@@ -43,18 +47,23 @@ def get_lang(ctx_or_guild=None) -> str:
 def get_command_help(ctx_or_interaction, cmd: commands.Command) -> str:
     """
     Return the localised help string for a command.
-    Commands store help as JSON: { 'en': '…', 'de': '…' }
-    Falls back to the raw help string if it isn't JSON.
+
+    Decorators serialise the locale entry into JSON on ``command.help``:
+    ``{ 'en': '…', 'de': '…' }``. Commands that only declare a short
+    description fall back to the same locale table, so the menu shows the same
+    wording as the dashboard commands page.
     """
     lang = get_lang(ctx_or_interaction)
     if cmd.help:
         try:
             help_dict = json.loads(cmd.help.replace("'", '"'))
             text = help_dict.get(lang) or help_dict.get("en")
-            return text or cmd.help
+            if text:
+                return text
         except (json.JSONDecodeError, AttributeError):
             return cmd.help
-    return ""
+    catalogue = description_map(cmd)
+    return catalogue.get(lang) or catalogue.get("en", "")
 
 
 def _ui(lang: str, key: str, **kwargs) -> str:
@@ -69,86 +78,7 @@ def _ui(lang: str, key: str, **kwargs) -> str:
 #  LOCALISED UI STRINGS
 # ===================================================
 
-_UI_STRINGS: dict[str, dict] = {
-    "en": {
-        "dropdown_placeholder": "☕ Pick a category…",
-        "dropdown_more_label":  "More categories (page {page}/{total})",
-        "dropdown_more_desc":   "Show the next page of categories",
-        "no_commands":          "*No commands found.*",
-        "no_desc":              "No description provided.",
-        "cmd_not_found_title":  "Command Not Found",
-        "cmd_not_found_body":   "No command named `{name}` exists.\nUse the help menu to browse available commands.",
-        "detail_description":   "Description",
-        "detail_usage":         "Usage",
-        "detail_aliases":       "Aliases",
-        "detail_subcommands":   "Subcommands",
-        "detail_category":      "Category",
-        "btn_prev":             "◀ Prev",
-        "btn_next":             "Next ▶",
-        "btn_page":             "Page {page}/{total}",
-        "general_title":        "### 🌸 Welcome to Niko's Help Menu",
-        "general_intro":        "Use the dropdown below to browse commands by category.",
-        "general_about_title":  "**About Niko**",
-        "general_about_body": (
-            "Niko is a modern all-in-one Discord bot — AI chat, economy and casino games, "
-            "leveling, music, tickets, giveaways, moderation, voice rooms, and a web dashboard, "
-            "all in three languages (EN/DE/ES)."
-        ),
-        "general_links_title":  "**{icon} Links**",
-    },
-    "es": {
-        "dropdown_placeholder": "☕ Elige una categoría…",
-        "dropdown_more_label":  "Más categorías (página {page}/{total})",
-        "dropdown_more_desc":   "Mostrar la siguiente página de categorías",
-        "no_commands":          "*No se encontraron comandos.*",
-        "no_desc":              "Sin descripción.",
-        "cmd_not_found_title":  "Comando no encontrado",
-        "cmd_not_found_body":   "No existe un comando llamado `{name}`.\nUsa el menú de ayuda para ver los comandos disponibles.",
-        "detail_description":   "Descripción",
-        "detail_usage":         "Uso",
-        "detail_aliases":       "Alias",
-        "detail_subcommands":   "Subcomandos",
-        "detail_category":      "Categoría",
-        "btn_prev":             "◀ Anterior",
-        "btn_next":             "Siguiente ▶",
-        "btn_page":             "Página {page}/{total}",
-        "general_title":        "### 🌸 Bienvenido al menú de ayuda de Niko",
-        "general_intro":        "Usa el menú desplegable para explorar los comandos por categoría.",
-        "general_about_title":  "**Sobre Niko**",
-        "general_about_body": (
-            "Niko es un bot de Discord moderno todo en uno: chat con IA, economía y juegos de casino, "
-            "niveles, música, tickets, sorteos, moderación, salas de voz y un panel web, "
-            "todo en tres idiomas (EN/DE/ES)."
-        ),
-        "general_links_title":  "**{icon} Enlaces**",
-    },
-    "de": {
-        "dropdown_placeholder": "☕ Kategorie auswählen…",
-        "dropdown_more_label":  "Weitere Kategorien (Seite {page}/{total})",
-        "dropdown_more_desc":   "Nächste Seite mit Kategorien anzeigen",
-        "no_commands":          "*Keine Befehle gefunden.*",
-        "no_desc":              "Keine Beschreibung verfügbar.",
-        "cmd_not_found_title":  "Befehl nicht gefunden",
-        "cmd_not_found_body":   "Kein Befehl namens `{name}` gefunden.\nNutze das Hilfemenü, um Befehle zu durchsuchen.",
-        "detail_description":   "Beschreibung",
-        "detail_usage":         "Verwendung",
-        "detail_aliases":       "Aliase",
-        "detail_subcommands":   "Unterbefehle",
-        "detail_category":      "Kategorie",
-        "btn_prev":             "◀ Zurück",
-        "btn_next":             "Weiter ▶",
-        "btn_page":             "Seite {page}/{total}",
-        "general_title":        "### 🌸 Willkommen bei Nikos Hilfemenü",
-        "general_intro":        "Nutze das Dropdown unten, um Befehle nach Kategorie zu durchsuchen.",
-        "general_about_title":  "**Über Niko**",
-        "general_about_body": (
-            "Niko ist ein moderner All-in-One-Discord-Bot: KI-Chat, Wirtschaft und Casinospiele, "
-            "Leveling, Musik, Tickets, Giveaways, Moderation, Sprachkanäle und ein Web-Dashboard — "
-            "alles dreisprachig (EN/DE/ES)."
-        ),
-        "general_links_title":  "**{icon} Links**",
-    },
-}
+_UI_STRINGS = load_locales("cogs.help", "ui")
 
 
 # ===================================================
@@ -175,256 +105,11 @@ _CATEGORY_LIST: List[Tuple[str, str]] = [
     ("Customization",  f"{get_emoji('edit')}"),
 ]
 
-CATEGORY_DESCS: dict[str, dict[str, str]] = {
-    "en": {
-        "General":       "General bot information",
-        "Fun":           "Fun commands",
-        "Gambling":      "Blackjack, Slots, Roulette",
-        "Economy":       "Balance, daily, work, etc.",
-        "Roleplay":      "RP commands",
-        "Info":          "User/server info commands",
-        "Utility":       "Misc tools and utilities",
-        "AI":            "AI commands",
-        "Moderation":    "Moderation and automod commands",
-        "EmojiManager":  "Emoji manager commands",
-        "Community":     "Polls, giveaways, leveling, birthdays, tickets & onboarding",
-        "Music":         "Music commands",
-        "Notifier":      "Social media notifier",
-        "VoiceMaster":   "Voice channel management",
-        "Image Tools":   "Image manipulation commands",
-        "Customization": "Customization commands",
-    },
-    "de": {
-        "General":       "Allgemeine Bot-Informationen",
-        "Fun":           "Spaßbefehle",
-        "Gambling":      "Blackjack, Slots, Roulette",
-        "Economy":       "Guthaben, tägl. Belohnung, Arbeit usw.",
-        "Roleplay":      "Rollenspiel-Befehle",
-        "Info":          "Nutzer-/Server-Informationen",
-        "Utility":       "Nützliche Hilfswerkzeuge",
-        "AI":            "KI-Befehle",
-        "Moderation":    "Moderations- und Automod-Befehle",
-        "EmojiManager":  "Emoji-Verwaltung",
-        "Community":     "Umfragen, Gewinnspiele, Leveling, Geburtstage, Tickets & Onboarding",
-        "Music":         "Musikbefehle",
-        "Notifier":      "Social-Media-Benachrichtigungen",
-        "VoiceMaster":   "Sprachkanal-Verwaltung",
-        "Image Tools":   "Bildbearbeitungsbefehle",
-        "Customization": "Anpassungsbefehle",
-    },
-    "es": {
-        "General":       "Información general del bot",
-        "Fun":           "Comandos divertidos",
-        "Gambling":      "Blackjack, tragamonedas, ruleta",
-        "Economy":       "Saldo, diario, trabajo, etc.",
-        "Roleplay":      "Comandos de rol",
-        "Info":          "Info de usuario/servidor",
-        "Utility":       "Herramientas y utilidades varias",
-        "AI":            "Comandos de IA",
-        "Moderation":    "Comandos de moderación y automoderación",
-        "EmojiManager":  "Gestión de emojis",
-        "Community":     "Encuestas, sorteos, niveles, cumpleaños, tickets y bienvenida",
-        "Music":         "Comandos de música",
-        "Notifier":      "Notificaciones de redes sociales",
-        "VoiceMaster":   "Gestión de canales de voz",
-        "Image Tools":   "Manipulación de imágenes",
-        "Customization": "Comandos de personalización",
-    },
-}
+CATEGORY_DESCS = load_locales("cogs.help", "category_descriptions")
 
 # Category header strings shown above the command list — localised.
 # Keyed by lang → category label → header markdown string.
-CATEGORY_HEADERS: dict[str, dict[str, str]] = {
-    "en": {
-        "General": "",
-        "Fun": (
-            f"{get_emoji('games')} **Fun Commands**\n"
-            "> Commands for fun and games!"
-        ),
-        "Gambling": (
-            f"{get_emoji('gambling')} **Casino Commands**\n"
-            "> Play games of chance!"
-        ),
-        "Economy": (
-            f"{get_emoji('economy')} **Economy Commands**\n"
-            "> Earn and spend virtual currency!"
-        ),
-        "Roleplay": (
-            f"{get_emoji('roleplay')} **Roleplay Commands**\n"
-            "> Fun roleplay commands!"
-        ),
-        "Info": (
-            f"{get_emoji('stats')} **Information Commands**\n"
-            "> Get info about users, servers, and more!"
-        ),
-        "Utility": (
-            f"{get_emoji('utility')} **Utility Commands**\n"
-            "> Useful tools and utilities."
-        ),
-        "AI": (
-            f"{get_emoji('ai')} **AI Commands**\n"
-            "> Interact with Niko's AI features!"
-        ),
-        "Moderation": (
-            f"{get_emoji('moderation')} **Moderation Commands**\n"
-            "> Moderation and automod tools for server management."
-        ),
-        "EmojiManager": (
-            f"{get_emoji('paint')} **Emoji Manager Commands**\n"
-            "> Manage custom emojis in your server."
-        ),
-        "Community": (
-            f"{get_emoji('heart')} **Community Commands**\n"
-            "> Polls, suggestions, starboard, birthdays, onboarding, leveling, giveaways and tickets."
-        ),
-        "Music": (
-            f"{get_emoji('music')} **Music Commands**\n"
-            "> Play music in your voice channel!"
-        ),
-        "Notifier": (
-            f"{get_emoji('megaphone')} **Notifier Commands**\n"
-            "> Get notified about new posts from your favourite creators!"
-        ),
-        "VoiceMaster": (
-            f"{get_emoji('voicemaster')} **VoiceMaster Commands**\n"
-            "> Create and manage temporary voice channels!"
-        ),
-        "Image Tools": (
-            f"{get_emoji('image')} **Image Tools**\n"
-            "> Manipulate images with these commands!"
-        ),
-        "Customization": (
-            f"{get_emoji('edit')} **Customization Commands**\n"
-            "> Customize Niko's pfp, banner, and more!"
-        ),
-    },
-    "de": {
-        "General": "",
-        "Fun": (
-            f"{get_emoji('games')} **Spaßbefehle**\n"
-            "> Befehle für Spaß und Spiele!"
-        ),
-        "Gambling": (
-            f"{get_emoji('gambling')} **Casino-Befehle**\n"
-            "> Spiele Glücksspiele!"
-        ),
-        "Economy": (
-            f"{get_emoji('economy')} **Wirtschaftsbefehle**\n"
-            "> Verdiene und gib virtuelle Währung aus!"
-        ),
-        "Roleplay": (
-            f"{get_emoji('roleplay')} **Rollenspiel-Befehle**\n"
-            "> Spaßige Rollenspiel-Befehle!"
-        ),
-        "Info": (
-            f"{get_emoji('stats')} **Informationsbefehle**\n"
-            "> Informationen zu Nutzern, Servern und mehr!"
-        ),
-        "Utility": (
-            f"{get_emoji('utility')} **Hilfswerkzeuge**\n"
-            "> Nützliche Tools und Dienstprogramme."
-        ),
-        "AI": (
-            f"{get_emoji('ai')} **KI-Befehle**\n"
-            "> Interagiere mit Nikos KI-Funktionen!"
-        ),
-        "Moderation": (
-            f"{get_emoji('moderation')} **Moderationsbefehle**\n"
-            "> Moderations- und Automod-Tools für die Serververwaltung."
-        ),
-        "EmojiManager": (
-            f"{get_emoji('paint')} **Emoji-Manager-Befehle**\n"
-            "> Verwalte benutzerdefinierte Emojis auf deinem Server."
-        ),
-        "Community": (
-            f"{get_emoji('heart')} **Community-Befehle**\n"
-            "> Umfragen, Vorschläge, Starboard, Geburtstage, Onboarding, Leveling, Gewinnspiele und Tickets."
-        ),
-        "Music": (
-            f"{get_emoji('music')} **Musikbefehle**\n"
-            "> Musik in deinem Sprachkanal abspielen!"
-        ),
-        "Notifier": (
-            f"{get_emoji('megaphone')} **Benachrichtigungs-Befehle**\n"
-            "> Werde über neue Beiträge deiner Lieblings-Ersteller benachrichtigt!"
-        ),
-        "VoiceMaster": (
-            f"{get_emoji('voicemaster')} **VoiceMaster-Befehle**\n"
-            "> Temporäre Sprachkanäle erstellen und verwalten!"
-        ),
-        "Image Tools": (
-            f"{get_emoji('image')} **Bildbearbeitungs-Befehle**\n"
-            "> Bilder mit diesen Befehlen bearbeiten!"
-        ),
-        "Customization": (
-            f"{get_emoji('edit')} **Anpassungsbefehle**\n"
-            "> Nikos Profilbild, Banner und mehr anpassen!"
-        ),
-    },
-    "es": {
-        "General": "",
-        "Fun": (
-            f"{get_emoji('games')} **Comandos Divertidos**\n"
-            "> ¡Comandos para diversión y juegos!"
-        ),
-        "Gambling": (
-            f"{get_emoji('gambling')} **Comandos del Casino**\n"
-            "> ¡Juega juegos de azar!"
-        ),
-        "Economy": (
-            f"{get_emoji('economy')} **Comandos de Economía**\n"
-            "> ¡Gana y gasta moneda virtual!"
-        ),
-        "Roleplay": (
-            f"{get_emoji('roleplay')} **Comandos de Rol**\n"
-            "> ¡Comandos divertidos de rol!"
-        ),
-        "Info": (
-            f"{get_emoji('stats')} **Comandos de Información**\n"
-            "> ¡Obtén info sobre usuarios, servidores y más!"
-        ),
-        "Utility": (
-            f"{get_emoji('utility')} **Comandos de Utilidad**\n"
-            "> Herramientas útiles y utilidades."
-        ),
-        "AI": (
-            f"{get_emoji('ai')} **Comandos de IA**\n"
-            "> ¡Interactúa con las funciones de IA de Niko!"
-        ),
-        "Moderation": (
-            f"{get_emoji('moderation')} **Comandos de Moderación**\n"
-            "> Herramientas de moderación y automoderación para gestionar el servidor."
-        ),
-        "EmojiManager": (
-            f"{get_emoji('paint')} **Comandos del Gestor de Emojis**\n"
-            "> Gestiona emojis personalizados en tu servidor."
-        ),
-        "Community": (
-            f"{get_emoji('heart')} **Comandos de Comunidad**\n"
-            "> Encuestas, sugerencias, starboard, cumpleaños, bienvenida, niveles, sorteos y tickets."
-        ),
-        "Music": (
-            f"{get_emoji('music')} **Comandos de Música**\n"
-            "> ¡Reproduce música en tu canal de voz!"
-        ),
-        "Notifier": (
-            f"{get_emoji('megaphone')} **Comandos de Notificaciones**\n"
-            "> ¡Recibe notificaciones sobre nuevas publicaciones de tus creadores favoritos!"
-        ),
-        "VoiceMaster": (
-            f"{get_emoji('voicemaster')} **Comandos de VoiceMaster**\n"
-            "> ¡Crea y gestiona canales de voz temporales!"
-        ),
-        "Image Tools": (
-            f"{get_emoji('image')} **Herramientas de Imagen**\n"
-            "> ¡Manipula imágenes con estos comandos!"
-        ),
-        "Customization": (
-            f"{get_emoji('edit')} **Comandos de Personalización**\n"
-            "> ¡Personaliza la foto de perfil, banner y más de Niko!"
-        ),
-    },
-}
+CATEGORY_HEADERS = load_locales("cogs.help", "category_headers")
 
 # Map category label → list of cog names that contribute to it.
 CATEGORY_COGS: dict[str, List[str]] = {

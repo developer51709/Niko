@@ -22,66 +22,17 @@ import discord
 from discord.ext import commands, tasks
 
 from config.emojis import get_emoji
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 DATE_RE = re.compile(r"^\s*(\d{1,2})[-/](\d{1,2})\s*$")
 
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "set_ok":         "🎂 Your birthday has been set to **{date}**.",
-            "removed":        "✅ Your birthday has been removed.",
-            "invalid_date":   "❌ Invalid date. Use `MM-DD` format (e.g. `07-23`).",
-            "show_self":      "🎂 Your birthday is **{date}**.",
-            "show_other":     "🎂 {user}'s birthday is **{date}**.",
-            "show_none":      "📭 {user} has no birthday set.",
-            "today_empty":    "🎂 No birthdays today.",
-            "today_title":    "### {icon} Birthdays Today",
-            "upcoming_empty": "📭 No upcoming birthdays in the next 30 days.",
-            "upcoming_title": "### {icon} Upcoming Birthdays",
-            "channel_set":    "✅ Birthday announcement channel set to {channel}.",
-            "role_set":       "✅ Birthday role set to {role}.",
-            "config_title":   "### {icon} Birthday Config",
-            "config_body":    "**Channel:** {channel}\n**Role:** {role}",
-            "happy_birthday": "🎂🎉 happy birthday {mention}! wishing you the most wonderful day! 🎈",
-        },
-        "de": {
-            "set_ok":         "🎂 Dein Geburtstag wurde auf **{date}** gesetzt.",
-            "removed":        "✅ Dein Geburtstag wurde entfernt.",
-            "invalid_date":   "❌ Ungültiges Datum. Verwende `MM-TT` (z.B. `07-23`).",
-            "show_self":      "🎂 Dein Geburtstag ist **{date}**.",
-            "show_other":     "🎂 {user}s Geburtstag ist **{date}**.",
-            "show_none":      "📭 {user} hat keinen Geburtstag gesetzt.",
-            "today_empty":    "🎂 Heute gibt es keine Geburtstage.",
-            "today_title":    "### {icon} Geburtstage heute",
-            "upcoming_empty": "📭 Keine Geburtstage in den nächsten 30 Tagen.",
-            "upcoming_title": "### {icon} Bevorstehende Geburtstage",
-            "channel_set":    "✅ Geburtstags-Ankündigungskanal auf {channel} gesetzt.",
-            "role_set":       "✅ Geburtstagsrolle auf {role} gesetzt.",
-            "config_title":   "### {icon} Geburtstags-Konfiguration",
-            "config_body":    "**Kanal:** {channel}\n**Rolle:** {role}",
-            "happy_birthday": "🎂🎉 herzlichen glückwunsch zum geburtstag {mention}! ich wünsche dir den schönsten tag! 🎈",
-        },
-        "es": {
-            "set_ok":         "🎂 Tu cumpleaños se ha establecido en **{date}**.",
-            "removed":        "✅ Tu cumpleaños se ha eliminado.",
-            "invalid_date":   "❌ Fecha inválida. Usa el formato `MM-DD` (ej. `07-23`).",
-            "show_self":      "🎂 Tu cumpleaños es el **{date}**.",
-            "show_other":     "🎂 El cumpleaños de {user} es el **{date}**.",
-            "show_none":      "📭 {user} no tiene cumpleaños configurado.",
-            "today_empty":    "🎂 No hay cumpleaños hoy.",
-            "today_title":    "### {icon} Cumpleaños de hoy",
-            "upcoming_empty": "📭 No hay cumpleaños en los próximos 30 días.",
-            "upcoming_title": "### {icon} Próximos cumpleaños",
-            "channel_set":    "✅ Canal de anuncios de cumpleaños establecido en {channel}.",
-            "role_set":       "✅ Rol de cumpleaños establecido en {role}.",
-            "config_title":   "### {icon} Configuración de cumpleaños",
-            "config_body":    "**Canal:** {channel}\n**Rol:** {role}",
-            "happy_birthday": "🎂🎉 ¡feliz cumpleaños {mention}! ¡te deseo el día más maravilloso! 🎈",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.social", "birthdays")
 
 
 def _lang(ctx) -> str:
@@ -92,7 +43,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:
@@ -192,8 +143,8 @@ class Birthdays(commands.Cog):
 
     @commands.hybrid_group(
         name="birthday",
-        description="Birthday system.",
-        help="{ 'en': 'Birthday system: set, list, announce.', 'de': 'Geburtstagssystem: setzen, anzeigen, ankündigen.', 'es': 'Sistema de cumpleaños: establecer, listar, anunciar.' }",
+        description=CMDS.text("birthday.description"),
+        help=CMDS.help("birthday"),
         invoke_without_command=True,
     )
     async def birthday(self, ctx: commands.Context):
@@ -201,8 +152,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="set",
-        description="Set your birthday (MM-DD).",
-        help="{ 'en': 'Set your birthday in MM-DD format.', 'de': 'Geburtstag im Format MM-TT setzen.', 'es': 'Establece tu cumpleaños en formato MM-DD.' }",
+        description=CMDS.text("birthday.set.description"),
+        help=CMDS.help("birthday.set"),
     )
     async def birthday_set(self, ctx: commands.Context, date: str):
         d = _parse_date(date)
@@ -213,8 +164,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="remove",
-        description="Remove your birthday.",
-        help="{ 'en': 'Remove your birthday.', 'de': 'Deinen Geburtstag entfernen.', 'es': 'Elimina tu cumpleaños.' }",
+        description=CMDS.text("birthday.remove.description"),
+        help=CMDS.help("birthday.remove"),
     )
     async def birthday_remove(self, ctx: commands.Context):
         await self._db_remove_user_birthday(ctx.author.id)
@@ -222,8 +173,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="show",
-        description="Show a user's birthday.",
-        help="{ 'en': 'Show a user\\'s birthday.', 'de': 'Geburtstag eines Nutzers anzeigen.', 'es': 'Muestra el cumpleaños de un usuario.' }",
+        description=CMDS.text("birthday.show.description"),
+        help=CMDS.help("birthday.show"),
     )
     async def birthday_show(self, ctx: commands.Context, user: discord.Member = None):
         target = user or ctx.author
@@ -238,8 +189,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="today",
-        description="List members with a birthday today.",
-        help="{ 'en': 'List today\\'s birthdays.', 'de': 'Heutige Geburtstage anzeigen.', 'es': 'Lista los cumpleaños de hoy.' }",
+        description=CMDS.text("birthday.today.description"),
+        help=CMDS.help("birthday.today"),
     )
     async def birthday_today(self, ctx: commands.Context):
         today = datetime.now(timezone.utc).strftime("%m-%d")
@@ -257,8 +208,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="upcoming",
-        description="Upcoming birthdays in the next 30 days.",
-        help="{ 'en': 'Upcoming birthdays in the next 30 days.', 'de': 'Bevorstehende Geburtstage in den nächsten 30 Tagen.', 'es': 'Próximos cumpleaños en los próximos 30 días.' }",
+        description=CMDS.text("birthday.upcoming.description"),
+        help=CMDS.help("birthday.upcoming"),
     )
     async def birthday_upcoming(self, ctx: commands.Context):
         today = datetime.now(timezone.utc).date()
@@ -295,8 +246,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="channel",
-        description="Set the birthday announcement channel.",
-        help="{ 'en': 'Set the birthday announcement channel (admin).', 'de': 'Geburtstags-Ankündigungskanal setzen (Admin).', 'es': 'Establece el canal de anuncios de cumpleaños (admin).' }",
+        description=CMDS.text("birthday.channel.description"),
+        help=CMDS.help("birthday.channel"),
     )
     @commands.has_permissions(manage_guild=True)
     async def birthday_channel(self, ctx: commands.Context, channel: discord.TextChannel):
@@ -305,8 +256,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="role",
-        description="Set the auto-assigned birthday role.",
-        help="{ 'en': 'Set the birthday role (admin).', 'de': 'Geburtstagsrolle setzen (Admin).', 'es': 'Establece el rol de cumpleaños (admin).' }",
+        description=CMDS.text("birthday.role.description"),
+        help=CMDS.help("birthday.role"),
     )
     @commands.has_permissions(manage_guild=True)
     async def birthday_role(self, ctx: commands.Context, role: discord.Role):
@@ -315,8 +266,8 @@ class Birthdays(commands.Cog):
 
     @birthday.command(
         name="config",
-        description="Show server birthday config.",
-        help="{ 'en': 'Show this server\\'s birthday config.', 'de': 'Geburtstags-Konfiguration dieses Servers anzeigen.', 'es': 'Muestra la configuración de cumpleaños de este servidor.' }",
+        description=CMDS.text("birthday.config.description"),
+        help=CMDS.help("birthday.config"),
     )
     async def birthday_config(self, ctx: commands.Context):
         gcfg = await self._db_get_guild_config(ctx.guild.id)

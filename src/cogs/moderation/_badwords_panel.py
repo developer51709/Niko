@@ -15,6 +15,7 @@ import discord
 
 from config.emojis import get_emoji
 from utils.i18n import get_lang
+from utils.locales import load_locales
 from ._presets import PRESET_FILTERS, preset_description, preset_label
 from .utils import (
     MAX_BADWORDS_MASK_LENGTH,
@@ -45,182 +46,7 @@ EMOJI = {
     "warn": get_emoji("warning"),
 }
 
-MESSAGES = {
-    "en": {
-        "no_permission":     "{cross} You need **Manage Server** permissions to do that.",
-        "panel_title":       "### {mod} Blocked Words",
-        "panel_desc":        "Niko checks every message in this server against your own word list and the preset filters you switch on.",
-        "overview_counts":   "**{words}** words in your list  •  **{presets}/{total}** preset filters on",
-        "overview_mode":     "Response: **{mode}**",
-        "overview_hint":     "-# Use the menu below to manage the word list, the preset filters, and what happens to a flagged message.",
-        "words_title":       "### {msg} Word list",
-        "words_desc":        "Whole-word matching, like Discord. `word*` also catches longer forms, `*word*` matches anywhere, and separators between letters are ignored — so `a.s.s` is still caught.",
-        "words_empty":       "*No words yet — add the first one with the button below.*",
-        "words_more":        "-# …and {count} more.",
-        "words_hint":        "-# Add, remove, or clear words with the buttons below.",
-        "presets_title":     "### {mod} Preset filters",
-        "presets_desc":      "Curated regular expressions for slurs and other content a plain word list cannot keep up with. They also catch leet (`n1gg3r`), spaced (`n i g g e r`), repeated (`niiiigger`), self-censored (`sh*t`) and look-alike spellings, while leaving ordinary words like “class”, “analysis” and “spices” alone.",
-        "presets_hint":      "-# Choose the filters with the menu below. Everything they catch follows the response in the Response section.",
-        "response_title":    "### {gear} Response",
-        "response_desc":     "What Niko does with a message that trips the word list or a preset filter.",
-        "response_current":  "Currently: **{mode}**",
-        "response_mask":     "Censor mask: `{mask}`",
-        "response_mask_none":"Censor mask: *removes the word entirely*",
-        "response_hint":     "-# Censoring deletes the message and reposts its text through a webhook using the member's name and avatar, so Niko needs **Manage Webhooks** in that channel. Without it the message is deleted instead.",
-        "mode_delete":       "delete the message",
-        "mode_censor":       "censor & repost it",
-        "word_invalid":      "{cross} That cannot be blocked — use 60 characters or fewer.",
-        "word_exists":       "{cross} `{word}` is already blocked.",
-        "words_full":        "{cross} The word list is full ({max} words). Remove one first.",
-        "word_added":        "{tick} Added `{word}`.",
-        "remove_none":       "{cross} There is nothing to remove.",
-        "remove_prompt":     "{msg} Pick the word to unblock:",
-        "remove_more":       "-# Showing the first {shown} of {total} words — remove one to reach the rest.",
-        "word_removed":      "{tick} Removed `{word}`.",
-        "clear_prompt":      "{warn} Clear **all {count} words**? This cannot be undone.",
-        "clear_confirm":     "Clear all words",
-        "cancel":            "Cancel",
-        "clear_cancelled":   "Nothing was changed.",
-        "clear_done":        "{tick} Cleared {count} words.",
-        "presets_saved":     "{tick} Preset filters updated.",
-        "response_saved":    "{tick} Response set to **{mode}**.",
-        "mask_title":        "Censor mask",
-        "mask_placeholder":  "e.g. * or [removed]",
-        "mask_saved":        "{tick} Censor mask set to `{mask}`.",
-        "mask_saved_none":   "{tick} Censor mask cleared — blocked words are removed entirely.",
-        "section_overview":  "Overview",
-        "section_words":     "Word list",
-        "section_presets":   "Preset filters",
-        "section_response":  "Response",
-        "btn_add_word":      "Add Word",
-        "btn_remove_word":   "Remove Word",
-        "btn_clear_words":   "Clear All",
-        "btn_set_mask":      "Set Mask",
-        "add_word_title":    "Blocked word",
-        "section_placeholder": "Navigate sections…",
-        "preset_placeholder": "Toggle preset filters…",
-        "response_placeholder": "Choose the response…",
-        "remove_placeholder": "Choose a word to remove…",
-        "words_label":       "Words",
-        "presets_label":     "Presets",
-    },
-    "de": {
-        "no_permission":     "{cross} Dafür brauchst du die Berechtigung **Server verwalten**.",
-        "panel_title":       "### {mod} Gesperrte Wörter",
-        "panel_desc":        "Niko prüft jede Nachricht auf diesem Server anhand deiner Wortliste und der aktivierten Preset-Filter.",
-        "overview_counts":   "**{words}** Wörter in deiner Liste  •  **{presets}/{total}** Preset-Filter aktiv",
-        "overview_mode":     "Reaktion: **{mode}**",
-        "overview_hint":     "-# Nutze das Menü unten, um Wortliste, Preset-Filter und die Reaktion auf eine markierte Nachricht zu verwalten.",
-        "words_title":       "### {msg} Wortliste",
-        "words_desc":        "Ganze Wörter, wie bei Discord. `wort*` erfasst auch längere Formen, `*wort*` trifft überall, und Trennzeichen zwischen Buchstaben werden ignoriert — `a.s.s` wird also weiterhin erkannt.",
-        "words_empty":       "*Noch keine Wörter — füge das erste mit dem Button unten hinzu.*",
-        "words_more":        "-# …und {count} weitere.",
-        "words_hint":        "-# Füge Wörter hinzu, entferne oder lösche sie mit den Buttons unten.",
-        "presets_title":     "### {mod} Preset-Filter",
-        "presets_desc":      "Kuratierte reguläre Ausdrücke für Beleidigungen und andere Inhalte, mit denen eine reine Wortliste nicht mithalten kann. Sie erkennen auch Leet- (`n1gg3r`), getrennte (`n i g g e r`), wiederholte (`niiiigger`), selbst zensierte (`sh*t`) und ähnlich aussehende Schreibweisen — normale Wörter wie „Klasse“, „Analyse“ oder „Gewürze“ bleiben unberührt.",
-        "presets_hint":      "-# Wähle die Filter mit dem Menü unten. Alles, was sie erkennen, folgt der Reaktion im Bereich „Reaktion“.",
-        "response_title":    "### {gear} Reaktion",
-        "response_desc":     "Was Niko mit einer Nachricht macht, die die Wortliste oder einen Preset-Filter auslöst.",
-        "response_current":  "Aktuell: **{mode}**",
-        "response_mask":     "Zensur-Maske: `{mask}`",
-        "response_mask_none":"Zensur-Maske: *entfernt das Wort vollständig*",
-        "response_hint":     "-# Beim Zensieren wird die Nachricht gelöscht und ihr Text über einen Webhook mit Name und Avatar des Mitglieds neu gesendet. Niko braucht dafür **Webhooks verwalten** in diesem Kanal — sonst wird die Nachricht nur gelöscht.",
-        "mode_delete":       "Nachricht löschen",
-        "mode_censor":       "zensieren & erneut senden",
-        "word_invalid":      "{cross} Das kann nicht gesperrt werden — höchstens 60 Zeichen.",
-        "word_exists":       "{cross} `{word}` ist bereits gesperrt.",
-        "words_full":        "{cross} Die Wortliste ist voll ({max} Wörter). Entferne zuerst eines.",
-        "word_added":        "{tick} `{word}` hinzugefügt.",
-        "remove_none":       "{cross} Es gibt nichts zu entfernen.",
-        "remove_prompt":     "{msg} Wähle das Wort, das du entsperren möchtest:",
-        "remove_more":       "-# Es werden die ersten {shown} von {total} Wörtern gezeigt — entferne eines, um die restlichen zu sehen.",
-        "word_removed":      "{tick} `{word}` entfernt.",
-        "clear_prompt":      "{warn} **Alle {count} Wörter** löschen? Das kann nicht rückgängig gemacht werden.",
-        "clear_confirm":     "Alle Wörter löschen",
-        "cancel":            "Abbrechen",
-        "clear_cancelled":   "Es wurde nichts geändert.",
-        "clear_done":        "{tick} {count} Wörter gelöscht.",
-        "presets_saved":     "{tick} Preset-Filter aktualisiert.",
-        "response_saved":    "{tick} Reaktion auf **{mode}** gesetzt.",
-        "mask_title":        "Zensur-Maske",
-        "mask_placeholder":  "z. B. * oder [entfernt]",
-        "mask_saved":        "{tick} Zensur-Maske auf `{mask}` gesetzt.",
-        "mask_saved_none":   "{tick} Zensur-Maske geleert — gesperrte Wörter werden vollständig entfernt.",
-        "section_overview":  "Übersicht",
-        "section_words":     "Wortliste",
-        "section_presets":   "Preset-Filter",
-        "section_response":  "Reaktion",
-        "btn_add_word":      "Wort hinzufügen",
-        "btn_remove_word":   "Wort entfernen",
-        "btn_clear_words":   "Alle löschen",
-        "btn_set_mask":      "Maske setzen",
-        "add_word_title":    "Gesperrtes Wort",
-        "section_placeholder": "Bereiche…",
-        "preset_placeholder": "Preset-Filter umschalten…",
-        "response_placeholder": "Reaktion wählen…",
-        "remove_placeholder": "Wort zum Entfernen wählen…",
-        "words_label":       "Wörter",
-        "presets_label":     "Presets",
-    },
-    "es": {
-        "no_permission":     "{cross} Necesitas el permiso **Gestionar servidor** para hacer eso.",
-        "panel_title":       "### {mod} Palabras bloqueadas",
-        "panel_desc":        "Niko revisa cada mensaje de este servidor con tu lista de palabras y los filtros predefinidos que actives.",
-        "overview_counts":   "**{words}** palabras en tu lista  •  **{presets}/{total}** filtros predefinidos activos",
-        "overview_mode":     "Respuesta: **{mode}**",
-        "overview_hint":     "-# Usa el menú de abajo para gestionar la lista de palabras, los filtros predefinidos y qué ocurre con un mensaje marcado.",
-        "words_title":       "### {msg} Lista de palabras",
-        "words_desc":        "Coincidencia por palabra completa, como en Discord. `palabra*` también detecta formas más largas, `*palabra*` coincide en cualquier lugar y los separadores entre letras se ignoran, así que `a.s.s` sigue detectándose.",
-        "words_empty":       "*Aún no hay palabras — añade la primera con el botón de abajo.*",
-        "words_more":        "-# …y {count} más.",
-        "words_hint":        "-# Añade, elimina o borra palabras con los botones de abajo.",
-        "presets_title":     "### {mod} Filtros predefinidos",
-        "presets_desc":      "Expresiones regulares seleccionadas para insultos y otro contenido que una lista de palabras no puede cubrir. También detectan variantes con leet (`n1gg3r`), separadas (`n i g g e r`), repetidas (`niiiigger`), autocensuradas (`sh*t`) y con caracteres parecidos, sin afectar a palabras normales como «clase», «análisis» o «especias».",
-        "presets_hint":      "-# Elige los filtros con el menú de abajo. Todo lo que detecten sigue la respuesta de la sección Respuesta.",
-        "response_title":    "### {gear} Respuesta",
-        "response_desc":     "Qué hace Niko con un mensaje que activa la lista de palabras o un filtro predefinido.",
-        "response_current":  "Actualmente: **{mode}**",
-        "response_mask":     "Máscara de censura: `{mask}`",
-        "response_mask_none":"Máscara de censura: *elimina la palabra por completo*",
-        "response_hint":     "-# Censurar borra el mensaje y reenvía su texto mediante un webhook con el nombre y el avatar del miembro, así que Niko necesita **Gestionar webhooks** en ese canal. Sin él, el mensaje solo se elimina.",
-        "mode_delete":       "eliminar el mensaje",
-        "mode_censor":       "censurar y reenviar",
-        "word_invalid":      "{cross} Eso no se puede bloquear — usa 60 caracteres o menos.",
-        "word_exists":       "{cross} `{word}` ya está bloqueada.",
-        "words_full":        "{cross} La lista está llena ({max} palabras). Elimina una primero.",
-        "word_added":        "{tick} Se añadió `{word}`.",
-        "remove_none":       "{cross} No hay nada que eliminar.",
-        "remove_prompt":     "{msg} Elige la palabra que quieres desbloquear:",
-        "remove_more":       "-# Mostrando las primeras {shown} de {total} palabras — elimina una para ver el resto.",
-        "word_removed":      "{tick} Se eliminó `{word}`.",
-        "clear_prompt":      "{warn} ¿Borrar **las {count} palabras**? No se puede deshacer.",
-        "clear_confirm":     "Borrar todas",
-        "cancel":            "Cancelar",
-        "clear_cancelled":   "No se cambió nada.",
-        "clear_done":        "{tick} Se borraron {count} palabras.",
-        "presets_saved":     "{tick} Filtros predefinidos actualizados.",
-        "response_saved":    "{tick} Respuesta establecida en **{mode}**.",
-        "mask_title":        "Máscara de censura",
-        "mask_placeholder":  "p. ej. * o [eliminado]",
-        "mask_saved":        "{tick} Máscara de censura establecida en `{mask}`.",
-        "mask_saved_none":   "{tick} Máscara borrada — las palabras bloqueadas se eliminan por completo.",
-        "section_overview":  "Resumen",
-        "section_words":     "Lista de palabras",
-        "section_presets":   "Filtros predefinidos",
-        "section_response":  "Respuesta",
-        "btn_add_word":      "Añadir palabra",
-        "btn_remove_word":   "Quitar palabra",
-        "btn_clear_words":   "Borrar todo",
-        "btn_set_mask":      "Definir máscara",
-        "add_word_title":    "Palabra bloqueada",
-        "section_placeholder": "Ir a una sección…",
-        "preset_placeholder": "Activar filtros predefinidos…",
-        "response_placeholder": "Elige la respuesta…",
-        "remove_placeholder": "Elige una palabra para eliminar…",
-        "words_label":       "Palabras",
-        "presets_label":     "Filtros",
-    },
-}
+MESSAGES = load_locales("cogs.moderation", "badwords_panel")
 
 
 def _lang(guild) -> str:
@@ -442,15 +268,16 @@ class AddWordButton(discord.ui.Button):
 
 
 class AddWordModal(discord.ui.Modal):
-    # Modal field labels stay English across the bot; the title follows the panel.
-    word = discord.ui.TextInput(
-        label="Word or phrase",
-        placeholder="e.g. badword, bad*, *bad*",
-        max_length=MAX_BLOCKED_WORD_LENGTH,
-    )
-
     def __init__(self, utils, guild_id: int, lang: str = "en"):
         super().__init__(title=_t(lang, "add_word_title"))
+        # Built here rather than as a class attribute: the label has to be in
+        # the guild's language, and a modal is assembled per interaction.
+        self.word = discord.ui.TextInput(
+            label=_t(lang, "add_word_label"),
+            placeholder="e.g. badword, bad*, *bad*",
+            max_length=MAX_BLOCKED_WORD_LENGTH,
+        )
+        self.add_item(self.word)
         self._utils = utils
         self._guild_id = guild_id
 
@@ -692,21 +519,19 @@ class SetMaskButton(discord.ui.Button):
 class MaskModal(discord.ui.Modal):
     """Edits the text that replaces a censored word."""
 
-    # The label stays English like every other modal in the bot; only the
-    # placeholder (which carries the syntax hint) is localised.
-    mask = discord.ui.TextInput(
-        label="Mask text",
-        max_length=MAX_BADWORDS_MASK_LENGTH,
-        # Empty is allowed on purpose: it means "remove the word entirely".
-        required=False,
-    )
-
     def __init__(self, utils, guild_id: int, lang: str):
         super().__init__(title=_t(lang, "mask_title"))
+        self.mask = discord.ui.TextInput(
+            label=_t(lang, "mask_label"),
+            placeholder=_t(lang, "mask_placeholder"),
+            max_length=MAX_BADWORDS_MASK_LENGTH,
+            # Empty is allowed on purpose: it means "remove the word entirely".
+            required=False,
+            default=utils.get_badwords_mask(guild_id),
+        )
+        self.add_item(self.mask)
         self._utils = utils
         self._guild_id = guild_id
-        self.mask.placeholder = _t(lang, "mask_placeholder")
-        self.mask.default = utils.get_badwords_mask(guild_id)
 
     async def on_submit(self, interaction: discord.Interaction):
         lang = _lang(interaction.guild)

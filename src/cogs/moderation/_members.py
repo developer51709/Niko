@@ -8,7 +8,18 @@ import discord
 from discord.ext import commands
 from config.emojis import get_emoji
 from ._messages import msg, _cv2
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from utils.ratelimit import mass_role_limiter
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+#: The mass role panel's own table, kept beside this module's commands.
+MASSROLE = load_locales(__package__, "massrole")
+_massmsg = make_flat_msg(MASSROLE, {"loading": get_emoji("loading"), "tick": get_emoji("tick"),
+                                     "cross": get_emoji("cross"), "warning": get_emoji("warning")})
 
 
 def _can_view_warnings(ctx) -> bool:
@@ -43,7 +54,8 @@ class _ModConfirmView(discord.ui.LayoutView):
     """
 
     def __init__(self, prompt: str, *, invoker_id: int, cancelled_text: str,
-                 timeout_text: str, invoker_text: str, timeout: float = 30.0):
+                 timeout_text: str, invoker_text: str, timeout: float = 30.0,
+                 confirm_label: str = "Confirm", cancel_label: str = "Cancel"):
         super().__init__(timeout=timeout)
         self.invoker_id = invoker_id
         self.confirmed: bool | None = None
@@ -55,12 +67,12 @@ class _ModConfirmView(discord.ui.LayoutView):
         # No Unicode fallback: a member of the generated set or no emoji at
         # all, so the buttons never draw Discord's colourful built-ins.
         self._confirm_btn = discord.ui.Button(
-            label="Confirm",
+            label=confirm_label,
             style=discord.ButtonStyle.danger,
             emoji=get_emoji("tick"),
         )
         self._cancel_btn = discord.ui.Button(
-            label="Cancel",
+            label=cancel_label,
             style=discord.ButtonStyle.secondary,
             emoji=get_emoji("cross"),
         )
@@ -126,8 +138,16 @@ class _ModConfirmView(discord.ui.LayoutView):
         return bool(self.confirmed)
 
 
-MASSROLE_ACTIONS = {"add": "Add", "remove": "Remove"}
-MASSROLE_TARGETS = {"humans": "Humans", "bots": "Bots", "all": "All"}
+MASSROLE_ACTIONS = ("add", "remove")
+MASSROLE_TARGETS = ("humans", "bots", "all")
+
+
+def _massrole_action(locale, action: str) -> str:
+    return _massmsg(locale, f"action_{action}")
+
+
+def _massrole_target(locale, target: str) -> str:
+    return _massmsg(locale, f"target_{target}")
 
 
 def _massrole_member_matches(member, target_type: str) -> bool:
@@ -158,16 +178,18 @@ def _massrole_status_view(content: str, accent: discord.Colour) -> discord.ui.La
 class _MassRoleActionSelect(discord.ui.Select):
     def __init__(self, panel: "MassRolePanel"):
         self.panel = panel
+        locale = panel.locale
         super().__init__(
-            placeholder="Choose an action…",
+            placeholder=_massmsg(locale, "action_placeholder"),
             options=[
                 discord.SelectOption(
                     label=label,
                     value=value,
-                    description=f"{label} the selected roles.",
+                    description=_massmsg(locale, "action_option_description", label=label),
                     default=panel.action == value,
                 )
-                for value, label in MASSROLE_ACTIONS.items()
+                for value in MASSROLE_ACTIONS
+                for label in [_massrole_action(locale, value)]
             ],
         )
 
@@ -179,16 +201,18 @@ class _MassRoleActionSelect(discord.ui.Select):
 class _MassRoleTargetSelect(discord.ui.Select):
     def __init__(self, panel: "MassRolePanel"):
         self.panel = panel
+        locale = panel.locale
         super().__init__(
-            placeholder="Choose who to target…",
+            placeholder=_massmsg(locale, "target_placeholder"),
             options=[
                 discord.SelectOption(
                     label=label,
                     value=value,
-                    description=f"Apply this change to {label.lower()}.",
+                    description=_massmsg(locale, "target_option_description", label=label),
                     default=panel.target_type == value,
                 )
-                for value, label in MASSROLE_TARGETS.items()
+                for value in MASSROLE_TARGETS
+                for label in [_massrole_target(locale, value)]
             ],
         )
 
@@ -201,7 +225,7 @@ class _MassRoleSelect(discord.ui.RoleSelect):
     def __init__(self, panel: "MassRolePanel"):
         self.panel = panel
         super().__init__(
-            placeholder="Choose roles (multiple allowed)…",
+            placeholder=_massmsg(panel.locale, "roles_placeholder"),
             min_values=0,
             max_values=25,
             default_values=list(panel.selected_roles),
@@ -217,7 +241,7 @@ class _MassRoleApplyButton(discord.ui.Button):
     def __init__(self, panel: "MassRolePanel"):
         self.panel = panel
         super().__init__(
-            label="Apply",
+            label=_massmsg(panel.locale, "apply"),
             style=discord.ButtonStyle.success,
             emoji=get_emoji("tick"),
             disabled=not panel.selected_roles,
@@ -230,11 +254,12 @@ class _MassRoleApplyButton(discord.ui.Button):
 class MassRolePanel(discord.ui.LayoutView):
     """Invoker-bound Components v2 panel for a rate-limited mass role change."""
 
-    def __init__(self, guild: discord.Guild, invoker_id: int, bot_member: discord.Member):
+    def __init__(self, guild: discord.Guild, invoker_id: int, bot_member: discord.Member, locale=None):
         super().__init__(timeout=600)
         self.guild = guild
         self.invoker_id = invoker_id
         self.bot_member = bot_member
+        self.locale = locale
         self.action = "add"
         self.target_type = "humans"
         self.selected_roles: tuple[discord.Role, ...] = ()
@@ -245,42 +270,45 @@ class MassRolePanel(discord.ui.LayoutView):
         """Guard every select and button, including after permissions change."""
         if interaction.user.id != self.invoker_id:
             await interaction.response.send_message(
-                "Only the person who opened this panel can use it.", ephemeral=True
+                _massmsg(interaction, "not_invoker"), ephemeral=True
             )
             return False
         if interaction.guild is None or interaction.guild.id != self.guild.id:
             await interaction.response.send_message(
-                "This panel can only be used in its original server.", ephemeral=True
+                _massmsg(interaction, "wrong_guild"), ephemeral=True
             )
             return False
         if not interaction.user.guild_permissions.manage_roles:
             await interaction.response.send_message(
-                "You no longer have the **Manage Roles** permission.", ephemeral=True
+                _massmsg(interaction, "need_user_permission"), ephemeral=True
             )
             return False
         if not self.bot_member.guild_permissions.manage_roles:
             await interaction.response.send_message(
-                "I need the **Manage Roles** permission before I can change roles.", ephemeral=True
+                _massmsg(interaction, "need_bot_permission"), ephemeral=True
             )
             return False
         if self._running:
             await interaction.response.send_message(
-                "This mass role update is already in progress.", ephemeral=True
+                _massmsg(interaction, "already_running"), ephemeral=True
             )
             return False
         return True
 
     def _build(self) -> None:
         self.clear_items()
-        role_text = ", ".join(role.mention for role in self.selected_roles) or "*No roles selected yet.*"
-        summary = (
-            "### Mass role manager\n"
-            "Choose an action, target group, and one or more roles, then apply the change.\n\n"
-            f"**Action:** {MASSROLE_ACTIONS[self.action]}\n"
-            f"**Targets:** {MASSROLE_TARGETS[self.target_type]}\n"
-            f"**Roles:** {role_text}"
+        role_text = ", ".join(role.mention for role in self.selected_roles) or _massmsg(
+            self.locale, "no_roles_selected"
+        )
+        summary = _massmsg(
+            self.locale, "body",
+            action=_massrole_action(self.locale, self.action),
+            targets=_massrole_target(self.locale, self.target_type),
+            roles=role_text,
         )
         self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=_massmsg(self.locale, "title")),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=summary),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(_MassRoleActionSelect(self)),
@@ -296,7 +324,7 @@ class MassRolePanel(discord.ui.LayoutView):
 
     def _plan(self) -> tuple[list[tuple[discord.Member, tuple[discord.Role, ...]]], int, str | None]:
         if not self.selected_roles:
-            return [], 0, "Select at least one role before applying the change."
+            return [], 0, _massmsg(self.locale, "select_role_first")
 
         invalid_roles = [
             role for role in self.selected_roles
@@ -305,7 +333,9 @@ class MassRolePanel(discord.ui.LayoutView):
         if invalid_roles:
             names = ", ".join(f"`{role.name}`" for role in invalid_roles[:5])
             suffix = "…" if len(invalid_roles) > 5 else ""
-            return [], 0, f"I cannot manage these roles: {names}{suffix}"
+            return [], 0, _massmsg(
+                self.locale, "cannot_manage", names=names, suffix=suffix
+            )
 
         operations: list[tuple[discord.Member, tuple[discord.Role, ...]]] = []
         skipped = 0
@@ -333,14 +363,16 @@ class MassRolePanel(discord.ui.LayoutView):
         self._running = True
         count = len(operations)
         estimate = _massrole_estimate_seconds(count)
-        action_label = MASSROLE_ACTIONS[self.action]
-        target_label = MASSROLE_TARGETS[self.target_type]
+        action_label = _massrole_action(interaction, self.action)
+        target_label = _massrole_target(interaction, self.target_type)
         await interaction.response.edit_message(view=_massrole_status_view(
-            f"### {get_emoji('loading')} Applying mass role update\n"
-            f"**Action:** {action_label} · **Targets:** {target_label}\n"
-            f"Updating **{count:,}** member{'s' if count != 1 else ''}. "
-            f"Estimated completion: **about {estimate} second{'s' if estimate != 1 else ''}**.\n"
-            "Please keep this panel open while Discord processes the changes.",
+            _massmsg(
+                interaction, "applying",
+                action=action_label,
+                targets=target_label,
+                count=f"{count:,}",
+                estimate=estimate,
+            ),
             discord.Colour.orange(),
         ), allowed_mentions=discord.AllowedMentions.none())
         updated = 0
@@ -360,12 +392,20 @@ class MassRolePanel(discord.ui.LayoutView):
         finally:
             self.stop()
 
-        skipped_text = f"\nSkipped **{skipped:,}** member{'s' if skipped != 1 else ''} above my role." if skipped else ""
-        failed_text = f"\nFailed for **{failed:,}** member{'s' if failed != 1 else ''}." if failed else ""
+        skipped_text = (
+            _massmsg(interaction, "skipped", count=f"{skipped:,}") if skipped else ""
+        )
+        failed_text = (
+            _massmsg(interaction, "failed", count=f"{failed:,}") if failed else ""
+        )
         await interaction.message.edit(view=_massrole_status_view(
-            f"### {get_emoji('tick') if not failed else get_emoji('warning')} Mass role update complete\n"
-            f"Successfully updated **{updated:,}** member{'s' if updated != 1 else ''}."
-            f"{failed_text}{skipped_text}",
+            _massmsg(
+                interaction, "done",
+                emoji=get_emoji("tick") if not failed else get_emoji("warning"),
+                updated=f"{updated:,}",
+                failed=failed_text,
+                skipped=skipped_text,
+            ),
             discord.Colour.green() if not failed else discord.Colour.orange(),
         ), allowed_mentions=discord.AllowedMentions.none())
 
@@ -374,16 +414,16 @@ class MembersMixin:
     """Kick, ban, unban, warn, mute/unmute/tempmute commands."""
 
     # ── KICK ────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(description="Kick a member from the server",
-                             help="{ 'en': 'Kick a member from the server.', 'de': 'Mitglied kicken.', 'es': 'Expulsa a un miembro del servidor.' }")
+    @commands.hybrid_command(description=CMDS.text("kick.description"),
+                             help=CMDS.help("kick"))
     @commands.guild_only()
     @commands.has_permissions(kick_members=True)
     async def kick(
         self,
         ctx,
-        member: discord.Member = commands.parameter(default=None, description="The server member to kick."),
+        member: discord.Member = commands.parameter(default=None, description=CMDS.arg("kick", "member")),
         *,
-        reason: str = commands.parameter(default="No reason provided", description="Why the member is being kicked."),
+        reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("kick", "reason")),
     ):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="kick"))
@@ -394,6 +434,8 @@ class MembersMixin:
             cancelled_text=msg(ctx, "cancelled"),
             timeout_text=msg(ctx, "timed_out"),
             invoker_text=msg(ctx, "invoker_only"),
+            confirm_label=msg(ctx, "btn_confirm"),
+            cancel_label=msg(ctx, "btn_cancel"),
         )
         confirm_msg = await ctx.send(view=confirm_view)
 
@@ -420,17 +462,17 @@ class MembersMixin:
         await self.logger().log_event(ctx.guild, "moderation", "Kick", body, target_id=member.id, action_key="Kick")
 
     # ── BAN ─────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(description="Ban a member from the server",
-                             help="{ 'en': 'Ban a member from the server.', 'de': 'Mitglied bannen.', 'es': 'Banea a un miembro del servidor.' }")
+    @commands.hybrid_command(description=CMDS.text("ban.description"),
+                             help=CMDS.help("ban"))
     @commands.guild_only()
     @commands.has_permissions(ban_members=True)
     async def ban(
         self,
         ctx,
-        member: discord.User = commands.parameter(default=None, description="The user to ban; they do not need to be in the server."),
-        delete_days: int = commands.parameter(default=7, description="How many days of their recent messages to delete (0–7)."),
+        member: discord.User = commands.parameter(default=None, description=CMDS.arg("ban", "member")),
+        delete_days: int = commands.parameter(default=7, description=CMDS.arg("ban", "delete_days")),
         *,
-        reason: str = commands.parameter(default="No reason provided", description="Why the user is being banned."),
+        reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("ban", "reason")),
     ):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="ban"))
@@ -444,6 +486,8 @@ class MembersMixin:
             cancelled_text=msg(ctx, "cancelled"),
             timeout_text=msg(ctx, "timed_out"),
             invoker_text=msg(ctx, "invoker_only"),
+            confirm_label=msg(ctx, "btn_confirm"),
+            cancel_label=msg(ctx, "btn_cancel"),
         )
         confirm_msg = await ctx.send(view=confirm_view)
 
@@ -470,16 +514,16 @@ class MembersMixin:
         await self.logger().log_event(ctx.guild, "moderation", "Ban", body, target_id=member.id, action_key="Ban")
 
     # ── UNBAN ────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(description="Unban a user by ID", aliases=["pardon"],
-                             help="{ 'en': 'Unban a member from the server.', 'de': 'Mitglied entbannen.', 'es': 'Desbanea a un miembro del servidor.' }")
+    @commands.hybrid_command(description=CMDS.text("unban.description"), aliases=["pardon"],
+                             help=CMDS.help("unban"))
     @commands.guild_only()
     @commands.has_permissions(ban_members=True)
     async def unban(
         self,
         ctx,
-        user_id: str = commands.parameter(default=None, description="The ID of the user to unban. A mention works too."),
+        user_id: str = commands.parameter(default=None, description=CMDS.arg("unban", "user_id")),
         *,
-        reason: str = commands.parameter(default="No reason provided", description="Why the user is being unbanned."),
+        reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("unban", "reason")),
     ):
         """Unban by id — the user is not in the guild, so no Member converter."""
         if not user_id:
@@ -517,16 +561,16 @@ class MembersMixin:
         await self.logger().log_event(ctx.guild, "moderation", "Unban", body, target_id=user.id, action_key="Unban")
 
     # ── WARN ─────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(description="Warn a member",
-                             help="{ 'en': 'Warn a member.', 'de': 'Mitglied verwarnen.', 'es': 'Advierte a un miembro.' }")
+    @commands.hybrid_command(description=CMDS.text("warn.description"),
+                             help=CMDS.help("warn"))
     @commands.guild_only()
     @commands.has_permissions(moderate_members=True)
     async def warn(
         self,
         ctx,
-        member: discord.Member = commands.parameter(default=None, description="The server member to warn."),
+        member: discord.Member = commands.parameter(default=None, description=CMDS.arg("warn", "member")),
         *,
-        reason: str = commands.parameter(default="No reason provided", description="The reason for the warning."),
+        reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("warn", "reason")),
     ):
         utils = self.utils()
         if not member:
@@ -540,10 +584,10 @@ class MembersMixin:
         await self.logger().log_event(ctx.guild, "moderation", "Warn", body, target_id=member.id, action_key="Warn")
 
     @commands.hybrid_command(name="warnings", aliases=["warns"],
-                             description="List a member's warnings",
-                             help="{ 'en': 'View a members warnings.', 'de': 'Verwarnungen anzeigen.', 'es': 'Ver las advertencias de un miembro.' }")
+                             description=CMDS.text("warnings.description"),
+                             help=CMDS.help("warnings"))
     @commands.guild_only()
-    async def warnings(self, ctx, member: discord.Member = commands.parameter(default=None, description="The member whose warnings to view.")):
+    async def warnings(self, ctx, member: discord.Member = commands.parameter(default=None, description=CMDS.arg("warnings", "member"))):
         if not _can_view_warnings(ctx):
             return await ctx.send(view=_cv2(msg(ctx, "warnings_perms")))
         utils = self.utils()
@@ -564,11 +608,11 @@ class MembersMixin:
         await ctx.send(view=_cv2(lines))
 
     @commands.hybrid_command(name="clearwarnings", aliases=["clearwarns"],
-                             description="Clear all warnings for a member",
-                             help="{ 'en': 'Clear all warnings for a member.', 'de': 'Verwarnungen löschen.', 'es': 'Borra todas las advertencias de un miembro.' }")
+                             description=CMDS.text("clearwarnings.description"),
+                             help=CMDS.help("clearwarnings"))
     @commands.guild_only()
     @commands.has_permissions(moderate_members=True)
-    async def clearwarnings(self, ctx, member: discord.Member = commands.parameter(default=None, description="The member whose warnings to clear.")):
+    async def clearwarnings(self, ctx, member: discord.Member = commands.parameter(default=None, description=CMDS.arg("clearwarnings", "member"))):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member_warns"))
@@ -581,16 +625,16 @@ class MembersMixin:
         await self.logger().log_event(ctx.guild, "moderation", "Clear Warnings", body, target_id=member.id)
 
     # ── MUTE / TEMPMUTE / UNMUTE ─────────────────────────────────────────────
-    @commands.hybrid_command(description="Mute a member",
-                             help="{ 'en': 'Mute a member.', 'de': 'Mitglied stummschalten.', 'es': 'Silencia a un miembro.' }")
+    @commands.hybrid_command(description=CMDS.text("mute.description"),
+                             help=CMDS.help("mute"))
     @commands.guild_only()
     @commands.has_permissions(moderate_members=True)
     async def mute(
         self,
         ctx,
-        member: discord.Member = commands.parameter(default=None, description="The server member to mute."),
+        member: discord.Member = commands.parameter(default=None, description=CMDS.arg("mute", "member")),
         *,
-        reason: str = commands.parameter(default="No reason provided", description="The reason for the mute."),
+        reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("mute", "reason")),
     ):
         utils = self.utils()
         if not member:
@@ -609,17 +653,17 @@ class MembersMixin:
         )
         await self.logger().log_event(ctx.guild, "moderation", "Mute", body, target_id=member.id, action_key="Mute")
 
-    @commands.hybrid_command(description="Temporarily mute a member (seconds)",
-                             help="{ 'en': 'Temporarily mute a member (seconds).', 'de': 'Zeitlich stummschalten.', 'es': 'Silencia temporalmente a un miembro (segundos).' }")
+    @commands.hybrid_command(description=CMDS.text("tempmute.description"),
+                             help=CMDS.help("tempmute"))
     @commands.guild_only()
     @commands.has_permissions(moderate_members=True)
     async def tempmute(
         self,
         ctx,
-        member: discord.Member = commands.parameter(default=None, description="The server member to mute temporarily."),
-        duration=commands.parameter(default=None, description="How long to mute them, in seconds."),
+        member: discord.Member = commands.parameter(default=None, description=CMDS.arg("tempmute", "member")),
+        duration=commands.parameter(default=None, description=CMDS.arg("tempmute", "duration")),
         *,
-        reason: str = commands.parameter(default="No reason provided", description="The reason for the temporary mute."),
+        reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("tempmute", "reason")),
     ):
         utils = self.utils()
         if not member:
@@ -641,11 +685,11 @@ class MembersMixin:
         )
         await self.logger().log_event(ctx.guild, "moderation", "Tempmute", body, target_id=member.id, action_key="Tempmute")
 
-    @commands.hybrid_command(description="Unmute a member",
-                             help="{ 'en': 'Unmute a member.', 'de': 'Stummschaltung aufheben.', 'es': 'Quita el silencio a un miembro.' }")
+    @commands.hybrid_command(description=CMDS.text("unmute.description"),
+                             help=CMDS.help("unmute"))
     @commands.guild_only()
     @commands.has_permissions(moderate_members=True)
-    async def unmute(self, ctx, member: discord.Member = commands.parameter(default=None, description="The server member to unmute.")):
+    async def unmute(self, ctx, member: discord.Member = commands.parameter(default=None, description=CMDS.arg("unmute", "member"))):
         utils = self.utils()
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="unmute"))
@@ -664,16 +708,16 @@ class MembersMixin:
         await self.logger().log_event(ctx.guild, "moderation", "Unmute", body, target_id=member.id)
 
     # ── NICK ─────────────────────────────────────────────────────────────────
-    @commands.hybrid_command(description="Change a member's nickname",
-                             help="{ 'en': 'Change a members nickname.', 'de': 'Spitznamen ändern.', 'es': 'Cambia el apodo de un miembro.' }")
+    @commands.hybrid_command(description=CMDS.text("nick.description"),
+                             help=CMDS.help("nick"))
     @commands.guild_only()
     @commands.has_permissions(manage_nicknames=True)
     async def nick(
         self,
         ctx,
-        member: discord.Member = commands.parameter(default=None, description="The server member whose nickname to change."),
+        member: discord.Member = commands.parameter(default=None, description=CMDS.arg("nick", "member")),
         *,
-        nickname=commands.parameter(default=None, description="The new nickname to set."),
+        nickname=commands.parameter(default=None, description=CMDS.arg("nick", "nickname")),
     ):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="rename"))
@@ -695,8 +739,8 @@ class MembersMixin:
     # ── MASSROLE ─────────────────────────────────────────────────────────────
     @commands.hybrid_command(
         name="massrole",
-        description="Open an interactive panel to add or remove roles in bulk",
-        help="{ 'en': 'Open an interactive panel to add or remove roles in bulk.', 'de': 'Öffne ein interaktives Panel, um Rollen gesammelt hinzuzufügen oder zu entfernen.', 'es': 'Abre un panel interactivo para añadir o quitar roles en masa.' }",
+        description=CMDS.text("massrole.description"),
+        help=CMDS.help("massrole"),
     )
     @commands.guild_only()
     @commands.has_permissions(manage_roles=True)
@@ -704,5 +748,8 @@ class MembersMixin:
         """Open the no-argument mass role management panel."""
         bot_member = ctx.guild.me or ctx.guild.get_member(self.bot.user.id)
         if bot_member is None or not bot_member.guild_permissions.manage_roles:
-            return await ctx.send("I need the **Manage Roles** permission before I can change roles.")
-        await ctx.send(view=MassRolePanel(ctx.guild, ctx.author.id, bot_member), allowed_mentions=discord.AllowedMentions.none())
+            return await ctx.send(_massmsg(ctx, "need_bot_permission"))
+        await ctx.send(
+            view=MassRolePanel(ctx.guild, ctx.author.id, bot_member, ctx),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )

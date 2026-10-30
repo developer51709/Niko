@@ -11,7 +11,17 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 log = logging.getLogger(__name__)
+
+MESSAGES = load_locales(__package__, "boosters")
+msg = make_flat_msg(MESSAGES)
 
 DEFAULT_BOOST_MESSAGE = (
     "Thank you {user} for boosting {server}! We now have {boost_count} boosts."
@@ -242,53 +252,35 @@ class BoosterRoles(commands.Cog):
     ) -> discord.Role | None:
         member = interaction.user
         if not isinstance(member, discord.Member) or interaction.guild is None:
-            await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "guild_only"), ephemeral=True)
             return None
         try:
             config = await self._config(interaction.guild.id)
         except Exception:
             log.exception("Could not load booster settings for guild %s", interaction.guild.id)
-            await interaction.followup.send(
-                "I couldn't load the booster settings for this server. Please try again later.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "settings_failed"), ephemeral=True)
             return None
         if not config["roles_enabled"]:
-            await interaction.followup.send(
-                "Booster roles are turned off for this server. Ask an admin to enable them in the dashboard.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "roles_disabled"), ephemeral=True)
             return None
         if member.premium_since is None:
-            await interaction.followup.send(
-                "You need to be boosting this server to customize your booster role.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "not_boosting"), ephemeral=True)
             return None
         try:
             role = await self._ensure_role(member)
         except PermissionError:
-            await interaction.followup.send(
-                "I need **Manage Roles**, and my top role must be above the booster roles.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "need_manage_roles"), ephemeral=True)
             return None
         except discord.HTTPException:
             log.exception("Could not provision booster role for member %s", member.id)
-            await interaction.followup.send(
-                "I couldn't create your booster role. Check the bot's role permissions and position.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "role_create_failed"), ephemeral=True)
             return None
         except Exception:
             log.exception("Could not load booster role for member %s", member.id)
-            await interaction.followup.send(
-                "I couldn't load your booster role. Please try again later.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "role_load_failed"), ephemeral=True)
             return None
         if role is None:
-            await interaction.followup.send("I couldn't find your booster role.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "role_missing"), ephemeral=True)
         return role
 
     @commands.Cog.listener()
@@ -331,37 +323,40 @@ class BoosterRoles(commands.Cog):
 
     boosterrole = app_commands.Group(
         name="boosterrole",
-        description="Customize and share your server booster role.",
+        description=CMDS.text("boosterrole.description"),
     )
 
-    @boosterrole.command(name="rename", description="Change your booster role's name.")
-    @app_commands.describe(name="A name for your personal role")
+    @boosterrole.command(name="rename", description=CMDS.text("boosterrole.rename.description"))
+    @app_commands.describe(name=CMDS.arg("boosterrole.rename", "name"))
     async def boosterrole_rename(
         self, interaction: discord.Interaction, name: str
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         name = name.strip()
         if not name or len(name) > 100:
-            await interaction.followup.send("Role names must be between 1 and 100 characters.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "role_name_invalid"), ephemeral=True)
             return
         role = await self._interaction_role(interaction)
         if role is None:
             return
         try:
             await role.edit(name=name, reason="Booster customized their role")
-            await interaction.followup.send(f"Your role is now **{discord.utils.escape_markdown(name)}**.", ephemeral=True)
+            await interaction.followup.send(
+                msg(interaction, "role_renamed", name=discord.utils.escape_markdown(name)),
+                ephemeral=True,
+            )
         except discord.HTTPException:
-            await interaction.followup.send("I couldn't rename your role. Check that my role is above it.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "role_rename_failed"), ephemeral=True)
 
-    @boosterrole.command(name="color", description="Set a solid color for your booster role.")
-    @app_commands.describe(hex_color="A six-digit color such as #e88cba")
+    @boosterrole.command(name="color", description=CMDS.text("boosterrole.color.description"))
+    @app_commands.describe(hex_color=CMDS.arg("boosterrole.color", "hex_color"))
     async def boosterrole_color(
         self, interaction: discord.Interaction, hex_color: str
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         color = _parse_color(hex_color)
         if color is None:
-            await interaction.followup.send("Enter a six-digit hex color, such as `#e88cba`.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "colour_invalid"), ephemeral=True)
             return
         role = await self._interaction_role(interaction)
         if role is None:
@@ -375,14 +370,14 @@ class BoosterRoles(commands.Cog):
                 tertiary_color=None,
                 reason="Booster customized their role color",
             )
-            await interaction.followup.send("Your solid role color has been updated.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "colour_updated"), ephemeral=True)
         except discord.HTTPException:
-            await interaction.followup.send("I couldn't update that color. Check the server's role settings and my role position.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "colour_failed"), ephemeral=True)
 
-    @boosterrole.command(name="gradient", description="Set gradient colors if this server has the required boost level.")
+    @boosterrole.command(name="gradient", description=CMDS.text("boosterrole.gradient.description"))
     @app_commands.describe(
-        first="First gradient color, for example #e88cba",
-        second="Second gradient color",
+        first=CMDS.arg("boosterrole.gradient", "first"),
+        second=CMDS.arg("boosterrole.gradient", "second"),
     )
     async def boosterrole_gradient(
         self,
@@ -393,14 +388,11 @@ class BoosterRoles(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         if guild is None or not _has_guild_feature(guild, "ENHANCED_ROLE_COLORS"):
-            await interaction.followup.send(
-                "Gradient role colors require the server boost level that unlocks role styles.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "gradient_unavailable"), ephemeral=True)
             return
         colors = [_parse_color(value) for value in (first, second)]
         if any(color is None for color in colors):
-            await interaction.followup.send("Use six-digit hex colors, such as `#e88cba`.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "hex_invalid"), ephemeral=True)
             return
         role = await self._interaction_role(interaction)
         if role is None:
@@ -414,28 +406,25 @@ class BoosterRoles(commands.Cog):
                 tertiary_color=None,
                 reason="Booster customized their role gradient",
             )
-            await interaction.followup.send("Your gradient role colors have been updated.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "gradient_updated"), ephemeral=True)
         except discord.HTTPException:
-            await interaction.followup.send("I couldn't apply the gradient. Check the server's role-style boost level.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "gradient_failed"), ephemeral=True)
 
-    @boosterrole.command(name="icon", description="Set your booster role's icon from an image.")
-    @app_commands.describe(image="A PNG or JPEG image (up to 256 KB)")
+    @boosterrole.command(name="icon", description=CMDS.text("boosterrole.icon.description"))
+    @app_commands.describe(image=CMDS.arg("boosterrole.icon", "image"))
     async def boosterrole_icon(
         self, interaction: discord.Interaction, image: discord.Attachment
     ) -> None:
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         if guild is None or not _has_guild_feature(guild, "ROLE_ICONS"):
-            await interaction.followup.send(
-                "Role icons require the server boost level that unlocks custom role icons.",
-                ephemeral=True,
-            )
+            await interaction.followup.send(msg(interaction, "icon_unavailable"), ephemeral=True)
             return
         if image.content_type not in {"image/png", "image/jpeg"}:
-            await interaction.followup.send("Upload a PNG or JPEG image.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "icon_type"), ephemeral=True)
             return
         if image.size > 256 * 1024:
-            await interaction.followup.send("That image is too large. Keep it under 256 KB.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "icon_too_large"), ephemeral=True)
             return
         role = await self._interaction_role(interaction)
         if role is None:
@@ -445,11 +434,11 @@ class BoosterRoles(commands.Cog):
                 display_icon=await image.read(),
                 reason="Booster customized their role icon",
             )
-            await interaction.followup.send("Your role icon has been updated.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "icon_updated"), ephemeral=True)
         except discord.HTTPException:
-            await interaction.followup.send("I couldn't apply that icon. Check the image and my role position.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "icon_failed"), ephemeral=True)
 
-    @boosterrole.command(name="clear-icon", description="Remove your booster role's custom icon.")
+    @boosterrole.command(name="clear-icon", description=CMDS.text("boosterrole.clear-icon.description"))
     async def boosterrole_clear_icon(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
         role = await self._interaction_role(interaction)
@@ -457,12 +446,12 @@ class BoosterRoles(commands.Cog):
             return
         try:
             await role.edit(display_icon=None, reason="Booster cleared their role icon")
-            await interaction.followup.send("Your role icon has been removed.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "icon_removed"), ephemeral=True)
         except discord.HTTPException:
-            await interaction.followup.send("I couldn't remove that icon.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "icon_remove_failed"), ephemeral=True)
 
-    @boosterrole.command(name="share", description="Give another member your booster role.")
-    @app_commands.describe(member="The member who should receive your role")
+    @boosterrole.command(name="share", description=CMDS.text("boosterrole.share.description"))
+    @app_commands.describe(member=CMDS.arg("boosterrole.share", "member"))
     async def boosterrole_share(
         self, interaction: discord.Interaction, member: discord.Member
     ) -> None:
@@ -471,19 +460,24 @@ class BoosterRoles(commands.Cog):
         if role is None:
             return
         if member.id == interaction.user.id:
-            await interaction.followup.send("Your role is already assigned to you.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "share_self"), ephemeral=True)
             return
         if role in member.roles:
-            await interaction.followup.send(f"{member.mention} already has your role.", ephemeral=True)
+            await interaction.followup.send(
+                msg(interaction, "share_already", member=member.mention), ephemeral=True
+            )
             return
         try:
             await member.add_roles(role, reason="Booster shared their personal role")
-            await interaction.followup.send(f"Shared {role.mention} with {member.mention}.", ephemeral=True)
+            await interaction.followup.send(
+                msg(interaction, "share_ok", role=role.mention, member=member.mention),
+                ephemeral=True,
+            )
         except discord.HTTPException:
-            await interaction.followup.send("I couldn't share your role. Check my role position and permissions.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "share_failed"), ephemeral=True)
 
-    @boosterrole.command(name="unshare", description="Remove your booster role from another member.")
-    @app_commands.describe(member="The member who should lose your role")
+    @boosterrole.command(name="unshare", description=CMDS.text("boosterrole.unshare.description"))
+    @app_commands.describe(member=CMDS.arg("boosterrole.unshare", "member"))
     async def boosterrole_unshare(
         self, interaction: discord.Interaction, member: discord.Member
     ) -> None:
@@ -492,16 +486,20 @@ class BoosterRoles(commands.Cog):
         if role is None:
             return
         if member.id == interaction.user.id:
-            await interaction.followup.send("You can't remove your own booster role this way.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "unshare_self"), ephemeral=True)
             return
         if role not in member.roles:
-            await interaction.followup.send(f"{member.mention} doesn't have your role.", ephemeral=True)
+            await interaction.followup.send(
+                msg(interaction, "unshare_missing", member=member.mention), ephemeral=True
+            )
             return
         try:
             await member.remove_roles(role, reason="Booster stopped sharing their personal role")
-            await interaction.followup.send(f"Removed your role from {member.mention}.", ephemeral=True)
+            await interaction.followup.send(
+                msg(interaction, "unshare_ok", member=member.mention), ephemeral=True
+            )
         except discord.HTTPException:
-            await interaction.followup.send("I couldn't remove that role. Check my role position and permissions.", ephemeral=True)
+            await interaction.followup.send(msg(interaction, "unshare_failed"), ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

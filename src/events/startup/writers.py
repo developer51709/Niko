@@ -69,6 +69,7 @@ def write_commands(bot):
     try:
         from discord import Permissions, app_commands
         from discord.ext import commands
+        from utils.command_locales import argument_maps, description_map, help_map
         commands_data = []
         hybrid_names = set()
         internal_cog_names = {"owner", "ownercog", "development", "staff", "staffcog"}
@@ -86,6 +87,12 @@ def write_commands(bot):
             return False
 
         def command_description(cmd):
+            # Command wording lives in the cog's locales; the registry keeps the
+            # whole ``{locale: text}`` map so the website can render it in the
+            # visitor's language.
+            localised = description_map(cmd) or help_map(cmd)
+            if localised:
+                return localised
             description = (
                 getattr(cmd, "description", None)
                 or getattr(cmd, "help", None)
@@ -101,7 +108,7 @@ def write_commands(bot):
         def text_value(value):
             return str(value).strip() if value is not None else ""
 
-        def parameter_metadata(parameter):
+        def parameter_metadata(parameter, localised_args):
             name = getattr(parameter, "display_name", None) or getattr(parameter, "name", None)
             if not name:
                 return None
@@ -109,9 +116,14 @@ def write_commands(bot):
             type_name = getattr(getattr(parameter, "type", None), "name", None)
             if not type_name and annotation is not None:
                 type_name = getattr(annotation, "__name__", None) or text_value(annotation)
+            description = localised_args.get(text_value(getattr(parameter, "name", None)))
+            if description is None:
+                description = localised_args.get(text_value(name))
+            if description is None:
+                description = text_value(getattr(parameter, "description", None))
             return {
                 "name": text_value(name),
-                "description": text_value(getattr(parameter, "description", None)),
+                "description": description,
                 "required": bool(getattr(parameter, "required", False)),
                 "type": type_name or "string",
             }
@@ -120,7 +132,12 @@ def write_commands(bot):
             params = getattr(cmd, "parameters", None)
             if params is None:
                 params = getattr(cmd, "clean_params", {}).values()
-            return [item for item in (parameter_metadata(param) for param in params) if item]
+            localised_args = argument_maps(cmd)
+            return [
+                item
+                for item in (parameter_metadata(param, localised_args) for param in params)
+                if item
+            ]
 
         def command_permissions(cmd):
             required = set()

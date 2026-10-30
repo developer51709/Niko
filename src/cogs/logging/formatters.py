@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 
 import discord
@@ -18,6 +19,7 @@ from config import links
 from utils.ratelimit import log_channel_limiter
 from config.emojis import get_emoji
 from .revert import RestoreChannelButton, RestoreRoleButton, RevertChannelButton
+from utils.locales import load_locales
 
 # ── Constants ─────────────────────────────────────
 
@@ -418,108 +420,119 @@ async def _save_guild_log_config(guild_id: int, cfg: dict):
 
 # ── Quick-action buttons ──────────────────────────
 
+def _act(interaction: discord.Interaction, key: str, **kwargs) -> str:
+    """A quick-action reply in the language of the server it happened in."""
+    return _t(_panel_lang(getattr(interaction, "guild", None)), key, **kwargs)
+
+
 class KickButton(discord.ui.Button):
-    def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Kick", style=discord.ButtonStyle.danger, emoji=get_emoji("log_kick"), row=0)
+    def __init__(self, guild_id: int, target_id: int, lang: str = "en"):
+        super().__init__(label=_t(lang, "btn_kick"), style=discord.ButtonStyle.danger, emoji=get_emoji("log_kick"), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.kick_members:
-            return await interaction.response.send_message("You don't have permission to kick members.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_perm_kick"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
-            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
         member = guild.get_member(self.target_id)
         if not member:
-            return await interaction.response.send_message("Member not found (they may have already left).", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_member_left"), ephemeral=True)
         try:
             await member.kick(reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('tick')} Kicked **{member}**.", ephemeral=True)
+            await interaction.response.send_message(
+                _act(interaction, "act_kicked", member=member), ephemeral=True)
         except discord.Forbidden:
-            await interaction.response.send_message("I don't have permission to kick that member.", ephemeral=True)
+            await interaction.response.send_message(_act(interaction, "act_bot_no_perm_kick"), ephemeral=True)
 
 
 class BanButton(discord.ui.Button):
-    def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Ban", style=discord.ButtonStyle.danger, emoji=get_emoji('ban'), row=0)
+    def __init__(self, guild_id: int, target_id: int, lang: str = "en"):
+        super().__init__(label=_t(lang, "btn_ban"), style=discord.ButtonStyle.danger, emoji=get_emoji('ban'), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.ban_members:
-            return await interaction.response.send_message("You don't have permission to ban members.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_perm_ban"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
-            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
         member = guild.get_member(self.target_id)
         if not member:
             try:
                 user = await interaction.client.fetch_user(self.target_id)
                 await guild.ban(user, reason=f"Quick action by {interaction.user}")
-                await interaction.response.send_message(f"{get_emoji('tick')} Banned **{user}**.", ephemeral=True)
+                await interaction.response.send_message(
+                    _act(interaction, "act_banned", member=user), ephemeral=True)
             except Exception:
-                await interaction.response.send_message("Could not ban that user.", ephemeral=True)
+                await interaction.response.send_message(_act(interaction, "act_ban_failed"), ephemeral=True)
             return
         try:
             await member.ban(reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('tick')} Banned **{member}**.", ephemeral=True)
+            await interaction.response.send_message(
+                _act(interaction, "act_banned", member=member), ephemeral=True)
         except discord.Forbidden:
-            await interaction.response.send_message("I don't have permission to ban that member.", ephemeral=True)
+            await interaction.response.send_message(_act(interaction, "act_bot_no_perm_ban"), ephemeral=True)
 
 
 class UnbanButton(discord.ui.Button):
-    def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Unban", style=discord.ButtonStyle.success, emoji=get_emoji('tick'), row=0)
+    def __init__(self, guild_id: int, target_id: int, lang: str = "en"):
+        super().__init__(label=_t(lang, "btn_unban"), style=discord.ButtonStyle.success, emoji=get_emoji('tick'), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.ban_members:
-            return await interaction.response.send_message("You don't have permission to unban members.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_perm_unban"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
-            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
         try:
             user = await interaction.client.fetch_user(self.target_id)
             await guild.unban(user, reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('tick')} Unbanned **{user}**.", ephemeral=True)
+            await interaction.response.send_message(
+                _act(interaction, "act_unbanned", member=user), ephemeral=True)
         except discord.NotFound:
-            await interaction.response.send_message("That user isn't banned.", ephemeral=True)
+            await interaction.response.send_message(_act(interaction, "act_not_banned"), ephemeral=True)
         except discord.Forbidden:
-            await interaction.response.send_message("I don't have permission to unban.", ephemeral=True)
+            await interaction.response.send_message(_act(interaction, "act_bot_no_perm_unban"), ephemeral=True)
 
 
 class UnmuteButton(discord.ui.Button):
-    def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Unmute", style=discord.ButtonStyle.success, emoji=get_emoji("log_unmute"), row=0)
+    def __init__(self, guild_id: int, target_id: int, lang: str = "en"):
+        super().__init__(label=_t(lang, "btn_unmute"), style=discord.ButtonStyle.success, emoji=get_emoji("log_unmute"), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.moderate_members:
-            return await interaction.response.send_message("You don't have permission to unmute members.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_perm_unmute"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
-            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
         member = guild.get_member(self.target_id)
         if not member:
-            return await interaction.response.send_message("Member not found.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_member_missing"), ephemeral=True)
         mod_utils = interaction.client.get_cog("ModerationUtils")
         if not mod_utils:
-            return await interaction.response.send_message("Moderation system unavailable.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_mod_unavailable"), ephemeral=True)
         try:
             await mod_utils.unmute_member(member, reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('tick')} Unmuted **{member}**.", ephemeral=True)
+            await interaction.response.send_message(
+                _act(interaction, "act_unmuted", member=member), ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"Failed to unmute: {e}", ephemeral=True)
+            await interaction.response.send_message(
+                _act(interaction, "act_unmute_failed", error=e), ephemeral=True)
 
 
 class VoiceDisconnectButton(discord.ui.Button):
     """Pull a member out of the voice channel the entry is about."""
 
-    def __init__(self, guild_id: int, target_id: int):
-        super().__init__(label="Disconnect", style=discord.ButtonStyle.secondary,
+    def __init__(self, guild_id: int, target_id: int, lang: str = "en"):
+        super().__init__(label=_t(lang, "btn_disconnect"), style=discord.ButtonStyle.secondary,
                          emoji=get_emoji("disconnect"), row=0)
         self.guild_id = guild_id
         self.target_id = target_id
@@ -527,26 +540,26 @@ class VoiceDisconnectButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.move_members:
             return await interaction.response.send_message(
-                "You don't have permission to move members.", ephemeral=True)
+                _act(interaction, "act_no_perm_move"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
-            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
         member = guild.get_member(self.target_id)
         if member is None:
             return await interaction.response.send_message(
-                "Member not found (they may have left the server).", ephemeral=True)
+                _act(interaction, "act_member_left"), ephemeral=True)
         voice = getattr(member, "voice", None)
         if voice is None or voice.channel is None:
             return await interaction.response.send_message(
-                f"**{member}** is not in a voice channel.", ephemeral=True)
+                _act(interaction, "act_not_in_voice", member=member), ephemeral=True)
         try:
             await member.move_to(None, reason=f"Quick action by {interaction.user}")
             await interaction.response.send_message(
-                f"{get_emoji('tick')} Disconnected **{member}** from {voice.channel.mention}.",
+                _act(interaction, "act_disconnected", member=member, channel=voice.channel.mention),
                 ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(
-                "I don't have permission to disconnect that member.", ephemeral=True)
+                _act(interaction, "act_bot_no_perm_disconnect"), ephemeral=True)
 
 
 class VoiceMuteButton(discord.ui.Button):
@@ -556,9 +569,9 @@ class VoiceMuteButton(discord.ui.Button):
     carries both directions and is labelled with the action it will take.
     """
 
-    def __init__(self, guild_id: int, target_id: int, *, unmute: bool = False):
+    def __init__(self, guild_id: int, target_id: int, *, unmute: bool = False, lang: str = "en"):
         super().__init__(
-            label="Server Unmute" if unmute else "Server Mute",
+            label=_t(lang, "btn_server_unmute" if unmute else "btn_server_mute"),
             style=discord.ButtonStyle.success if unmute else discord.ButtonStyle.secondary,
             emoji=get_emoji("log_unmute" if unmute else "log_mute"),
             row=0,
@@ -570,45 +583,46 @@ class VoiceMuteButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.mute_members:
             return await interaction.response.send_message(
-                "You don't have permission to mute members in voice.", ephemeral=True)
+                _act(interaction, "act_no_perm_voice_mute"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
-            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
         member = guild.get_member(self.target_id)
         if member is None:
             return await interaction.response.send_message(
-                "Member not found (they may have left the server).", ephemeral=True)
+                _act(interaction, "act_member_left"), ephemeral=True)
         try:
             await member.edit(mute=not self.unmute,
                               reason=f"Quick action by {interaction.user}")
-            action = "Unmuted" if self.unmute else "Server-muted"
             await interaction.response.send_message(
-                f"{get_emoji('tick')} {action} **{member}** in voice.", ephemeral=True)
+                _act(interaction, "act_voice_unmuted" if self.unmute else "act_voice_muted", member=member),
+                ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message(
-                "I don't have permission to mute that member.", ephemeral=True)
+                _act(interaction, "act_bot_no_perm_mute"), ephemeral=True)
 
 
 class UnlockButton(discord.ui.Button):
-    def __init__(self, guild_id: int, channel_id: int):
-        super().__init__(label="Unlock Channel", style=discord.ButtonStyle.success, emoji=get_emoji('unlock'), row=0)
+    def __init__(self, guild_id: int, channel_id: int, lang: str = "en"):
+        super().__init__(label=_t(lang, "btn_unlock_channel"), style=discord.ButtonStyle.success, emoji=get_emoji('unlock'), row=0)
         self.guild_id = guild_id
         self.channel_id = channel_id
 
     async def callback(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.manage_channels:
-            return await interaction.response.send_message("You don't have permission to unlock channels.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_perm_unlock"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
-            return await interaction.response.send_message("Could not find the server.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
         channel = guild.get_channel(self.channel_id)
         if not channel:
-            return await interaction.response.send_message("Channel not found.", ephemeral=True)
+            return await interaction.response.send_message(_act(interaction, "act_channel_missing"), ephemeral=True)
         try:
             await channel.set_permissions(guild.default_role, send_messages=None, reason=f"Quick action by {interaction.user}")
-            await interaction.response.send_message(f"{get_emoji('tick')} Unlocked {channel.mention}.", ephemeral=True)
+            await interaction.response.send_message(
+                _act(interaction, "act_unlocked", channel=channel.mention), ephemeral=True)
         except discord.Forbidden:
-            await interaction.response.send_message("I don't have permission to unlock that channel.", ephemeral=True)
+            await interaction.response.send_message(_act(interaction, "act_bot_no_perm_unlock"), ephemeral=True)
 
 
 #: A snapshot-carrying button per revertable log type. The snapshot id is all
@@ -622,7 +636,7 @@ _REVERT_BUTTONS = {
 
 def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None, channel_id: int | None = None,
                           revert: tuple[str, str] | None = None,
-                          body: str = "") -> list[discord.ui.Button]:
+                          body: str = "", lang: str = "en") -> list[discord.ui.Button]:
     btns: list[discord.ui.Button] = []
     # A voice entry states the member's mute state, so the one mute button can
     # offer the action that is actually still available.
@@ -632,25 +646,25 @@ def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None,
     if revert:
         builder = _REVERT_BUTTONS.get(revert[0])
         if builder is not None:
-            btns.append(builder(revert[1]))
+            btns.append(builder(revert[1], lang))
     wanted = _ACTION_BUTTONS.get(action_key, [])
     if not wanted and any(s in action_key for s in _AUTOMOD_SUBSTRINGS):
         wanted = _AUTOMOD_DEFAULT_BUTTONS
     for b in wanted:
         if b == "kick" and target_id:
-            btns.append(KickButton(guild_id, target_id))
+            btns.append(KickButton(guild_id, target_id, lang))
         elif b == "ban" and target_id:
-            btns.append(BanButton(guild_id, target_id))
+            btns.append(BanButton(guild_id, target_id, lang))
         elif b == "unban" and target_id:
-            btns.append(UnbanButton(guild_id, target_id))
+            btns.append(UnbanButton(guild_id, target_id, lang))
         elif b == "unmute" and target_id:
-            btns.append(UnmuteButton(guild_id, target_id))
+            btns.append(UnmuteButton(guild_id, target_id, lang))
         elif b == "unlock" and channel_id:
-            btns.append(UnlockButton(guild_id, channel_id))
+            btns.append(UnlockButton(guild_id, channel_id, lang))
         elif b == "voice_mute" and target_id:
-            btns.append(VoiceMuteButton(guild_id, target_id, unmute=server_muted))
+            btns.append(VoiceMuteButton(guild_id, target_id, unmute=server_muted, lang=lang))
         elif b == "voice_disconnect" and target_id:
-            btns.append(VoiceDisconnectButton(guild_id, target_id))
+            btns.append(VoiceDisconnectButton(guild_id, target_id, lang))
     return btns
 
 
@@ -669,8 +683,10 @@ def _build_log_view(
     files: list[discord.File] | None = None,
     file_components: bool = True,
     revert: tuple[str, str] | None = None,
+    lang: str = "en",
 ) -> discord.ui.LayoutView:
     cat_info = CATEGORIES.get(category, CATEGORIES["moderation"])
+    cat_label = _t(lang, f"cat_{category}")
     color = discord.Colour(cat_info["color"])
     # discord timestamp types
     # relative: <t:1711234567:R> → "2 months ago"
@@ -679,7 +695,7 @@ def _build_log_view(
     # at one channel, and a bare timestamp left the reader guessing which
     # category had fired.
     timestamp = (
-        f"-# {cat_info['label']} • <t:{int(datetime.now(timezone.utc).timestamp())}:F>\n"
+        f"-# {cat_label} • <t:{int(datetime.now(timezone.utc).timestamp())}:F>\n"
         f"-# <t:{int(datetime.now(timezone.utc).timestamp())}:R>"
     )
     # The message type's own emoji, keyed by the title the caller logged (the
@@ -689,11 +705,17 @@ def _build_log_view(
     if not emoji:
         emoji = get_emoji(cat_info["emoji_key"])
 
+    # The heading and the body are translated for the reader here, at the one
+    # point every entry passes through; ``title`` and ``body`` stay English
+    # because they route the entry, merge coalesced changes, and drive reverts.
+    display_title = _title(lang, title)
+    display_body = _localize_body(lang, body)
+
     buttons = _build_action_buttons(
-        action_key or title, guild_id, target_id, channel_id, revert, body=body)
+        action_key or title, guild_id, target_id, channel_id, revert, body=body, lang=lang)
 
     children: list[discord.ui.Item] = [
-        discord.ui.TextDisplay(content=f"### {emoji} {title}"),
+        discord.ui.TextDisplay(content=f"### {emoji} {display_title}"),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
     ]
 
@@ -702,12 +724,12 @@ def _build_log_view(
         # as a thumbnail accessory.
         children.append(
             discord.ui.Section(
-                discord.ui.TextDisplay(content=body),
+                discord.ui.TextDisplay(content=display_body),
                 accessory=discord.ui.Thumbnail(thumbnail_url),
             )
         )
     else:
-        children.append(discord.ui.TextDisplay(content=body))
+        children.append(discord.ui.TextDisplay(content=display_body))
 
     children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
@@ -757,125 +779,62 @@ def _build_log_view(
 # sits there with components that quietly stopped working after a restart.
 PANEL_TIMEOUT = 300.0
 
-MESSAGES: dict[str, dict[str, str]] = {
-    "en": {
-        "panel_title":        "Server Logging",
-        "panel_desc":         "Pick a category below, then set, clear or toggle its channel. Each category can go to its own channel.",
-        "panel_selected":     "**Configuring:** {category}",
-        "panel_unselected":   "**Configuring:** nothing yet — pick a category below.",
-        "select_placeholder": "Select a category to configure…",
-        "opt_set":            "Channel set",
-        "opt_unset":          "No channel",
-        "opt_off":            "Disabled",
-        "btn_set_channel":    "Set Channel",
-        "btn_clear_channel":  "Clear Channel",
-        "btn_toggle":         "Enable / Disable",
-        "btn_set_all":        "Set All → This Channel",
-        "btn_clear_all":      "Clear All Channels",
-        "invoker_only":       "{cross} Only the person who opened this panel can use it.",
-        "no_permission":      "{cross} You need **Manage Server** to change logging settings.",
-        "no_category":        "{cross} Pick a category from the dropdown first.",
-        "channel_saved":      "{tick} **{category}** logs → {channel}",
-        "channel_cleared":    "{cross} Cleared the channel for **{category}** logs.",
-        "toggled_on":         "{tick} **{category}** logging enabled.",
-        "toggled_off":        "{cross} **{category}** logging disabled.",
-        "all_set":            "{tick} Every category now logs to {channel}.",
-        "all_cleared":        "{cross} Cleared every logging channel.",
-        "save_failed":        "{cross} The change could not be saved: {error}",
-        "confirm_set_all":    "Send **all {count} categories** to {channel}? Existing channels are replaced.",
-        "confirm_clear_all":  "Remove the channel from **every category**? Logging stops until you set one again.",
-        "confirm_yes":        "Yes, apply",
-        "confirm_no":         "Cancel",
-        "cancelled":          "{cross} Nothing was changed.",
-        "expired_title":      "### {settings} Logging panel expired",
-        "expired_body":       "Open it again with `.logging` to keep configuring. Nothing was changed.",
-        "picker_title":       "Select a channel for **{category}**",
-        "picker_placeholder": "Select a channel…",
-        "picker_save":        "Save Channel",
-        "picker_no_channel":  "{cross} Select a channel first.",
-        "status_title":       "Logging Status",
-        "status_not_set":     "`Not set`",
-        "status_hint":        "Run `.logging` to change these channels.",
-    },
-    "de": {
-        "panel_title":        "Server-Logging",
-        "panel_desc":         "Wähle unten eine Kategorie und setze, lösche oder schalte ihren Kanal. Jede Kategorie kann einen eigenen Kanal haben.",
-        "panel_selected":     "**Ausgewählt:** {category}",
-        "panel_unselected":   "**Ausgewählt:** noch nichts — wähle unten eine Kategorie.",
-        "select_placeholder": "Kategorie zum Einrichten wählen…",
-        "opt_set":            "Kanal gesetzt",
-        "opt_unset":          "Kein Kanal",
-        "opt_off":            "Deaktiviert",
-        "btn_set_channel":    "Kanal setzen",
-        "btn_clear_channel":  "Kanal entfernen",
-        "btn_toggle":         "Ein / Aus",
-        "btn_set_all":        "Alle → dieser Kanal",
-        "btn_clear_all":      "Alle Kanäle leeren",
-        "invoker_only":       "{cross} Nur die Person, die dieses Panel geöffnet hat, kann es benutzen.",
-        "no_permission":      "{cross} Du brauchst **Server verwalten**, um die Log-Einstellungen zu ändern.",
-        "no_category":        "{cross} Wähle zuerst eine Kategorie aus dem Menü.",
-        "channel_saved":      "{tick} **{category}**-Logs → {channel}",
-        "channel_cleared":    "{cross} Kanal für **{category}**-Logs entfernt.",
-        "toggled_on":         "{tick} **{category}**-Logging aktiviert.",
-        "toggled_off":        "{cross} **{category}**-Logging deaktiviert.",
-        "all_set":            "{tick} Alle Kategorien loggen jetzt in {channel}.",
-        "all_cleared":        "{cross} Alle Log-Kanäle entfernt.",
-        "save_failed":        "{cross} Die Änderung konnte nicht gespeichert werden: {error}",
-        "confirm_set_all":    "**Alle {count} Kategorien** in {channel} senden? Bestehende Kanäle werden ersetzt.",
-        "confirm_clear_all":  "Den Kanal aus **allen Kategorien** entfernen? Bis du wieder einen setzt, wird nichts geloggt.",
-        "confirm_yes":        "Ja, anwenden",
-        "confirm_no":         "Abbrechen",
-        "cancelled":          "{cross} Es wurde nichts geändert.",
-        "expired_title":      "### {settings} Logging-Panel abgelaufen",
-        "expired_body":       "Öffne es mit `.logging` erneut, um weiter einzurichten. Es wurde nichts geändert.",
-        "picker_title":       "Kanal für **{category}** wählen",
-        "picker_placeholder": "Kanal wählen…",
-        "picker_save":        "Kanal speichern",
-        "picker_no_channel":  "{cross} Wähle zuerst einen Kanal.",
-        "status_title":       "Logging-Status",
-        "status_not_set":     "`Nicht gesetzt`",
-        "status_hint":        "Nutze `.logging`, um diese Kanäle zu ändern.",
-    },
-    "es": {
-        "panel_title":        "Registro del servidor",
-        "panel_desc":         "Elige una categoría abajo y define, borra o activa su canal. Cada categoría puede tener su propio canal.",
-        "panel_selected":     "**Configurando:** {category}",
-        "panel_unselected":   "**Configurando:** nada todavía — elige una categoría abajo.",
-        "select_placeholder": "Elige una categoría para configurar…",
-        "opt_set":            "Canal definido",
-        "opt_unset":          "Sin canal",
-        "opt_off":            "Desactivado",
-        "btn_set_channel":    "Definir canal",
-        "btn_clear_channel":  "Borrar canal",
-        "btn_toggle":         "Activar / Desactivar",
-        "btn_set_all":        "Todos → este canal",
-        "btn_clear_all":      "Borrar todos los canales",
-        "invoker_only":       "{cross} Solo quien abrió este panel puede usarlo.",
-        "no_permission":      "{cross} Necesitas **Gestionar servidor** para cambiar el registro.",
-        "no_category":        "{cross} Elige primero una categoría del menú.",
-        "channel_saved":      "{tick} Registro de **{category}** → {channel}",
-        "channel_cleared":    "{cross} Canal borrado para el registro de **{category}**.",
-        "toggled_on":         "{tick} Registro de **{category}** activado.",
-        "toggled_off":        "{cross} Registro de **{category}** desactivado.",
-        "all_set":            "{tick} Todas las categorías se registran ahora en {channel}.",
-        "all_cleared":        "{cross} Se borraron todos los canales de registro.",
-        "save_failed":        "{cross} No se pudo guardar el cambio: {error}",
-        "confirm_set_all":    "¿Enviar **las {count} categorías** a {channel}? Se reemplazan los canales actuales.",
-        "confirm_clear_all":  "¿Quitar el canal de **todas las categorías**? Hasta que definas uno no se registrará nada.",
-        "confirm_yes":        "Sí, aplicar",
-        "confirm_no":         "Cancelar",
-        "cancelled":          "{cross} No se cambió nada.",
-        "expired_title":      "### {settings} El panel de registro caducó",
-        "expired_body":       "Ábrelo de nuevo con `.logging` para seguir configurando. No se cambió nada.",
-        "picker_title":       "Elige un canal para **{category}**",
-        "picker_placeholder": "Elige un canal…",
-        "picker_save":        "Guardar canal",
-        "picker_no_channel":  "{cross} Elige primero un canal.",
-        "status_title":       "Estado del registro",
-        "status_not_set":     "`Sin definir`",
-        "status_hint":        "Usa `.logging` para cambiar estos canales.",
-    },
-}
+MESSAGES = load_locales("cogs.logging", "formatters")
+#: The heading of every entry type, keyed by the English title the listeners
+#: log. The English title stays the internal key: it picks the category
+#: channel, the emoji and the revert buttons, so a translated server routes
+#: exactly like an English one.
+TITLES = load_locales("cogs.logging", "titles")
+#: The field labels a log body is built from — ``**User:**``, ``**Reason:**``.
+LABELS = load_locales("cogs.logging", "labels")
+#: Stock values a body repeats across entry types: ``Unknown``, ``None``,
+#: ``No reason provided``.
+VALUES = load_locales("cogs.logging", "values")
+
+#: A bolded ``**Label:**`` (or ``**Roles (3):**``) token inside a body.
+_LABEL_TOKEN = re.compile(r"\*\*(?P<label>[^*\n]+?)(?P<count>\s+\(\d+\))?:\*\*")
+#: A body line that is one label followed by one value.
+_LABELLED_LINE = re.compile(r"^(?P<label>\*\*[^*\n]+?:\*\*)\s(?P<value>.+)$")
+
+
+def _title(lang: str, title: str) -> str:
+    """The heading to display for an entry logged under *title*."""
+    return TITLES.get(lang, {}).get(title) or TITLES["en"].get(title, title)
+
+
+def _localize_body(lang: str, body: str) -> str:
+    """Translate the labels and stock values of a log body for display.
+
+    Bodies are assembled in English by the listeners because that text is also
+    what coalescing merges and what the revert buttons parse. Translating here,
+    on the way into the view, keeps every entry type in one place: the labels
+    are a closed vocabulary, so a new listener needs no translation work as
+    long as it reuses them.
+    """
+    if lang == "en" or not body:
+        return body
+    labels = LABELS.get(lang) or {}
+    values = {**TITLES.get(lang, {}), **(VALUES.get(lang) or {})}
+    if not labels and not values:
+        return body
+
+    def _label(match: re.Match) -> str:
+        label = match.group("label")
+        count = match.group("count") or ""
+        return f"**{labels.get(label, label)}{count}:**"
+
+    lines = []
+    for line in body.split("\n"):
+        line = _LABEL_TOKEN.sub(_label, line)
+        # A value is only swapped when the whole value is a known stock phrase:
+        # a member's name or a reason somebody typed must stay as written.
+        labelled = _LABELLED_LINE.match(line)
+        if labelled:
+            value = labelled.group("value")
+            if value in values:
+                line = f"{labelled.group('label')} {values[value]}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _t(lang: str, key: str, **kwargs) -> str:

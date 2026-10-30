@@ -6,8 +6,9 @@ import os
 import time
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
 from config.emojis import get_emoji
+from utils.locales import load_locales
 
 # The brand accent shared by every Niko view, used when a guild has not picked
 # custom card colours.
@@ -20,52 +21,13 @@ MAX_SELECT_OPTIONS = 25
 #  MESSAGE TABLE
 # ───────────────────────────────────────────────────
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "level_up":          "Congratulations {mention}, you leveled up to level **{level}**!",
-            "no_xp":             "{name} hasn't earned any XP yet.",
-            "stats_title":       "Level Stats — {name}",
-            "stats_level":       "Level",
-            "stats_xp":          "XP",
-            "stats_rank":        "Rank",
-            "leaderboard_title": "Leveling Leaderboard — {guild}",
-            "leaderboard_empty": "No one has earned any XP in this server yet.",
-            "xp_disabled":       "XP tracking is currently disabled for this server.",
-            "cfg_updated":       "✅ Setting updated.",
-            "cfg_show":          "### Level Config — {guild}\n{body}",
-        },
-        "de": {
-            "level_up":          "Glückwunsch {mention}, du bist auf Level **{level}** aufgestiegen!",
-            "no_xp":             "{name} hat noch keine XP gesammelt.",
-            "stats_title":       "Level-Statistiken — {name}",
-            "stats_level":       "Level",
-            "stats_xp":          "XP",
-            "stats_rank":        "Rang",
-            "leaderboard_title": "Leveling-Bestenliste — {guild}",
-            "leaderboard_empty": "Noch niemand hat XP auf diesem Server gesammelt.",
-            "xp_disabled":       "XP-Tracking ist für diesen Server deaktiviert.",
-            "cfg_updated":       "✅ Einstellung aktualisiert.",
-            "cfg_show":          "### Level-Konfiguration — {guild}\n{body}",
-        },
-        "es": {
-            "level_up":          "¡Felicidades {mention}, has subido al nivel **{level}**!",
-            "no_xp":             "{name} aún no ha ganado XP.",
-            "stats_title":       "Estadísticas de Nivel — {name}",
-            "stats_level":       "Nivel",
-            "stats_xp":          "XP",
-            "stats_rank":        "Rango",
-            "leaderboard_title": "Tabla de Niveles — {guild}",
-            "leaderboard_empty": "Nadie ha ganado XP en este servidor todavía.",
-            "xp_disabled":       "El sistema de XP está desactivado en este servidor.",
-            "cfg_updated":       "✅ Configuración actualizada.",
-            "cfg_show":          "### Configuración de Niveles — {guild}\n{body}",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.leveling", "panel")
 
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES, {
+    "tick": get_emoji("tick"),
+    "cross": get_emoji("cross"),
+})
 
 
 # ───────────────────────────────────────────────────
@@ -98,6 +60,20 @@ def _lv_icon(val) -> str:
     return get_emoji("tick") if val else get_emoji("cross")
 
 
+def _fill(template: str, **values) -> str:
+    """Substitute ``{token}`` placeholders without ``str.format``.
+
+    A panel body pastes member-authored text into the sentence — a custom
+    level-up message, a role name — and that text may itself contain braces
+    (the level-up template legitimately holds ``{mention}`` and ``{level}``).
+    Running the result through ``str.format`` would raise on those, so the
+    tokens are replaced literally instead.
+    """
+    for name, value in values.items():
+        template = template.replace("{" + name + "}", str(value))
+    return template
+
+
 def _colour_hex(rgb):
     """Convert an RGB tuple to a Discord colour integer or None."""
     if not rgb:
@@ -116,77 +92,61 @@ def _lv_role_mention(guild: discord.Guild, role_id) -> str:
         role = guild.get_role(int(role_id))
     except (TypeError, ValueError):
         role = None
-    return role.mention if role else f"*(deleted role `{role_id}`)*"
+    return role.mention if role else msg(guild, "panel_deleted_role", role_id=role_id)
 
 
 def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
     lu_ch   = guild.get_channel(cfg.get("level_up_channel") or 0)
-    lu_ch_s = lu_ch.mention if lu_ch else "*(same channel)*"
+    lu_ch_s = lu_ch.mention if lu_ch else msg(guild, "panel_same_channel")
     lr      = cfg.get("level_roles", {})
-    lr_s    = ", \n".join(
-        f"  Level {lvl} → {_lv_role_mention(guild, rid)}"
+    role_line = msg(guild, "panel_overview_role_line")
+    lr_s    = "\n".join(
+        _fill(role_line, level=lvl, role=_lv_role_mention(guild, rid))
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0]))
-    ) or "  *(none)*"
+    ) or msg(guild, "panel_no_roles")
     custom_msg = cfg.get("level_up_message")
-    msg_s = f"`{custom_msg}`" if custom_msg else "*(default message)*"
+    msg_s = f"`{custom_msg}`" if custom_msg else msg(guild, "panel_default_message")
 
     # Card style summary
     accent = cfg.get("card_accent")
-    accent_s = f"#{accent[0]:02x}{accent[1]:02x}{accent[2]:02x}" if accent else "*(default gold)*"
+    accent_s = f"#{accent[0]:02x}{accent[1]:02x}{accent[2]:02x}" if accent else msg(guild, "panel_default_gold")
 
     excluded = cfg.get("xp_excluded_channels") or []
-    return (
-        "### Leveling Management Panel\n"
-        "Manage all your server's leveling settings from one place.\n\n"
-        "**📊 XP Settings**\n"
-        f"{_lv_icon(cfg.get('xp_enabled', True))} XP enabled  •  "
-        f"Multiplier: `{cfg.get('xp_multiplier', 1.0)}x`  •  "
-        f"Cooldown: `{cfg.get('xp_cooldown', 0)}s`\n\n"
-        "**📡 Channels & Voice**\n"
-        f"Channels excluded from XP: `{len(excluded)}`  •  "
-        f"Voice XP: {_lv_icon(cfg.get('xp_vc_enabled', False))}\n"
-        "-# Ticket channels never award XP.\n\n"
-        "**📣 Announcements**\n"
-        f"Level-up channel: {lu_ch_s}\n"
-        f"Custom message: {msg_s}\n\n"
-        "**🎖️ Level Roles** *(automatically awarded on level-up)*\n"
-        f"{lr_s}\n\n"
-        "**🎨 Card Style**\n"
-        f"Accent colour: `{accent_s}`\n\n"
-        "-# Use the dropdown below to navigate and configure each section."
+    return _fill(
+        msg(guild, "panel_overview"),
+        xp_state=_lv_icon(cfg.get("xp_enabled", True)),
+        multiplier=cfg.get("xp_multiplier", 1.0),
+        cooldown=cfg.get("xp_cooldown", 0),
+        excluded=len(excluded),
+        voice_state=_lv_icon(cfg.get("xp_vc_enabled", False)),
+        levelup_channel=lu_ch_s,
+        custom_message=msg_s,
+        roles=lr_s,
+        accent=accent_s,
     )
 
 
-def _lv_xp_text(cfg: dict) -> str:
+def _lv_xp_text(cfg: dict, guild: discord.Guild) -> str:
     cd = cfg.get("xp_cooldown", 0)
-    cd_s = f"`{cd}s`" if cd > 0 else "`off`"
-    return (
-        "### 📊 XP Settings\n"
-        "Control how members earn experience in your server.\n\n"
-        f"{get_emoji('enabled') if cfg.get('xp_enabled', True) else get_emoji('disabled')} — **XP Tracking**\n\n"
-        f"**XP Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x`\n"
-        f"Each message earns `15–25 × multiplier` XP at random.\n\n"
-        f"**XP Cooldown:** {cd_s}\n"
-        "Minimum time between XP gains per member (0 = every message).\n\n"
-        "-# Use **Channels & Voice** to exclude channels from XP or enable passive voice XP."
+    cd_s = _fill(msg(guild, "panel_xp_cooldown_on"), seconds=cd) if cd > 0 \
+        else msg(guild, "panel_xp_cooldown_off")
+    return _fill(
+        msg(guild, "panel_xp"),
+        state=get_emoji('enabled') if cfg.get('xp_enabled', True) else get_emoji('disabled'),
+        multiplier=cfg.get('xp_multiplier', 1.0),
+        cooldown=cd_s,
     )
 
 
 def _lv_announcements_text(cfg: dict, guild: discord.Guild) -> str:
     lu_ch      = guild.get_channel(cfg.get("level_up_channel") or 0)
-    lu_ch_s    = lu_ch.mention if lu_ch else "*(same channel as the message)*"
+    lu_ch_s    = lu_ch.mention if lu_ch else msg(guild, "panel_announcement_same_channel")
     custom_msg = cfg.get("level_up_message")
-    default_msg = "Congratulations {mention}, you leveled up to level **{level}**!"
-    msg_display = custom_msg if custom_msg else default_msg
-    return (
-        "### 📣 Announcement Settings\n"
-        "Configure where and how level-ups are announced.\n\n"
-        f"**Level-Up Channel:** {lu_ch_s}\n"
-        "-# Select a channel below or clear it to announce in the message's channel.\n\n"
-        f"**Level-Up Message:**\n"
-        f"> {msg_display}\n\n"
-        "-# Available placeholders: `{mention}` `{level}` `{name}` `{guild}`\n"
-        "-# Click **Edit Message** to customise, or **Reset Message** to restore the default."
+    msg_display = custom_msg if custom_msg else msg(guild, "level_up")
+    return _fill(
+        msg(guild, "panel_announcements"),
+        channel=lu_ch_s,
+        message=msg_display,
     )
 
 
@@ -195,17 +155,19 @@ def _lv_roles_text(cfg: dict, guild: discord.Guild) -> str:
     if lr:
         lines = []
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0])):
-            lines.append(f"**Level {lvl}** → {_lv_role_mention(guild, rid)}")
+            lines.append(_fill(
+                msg(guild, "panel_role_line"),
+                level=lvl,
+                role=_lv_role_mention(guild, rid),
+            ))
         roles_body = "\n".join(lines)
     else:
-        roles_body = "*No level roles configured yet.*"
+        roles_body = msg(guild, "panel_no_level_roles_body")
 
-    return (
-        "### 🎖️ Level Roles\n"
-        "Roles automatically awarded when a member reaches a certain level.\n\n"
-        f"{roles_body}\n\n"
-        f"-# Click **{get_emoji('plus')} Add Role** to assign a role to a level.\n"
-        "-# Click **➖ Remove Role** to remove an assignment."
+    return _fill(
+        msg(guild, "panel_roles"),
+        roles=roles_body,
+        plus=get_emoji("plus"),
     )
 
 
@@ -215,60 +177,43 @@ def _lv_channels_text(cfg: dict, guild: discord.Guild) -> str:
         lines = []
         for cid in excluded_ids:
             channel = guild.get_channel(int(cid))
-            lines.append(f"• {channel.mention}" if channel else f"• *(deleted channel `{cid}`)*")
+            lines.append(
+                _fill(msg(guild, "panel_channel_line"), channel=channel.mention)
+                if channel else
+                _fill(msg(guild, "panel_deleted_channel"), cid=cid)
+            )
         excluded_body = "\n".join(lines)
     else:
-        excluded_body = "*No channels excluded — every channel can award XP.*"
+        excluded_body = msg(guild, "panel_no_excluded_body")
 
     vc_enabled = bool(cfg.get("xp_vc_enabled", False))
-    return (
-        "### 📡 Channels & Voice\n"
-        "Control where members can earn XP.\n\n"
-        "**Excluded Channels**\n"
-        f"{excluded_body}\n"
-        "-# Messages and time spent in these channels never award XP.\n"
-        "-# Ticket channels are always excluded automatically.\n\n"
-        f"**Voice XP:** {_lv_icon(vc_enabled)}\n"
-        "-# When enabled, members earn XP for every minute they spend in a voice channel. "
-        "AFK channels never award XP.\n\n"
-        "-# Use the selector below to change the excluded channels."
+    return _fill(
+        msg(guild, "panel_channels"),
+        excluded=excluded_body,
+        voice=_lv_icon(vc_enabled),
     )
 
 
-def _lv_cardstyle_text(cfg: dict) -> str:
-    accent = cfg.get("card_accent")
-    bg_top = cfg.get("card_bg_top")
-    bg_bot = cfg.get("card_bg_bottom")
-
+def _lv_cardstyle_text(cfg: dict, guild: discord.Guild) -> str:
     def _fmt_rgb(rgb):
         if not rgb:
-            return "*(default)*"
+            return msg(guild, "panel_default_colour")
         return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
-    accent_s = _fmt_rgb(accent)
-    bg_top_s = _fmt_rgb(bg_top)
-    bg_bot_s = _fmt_rgb(bg_bot)
-
-    return (
-        "### 🎨 Card Style\n"
-        "Customise the colours used in level cards and the leaderboard.\n\n"
-        f"**Accent Colour:** `{accent_s}`\n"
-        "Used for borders, level numbers, and the progress bar.\n\n"
-        f"**Background Top:** `{bg_top_s}`\n"
-        f"**Background Bottom:** `{bg_bot_s}`\n"
-        "The gradient fills the card background.\n\n"
-        "-# Use the buttons below to edit each colour.\n"
-        "-# Enter hex codes like `#d96545` or `ff5500`.\n"
-        "-# Click **Reset Colours** to restore the default colours."
+    return _fill(
+        msg(guild, "panel_cardstyle"),
+        accent=_fmt_rgb(cfg.get("card_accent")),
+        bg_top=_fmt_rgb(cfg.get("card_bg_top")),
+        bg_bottom=_fmt_rgb(cfg.get("card_bg_bottom")),
     )
 
 
 def _lv_section_text(cfg: dict, section: str, guild: discord.Guild) -> str:
-    if section == "xp":            return _lv_xp_text(cfg)
+    if section == "xp":            return _lv_xp_text(cfg, guild)
     if section == "channels":      return _lv_channels_text(cfg, guild)
     if section == "announcements": return _lv_announcements_text(cfg, guild)
     if section == "level_roles":   return _lv_roles_text(cfg, guild)
-    if section == "card_style":    return _lv_cardstyle_text(cfg)
+    if section == "card_style":    return _lv_cardstyle_text(cfg, guild)
     return _lv_overview_text(cfg, guild)
 
 
@@ -292,10 +237,7 @@ class _LevelPanelView(discord.ui.LayoutView):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=(
-                    f"{get_emoji('cross')} You need the **Manage Server** permission "
-                    "to change this server's leveling settings."
-                )
+                content=msg(interaction, "panel_permission_error")
             ),
             accent_colour=discord.Color.red(),
         ))
@@ -304,37 +246,37 @@ class _LevelPanelView(discord.ui.LayoutView):
 
 
 class _LvSectionSelect(discord.ui.Select):
-    def __init__(self, cog, guild_id: int, current: str):
+    def __init__(self, cog, guild_id: int, current: str, ctx):
         self._cog      = cog
         self._guild_id = guild_id
         options = [
             discord.SelectOption(
-                label="Overview",       value="overview",      emoji="📋",
-                description="All leveling settings at a glance",
+                label=msg(ctx, "panel_nav_overview"), value="overview", emoji="📋",
+                description=msg(ctx, "panel_nav_overview_description"),
                 default=(current == "overview")),
             discord.SelectOption(
-                label="XP Settings",    value="xp",            emoji="📊",
-                description="Toggle XP, multiplier, cooldown",
+                label=msg(ctx, "panel_nav_xp"), value="xp", emoji="📊",
+                description=msg(ctx, "panel_nav_xp_description"),
                 default=(current == "xp")),
             discord.SelectOption(
-                label="Channels & Voice", value="channels",     emoji="📡",
-                description="Exclude channels from XP, enable voice XP",
+                label=msg(ctx, "panel_nav_channels"), value="channels", emoji="📡",
+                description=msg(ctx, "panel_nav_channels_description"),
                 default=(current == "channels")),
             discord.SelectOption(
-                label="Announcements",  value="announcements", emoji="📣",
-                description="Level-up channel and custom message",
+                label=msg(ctx, "panel_nav_announcements"), value="announcements", emoji="📣",
+                description=msg(ctx, "panel_nav_announcements_description"),
                 default=(current == "announcements")),
             discord.SelectOption(
-                label="Level Roles",    value="level_roles",   emoji="🎖️",
-                description="Roles awarded on level-up",
+                label=msg(ctx, "panel_nav_roles"), value="level_roles", emoji="🎖️",
+                description=msg(ctx, "panel_nav_roles_description"),
                 default=(current == "level_roles")),
             discord.SelectOption(
-                label="Card Style",     value="card_style",    emoji="🎨",
-                description="Customise level card colours",
+                label=msg(ctx, "panel_nav_card"), value="card_style", emoji="🎨",
+                description=msg(ctx, "panel_nav_card_description"),
                 default=(current == "card_style")),
         ]
         super().__init__(
-            placeholder="Navigate sections…", options=options,
+            placeholder=msg(ctx, "panel_nav_placeholder"), options=options,
             min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
@@ -343,12 +285,12 @@ class _LvSectionSelect(discord.ui.Select):
 
 
 class _LvXPToggleBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int, cfg: dict):
+    def __init__(self, cog, guild_id: int, cfg: dict, ctx):
         self._cog      = cog
         self._guild_id = guild_id
         enabled = cfg.get("xp_enabled", True)
         super().__init__(
-            label="XP Tracking",
+            label=msg(ctx, "panel_btn_xp_tracking"),
             style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red,
             emoji=_lv_icon(enabled),
         )
@@ -361,23 +303,27 @@ class _LvXPToggleBtn(discord.ui.Button):
         await interaction.response.edit_message(view=panel)
 
 
-class _LvXPSettingsModal(discord.ui.Modal, title="XP Settings"):
-    multiplier = discord.ui.TextInput(label="XP Multiplier (e.g. 1.5)", placeholder="1.0")
-    cooldown   = discord.ui.TextInput(label="Cooldown in seconds (0 = off)", placeholder="0")
-
-    def __init__(self, cog, guild_id: int, cfg: dict):
-        super().__init__()
+class _LvXPSettingsModal(discord.ui.Modal):
+    def __init__(self, cog, guild_id: int, cfg: dict, ctx):
+        super().__init__(title=msg(ctx, "panel_xp_modal_title"))
         self._cog      = cog
         self._guild_id = guild_id
+        self.multiplier = discord.ui.TextInput(
+            label=msg(ctx, "panel_xp_multiplier_label"), placeholder="1.0")
+        self.cooldown = discord.ui.TextInput(
+            label=msg(ctx, "panel_xp_cooldown_label"), placeholder="0")
         self.multiplier.default = str(cfg.get("xp_multiplier", 1.0))
         self.cooldown.default   = str(cfg.get("xp_cooldown", 0))
+        self.add_item(self.multiplier)
+        self.add_item(self.cooldown)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
             mult = round(max(0.1, float(self.multiplier.value)), 2)
             cd   = max(0, int(self.cooldown.value))
         except ValueError:
-            return await interaction.response.send_message("Please enter valid numbers.", ephemeral=True)
+            return await interaction.response.send_message(
+                msg(interaction, "panel_invalid_numbers"), ephemeral=True)
         cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["xp_multiplier"] = mult
         cfg["xp_cooldown"]   = cd
@@ -387,24 +333,25 @@ class _LvXPSettingsModal(discord.ui.Modal, title="XP Settings"):
 
 
 class _LvEditXPBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
         super().__init__(
-            label="Edit XP Values", style=discord.ButtonStyle.blurple,
+            label=msg(ctx, "panel_btn_edit_xp"), style=discord.ButtonStyle.blurple,
             emoji=get_emoji("settings"))
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
-        await interaction.response.send_modal(_LvXPSettingsModal(self._cog, self._guild_id, cfg))
+        await interaction.response.send_modal(
+            _LvXPSettingsModal(self._cog, self._guild_id, cfg, interaction))
 
 
 # ── Channels & Voice ─────────────────────────────
 
 class _LvExcludedChannelsSelect(discord.ui.ChannelSelect):
-    def __init__(self, cog, guild_id: int, cfg: dict):
+    def __init__(self, cog, guild_id: int, cfg: dict, ctx):
         super().__init__(
-            placeholder="Add channels to exclude from XP…",
+            placeholder=msg(ctx, "panel_select_exclude_add"),
             channel_types=[
                 discord.ChannelType.text,
                 discord.ChannelType.voice,
@@ -428,13 +375,13 @@ class _LvExcludedChannelsSelect(discord.ui.ChannelSelect):
 
 
 class _LvRemoveExcludedSelect(discord.ui.Select):
-    def __init__(self, cog, guild_id: int, options: list, message: discord.Message):
+    def __init__(self, cog, guild_id: int, options: list, message: discord.Message, ctx):
         # Discord caps a select at 25 options and 25 max_values. Clamping both
         # together matters: a guild with more exclusions than that used to hand
         # ``max_values`` a value the select refuses to accept.
         options = list(options)[:MAX_SELECT_OPTIONS]
         super().__init__(
-            placeholder="Choose channels to include again…",
+            placeholder=msg(ctx, "panel_select_exclude_remove"),
             min_values=1, max_values=len(options),
             options=options,
         )
@@ -453,7 +400,7 @@ class _LvRemoveExcludedSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Removed `{len(removed)}` channel(s) from the XP exclusion list."
+                content=msg(interaction, "panel_removed_channels", count=len(removed))
             ),
             accent_colour=discord.Color.green(),
         ))
@@ -463,42 +410,46 @@ class _LvRemoveExcludedSelect(discord.ui.Select):
 
 
 class _LvRemoveExcludedBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int, has_excluded: bool):
+    def __init__(self, cog, guild_id: int, has_excluded: bool, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="Remove Exclusion", style=discord.ButtonStyle.red, disabled=not has_excluded)
+        super().__init__(
+            label=msg(ctx, "panel_btn_remove_exclusion"),
+            style=discord.ButtonStyle.red, disabled=not has_excluded)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
         options = []
         for cid in cfg.get("xp_excluded_channels") or []:
             channel = interaction.guild.get_channel(int(cid))
-            name = f"#{channel.name}" if channel else f"Channel {cid}"
+            name = f"#{channel.name}" if channel else msg(
+                interaction, "panel_channel_name", cid=cid)
             options.append(discord.SelectOption(
                 label=name[:100],
                 value=str(cid),
-                description=f"Channel ID: {cid}",
+                description=msg(interaction, "panel_channel_id", cid=cid),
             ))
         if not options:
             return await interaction.response.send_message(
-                "No channels are excluded from XP.", ephemeral=True)
+                msg(interaction, "panel_no_excluded"), ephemeral=True)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="Select the channels that should award XP again:"),
+            discord.ui.TextDisplay(content=msg(interaction, "panel_select_award")),
             discord.ui.ActionRow(
-                _LvRemoveExcludedSelect(self._cog, self._guild_id, options, interaction.message)
+                _LvRemoveExcludedSelect(
+                    self._cog, self._guild_id, options, interaction.message, interaction)
             ),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class _LvVCToggleBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int, cfg: dict):
+    def __init__(self, cog, guild_id: int, cfg: dict, ctx):
         self._cog      = cog
         self._guild_id = guild_id
         enabled = bool(cfg.get("xp_vc_enabled", False))
         super().__init__(
-            label="Voice XP",
+            label=msg(ctx, "panel_btn_voice_xp"),
             style=discord.ButtonStyle.green if enabled else discord.ButtonStyle.red,
             emoji=_lv_icon(enabled),
         )
@@ -512,10 +463,12 @@ class _LvVCToggleBtn(discord.ui.Button):
 
 
 class _LvClearExcludedBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int, has_excluded: bool):
+    def __init__(self, cog, guild_id: int, has_excluded: bool, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="Clear Exclusions", style=discord.ButtonStyle.red, disabled=not has_excluded)
+        super().__init__(
+            label=msg(ctx, "panel_btn_clear_exclusions"),
+            style=discord.ButtonStyle.red, disabled=not has_excluded)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -528,9 +481,9 @@ class _LvClearExcludedBtn(discord.ui.Button):
 # ── Announcements ──────────────────────────────────
 
 class _LvChannelSelect(discord.ui.ChannelSelect):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         super().__init__(
-            placeholder="Choose a text channel…",
+            placeholder=msg(ctx, "panel_select_channel"),
             channel_types=[discord.ChannelType.text],
             min_values=1, max_values=1,
         )
@@ -543,57 +496,58 @@ class _LvChannelSelect(discord.ui.ChannelSelect):
         cfg["level_up_channel"] = channel.id
         await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
-            content=f"{get_emoji('tick')} Level-up announcements will now go to {channel.mention}.", view=None)
+            content=msg(interaction, "panel_levelup_channel_set", channel=channel.mention), view=None)
 
 
 class _LvClearChannelBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="Clear (use same channel)", style=discord.ButtonStyle.red)
+        super().__init__(
+            label=msg(ctx, "panel_btn_clear_channel"), style=discord.ButtonStyle.red)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["level_up_channel"] = None
         await self._cog._save_guild_cfg(self._guild_id, cfg)
         await interaction.response.edit_message(
-            content=f"{get_emoji('tick')} Level-up announcements will now appear in the same channel as the message.", view=None)
+            content=msg(interaction, "panel_levelup_same_channel"), view=None)
 
 
 class _LvSetChannelBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="📺 Set Channel", style=discord.ButtonStyle.blurple)
+        super().__init__(label=msg(ctx, "panel_btn_set_channel"), style=discord.ButtonStyle.blurple)
 
     async def callback(self, interaction: discord.Interaction):
         view = discord.ui.View(timeout=60)
-        view.add_item(_LvChannelSelect(self._cog, self._guild_id))
-        view.add_item(_LvClearChannelBtn(self._cog, self._guild_id))
+        view.add_item(_LvChannelSelect(self._cog, self._guild_id, interaction))
+        view.add_item(_LvClearChannelBtn(self._cog, self._guild_id, interaction))
         await interaction.response.send_message(
-            "Select the channel where level-up messages should appear:",
+            msg(interaction, "panel_choose_levelup_channel"),
             view=view, ephemeral=True)
 
 
-class _LvMessageModal(discord.ui.Modal, title="Custom Level-Up Message"):
-    message = discord.ui.TextInput(
-        label="Level-up message template",
-        placeholder="Congratulations {mention}, you reached level **{level}**!",
-        style=discord.TextStyle.paragraph,
-        max_length=400,
-    )
-
-    def __init__(self, cog, guild_id: int, cfg: dict):
-        super().__init__()
+class _LvMessageModal(discord.ui.Modal):
+    def __init__(self, cog, guild_id: int, cfg: dict, ctx):
+        super().__init__(title=msg(ctx, "panel_message_modal_title"))
         self._cog      = cog
         self._guild_id = guild_id
+        self.message = discord.ui.TextInput(
+            label=msg(ctx, "panel_message_label"),
+            placeholder=msg(ctx, "panel_message_placeholder"),
+            style=discord.TextStyle.paragraph,
+            max_length=400,
+        )
         self.message.default = cfg.get("level_up_message") or ""
+        self.add_item(self.message)
 
     async def on_submit(self, interaction: discord.Interaction):
         val = self.message.value.strip()
         if not val:
             return await interaction.response.send_message(
-                "Message cannot be empty. Use the Reset button to restore the default.",
+                msg(interaction, "panel_message_empty"),
                 ephemeral=True)
         cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["level_up_message"] = val
@@ -603,21 +557,24 @@ class _LvMessageModal(discord.ui.Modal, title="Custom Level-Up Message"):
 
 
 class _LvEditMessageBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="✏️ Edit Message", style=discord.ButtonStyle.blurple)
+        super().__init__(label=msg(ctx, "panel_btn_edit_message"), style=discord.ButtonStyle.blurple)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
-        await interaction.response.send_modal(_LvMessageModal(self._cog, self._guild_id, cfg))
+        await interaction.response.send_modal(
+            _LvMessageModal(self._cog, self._guild_id, cfg, interaction))
 
 
 class _LvResetMessageBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int, has_custom: bool):
+    def __init__(self, cog, guild_id: int, has_custom: bool, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="↩️ Reset Message", style=discord.ButtonStyle.red, disabled=not has_custom)
+        super().__init__(
+            label=msg(ctx, "panel_btn_reset_message"),
+            style=discord.ButtonStyle.red, disabled=not has_custom)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -630,8 +587,8 @@ class _LvResetMessageBtn(discord.ui.Button):
 # ── Level Roles ────────────────────────────────────
 
 class _LvRoleAssignSelect(discord.ui.RoleSelect):
-    def __init__(self, cog, guild_id: int, level: int, message: discord.Message | None):
-        super().__init__(placeholder="Choose a role to award…", min_values=1, max_values=1)
+    def __init__(self, cog, guild_id: int, level: int, message: discord.Message | None, ctx):
+        super().__init__(placeholder=msg(ctx, "panel_select_role"), min_values=1, max_values=1)
         self._cog      = cog
         self._guild_id = guild_id
         self._level    = level
@@ -645,7 +602,12 @@ class _LvRoleAssignSelect(discord.ui.RoleSelect):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} **Level {self._level}** → {role.mention}"
+                content=msg(
+                    interaction,
+                    "panel_level_reward",
+                    level=self._level,
+                    role=role.mention,
+                )
             ),
             accent_colour=discord.Color.green()
         )
@@ -656,16 +618,17 @@ class _LvRoleAssignSelect(discord.ui.RoleSelect):
             await self.message.edit(view=panel)
 
 
-class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
-    level_num = discord.ui.TextInput(
-        label="Level number", placeholder="e.g. 5",
-        min_length=1, max_length=4,
-    )
-
-    def __init__(self, cog, guild_id: int, panel_message: discord.Message | None = None):
-        super().__init__()
+class _LvAddRoleModal(discord.ui.Modal):
+    def __init__(self, cog, guild_id: int, ctx,
+                 panel_message: discord.Message | None = None):
+        super().__init__(title=msg(ctx, "panel_add_role_modal_title"))
         self._cog          = cog
         self._guild_id     = guild_id
+        self.level_num = discord.ui.TextInput(
+            label=msg(ctx, "panel_level_number_label"), placeholder="e.g. 5",
+            min_length=1, max_length=4,
+        )
+        self.add_item(self.level_num)
         # Carried over from the button instead of read off the modal submit
         # interaction, which does not reliably include the panel message.
         self._panel_message = panel_message
@@ -675,14 +638,15 @@ class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
             lvl = max(1, int(self.level_num.value))
         except ValueError:
             return await interaction.response.send_message(
-                "Please enter a valid whole number for the level.", ephemeral=True)
+                msg(interaction, "panel_invalid_level"), ephemeral=True)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"Now select the role to award at **Level {lvl}**"
+                content=msg(interaction, "panel_pick_role_for_level", level=lvl)
             ),
             discord.ui.ActionRow(
-                _LvRoleAssignSelect(self._cog, self._guild_id, lvl, self._panel_message)
+                _LvRoleAssignSelect(
+                    self._cog, self._guild_id, lvl, self._panel_message, interaction)
             )
         )
         view.add_item(container)
@@ -690,24 +654,27 @@ class _LvAddRoleModal(discord.ui.Modal, title="Add Level Role — Step 1/2"):
 
 
 class _LvAddRoleBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="Add Role", style=discord.ButtonStyle.green, emoji=get_emoji("plus"))
+        super().__init__(
+            label=msg(ctx, "panel_btn_add_role"),
+            style=discord.ButtonStyle.green, emoji=get_emoji("plus"))
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
-            _LvAddRoleModal(self._cog, self._guild_id, interaction.message)
+            _LvAddRoleModal(self._cog, self._guild_id, interaction,
+                            panel_message=interaction.message)
         )
 
 
 class _LvRemoveRoleSelect(discord.ui.Select):
-    def __init__(self, cog, guild_id: int, options: list, message: discord.Message):
+    def __init__(self, cog, guild_id: int, options: list, message: discord.Message, ctx):
         # See _LvRemoveExcludedSelect: options and max_values share Discord's
         # hard limit of 25.
         options = list(options)[:MAX_SELECT_OPTIONS]
         super().__init__(
-            placeholder="Choose level role(s) to remove…",
+            placeholder=msg(ctx, "panel_select_roles_remove_placeholder"),
             min_values=1, max_values=len(options),
             options=options,
         )
@@ -724,7 +691,7 @@ class _LvRemoveRoleSelect(discord.ui.Select):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Removed `{len(self.values)}` level role assignment(s)."
+                content=msg(interaction, "panel_removed_level_roles", count=len(self.values))
             ),
             accent_colour=discord.Color.green()
         )
@@ -735,10 +702,12 @@ class _LvRemoveRoleSelect(discord.ui.Select):
 
 
 class _LvRemoveRoleBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int, has_roles: bool):
+    def __init__(self, cog, guild_id: int, has_roles: bool, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="➖ Remove Role", style=discord.ButtonStyle.red, disabled=not has_roles)
+        super().__init__(
+            label=msg(ctx, "panel_btn_remove_role"),
+            style=discord.ButtonStyle.red, disabled=not has_roles)
 
     async def callback(self, interaction: discord.Interaction):
         cfg   = await self._cog._guild_cfg(self._guild_id)
@@ -747,22 +716,24 @@ class _LvRemoveRoleBtn(discord.ui.Button):
         options = []
         for lvl, rid in sorted(lr.items(), key=lambda x: int(x[0])):
             role  = guild.get_role(int(rid))
-            rname = role.name if role else f"Role {rid}"
+            rname = role.name if role else msg(interaction, "panel_role_name", rid=rid)
             options.append(discord.SelectOption(
-                label=f"Level {lvl} — {rname[:80]}",
+                label=_fill(msg(interaction, "panel_role_option"),
+                            level=lvl, role=rname[:80]),
                 value=str(lvl),
-                description=f"Role ID: {rid}",
+                description=msg(interaction, "panel_role_id", rid=rid),
             ))
         if not options:
             return await interaction.response.send_message(
-                "No level roles are configured.", ephemeral=True)
+                msg(interaction, "panel_no_level_roles"), ephemeral=True)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="Select the level role assignments to remove:"
+                content=msg(interaction, "panel_select_roles_remove")
             ),
             discord.ui.ActionRow(
-                _LvRemoveRoleSelect(self._cog, self._guild_id, options, interaction.message)
+                _LvRemoveRoleSelect(
+                    self._cog, self._guild_id, options, interaction.message, interaction)
             )
         )
         view.add_item(container)
@@ -783,22 +754,22 @@ def _parse_colour(text: str) -> tuple[int, int, int] | None:
         return None
 
 
-class _LvAccentColourModal(discord.ui.Modal, title="Accent Colour"):
-    hex_colour = discord.ui.TextInput(
-        label="Hex colour (e.g. #d96545 or ff5500)", placeholder="d96545",
-        min_length=1, max_length=7,
-    )
-
-    def __init__(self, cog, guild_id: int):
-        super().__init__()
+class _LvAccentColourModal(discord.ui.Modal):
+    def __init__(self, cog, guild_id: int, ctx):
+        super().__init__(title=msg(ctx, "panel_accent_modal_title"))
         self._cog      = cog
         self._guild_id = guild_id
+        self.hex_colour = discord.ui.TextInput(
+            label=msg(ctx, "panel_accent_label"), placeholder="d96545",
+            min_length=1, max_length=7,
+        )
+        self.add_item(self.hex_colour)
 
     async def on_submit(self, interaction: discord.Interaction):
         rgb = _parse_colour(self.hex_colour.value)
         if rgb is None:
             return await interaction.response.send_message(
-                "Invalid hex colour. Use format `#d96545` or `ff5500`.", ephemeral=True)
+                msg(interaction, "panel_invalid_hex_accent"), ephemeral=True)
         cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["card_accent"] = list(rgb)
         await self._cog._save_guild_cfg(self._guild_id, cfg)
@@ -806,22 +777,22 @@ class _LvAccentColourModal(discord.ui.Modal, title="Accent Colour"):
         await interaction.response.edit_message(view=panel)
 
 
-class _LvBgTopModal(discord.ui.Modal, title="Background Top Colour"):
-    hex_colour = discord.ui.TextInput(
-        label="Hex colour (e.g. #261a16)", placeholder="261a16",
-        min_length=1, max_length=7,
-    )
-
-    def __init__(self, cog, guild_id: int):
-        super().__init__()
+class _LvBgTopModal(discord.ui.Modal):
+    def __init__(self, cog, guild_id: int, ctx):
+        super().__init__(title=msg(ctx, "panel_bg_top_modal_title"))
         self._cog      = cog
         self._guild_id = guild_id
+        self.hex_colour = discord.ui.TextInput(
+            label=msg(ctx, "panel_bg_top_label"), placeholder="261a16",
+            min_length=1, max_length=7,
+        )
+        self.add_item(self.hex_colour)
 
     async def on_submit(self, interaction: discord.Interaction):
         rgb = _parse_colour(self.hex_colour.value)
         if rgb is None:
             return await interaction.response.send_message(
-                "Invalid hex colour. Use format `#261a16` or `261a16`.", ephemeral=True)
+                msg(interaction, "panel_invalid_hex_top"), ephemeral=True)
         cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["card_bg_top"] = list(rgb)
         await self._cog._save_guild_cfg(self._guild_id, cfg)
@@ -829,22 +800,22 @@ class _LvBgTopModal(discord.ui.Modal, title="Background Top Colour"):
         await interaction.response.edit_message(view=panel)
 
 
-class _LvBgBottomModal(discord.ui.Modal, title="Background Bottom Colour"):
-    hex_colour = discord.ui.TextInput(
-        label="Hex colour (e.g. #120c0a)", placeholder="120c0a",
-        min_length=1, max_length=7,
-    )
-
-    def __init__(self, cog, guild_id: int):
-        super().__init__()
+class _LvBgBottomModal(discord.ui.Modal):
+    def __init__(self, cog, guild_id: int, ctx):
+        super().__init__(title=msg(ctx, "panel_bg_bottom_modal_title"))
         self._cog      = cog
         self._guild_id = guild_id
+        self.hex_colour = discord.ui.TextInput(
+            label=msg(ctx, "panel_bg_bottom_label"), placeholder="120c0a",
+            min_length=1, max_length=7,
+        )
+        self.add_item(self.hex_colour)
 
     async def on_submit(self, interaction: discord.Interaction):
         rgb = _parse_colour(self.hex_colour.value)
         if rgb is None:
             return await interaction.response.send_message(
-                "Invalid hex colour. Use format `#120c0a` or `120c0a`.", ephemeral=True)
+                msg(interaction, "panel_invalid_hex_bottom"), ephemeral=True)
         cfg = await self._cog._guild_cfg(self._guild_id)
         cfg["card_bg_bottom"] = list(rgb)
         await self._cog._save_guild_cfg(self._guild_id, cfg)
@@ -853,40 +824,43 @@ class _LvBgBottomModal(discord.ui.Modal, title="Background Bottom Colour"):
 
 
 class _LvEditAccentBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="✏️ Accent Colour", style=discord.ButtonStyle.blurple)
+        super().__init__(label=msg(ctx, "panel_btn_accent"), style=discord.ButtonStyle.blurple)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(_LvAccentColourModal(self._cog, self._guild_id))
+        await interaction.response.send_modal(
+            _LvAccentColourModal(self._cog, self._guild_id, interaction))
 
 
 class _LvEditBgTopBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="🌄 Background Top", style=discord.ButtonStyle.blurple)
+        super().__init__(label=msg(ctx, "panel_btn_bg_top"), style=discord.ButtonStyle.blurple)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(_LvBgTopModal(self._cog, self._guild_id))
+        await interaction.response.send_modal(
+            _LvBgTopModal(self._cog, self._guild_id, interaction))
 
 
 class _LvEditBgBottomBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="🌅 Background Bottom", style=discord.ButtonStyle.blurple)
+        super().__init__(label=msg(ctx, "panel_btn_bg_bottom"), style=discord.ButtonStyle.blurple)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(_LvBgBottomModal(self._cog, self._guild_id))
+        await interaction.response.send_modal(
+            _LvBgBottomModal(self._cog, self._guild_id, interaction))
 
 
 class _LvResetColoursBtn(discord.ui.Button):
-    def __init__(self, cog, guild_id: int):
+    def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label="↩️ Reset Colours", style=discord.ButtonStyle.red)
+        super().__init__(label=msg(ctx, "panel_btn_reset_colours"), style=discord.ButtonStyle.red)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -918,49 +892,49 @@ async def _build_level_panel(cog, guild_id: int, section: str = "overview",
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         accent_colour=accent_colour,
     )
-    container.add_item(discord.ui.ActionRow(_LvSectionSelect(cog, guild_id, section)))
+    container.add_item(discord.ui.ActionRow(_LvSectionSelect(cog, guild_id, section, guild)))
 
     if section == "xp":
         container.add_item(discord.ui.ActionRow(
-            _LvXPToggleBtn(cog, guild_id, cfg),
-            _LvEditXPBtn(cog, guild_id),
+            _LvXPToggleBtn(cog, guild_id, cfg, guild),
+            _LvEditXPBtn(cog, guild_id, guild),
         ))
 
     elif section == "channels":
         container.add_item(discord.ui.ActionRow(
-            _LvExcludedChannelsSelect(cog, guild_id, cfg),
+            _LvExcludedChannelsSelect(cog, guild_id, cfg, guild),
         ))
         container.add_item(discord.ui.ActionRow(
-            _LvVCToggleBtn(cog, guild_id, cfg),
-            _LvRemoveExcludedBtn(cog, guild_id, bool(cfg.get("xp_excluded_channels"))),
-            _LvClearExcludedBtn(cog, guild_id, bool(cfg.get("xp_excluded_channels"))),
+            _LvVCToggleBtn(cog, guild_id, cfg, guild),
+            _LvRemoveExcludedBtn(cog, guild_id, bool(cfg.get("xp_excluded_channels")), guild),
+            _LvClearExcludedBtn(cog, guild_id, bool(cfg.get("xp_excluded_channels")), guild),
         ))
 
     elif section == "announcements":
         has_custom = bool(cfg.get("level_up_message"))
         container.add_item(discord.ui.ActionRow(
-            _LvSetChannelBtn(cog, guild_id),
+            _LvSetChannelBtn(cog, guild_id, guild),
         ))
         container.add_item(discord.ui.ActionRow(
-            _LvEditMessageBtn(cog, guild_id),
-            _LvResetMessageBtn(cog, guild_id, has_custom),
+            _LvEditMessageBtn(cog, guild_id, guild),
+            _LvResetMessageBtn(cog, guild_id, has_custom, guild),
         ))
 
     elif section == "level_roles":
         has_roles = bool(cfg.get("level_roles"))
         container.add_item(discord.ui.ActionRow(
-            _LvAddRoleBtn(cog, guild_id),
-            _LvRemoveRoleBtn(cog, guild_id, has_roles),
+            _LvAddRoleBtn(cog, guild_id, guild),
+            _LvRemoveRoleBtn(cog, guild_id, has_roles, guild),
         ))
 
     elif section == "card_style":
         container.add_item(discord.ui.ActionRow(
-            _LvEditAccentBtn(cog, guild_id),
-            _LvEditBgTopBtn(cog, guild_id),
+            _LvEditAccentBtn(cog, guild_id, guild),
+            _LvEditBgTopBtn(cog, guild_id, guild),
         ))
         container.add_item(discord.ui.ActionRow(
-            _LvEditBgBottomBtn(cog, guild_id),
-            _LvResetColoursBtn(cog, guild_id),
+            _LvEditBgBottomBtn(cog, guild_id, guild),
+            _LvResetColoursBtn(cog, guild_id, guild),
         ))
 
     view.add_item(container)

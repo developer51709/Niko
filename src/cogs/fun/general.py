@@ -5,6 +5,14 @@ import random
 from config.links import WEBSITE
 from utils.prefix_manager import resolve_prefix
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "general")
+msg = make_flat_msg(MESSAGES)
+
 # Nitro gift prank — the thumbnail on the gift card and the rickroll in the
 # ephemeral "accept" response.
 NITRO_GIF_URL = "https://c.tenor.com/ARL3mp1NaXYAAAAd/tenor.gif"
@@ -19,10 +27,10 @@ class NitroAcceptButton(discord.ui.DynamicItem[discord.ui.Button], template=r"is
     restart. Clicking it answers with the (very honest) rickroll.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, label: str | None = None) -> None:
         super().__init__(discord.ui.Button(
             style=discord.ButtonStyle.secondary,
-            label="Accept",
+            label=label or msg("en", "nitro_accept"),
             custom_id="isitnitro",
         ))
 
@@ -33,7 +41,7 @@ class NitroAcceptButton(discord.ui.DynamicItem[discord.ui.Button], template=r"is
     async def callback(self, interaction: discord.Interaction) -> None:
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="## No nitro here!"),
+            discord.ui.TextDisplay(content=msg(interaction, "nitro_none")),
             discord.ui.MediaGallery(
                 discord.MediaGalleryItem(media=RICKROLL_GIF_URL),
             ),
@@ -57,78 +65,61 @@ class FunCog(commands.Cog):
     async def cog_unload(self) -> None:
         self.bot.remove_dynamic_items(NitroAcceptButton)
 
-    @commands.hybrid_command(name="nitro", description="Free Nitro!!!", help="{ 'en': 'free nitro!!! 🎁', 'de': 'kostenloses Nitro!!! 🎁', 'es': '¡¡¡nitro gratis!!! 🎁' }")
+    @commands.hybrid_command(name="nitro", description=CMDS.text("nitro.description"), help=CMDS.help("nitro"),
+    )
     async def nitro(self, ctx):
         """FREE NITRO!!!"""
         container = discord.ui.Container(
             discord.ui.Section(
-                discord.ui.TextDisplay(content="## A WILD GIFT APPEARS!\n\n**Nitro**\nExpires in 47 hours"),
+                discord.ui.TextDisplay(content=msg(ctx, "nitro_card")),
                 accessory=discord.ui.Thumbnail(
                     media=NITRO_GIF_URL,
                 ),
             ),
             discord.ui.ActionRow(
-                NitroAcceptButton(),
+                NitroAcceptButton(msg(ctx, "nitro_accept")),
             ),
         )
         view = discord.ui.LayoutView()
         view.add_item(container)
         await ctx.send(view=view)
 
-    @commands.hybrid_command(name="boring", description="A boring command", help="{ 'en': 'a boring command 😴', 'de': 'ein langweiliger Befehl 😴', 'es': 'un comando aburrido 😴' }")
+    @commands.hybrid_command(name="boring", description=CMDS.text("boring.description"), help=CMDS.help("boring"),
+    )
     async def boring(self, ctx):
         """A boring command."""
         prefix = await _resolve_prefix(self.bot, ctx)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"### ☕ What did you expect?"
-            ),
+            discord.ui.TextDisplay(content=msg(ctx, "boring_title")),
             discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"I bet you thought this command would do something cool, but no. It's just boring. 😔"
-            ),
+            discord.ui.TextDisplay(content=msg(ctx, "boring_body")),
             discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"-# Maybe try `{prefix}notboring`?"
-            )
+            discord.ui.TextDisplay(content=msg(ctx, "boring_hint", prefix=prefix))
         ))
         await ctx.send(view=view)
 
-    @commands.hybrid_command(name="notboring", description="A not boring command", help="{ 'en': 'a not boring command 🎉', 'de': 'ein nicht langweiliger Befehl 🎉', 'es': 'un comando no aburrido 🎉' }")
+    @commands.hybrid_command(name="notboring", description=CMDS.text("notboring.description"), help=CMDS.help("notboring"),
+    )
     async def notboring(self, ctx):
         """A not boring command."""
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content="### ☕ I lied."
-            ),
+            discord.ui.TextDisplay(content=msg(ctx, "notboring_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"This command is actually in fact quite boring."
-            ),
+            discord.ui.TextDisplay(content=msg(ctx, "notboring_body")),
             discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"-# Please forgive me 😭"
-            )
+            discord.ui.TextDisplay(content=msg(ctx, "notboring_footer"))
         ))
         await ctx.send(view=view)
 
-    @commands.hybrid_command(name="crazy", description="Crazy? I was crazy once...", help="{ 'en': 'crazy? I was crazy once... 🤪', 'de': 'verrückt? Ich war mal verrückt... 🤪', 'es': '¿loco? estuve loco una vez... 🤪' }")
+    @commands.hybrid_command(name="crazy", description=CMDS.text("crazy.description"), help=CMDS.help("crazy"),
+    )
     async def crazy(self, ctx):
         """Crazy? I was crazy once..."""
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=(
-                    "### ☕ Crazy?\n"
-                    "Crazy? I was crazy once. They locked me in a room. A rubber room. "
-                    "A rubber room with rats. And rats make me crazy.\n\n"
-                    "Crazy? I was crazy once. They locked me in a room. A rubber room. "
-                    "A rubber room with rats. And rats make me crazy.\n\n"
-                    "Crazy? I was crazy once..."
-                )
-            )
+            discord.ui.TextDisplay(content=msg(ctx, "crazy_body"))
         ))
         await ctx.send(view=view)
 

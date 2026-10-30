@@ -11,6 +11,121 @@ Restart the bot process after updating.
 ## Backing Up Data
 - **JSON Data**: Regularly back up the `data/` folder.
 
+## Cog layout and translated strings
+
+Every cog is a package with the same shape, and translated wording is never kept in Python. It lives in a `locales` folder next to the code, one JSON file per language:
+
+```
+src/cogs/social/
+    __init__.py
+    cog.py
+    birthdays.py
+    polls.py
+    starboard.py
+    suggestions.py
+    locales/
+        en.json
+        de.json
+        es.json
+```
+
+A module that sends text loads its slice of the catalogue:
+
+```python
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+MESSAGES = load_locales(__package__, "birthdays")
+msg = make_flat_msg(MESSAGES)
+...
+await ctx.send(msg(ctx, "birthday_saved"))
+```
+
+`load_locales` returns `{lang: {key: text}}` and fills a missing German or Spanish key from English, so a new English string is never a `KeyError` in another language. Values may be a string or a list of strings (roleplay keeps its sentence variants in lists).
+
+### Namespaces
+
+A cog with one table stores its keys at the root of `en.json` and can call `load_locales(__package__)`. A cog whose modules each keep their own table groups them by module name in the same three files:
+
+```json
+{
+  "birthdays": { "saved": "Birthday saved." },
+  "polls": { "created": "Poll created." }
+}
+```
+
+Each module then asks for its own namespace. Several cogs (`fun`, `social`, `utility`, `moderation`, `help`, `voicemaster`) work this way; a namespace is the module's table name, not its file name, so `cogs/help/views.py` owns `ui`, `category_descriptions` and `category_headers`.
+
+### Editing strings
+
+- **Add or change a key**: edit all three files of the cog. `tests/test_cog_locales.py` fails when a language is missing a key, has a different namespace, or stores a different shape (a list where English has a string).
+- **Add a language**: add its file to every `locales` folder and extend `SUPPORTED_LANGUAGES` in `src/utils/locales.py`; the tests then require it everywhere.
+- **Shared wording**: a utility that is not a cog gets the same treatment by being a package — `src/utils/guild_lockdown/` holds the blacklist lockdown reply in its own `locales/` folder.
+- **Music**: the strings live in `cogs/music/locales/`; `src/utils/music/messages.py` only exposes `msg` so the playback helpers do not depend on the command layer.
+
+### Values that are not plain text
+
+Emoji and configured links are substituted by the resolver, so the JSON stays readable and one change reaches every language. `make_flat_msg` accepts a `defaults` map which fills `{name}` tokens before `str.format` runs:
+
+```python
+_LEGAL_VALUES = {"privacy": PRIVACY, "important": get_emoji("important")}
+msg = make_flat_msg(MESSAGES, _LEGAL_VALUES)
+```
+
+Messages that need per-call values take them as keyword arguments (`msg(ctx, "banned", member=member, reason=reason)`), exactly as before.
+
+### Command wording
+
+Command help lines, short descriptions and argument text are catalogue entries too, in a `commands` namespace inside the same three files. Catalogue tables are flat, so a key carries the command path (the same path Discord shows) and the kind of text:
+
+```json
+{
+  "commands": {
+    "slots.help": "play a casino-style 3×3 slot machine 🎰",
+    "slots.play.description": "Play a game of slots",
+    "slots.play.args.amount": "How many coins to bet",
+    "voicemaster.default.limit.help": "Set the default user limit"
+  }
+}
+```
+
+A module reads its cog's table once and hands the decorators strings:
+
+```python
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
+@commands.hybrid_command(
+    name="slots",
+    description=CMDS.text("slots.description"),
+    help=CMDS.help("slots"),
+)
+@app_commands.describe(amount=CMDS.arg("slots", "amount"))
+async def slots(...):
+    ...
+```
+
+- `CMDS.help(key)` serialises all three translations into the `{ 'en': … }` map the help menu reads; `CMDS.text`/`CMDS.arg` give Discord the English wording, since a decorator only takes one string.
+- `utils.command_locales` resolves the package from the module (`cogs.economy.commands` finds `cogs.economy/locales`) and reads the key from the live command path, so a subcommand's entries sit under its parent's prefix.
+- The startup registry (`src/events/startup/writers.py`) writes the whole language map for a command's description and for each documented argument into `data/commands.json`, which is what `/api/commands` and the website's commands page render in the visitor's language.
+- Commands that declare no text at all (a docstring only, or nothing) stay plain English in Python; give them a `commands` entry and a `help=` when you touch them.
+
+Adding a command means adding its keys to all three files, exactly like any other string. `tests/test_cog_locales.py` checks the catalogues; `CMDS.help`/`CMDS.text` return an empty string for a key that does not exist, so a missing entry shows up as an empty line rather than a crash.
+
+### Localised commands inside Discord
+
+Discord only localises a slash command's name, description and option descriptions when the bulk-overwrite payload carries `name_localizations` and `description_localizations`. `src/utils/command_localization.py` adds both from the catalogue, so nothing extra is needed when declaring a command:
+
+- `apply_command_localizations()` runs before every sync (startup in `src/events/startup/sync.py`, and the owner `sync` command) and extends each top-level command's `to_dict` output. Subcommands and options are localised recursively from their `commands` keys, so one pass covers the whole tree.
+- `commands.<path>.description` becomes the English description (and its `de`/`es` translations become the localised ones), while `commands.<path>.args.<param>` becomes the option description. That also replaces discord.py's empty `…` placeholder for options declared without `@app_commands.describe`.
+- Add `commands.<path>.name` only when the display name should change per language; context menus need it because Discord gives them no description at all (see the six menus such as `Translate` and `Roleplay`).
+- Because the payload now carries the translations, the startup fingerprint sees translation-only edits and syncs them instead of skipping as "no command changes".
+
+### What still lives in Python
+
+A cog whose *replies* are still English-only keeps that text in Python — `casino`, `notifier` and `onboarding` at the time of writing, plus `staff` by design. Their command wording is catalogued already; moving their replies is the same steps as above: add the namespace to `locales/{en,de,es}.json`, load it in the module that owns the text, and replace the literals with `msg(ctx, key)` calls.
+
 ## Discord API proxy workers
 
 `proxy-worker/` is an optional Cloudflare Worker that relays Discord REST requests from Cloudflare's Worker egress instead of the bot host's shared IP. It deploys the same way as `nsfw-api/`: Cloudflare's Workers Builds Git integration can build the folder on every push, or run `wrangler deploy` from `proxy-worker/`. Create an `AUTH_TOKEN` secret on every worker and set the same value as `PROXY_WORKER_TOKEN` on the bot. Multiple workers may be registered; Niko rotates through them per request.

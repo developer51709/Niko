@@ -8,6 +8,14 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils import logging as log
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "misc")
+msg = make_flat_msg(MESSAGES, {"tick": get_emoji("tick")})
+
 
 # ===================================================
 #  DATA MODEL (GLOBAL AFK)
@@ -106,19 +114,22 @@ def _format_timedelta(start: datetime) -> str:
 #  CV2 LAYOUT HELPERS
 # ===================================================
 
-def _afk_set_view(user: discord.User, reason: str) -> discord.ui.LayoutView:
+def _afk_set_view(user: discord.User, reason: str, locale=None) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     container = discord.ui.Container()
 
-    header = discord.ui.TextDisplay(content="### 🌙 AFK Enabled")
+    header = discord.ui.TextDisplay(content=msg(locale, "afk_set_title"))
     container.add_item(header)
     container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     body = discord.ui.TextDisplay(
-        content=(
-            f"{user.mention} is now marked as AFK.\n"
-            f"-# **Reason:** {reason or 'No reason provided.'}\n"
-            f"-# Your AFK will be removed automatically when you speak again."
+        content=msg(
+            locale,
+            "afk_set_body",
+            mention=user.mention,
+            reason_line=msg(
+                locale, "afk_reason", reason=reason or msg(locale, "afk_no_reason")
+            ),
         )
     )
     container.add_item(body)
@@ -126,16 +137,22 @@ def _afk_set_view(user: discord.User, reason: str) -> discord.ui.LayoutView:
     return view
 
 
-def _afk_ping_view(afk_user: discord.Member | discord.User, state: AFKState) -> discord.ui.LayoutView:
+def _afk_ping_view(afk_user: discord.Member | discord.User, state: AFKState, locale=None) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     container = discord.ui.Container()
 
     duration = _format_timedelta(state.since)
     text = discord.ui.TextDisplay(
         content=(
-            f"### 🌙 {afk_user.display_name} is AFK\n"
-            f"**Reason:** {state.reason or 'No reason provided.'}\n"
-            f"**Since:** <t:{int(state.since.timestamp())}:R> ({duration} ago)"
+            msg(locale, "afk_ping_title", name=afk_user.display_name)
+            + "\n"
+            + msg(
+                locale,
+                "afk_ping_body",
+                reason=state.reason or msg(locale, "afk_no_reason"),
+                timestamp=int(state.since.timestamp()),
+                duration=duration,
+            )
         )
     )
     container.add_item(text)
@@ -143,19 +160,18 @@ def _afk_ping_view(afk_user: discord.Member | discord.User, state: AFKState) -> 
     return view
 
 
-def _afk_removed_view(user: discord.User, state: AFKState) -> discord.ui.LayoutView:
+def _afk_removed_view(user: discord.User, state: AFKState, locale=None) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     container = discord.ui.Container()
 
-    header = discord.ui.TextDisplay(content=f"### {get_emoji('tick')} AFK Removed")
+    header = discord.ui.TextDisplay(content=msg(locale, "afk_removed_title"))
     container.add_item(header)
     container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     duration = _format_timedelta(state.since)
     body = discord.ui.TextDisplay(
-        content=(
-            f"Welcome back {user.mention}!\n"
-            f"-# You were away for **{duration}**"
+        content=msg(
+            locale, "afk_removed_body", mention=user.mention, duration=duration
         )
     )
     container.add_item(body)
@@ -197,7 +213,7 @@ class AFKCog(commands.Cog):
 
     @commands.command(
         name="afk",
-        help="Set yourself as AFK with an optional reason.",
+        help=CMDS.help("afk"),
     )
     async def afk(self, ctx: commands.Context, *, reason: Optional[str] = None):
         """Mark the invoking user as AFK globally."""
@@ -205,13 +221,13 @@ class AFKCog(commands.Cog):
 
         state = AFKState(
             user_id=ctx.author.id,
-            reason=reason or "No reason provided.",
+            reason=reason or "",
             since=_utcnow(),
         )
         AFK_CACHE[ctx.author.id] = state
         await _db_set_afk(self.bot, ctx.author.id, state.reason, state.since)
 
-        view = _afk_set_view(ctx.author, state.reason)
+        view = _afk_set_view(ctx.author, state.reason, ctx)
         try:
             await ctx.reply(view=view, allowed_mentions=discord.AllowedMentions.none())
         except Exception:
@@ -241,7 +257,7 @@ class AFKCog(commands.Cog):
         if author_state is not None:
             await _db_remove_afk(self.bot, message.author.id)
             try:
-                view = _afk_removed_view(message.author, author_state)
+                view = _afk_removed_view(message.author, author_state, message.guild)
                 await message.channel.send(view=view, allowed_mentions=discord.AllowedMentions.none())
             except discord.HTTPException:
                 pass
@@ -261,7 +277,7 @@ class AFKCog(commands.Cog):
 
             notified_ids.add(user.id)
 
-            view = _afk_ping_view(user, state)
+            view = _afk_ping_view(user, state, message.guild)
             try:
                 try:
                     await message.reply(view=view, allowed_mentions=discord.AllowedMentions.none())

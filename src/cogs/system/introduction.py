@@ -4,8 +4,13 @@
 import discord
 from discord.ext import commands
 from utils.logging import info, success, warning, error, debug
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from utils.prefix_manager import resolve_prefix
 from config import links
+
+MESSAGES = load_locales(__package__, "introduction")
+msg = make_flat_msg(MESSAGES)
 
 MAIN_CHANNEL_NAMES = [
     "general",
@@ -68,20 +73,23 @@ class Introduction(commands.Cog):
         container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    content="### Hello, I'm Niko!"
+                    content=f"### {msg(guild, 'title')}"
                 ),
-                discord.ui.TextDisplay(
-                    content="> I am a multi-purpose bot for your server. I can help you with moderation, fun commands, music, onboarding, and more!"
-                ),
+                discord.ui.TextDisplay(content=msg(guild, "body")),
                 accessory=discord.ui.Thumbnail(self.bot.user.avatar.url)
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**To get started, type `{prefix}help` or just say “hey niko” in the chat.**"
+                content=msg(guild, "start", prefix=prefix)
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# 📌 **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+                content=msg(
+                    guild,
+                    "help",
+                    support=links.SUPPORT_SERVER,
+                    docs=links.DOCS,
+                )
             )
         )
 

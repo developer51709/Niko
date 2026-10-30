@@ -21,6 +21,15 @@ from discord.ext import commands
 from config import links
 from config.emojis import get_emoji
 from utils import logging
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+MESSAGES = load_locales(__package__, "images")
+msg = make_flat_msg(MESSAGES, {"image": get_emoji("image")})
+
+CMDS = command_texts(__package__)
 
 PROVIDER_URL = "https://image.pollinations.ai/prompt"
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=60)
@@ -92,7 +101,7 @@ class AiImageTools(commands.Cog):
 
     @commands.command(
         name="generate",
-        help="Generate an image using AI.",
+        help=CMDS.help("generate"),
         aliases=["imagen", "imagine"],
     )
     @commands.cooldown(1, USER_COOLDOWN, commands.BucketType.user)
@@ -121,7 +130,7 @@ class AiImageTools(commands.Cog):
 
     @commands.command(
         name="edit",
-        help="Image editing was retired — this explains why.",
+        help=CMDS.help("edit"),
         aliases=["aiedit", "editimage"],
         hidden=True,
     )
@@ -129,23 +138,14 @@ class AiImageTools(commands.Cog):
         """/edit is gone; keep the name so old muscle memory gets an answer."""
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('image')} Image editing was removed"),
+            discord.ui.TextDisplay(content=msg(ctx, "edit_removed_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    "AI image editing was retired because the hosted models charged "
-                    "per edit, and we have not found a free provider that produces "
-                    "results we would be happy to ship.\n\n"
-                    f"Image **generation** is still free and unlimited-ish — try "
-                    f"`{ctx.prefix}imagine <prompt>`.\n\n"
-                    "If you know a provider worth trying (a generous free tier or "
-                    "something we could self-host), join the support server and leave "
-                    "a suggestion. We would genuinely like to bring editing back."
-                )
+                content=msg(ctx, "edit_removed_body", prefix=ctx.prefix)
             ),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Suggest a provider",
+                    label=msg(ctx, "suggest_provider"),
                     style=discord.ButtonStyle.link,
                     url=links.SUPPORT_SERVER,
                 )

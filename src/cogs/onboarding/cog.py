@@ -1,64 +1,81 @@
 from .views import *
+from .views import _t
 from config.ids import SUPPORT_GUILD
 from utils import logging
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 class Onboarding(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.group(name="onboarding", help="Manage server onboarding")
+    @commands.group(name="onboarding", help=CMDS.help("onboarding"))
     async def onboarding(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
             prefix = await _resolve_prefix(self.bot, ctx)
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(content="### Server Onboarding"),
+                discord.ui.TextDisplay(content=_t(ctx, "help_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(content=_t(ctx, "help_intro")),
+                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+                discord.ui.TextDisplay(content=_t(ctx, "help_commands_title")),
                 discord.ui.TextDisplay(
-                    content="Setup onboarding for your server to help new members get started without requiring an entire staff team to welcome them!"
+                    content=_t(ctx, "help_commands", prefix=prefix)
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(content="**Onboarding Commands**"),
                 discord.ui.TextDisplay(
-                    content=(
-                        f"**`{prefix}onboarding setup`** — Setup onboarding for the server.\n"
-                        f"**`{prefix}onboarding role-menu`** — Setup role menu for the server.\n"
-                        f"**`{prefix}onboarding autoroles`** — Configure auto-assigned roles on join.\n"
-                        f"**`{prefix}onboarding captcha`** — Configure captcha human verification."
+                    content=_t(
+                        ctx,
+                        "help_footer",
+                        support=links.SUPPORT_SERVER,
+                        docs=links.DOCS,
                     )
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
                 )
             )
             view.add_item(container)
             await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
-    @onboarding.command(name="setup")
+    @onboarding.command(name="setup", help=CMDS.help("onboarding.setup"))
     @commands.has_permissions(administrator=True)
     async def onboarding_setup(self, ctx: commands.Context):
-        """Setup onboarding for the server."""
         prefix = await _resolve_prefix(self.bot, ctx)
-        await ctx.send(view=OnboardingSetupView(ctx.guild.id, ctx.author, prefix=prefix), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(
+            view=OnboardingSetupView(ctx.guild.id, ctx.author, prefix=prefix, locale=ctx),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
-    @onboarding.command(name="role-menu")
+    @onboarding.command(name="role-menu", help=CMDS.help("onboarding.role-menu"))
     @commands.has_permissions(administrator=True)
     async def onboarding_role_menu(self, ctx: commands.Context):
-        """Create, edit, and manage role menus for the server."""
-        await ctx.send(view=RoleMenuManagerView(ctx.guild.id, ctx.author, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(
+            view=RoleMenuManagerView(
+                ctx.guild.id, ctx.author, await get_config(ctx.guild.id), ctx,
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
-    @onboarding.command(name="autoroles")
+    @onboarding.command(name="autoroles", help=CMDS.help("onboarding.autoroles"))
     @commands.has_permissions(administrator=True)
     async def onboarding_autoroles(self, ctx: commands.Context):
-        """Configure which roles are automatically given to new members on join."""
-        await ctx.send(view=AutoroleSetupView(ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(
+            view=AutoroleSetupView(
+                ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id), ctx,
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
-    @onboarding.command(name="captcha")
+    @onboarding.command(name="captcha", help=CMDS.help("onboarding.captcha"))
     @commands.has_permissions(administrator=True)
     async def onboarding_captcha(self, ctx: commands.Context):
-        """Configure captcha verification for the server."""
-        await ctx.send(view=CaptchaSetupView(ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id)), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.send(
+            view=CaptchaSetupView(
+                ctx.guild.id, ctx.author, ctx.guild, await get_config(ctx.guild.id), ctx,
+            ),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -71,6 +88,10 @@ class Onboarding(commands.Cog):
         pending = _pending_verifications.get(user_id)
         if pending is None:
             return
+
+        # DMs carry no guild, so the member gets the wording of the server their
+        # captcha belongs to rather than English by default.
+        locale = self.bot.get_guild(pending["guild_id"])
 
         guess = message.content.strip().upper()
         correct = pending["code"].upper()
@@ -89,9 +110,7 @@ class Onboarding(commands.Cog):
             if result["problem"] == "guild":
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"{get_emoji('tick')} Verification passed! However, I could not find the server to apply roles."
-                    ),
+                    discord.ui.TextDisplay(content=_t(locale, "verified_no_guild")),
                     accent_colour=discord.Color.green()
                 )
                 view.add_item(container)
@@ -100,9 +119,7 @@ class Onboarding(commands.Cog):
             if result["problem"] == "member":
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"{get_emoji('tick')} Verification passed! However, I could not find you in the server."
-                    ),
+                    discord.ui.TextDisplay(content=_t(locale, "verified_no_member")),
                     accent_colour=discord.Color.green()
                 )
                 view.add_item(container)
@@ -110,18 +127,18 @@ class Onboarding(commands.Cog):
 
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"### {get_emoji('tick')} Verification complete!"
-                ),
+                discord.ui.TextDisplay(content=_t(locale, "verified_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content="You have been verified."
-                )
+                discord.ui.TextDisplay(content=_t(locale, "verified_body"))
             )
             if result["applied"]:
-                container.add_item(discord.ui.TextDisplay(f"Roles added: {', '.join(result['applied'])}"))
+                container.add_item(discord.ui.TextDisplay(
+                    _t(locale, "verified_roles_added", roles=", ".join(result["applied"]))
+                ))
             if result["removed"]:
-                container.add_item(discord.ui.TextDisplay(f"Roles removed: {', '.join(result['removed'])}"))
+                container.add_item(discord.ui.TextDisplay(
+                    _t(locale, "verified_roles_removed", roles=", ".join(result["removed"]))
+                ))
             view.add_item(container)
 
             await message.channel.send(view=view)
@@ -138,18 +155,14 @@ class Onboarding(commands.Cog):
 
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"### {get_emoji('cross')} Verification failed!"
-                    ),
+                    discord.ui.TextDisplay(content=_t(locale, "captcha_failed_title")),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                    discord.ui.TextDisplay(
-                        content="You have failed the captcha verification."
-                    )
+                    discord.ui.TextDisplay(content=_t(locale, "captcha_failed_body"))
                 )
                 if cfg and cfg.captcha_kick_on_fail:
-                    container.add_item(discord.ui.TextDisplay("You have been kicked from the server."))
+                    container.add_item(discord.ui.TextDisplay(_t(locale, "captcha_kicked")))
                 else:
-                    container.add_item(discord.ui.TextDisplay(content="Return to the server and click **Verify** again to get a new captcha."))
+                    container.add_item(discord.ui.TextDisplay(content=_t(locale, "captcha_retry")))
                 view.add_item(container)
                 await message.channel.send(view=view)
 
@@ -164,12 +177,10 @@ class Onboarding(commands.Cog):
                 file = discord.File(img_bytes, filename="captcha.png")
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
-                    discord.ui.TextDisplay(
-                        content=f"### {get_emoji('cross')} Incorrect."
-                    ),
+                    discord.ui.TextDisplay(content=_t(locale, "captcha_incorrect_title")),
                     discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                     discord.ui.TextDisplay(
-                        content=f"You have **{attempts_left}** attempt(s) left. Here is a new captcha:"
+                        content=_t(locale, "captcha_attempts_left", count=attempts_left)
                     ),
                     discord.ui.MediaGallery(
                         discord.MediaGalleryItem(
@@ -259,15 +270,25 @@ async def setup(bot):
     await migrate_json_files(bot)
 
     for guild_id, cfg in await load_all_configs():
+        # A persistent view renders once, at startup, so it has to pick its
+        # wording from the guild rather than from an interaction.
+        guild = bot.get_guild(guild_id)
+
         if cfg.rules_channel and cfg.rules_message_id:
-            bot.add_view(RulesAcknowledgeView(guild_id, cfg=cfg), message_id=cfg.rules_message_id)
+            bot.add_view(
+                RulesAcknowledgeView(guild_id, cfg=cfg, locale=guild),
+                message_id=cfg.rules_message_id,
+            )
 
         for menu_id, menu in (cfg.role_menus or {}).items():
             if menu.get("channel_id") and menu.get("message_id"):
-                bot.add_view(RoleMenuView(guild_id, menu_id, cfg=cfg), message_id=menu["message_id"])
+                bot.add_view(
+                    RoleMenuView(guild_id, menu_id, cfg=cfg, locale=guild),
+                    message_id=menu["message_id"],
+                )
 
         if cfg.captcha_channel_id and cfg.captcha_panel_message_id:
             bot.add_view(
-                CaptchaPanelView(guild_id, mode=cfg.captcha_mode),
+                CaptchaPanelView(guild_id, mode=cfg.captcha_mode, locale=guild),
                 message_id=cfg.captcha_panel_message_id,
             )

@@ -9,6 +9,14 @@ from cogs.casino.replay import InteractionContext
 from utils.cooldown import cooldown_ready_at, cooldown_view
 from utils.prefix_manager import resolve_prefix
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "messages")
+msg = make_flat_msg(MESSAGES)
+
 # Seconds between spins. Kept numeric so the cooldown is compared as a time,
 # not as concatenated strings.
 slots_cooldown = float(os.getenv("SLOTS_COOLDOWN") or 30)
@@ -31,6 +39,17 @@ LINE_PAYOUTS = {
 }
 
 FULL_BOARD_MULTIPLIER = 100
+
+#: Paytable labels stay stable English keys in ``evaluate_grid`` so the ledger
+#: note and the tests read the same value; the visible text is translated from
+#: these keys when a result is rendered.
+_LINE_KEYS = {
+    "Common Line (2×)": "slots_line_common",
+    "Uncommon Line (3×)": "slots_line_uncommon",
+    "Rare Line (5×)": "slots_line_rare",
+    "JACKPOT LINE (25×)": "slots_line_jackpot",
+    "FULL BOARD JACKPOT (100×)": "slots_line_full_board",
+}
 
 
 def spin_grid() -> list[list[str]]:
@@ -85,14 +104,21 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
     return await resolve_prefix(bot, ctx_or_interaction)
 
 
-def _slots_cooldown_view(last_spin) -> discord.ui.LayoutView:
+def _slots_cooldown_view(ctx, last_spin) -> discord.ui.LayoutView:
     """The shared cooldown notice, used by the command and by Play Again."""
     return cooldown_view(
-        "spin the slots",
+        msg(ctx, "slots_cooldown_action"),
         cooldown_ready_at(last_spin, slots_cooldown),
-        title="🎰 Slow down",
-        note=f"Slots allow one spin every **{int(slots_cooldown)}** seconds.",
+        title=msg(ctx, "slots_cooldown_title"),
+        note=msg(ctx, "slots_cooldown_note", seconds=int(slots_cooldown)),
+        template=msg(ctx, "slots_cooldown_sentence"),
     )
+
+
+def _line_label(ctx, label: str) -> str:
+    """The translated paytable label for a hit returned by ``evaluate_grid``."""
+    key = _LINE_KEYS.get(label)
+    return msg(ctx, key) if key else label
 
 
 _PLAY_AGAIN_TEMPLATE = r"casino:slots:again:(?P<user_id>\d+):(?P<amount>\d+)"
@@ -105,9 +131,9 @@ class PlayAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_PLAY_
     same spin after a restart without any message state being stored.
     """
 
-    def __init__(self, user_id: int, amount: int):
+    def __init__(self, user_id: int, amount: int, label: str = "Play Again"):
         super().__init__(discord.ui.Button(
-            label="Play Again",
+            label=label,
             style=discord.ButtonStyle.green,
             custom_id=f"casino:slots:again:{int(user_id)}:{int(amount)}",
         ))
@@ -115,19 +141,23 @@ class PlayAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_PLAY_
         self.amount = int(amount)
 
     @classmethod
-    async def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
-        return cls(int(match["user_id"]), int(match["amount"]))
+    async    def from_custom_id(cls, interaction: discord.Interaction, item, match, /):
+        return cls(
+            int(match["user_id"]),
+            int(match["amount"]),
+            label=msg(interaction, "slots_play_again"),
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message(
-                "This spin belongs to someone else. Start your own with `/slots play`.",
+                msg(interaction, "slots_wrong_player"),
                 ephemeral=True,
             )
         cog = interaction.client.get_cog("Slots")
         if cog is None:
             return await interaction.response.send_message(
-                "Slots is unavailable right now.", ephemeral=True
+                msg(interaction, "slots_unavailable"), ephemeral=True
             )
         economy = interaction.client.get_cog("EconomyCog")
         if economy is not None:
@@ -137,7 +167,7 @@ class PlayAgainButton(discord.ui.DynamicItem[discord.ui.Button], template=_PLAY_
                 # Answer the cooldown privately so a spammed button cannot
                 # flood the channel with notices.
                 return await interaction.response.send_message(
-                    view=_slots_cooldown_view(last_spin), ephemeral=True
+                    view=_slots_cooldown_view(interaction, last_spin), ephemeral=True
                 )
         await interaction.response.defer()
         await cog.play(InteractionContext(interaction), self.amount)
@@ -156,8 +186,8 @@ class Slots(commands.Cog):
 
     @commands.hybrid_group(
         name="slots",
-        description="Play a casino-style 3x3 slot machine",
-        help="{ 'en': 'play a casino-style 3×3 slot machine 🎰', 'de': 'spiele ein Casino-Slot-Spiel', 'es': 'juega una tragamoneda de estilo 3×3 estilo casino 🎰' }"
+        description=CMDS.text("slots.description"),
+        help=CMDS.help("slots"),
     )
     async def slots(self, ctx):
         if ctx.invoked_subcommand is None:
@@ -165,17 +195,21 @@ class Slots(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### 🎰 Slots Help"
+                    content=msg(ctx, "slots_help_title")
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"**{prefix}slots play <amount>** - Play a game of slots.\n**{prefix}slots payouts** - View the slots payout table."
+                    content=msg(ctx, "slots_help_body", prefix=prefix)
                 )
             )
             view.add_item(container)
             await ctx.send(view=view)
 
-    @slots.command(name="play", description="Play a game of slots")
+    @slots.command(
+        name="play",
+        description=CMDS.text("slots.play.description"),
+        help=CMDS.help("slots.play"),
+    )
     async def slots_play(self, ctx, amount: int = None):
         """Play a casino‑style 3×3 slot machine."""
         await self.play(ctx, amount)
@@ -189,27 +223,27 @@ class Slots(commands.Cog):
 
         # Cooldown
         if float(user_data.get("last_slots") or 0) + slots_cooldown > time.time():
-            return await ctx.send(view=_slots_cooldown_view(user_data.get("last_slots")))
+            return await ctx.send(view=_slots_cooldown_view(ctx, user_data.get("last_slots")))
 
         if amount is None or amount <= 0:
-            return await ctx.send("You must bet more than 0 coins.")
+            return await ctx.send(msg(ctx, "slots_bet_positive"))
 
         if amount > balance:
-            return await ctx.send("You don't have enough coins to play slots.")
+            return await ctx.send(msg(ctx, "slots_not_enough"))
 
         # SPIN ANIMATION
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### 🎰 Slots"
+                content=msg(ctx, "slots_title")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"Spinning..."
+                content=msg(ctx, "slots_spinning")
             )
         )
         view.add_item(container)
-        msg = await ctx.send(view=view)
+        message = await ctx.send(view=view)
 
         # Fake spinning animation
         for _ in range(3):
@@ -217,15 +251,15 @@ class Slots(commands.Cog):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"### 🎰 Slots"
+                    content=msg(ctx, "slots_title")
                 ),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content=f"{grid_to_text(grid)}"
+                    content=grid_to_text(grid)
                 )
             )
             view.add_item(container)
-            await msg.edit(view=view)
+            await message.edit(view=view)
             await asyncio.sleep(0.5)
 
         # Final result
@@ -248,12 +282,16 @@ class Slots(commands.Cog):
         result_text = grid_to_text(final_grid)
 
         if net > 0:
-            title = "🎉 You Win!"
-            details = "\n".join(f"{sym} — {desc}" for sym, desc in hits)
-            description = f"{result_text}\n\n**{details}**\nYou won **{net}** coins."
+            title = msg(ctx, "slots_win_title")
+            details = "\n".join(
+                f"{sym} — {_line_label(ctx, desc)}" for sym, desc in hits
+            )
+            description = msg(
+                ctx, "slots_win_body", grid=result_text, details=details, net=net
+            )
         else:
-            title = "😢 You Lose"
-            description = f"{result_text}\n\nYou lost **{amount}** coins."
+            title = msg(ctx, "slots_lose_title")
+            description = msg(ctx, "slots_lose_body", grid=result_text, amount=amount)
 
         result_view = discord.ui.LayoutView(timeout=None)
         result_container = discord.ui.Container(
@@ -264,31 +302,37 @@ class Slots(commands.Cog):
             discord.ui.TextDisplay(
                 content=f"{description}"
             ),
-            discord.ui.ActionRow(PlayAgainButton(ctx.author.id, amount)),
+            discord.ui.ActionRow(
+                PlayAgainButton(ctx.author.id, amount, label=msg(ctx, "slots_play_again"))
+            ),
         )
         result_view.add_item(result_container)
-        await msg.edit(view=result_view)
+        await message.edit(view=result_view)
 
     # payouts subcommand (!slots payouts)
-    @slots.command(name="payouts", description="View the slots payout table")
+    @slots.command(
+        name="payouts",
+        description=CMDS.text("slots.payouts.description"),
+        help=CMDS.help("slots.payouts"),
+    )
     async def slots_payouts(self, ctx):
         """View the slots payout table."""
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"### 🎰 Slots Payouts"
+                content=msg(ctx, "slots_payouts_title")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**Common Symbols (🍒🍋🍊)**\n2× bet\n\n**Uncommon Symbols (🍎🍇🍐)**\n3× bet\n\n**Rare Symbols (💎🔥)**\n5× bet\n\n**Jackpot Symbol (🪙 ✨)**\n25× bet\n\n**Full Board Jackpot**\n100× bet"
+                content=msg(ctx, "slots_payouts_body")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**Paylines:**\n- Middle row\n- Top row\n- Bottom row\n- Diagonal (top-left to bottom-right)"
+                content=msg(ctx, "slots_paylines_body")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Notice:** There may be some issues with the slots game. Please report any bugs to the developers."
+                content=msg(ctx, "slots_notice")
             )
         )
         view.add_item(container)

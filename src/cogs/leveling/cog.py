@@ -11,6 +11,10 @@ from types import SimpleNamespace
 from utils.image.level_card import render_level_card
 from utils.image.economy_card import fetch_avatar_bytes
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 # Voice XP is passive, so it pays less per tick than chatting does per message.
 VC_XP_INTERVAL_SECONDS = 60
 VC_XP_MIN = 5
@@ -466,8 +470,8 @@ class Leveling(commands.Cog):
         name="leveling",
         aliases=["levels", "lvl", "lv"],
         invoke_without_command=True,
-        description="All leveling commands — rank, leaderboard, config, and panel",
-        help="{ 'en': 'All leveling commands.', 'de': 'Alle Leveling-Befehle.' }"
+        description=CMDS.text("leveling.description"),
+        help=CMDS.help("leveling"),
     )
     async def leveling(self, ctx):
         """Show a quick overview or help for the leveling system."""
@@ -494,8 +498,8 @@ class Leveling(commands.Cog):
     @leveling.command(
         name="rank",
         aliases=["level", "profile"],
-        description="Check your level stats with a beautiful image card",
-        help="{ 'en': 'Check your level stats', 'de': 'Zeigt deine Level-Statistiken.', 'es': 'Consulta tus estadísticas de nivel' }"
+        description=CMDS.text("leveling.rank.description"),
+        help=CMDS.help("leveling.rank"),
     )
     async def leveling_rank(self, ctx, member: discord.Member = None):
         member   = member or ctx.author
@@ -561,8 +565,8 @@ class Leveling(commands.Cog):
     @leveling.command(
         name="leaderboard",
         aliases=["lb", "top"],
-        description="See this server's live leveling leaderboard",
-        help="{ 'en': 'Open the live leaderboard 🏆', 'de': 'Öffnet die Live-Bestenliste.' }"
+        description=CMDS.text("leveling.leaderboard.description"),
+        help=CMDS.help("leveling.leaderboard"),
     )
     async def leveling_leaderboard(self, ctx):
         """Link to this server's public leaderboard page on the website.
@@ -597,8 +601,8 @@ class Leveling(commands.Cog):
     @leveling.command(
         name="panel",
         aliases=["levelpanel", "settings"],
-        description="Open the interactive leveling management panel",
-        help="{ 'en': 'Open the interactive leveling management panel', 'de': 'Leveling-Dashboard öffnen.' }"
+        description=CMDS.text("leveling.panel.description"),
+        help=CMDS.help("leveling.panel"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_panel(self, ctx):
@@ -611,8 +615,8 @@ class Leveling(commands.Cog):
         name="config",
         aliases=["cfg"],
         invoke_without_command=True,
-        description="View or configure the leveling system",
-        help="{ 'en': 'View or configure the leveling system.', 'de': 'Level-Einstellungen anzeigen / bearbeiten.' }"
+        description=CMDS.text("leveling.config.description"),
+        help=CMDS.help("leveling.config"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config(self, ctx):
@@ -652,147 +656,173 @@ class Leveling(commands.Cog):
 
     @leveling_config.command(
         name="toggle",
-        description="Enable or disable XP for this server",
-        help="{ 'en': 'Enable or disable XP for this server.', 'de': 'XP für diesen Server aktivieren/deaktivieren.' }"
+        description=CMDS.text("leveling.config.toggle.description"),
+        help=CMDS.help("leveling.config.toggle"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_toggle(self, ctx):
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_enabled"] = not cfg.get("xp_enabled", True)
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        state = f"{get_emoji('tick')} enabled" if cfg["xp_enabled"] else f"{get_emoji('cross')} disabled"
-        await ctx.send(f"XP tracking is now **{state}** for this server.")
+        state = msg(ctx, "cfg_state_enabled" if cfg["xp_enabled"] else "cfg_state_disabled")
+        await ctx.send(msg(ctx, "cfg_toggle_done", state=state))
 
     @leveling_config.command(
         name="multiplier",
         aliases=["xpmultiplier"],
-        description="Set XP gain multiplier",
-        help="{ 'en': 'Set XP gain multiplier (e.g. 2.0).', 'de': 'XP-Verstärkung einstellen (z.B. 2.0).' }"
+        description=CMDS.text("leveling.config.multiplier.description"),
+        help=CMDS.help("leveling.config.multiplier"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_multiplier(self, ctx, value: float = None):
         if value is None or value <= 0:
-            return await ctx.send("Please provide a positive multiplier (e.g. `1.5`).")
+            return await ctx.send(msg(ctx, "cfg_multiplier_invalid"))
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_multiplier"] = round(value, 2)
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        await ctx.send(msg(ctx, "cfg_updated") + f" XP multiplier → `{cfg['xp_multiplier']}x`")
+        await ctx.send(
+            msg(ctx, "cfg_updated")
+            + " "
+            + msg(ctx, "cfg_multiplier", value=cfg["xp_multiplier"])
+        )
 
     @leveling_config.command(
         name="cooldown",
-        description="Set XP cooldown between gains in seconds",
-        help="{ 'en': 'Set XP cooldown between gains in seconds (0 = off).', 'de': 'XP-Cooldown in Sekunden einstellen (0 = aus).' }"
+        description=CMDS.text("leveling.config.cooldown.description"),
+        help=CMDS.help("leveling.config.cooldown"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_cooldown(self, ctx, seconds: int = None):
         if seconds is None or seconds < 0:
-            return await ctx.send("Please provide a non-negative number of seconds.")
+            return await ctx.send(msg(ctx, "cfg_cooldown_invalid"))
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_cooldown"] = seconds
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        status = f"`{seconds}s`" if seconds > 0 else "off"
-        await ctx.send(msg(ctx, "cfg_updated") + f" XP cooldown → {status}")
+        status = f"`{seconds}s`" if seconds > 0 else msg(ctx, "cfg_cooldown_off")
+        await ctx.send(
+            msg(ctx, "cfg_updated") + " " + msg(ctx, "cfg_cooldown", status=status)
+        )
 
     @leveling_config.command(
         name="exclude",
         aliases=["excludechannel", "ignorechannel"],
-        description="Stop a channel from awarding XP",
-        help="{ 'en': 'Stop a channel (text or voice) from awarding XP.', 'de': 'Kanal von XP ausschließen.' }"
+        description=CMDS.text("leveling.config.exclude.description"),
+        help=CMDS.help("leveling.config.exclude"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_exclude(self, ctx, channel: typing.Union[discord.TextChannel, discord.VoiceChannel] = None):
         if channel is None:
-            return await ctx.send("Choose a text or voice channel, e.g. `/leveling config exclude #staff-chat`.")
+            return await ctx.send(msg(ctx, "cfg_exclude_pick"))
         target = channel
         cfg = await self._guild_cfg(ctx.guild.id)
         excluded = set(_channel_id_list(cfg.get("xp_excluded_channels")))
         if target.id in excluded:
-            return await ctx.send(f"{get_emoji('tick')} {target.mention} is already excluded from XP.")
+            return await ctx.send(
+                f"{get_emoji('tick')} " + msg(ctx, "cfg_already_excluded", channel=target.mention)
+            )
         excluded.add(target.id)
         cfg["xp_excluded_channels"] = sorted(excluded)
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        await ctx.send(msg(ctx, "cfg_updated") + f" {target.mention} no longer awards XP.")
+        await ctx.send(
+            msg(ctx, "cfg_updated") + " " + msg(ctx, "cfg_excluded", channel=target.mention)
+        )
 
     @leveling_config.command(
         name="include",
         aliases=["includechannel", "unignorechannel"],
-        description="Let a channel award XP again",
-        help="{ 'en': 'Let an excluded channel award XP again.', 'de': 'Kanal wieder für XP zulassen.' }"
+        description=CMDS.text("leveling.config.include.description"),
+        help=CMDS.help("leveling.config.include"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_include(self, ctx, channel: typing.Union[discord.TextChannel, discord.VoiceChannel] = None):
         if channel is None:
-            return await ctx.send("Choose a text or voice channel, e.g. `/leveling config include #general`.")
+            return await ctx.send(msg(ctx, "cfg_include_pick"))
         target = channel
         cfg = await self._guild_cfg(ctx.guild.id)
         excluded = set(_channel_id_list(cfg.get("xp_excluded_channels")))
         if target.id not in excluded:
-            return await ctx.send(f"{get_emoji('cross')} {target.mention} is not excluded from XP.")
+            return await ctx.send(
+                f"{get_emoji('cross')} " + msg(ctx, "cfg_not_excluded", channel=target.mention)
+            )
         excluded.discard(target.id)
         cfg["xp_excluded_channels"] = sorted(excluded)
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        await ctx.send(msg(ctx, "cfg_updated") + f" {target.mention} awards XP again.")
+        await ctx.send(
+            msg(ctx, "cfg_updated") + " " + msg(ctx, "cfg_included", channel=target.mention)
+        )
 
     @leveling_config.command(
         name="voicexp",
         aliases=["vcxp"],
-        description="Enable or disable passive voice XP",
-        help="{ 'en': 'Toggle passive XP for time spent in voice channels.', 'de': 'Passives XP für Sprachkanäle umschalten.' }"
+        description=CMDS.text("leveling.config.voicexp.description"),
+        help=CMDS.help("leveling.config.voicexp"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_voicexp(self, ctx, enabled: bool = None):
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["xp_vc_enabled"] = (not cfg.get("xp_vc_enabled", False)) if enabled is None else bool(enabled)
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        state = "enabled" if cfg["xp_vc_enabled"] else "disabled"
-        await ctx.send(msg(ctx, "cfg_updated") + f" Voice XP is now **{state}**.")
+        state = msg(ctx, "cfg_voice_enabled" if cfg["xp_vc_enabled"] else "cfg_voice_disabled")
+        await ctx.send(msg(ctx, "cfg_updated") + " " + msg(ctx, "cfg_voicexp", state=state))
 
     @leveling_config.command(
         name="levelupchannel",
         aliases=["luchannel", "channel"],
-        description="Set the level-up announcement channel",
-        help="{ 'en': 'Set the level-up announcement channel.', 'de': 'Level-Up-Benachrichtigungs-Kanal einstellen.' }"
+        description=CMDS.text("leveling.config.levelupchannel.description"),
+        help=CMDS.help("leveling.config.levelupchannel"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_channel(self, ctx, channel: discord.TextChannel = None):
         cfg = await self._guild_cfg(ctx.guild.id)
         cfg["level_up_channel"] = channel.id if channel else None
         await self._save_guild_cfg(ctx.guild.id, cfg)
-        dest = channel.mention if channel else "*(same channel)*"
-        await ctx.send(msg(ctx, "cfg_updated") + f" Level-up channel → {dest}")
+        dest = channel.mention if channel else msg(ctx, "cfg_levelup_same_channel")
+        await ctx.send(
+            msg(ctx, "cfg_updated") + " " + msg(ctx, "cfg_levelup_channel", channel=dest)
+        )
 
     @leveling_config.command(
         name="levelrole",
         aliases=["role"],
-        description="Assign a role when a level is reached",
-        help="{ 'en': 'Assign a role when a level is reached.', 'de': 'Rolle bei Erreichen eines Levels zuweisen.' }"
+        description=CMDS.text("leveling.config.levelrole.description"),
+        help=CMDS.help("leveling.config.levelrole"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_levelrole(self, ctx, level: int = None, role: discord.Role = None):
         if level is None or level < 1:
-            return await ctx.send("Please specify a valid level (e.g. `5`).")
+            return await ctx.send(msg(ctx, "cfg_levelrole_invalid_level"))
         cfg = await self._guild_cfg(ctx.guild.id)
         lr  = cfg.setdefault("level_roles", {})
         if role is None:
             lr.pop(str(level), None)
             await self._save_guild_cfg(ctx.guild.id, cfg)
-            await ctx.send(msg(ctx, "cfg_updated") + f" Removed level role for level {level}.")
+            await ctx.send(
+                msg(ctx, "cfg_updated")
+                + " "
+                + msg(ctx, "cfg_levelrole_removed", level=level)
+            )
         else:
             lr[str(level)] = role.id
             await self._save_guild_cfg(ctx.guild.id, cfg)
-            await ctx.send(msg(ctx, "cfg_updated") + f" Level {level} → {role.mention}")
+            await ctx.send(
+                msg(ctx, "cfg_updated")
+                + " "
+                + msg(ctx, "cfg_levelrole_set", level=level, role=role.mention)
+            )
 
     @leveling_config.command(
         name="resetuser",
-        description="Reset XP and level for a member",
-        help="{ 'en': 'Reset XP and level for a member.', 'de': 'XP und Level eines Mitglieds zurücksetzen.' }"
+        description=CMDS.text("leveling.config.resetuser.description"),
+        help=CMDS.help("leveling.config.resetuser"),
     )
     @commands.has_permissions(manage_guild=True)
     async def leveling_config_resetuser(self, ctx, member: discord.Member = None):
         if not member:
-            return await ctx.send("Please specify a member.")
+            return await ctx.send(msg(ctx, "cfg_reset_member_missing"))
         await self._save_user_data(ctx.guild.id, member.id, 0, 0)
-        await ctx.send(f"{get_emoji('tick')} Reset XP and level for **{member.display_name}**.")
+        await ctx.send(
+            f"{get_emoji('tick')} " + msg(ctx, "cfg_reset_done", name=member.display_name)
+        )
 
 
 async def setup(bot):

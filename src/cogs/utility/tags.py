@@ -22,60 +22,20 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
 from utils.paginator import paginate, PaginatedView
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 DATA_FILE = "data/tags.json"
 MAX_TAGS_PER_GUILD = 500
 MAX_TAG_LEN = 1900
 
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "created":      "✅ Tag **{name}** created.",
-            "edited":       "✅ Tag **{name}** edited.",
-            "deleted":      "✅ Tag **{name}** deleted.",
-            "exists":       "⚠️ A tag named **{name}** already exists.",
-            "missing":      "⚠️ No tag named **{name}** in this server.",
-            "no_perm":      "❌ You can only edit or delete your own tags (unless you have manage_messages).",
-            "list_empty":   "No tags in this server yet.",
-            "list_title":   "### {icon} Tags ({n})",
-            "info":         "### {icon} Tag `{name}`\n**Owner:** {owner}\n**Uses:** {uses}\n**Created:** <t:{created}:R>",
-            "raw_title":    "### Raw `{name}`",
-            "limit_hit":    "⚠️ This server already has {max} tags — delete some before creating more.",
-            "too_long":     "⚠️ Tag content must be ≤ {n} characters.",
-        },
-        "de": {
-            "created":      "✅ Tag **{name}** erstellt.",
-            "edited":       "✅ Tag **{name}** bearbeitet.",
-            "deleted":      "✅ Tag **{name}** gelöscht.",
-            "exists":       "⚠️ Ein Tag namens **{name}** existiert bereits.",
-            "missing":      "⚠️ Kein Tag namens **{name}** auf diesem Server.",
-            "no_perm":      "❌ Du kannst nur eigene Tags bearbeiten oder löschen (außer du hast manage_messages).",
-            "list_empty":   "Noch keine Tags auf diesem Server.",
-            "list_title":   "### {icon} Tags ({n})",
-            "info":         "### {icon} Tag `{name}`\n**Besitzer:** {owner}\n**Benutzungen:** {uses}\n**Erstellt:** <t:{created}:R>",
-            "raw_title":    "### Roh `{name}`",
-            "limit_hit":    "⚠️ Dieser Server hat bereits {max} Tags — lösche einige, bevor du neue erstellst.",
-            "too_long":     "⚠️ Tag-Inhalt muss ≤ {n} Zeichen sein.",
-        },
-        "es": {
-            "created":      "✅ Tag **{name}** creado.",
-            "edited":       "✅ Tag **{name}** editado.",
-            "deleted":      "✅ Tag **{name}** eliminado.",
-            "exists":       "⚠️ Ya existe un tag llamado **{name}**.",
-            "missing":      "⚠️ No hay un tag llamado **{name}** en este servidor.",
-            "no_perm":      "❌ Solo puedes editar o eliminar tus propios tags (a menos que tengas manage_messages).",
-            "list_empty":   "Aún no hay tags en este servidor.",
-            "list_title":   "### {icon} Tags ({n})",
-            "info":         "### {icon} Tag `{name}`\n**Dueño:** {owner}\n**Usos:** {uses}\n**Creado:** <t:{created}:R>",
-            "raw_title":    "### Raw `{name}`",
-            "limit_hit":    "⚠️ Este servidor ya tiene {max} tags — elimina algunos antes de crear más.",
-            "too_long":     "⚠️ El contenido del tag debe ser ≤ {n} caracteres.",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.utility", "tags")
 
 
 def _lang(ctx) -> str:
@@ -86,7 +46,7 @@ def _lang(ctx) -> str:
     return "en"
 
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 def cv2(text: str) -> discord.ui.LayoutView:
@@ -131,8 +91,8 @@ class Tags(commands.Cog):
 
     @commands.hybrid_group(
         name="tag",
-        description="Server tag system.",
-        help="{ 'en': 'Server tag system: create, edit, delete, list, show.', 'de': 'Server-Tag-System: erstellen, bearbeiten, löschen, anzeigen.', 'es': 'Sistema de tags del servidor: crear, editar, eliminar, listar, mostrar.' }",
+        description=CMDS.text("tag.description"),
+        help=CMDS.help("tag"),
         invoke_without_command=True,
     )
     @commands.guild_only()
@@ -146,8 +106,8 @@ class Tags(commands.Cog):
 
     @tag.command(
         name="show",
-        description="Show a tag's content.",
-        help="{ 'en': 'Show a tag.', 'de': 'Einen Tag anzeigen.', 'es': 'Muestra un tag.' }",
+        description=CMDS.text("tag.show.description"),
+        help=CMDS.help("tag.show"),
     )
     async def tag_show(self, ctx: commands.Context, *, name: str):
         await self._show(ctx, name)
@@ -163,8 +123,8 @@ class Tags(commands.Cog):
 
     @tag.command(
         name="create",
-        description="Create a new tag.",
-        help="{ 'en': 'Create a new tag.', 'de': 'Einen neuen Tag erstellen.', 'es': 'Crea un nuevo tag.' }",
+        description=CMDS.text("tag.create.description"),
+        help=CMDS.help("tag.create"),
     )
     async def tag_create(self, ctx: commands.Context, name: str, *, content: str):
         tags = self._gtags(ctx.guild.id)
@@ -187,8 +147,8 @@ class Tags(commands.Cog):
 
     @tag.command(
         name="edit",
-        description="Edit a tag you own.",
-        help="{ 'en': 'Edit a tag you own.', 'de': 'Einen eigenen Tag bearbeiten.', 'es': 'Edita un tag que te pertenece.' }",
+        description=CMDS.text("tag.edit.description"),
+        help=CMDS.help("tag.edit"),
     )
     async def tag_edit(self, ctx: commands.Context, name: str, *, content: str):
         tags = self._gtags(ctx.guild.id)
@@ -205,8 +165,8 @@ class Tags(commands.Cog):
 
     @tag.command(
         name="delete",
-        description="Delete a tag.",
-        help="{ 'en': 'Delete a tag you own.', 'de': 'Einen eigenen Tag löschen.', 'es': 'Elimina un tag que te pertenece.' }",
+        description=CMDS.text("tag.delete.description"),
+        help=CMDS.help("tag.delete"),
     )
     async def tag_delete(self, ctx: commands.Context, *, name: str):
         tags = self._gtags(ctx.guild.id)
@@ -221,8 +181,8 @@ class Tags(commands.Cog):
 
     @tag.command(
         name="list",
-        description="List all tags in this server.",
-        help="{ 'en': 'List all tags in this server.', 'de': 'Alle Tags auf diesem Server anzeigen.', 'es': 'Lista todos los tags de este servidor.' }",
+        description=CMDS.text("tag.list.description"),
+        help=CMDS.help("tag.list"),
     )
     async def tag_list(self, ctx: commands.Context):
         tags = self._gtags(ctx.guild.id)
@@ -243,8 +203,8 @@ class Tags(commands.Cog):
 
     @tag.command(
         name="info",
-        description="Show metadata about a tag.",
-        help="{ 'en': 'Show metadata about a tag.', 'de': 'Metadaten zu einem Tag anzeigen.', 'es': 'Muestra metadatos de un tag.' }",
+        description=CMDS.text("tag.info.description"),
+        help=CMDS.help("tag.info"),
     )
     async def tag_info(self, ctx: commands.Context, *, name: str):
         tags = self._gtags(ctx.guild.id)
@@ -260,8 +220,8 @@ class Tags(commands.Cog):
 
     @tag.command(
         name="raw",
-        description="Show the raw markdown of a tag.",
-        help="{ 'en': 'Show the raw markdown of a tag.', 'de': 'Roh-Markdown eines Tags anzeigen.', 'es': 'Muestra el markdown crudo de un tag.' }",
+        description=CMDS.text("tag.raw.description"),
+        help=CMDS.help("tag.raw"),
     )
     async def tag_raw(self, ctx: commands.Context, *, name: str):
         tags = self._gtags(ctx.guild.id)

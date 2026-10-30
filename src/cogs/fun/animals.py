@@ -3,35 +3,19 @@ import asyncio
 import requests
 import discord
 import random
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 # -----------------------------
 # MESSAGE DICTIONARY
 # -----------------------------
-MESSAGES = {
-    "normal": {
-        "en": {
-            "fetch_fail": "Couldn't fetch a cute animal right now.",
-            "sending_random": "Here's a random {animal}:",
-            "sending_cat": "Here's a cat:",
-            "sending_dog": "Here's a dog:",
-        },
-        "de": {
-            "fetch_fail": "Konnte gerade kein süßes Tier abrufen.",
-            "sending_random": "Hier ist ein zufälliges {animal}:",
-            "sending_cat": "Hier ist eine Katze:",
-            "sending_dog": "Hier ist ein Hund:",
-        },
-        "es": {
-            "fetch_fail": "No pude traer un animalito ahora mismo.",
-            "sending_random": "Aquí tienes un {animal} aleatorio:",
-            "sending_cat": "Aquí tienes un gato:",
-            "sending_dog": "Aquí tienes un perro:",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.fun", "animals")
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 # -----------------------------
@@ -83,7 +67,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cuteanimal",
-        help="{ 'en': 'get a random animal pic', 'de': 'zeigt ein zufälliges süßes tier' }"
+        help=CMDS.help("cuteanimal"),
     )
     async def cuteanimal(self, ctx):
         """Sends a random cute animal image."""
@@ -121,7 +105,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="cat",
-        help="{ 'en': 'get a kitty pic', 'de': 'zeigt ein süßes kätzchen' }"
+        help=CMDS.help("cat"),
     )
     async def cat(self, ctx):
         """Sends a random cat image."""
@@ -148,7 +132,7 @@ class CuteAnimals(commands.Cog):
     # -----------------------------
     @commands.command(
         name="dog",
-        help="{ 'en': 'get a dog pic', 'de': 'zeigt einen süßen hund' }"
+        help=CMDS.help("dog"),
     )
     async def dog(self, ctx):
         """Sends a random dog image."""

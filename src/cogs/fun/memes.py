@@ -2,32 +2,19 @@ import discord
 from discord.ext import commands
 import aiohttp
 import random
-from utils.i18n import make_msg
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 # -----------------------------
 # MESSAGE DICTIONARY
 # -----------------------------
-MESSAGES = {
-    "normal": {
-        "en": {
-            "fetch_fail": "Couldn't fetch memes right now.",
-            "no_safe_memes": "No safe memes available right now.",
-            "meme_title_prefix": "",
-        },
-        "de": {
-            "fetch_fail": "Konnte gerade keine Memes abrufen.",
-            "no_safe_memes": "Keine sicheren Memes verfügbar.",
-            "meme_title_prefix": "",
-        },
-        "es": {
-            "fetch_fail": "No pude traer memes ahora mismo.",
-            "no_safe_memes": "No hay memes seguros disponibles ahora mismo.",
-            "meme_title_prefix": "",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.fun", "memes")
 
-msg = make_msg(MESSAGES)
+msg = make_flat_msg(MESSAGES)
 
 
 # -----------------------------
@@ -41,7 +28,7 @@ class Meme(commands.Cog):
 
     @commands.command(
         name="meme",
-        help="{ 'en': 'get a random meme', 'de': 'holt ein zufälliges meme' }"
+        help=CMDS.help("meme"),
     )
     async def meme(self, ctx):
         """Fetch a random meme using meme-api.com"""

@@ -1,6 +1,12 @@
 import os
 import time
+from types import SimpleNamespace
+
 from .views import *
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
 
 class Tickets(commands.Cog):
     """Premium ticket system."""
@@ -12,8 +18,8 @@ class Tickets(commands.Cog):
 
     @commands.hybrid_group(
         name="ticket",
-        description="Ticket system commands.",
-        help="{ 'en': 'Ticket system commands.', 'de': 'Ticketsystem-Befehle.', 'es': 'Comandos del sistema de tickets.' }",
+        description=CMDS.text("ticket.description"),
+        help=CMDS.help("ticket"),
         invoke_without_command=True,
     )
     async def ticket(self, ctx: commands.Context):
@@ -23,8 +29,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="setup",
-        description="Open the ticket-system setup panel.",
-        help="{ 'en': 'Open the ticket-system setup panel (admin).', 'de': 'Setup-Panel des Ticketsystems öffnen (Admin).', 'es': 'Abre el panel de configuración del sistema de tickets (admin).' }",
+        description=CMDS.text("ticket.setup.description"),
+        help=CMDS.help("ticket.setup"),
     )
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
@@ -36,8 +42,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="panel",
-        description="Post the public ticket panel in this channel.",
-        help="{ 'en': 'Post the ticket panel in this channel (admin).', 'de': 'Ticket-Panel in diesem Kanal posten (Admin).', 'es': 'Publica el panel de tickets en este canal (admin).' }",
+        description=CMDS.text("ticket.panel.description"),
+        help=CMDS.help("ticket.panel"),
     )
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
@@ -54,8 +60,8 @@ class Tickets(commands.Cog):
 
     @ticket.group(
         name="category",
-        description="Manage ticket categories.",
-        help="{ 'en': 'Manage ticket categories (add/remove/list).', 'de': 'Ticket-Kategorien verwalten.', 'es': 'Gestiona las categorías de tickets.' }",
+        description=CMDS.text("ticket.category.description"),
+        help=CMDS.help("ticket.category"),
         invoke_without_command=True,
     )
     @commands.has_permissions(administrator=True)
@@ -65,8 +71,8 @@ class Tickets(commands.Cog):
 
     @ticket_category.command(
         name="add",
-        description="Add a ticket category.",
-        help="{ 'en': 'Add a ticket category.', 'de': 'Eine Ticket-Kategorie hinzufügen.', 'es': 'Añade una categoría de tickets.' }",
+        description=CMDS.text("ticket.category.add.description"),
+        help=CMDS.help("ticket.category.add"),
     )
     async def ticket_category_add(self, ctx: commands.Context, *, name: str):
         cfg = get_ticket_config(ctx.guild.id)
@@ -79,8 +85,8 @@ class Tickets(commands.Cog):
 
     @ticket_category.command(
         name="remove",
-        description="Remove a ticket category.",
-        help="{ 'en': 'Remove a ticket category.', 'de': 'Eine Ticket-Kategorie entfernen.', 'es': 'Elimina una categoría de tickets.' }",
+        description=CMDS.text("ticket.category.remove.description"),
+        help=CMDS.help("ticket.category.remove"),
     )
     async def ticket_category_remove(self, ctx: commands.Context, *, name: str):
         cfg = get_ticket_config(ctx.guild.id)
@@ -93,8 +99,8 @@ class Tickets(commands.Cog):
 
     @ticket_category.command(
         name="list",
-        description="List all ticket categories.",
-        help="{ 'en': 'List all ticket categories.', 'de': 'Alle Ticket-Kategorien anzeigen.', 'es': 'Lista todas las categorías de tickets.' }",
+        description=CMDS.text("ticket.category.list.description"),
+        help=CMDS.help("ticket.category.list"),
     )
     async def ticket_category_list(self, ctx: commands.Context):
         cfg = get_ticket_config(ctx.guild.id)
@@ -107,8 +113,8 @@ class Tickets(commands.Cog):
 
     @ticket.group(
         name="support",
-        description="Manage support roles.",
-        help="{ 'en': 'Manage support roles (add/remove/list).', 'de': 'Support-Rollen verwalten.', 'es': 'Gestiona los roles de soporte.' }",
+        description=CMDS.text("ticket.support.description"),
+        help=CMDS.help("ticket.support"),
         invoke_without_command=True,
     )
     @commands.has_permissions(administrator=True)
@@ -118,8 +124,8 @@ class Tickets(commands.Cog):
 
     @ticket_support.command(
         name="add",
-        description="Add a support role.",
-        help="{ 'en': 'Add a support role.', 'de': 'Eine Support-Rolle hinzufügen.', 'es': 'Añade un rol de soporte.' }",
+        description=CMDS.text("ticket.support.add.description"),
+        help=CMDS.help("ticket.support.add"),
     )
     async def ticket_support_add(self, ctx: commands.Context, role: discord.Role):
         cfg = get_ticket_config(ctx.guild.id)
@@ -131,8 +137,8 @@ class Tickets(commands.Cog):
 
     @ticket_support.command(
         name="remove",
-        description="Remove a support role.",
-        help="{ 'en': 'Remove a support role.', 'de': 'Eine Support-Rolle entfernen.', 'es': 'Elimina un rol de soporte.' }",
+        description=CMDS.text("ticket.support.remove.description"),
+        help=CMDS.help("ticket.support.remove"),
     )
     async def ticket_support_remove(self, ctx: commands.Context, role: discord.Role):
         cfg = get_ticket_config(ctx.guild.id)
@@ -144,8 +150,8 @@ class Tickets(commands.Cog):
 
     @ticket_support.command(
         name="list",
-        description="List support roles.",
-        help="{ 'en': 'List support roles.', 'de': 'Support-Rollen anzeigen.', 'es': 'Lista los roles de soporte.' }",
+        description=CMDS.text("ticket.support.list.description"),
+        help=CMDS.help("ticket.support.list"),
     )
     async def ticket_support_list(self, ctx: commands.Context):
         cfg = get_ticket_config(ctx.guild.id)
@@ -161,8 +167,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="add",
-        description="Add a user to this ticket.",
-        help="{ 'en': 'Add a user to this ticket (in-ticket).', 'de': 'Einen Nutzer zu diesem Ticket hinzufügen (im Ticket).', 'es': 'Añade un usuario a este ticket (dentro del ticket).' }",
+        description=CMDS.text("ticket.add.description"),
+        help=CMDS.help("ticket.add"),
     )
     @commands.guild_only()
     async def ticket_add(self, ctx: commands.Context, user: discord.Member):
@@ -185,8 +191,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="remove",
-        description="Remove a user from this ticket.",
-        help="{ 'en': 'Remove a user from this ticket (in-ticket).', 'de': 'Einen Nutzer aus diesem Ticket entfernen (im Ticket).', 'es': 'Elimina un usuario de este ticket (dentro del ticket).' }",
+        description=CMDS.text("ticket.remove.description"),
+        help=CMDS.help("ticket.remove"),
     )
     @commands.guild_only()
     async def ticket_remove(self, ctx: commands.Context, user: discord.Member):
@@ -205,8 +211,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="rename",
-        description="Rename this ticket channel.",
-        help="{ 'en': 'Rename this ticket (in-ticket).', 'de': 'Dieses Ticket umbenennen (im Ticket).', 'es': 'Renombra este ticket (dentro del ticket).' }",
+        description=CMDS.text("ticket.rename.description"),
+        help=CMDS.help("ticket.rename"),
     )
     @commands.guild_only()
     async def ticket_rename(self, ctx: commands.Context, *, name: str):
@@ -225,8 +231,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="claim",
-        description="Claim this ticket as a support member.",
-        help="{ 'en': 'Claim this ticket as a support member (in-ticket).', 'de': 'Dieses Ticket als Support-Mitglied beanspruchen (im Ticket).', 'es': 'Reclama este ticket como miembro del soporte (dentro del ticket).' }",
+        description=CMDS.text("ticket.claim.description"),
+        help=CMDS.help("ticket.claim"),
     )
     @commands.guild_only()
     async def ticket_claim(self, ctx: commands.Context):
@@ -250,8 +256,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="transcript",
-        description="Generate a web transcript of this ticket.",
-        help="{ 'en': 'Generate a web transcript of this ticket with download options (in-ticket).', 'de': 'Ein Web-Protokoll dieses Tickets erstellen (im Ticket).', 'es': 'Genera una transcripción web de este ticket (dentro del ticket).' }",
+        description=CMDS.text("ticket.transcript.description"),
+        help=CMDS.help("ticket.transcript"),
     )
     @commands.guild_only()
     async def ticket_transcript(self, ctx: commands.Context):
@@ -389,7 +395,7 @@ class Tickets(commands.Cog):
         if web_url:
             container.add_item(discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="View Transcript",
+                    label=_local_msg(ctx, "view_transcript_button"),
                     style=discord.ButtonStyle.link,
                     url=web_url,
                 ),
@@ -401,8 +407,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="close",
-        description="Soft-close this ticket (locks the channel).",
-        help="{ 'en': 'Soft-close (lock) this ticket (in-ticket).', 'de': 'Dieses Ticket weich schließen / sperren (im Ticket).', 'es': 'Cierra suavemente (bloquea) este ticket (dentro del ticket).' }",
+        description=CMDS.text("ticket.close.description"),
+        help=CMDS.help("ticket.close"),
     )
     @commands.guild_only()
     async def ticket_close(self, ctx: commands.Context):
@@ -443,8 +449,8 @@ class Tickets(commands.Cog):
 
     @ticket.command(
         name="delete",
-        description="Delete this ticket channel.",
-        help="{ 'en': 'Delete this ticket channel (in-ticket).', 'de': 'Diesen Ticket-Kanal löschen (im Ticket).', 'es': 'Elimina este canal de ticket (dentro del ticket).' }",
+        description=CMDS.text("ticket.delete.description"),
+        help=CMDS.help("ticket.delete"),
     )
     @commands.guild_only()
     async def ticket_delete(self, ctx: commands.Context, seconds: int = 5):
@@ -497,26 +503,33 @@ def _local_msg(ctx_or_int, key: str, **kwargs) -> str:
 # ───────────────────────────────────────────────────
 
 class _ConfigurePanelBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author_id: int):
-        super().__init__(label="Configure Panel", style=discord.ButtonStyle.primary)
+    def __init__(self, guild_id: int, author_id: int, ctx=None):
+        super().__init__(
+            label=_local_msg(ctx, "configure_panel_button"),
+            style=discord.ButtonStyle.primary)
         self.guild_id = guild_id
         self.author_id = author_id
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.author_id:
-            return await interaction.response.send_message("This panel isn't yours to use.", ephemeral=True)
-        await interaction.response.send_modal(TicketPanelModal(self.guild_id))
+            return await interaction.response.send_message(
+                msg(interaction, "panel_not_yours"), ephemeral=True)
+        await interaction.response.send_modal(
+            TicketPanelModal(self.guild_id, interaction))
 
 
 class _PostPanelBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author_id: int):
-        super().__init__(label="Post Panel Here", style=discord.ButtonStyle.success)
+    def __init__(self, guild_id: int, author_id: int, ctx=None):
+        super().__init__(
+            label=_local_msg(ctx, "post_panel_button"),
+            style=discord.ButtonStyle.success)
         self.guild_id = guild_id
         self.author_id = author_id
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.author_id:
-            return await interaction.response.send_message("This panel isn't yours to use.", ephemeral=True)
+            return await interaction.response.send_message(
+                msg(interaction, "panel_not_yours"), ephemeral=True)
         cfg = get_ticket_config(self.guild_id)
         view = TicketPanelView(self.guild_id, cfg)
         sent = await interaction.channel.send(view=view)
@@ -532,18 +545,22 @@ class _PostPanelBtn(discord.ui.Button):
 class TicketSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, lang: str = "en"):
         super().__init__(timeout=None)
-        title = MESSAGES["normal"].get(lang, {}).get("setup_title") \
-                or MESSAGES["normal"]["en"]["setup_title"]
-        desc = MESSAGES["normal"].get(lang, {}).get("setup_desc") \
-                or MESSAGES["normal"]["en"]["setup_desc"]
+        title = MESSAGES.get(lang, {}).get("setup_title") \
+                or MESSAGES["en"]["setup_title"]
+        desc = MESSAGES.get(lang, {}).get("setup_desc") \
+                or MESSAGES["en"]["setup_desc"]
+        # The panel is stored with a language code rather than a guild, so the
+        # buttons are given the same one through a minimal locale context.
+        locale_ctx = SimpleNamespace(
+            guild=SimpleNamespace(preferred_locale=lang))
         container = discord.ui.Container(
             discord.ui.TextDisplay(content=title.format(icon=get_emoji("ticket"))),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=desc),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                _ConfigurePanelBtn(guild_id, author.id),
-                _PostPanelBtn(guild_id, author.id),
+                _ConfigurePanelBtn(guild_id, author.id, locale_ctx),
+                _PostPanelBtn(guild_id, author.id, locale_ctx),
             ),
         )
         self.add_item(container)

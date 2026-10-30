@@ -22,16 +22,24 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 
+from utils.command_locales import command_texts
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+CMDS = command_texts(__package__)
+MESSAGES = load_locales(__package__, "misc")
+msg = make_flat_msg(MESSAGES)
+
 MAX_CONTENT_LEN = 1000
 MAX_STICKIES_PER_GUILD = 50
 REPOST_DELAY = 3.0  # seconds — debounce window so bursts only trigger one repost
 DEFAULT_COLOR = 0x5865F2
 
 
-def _sticky_view(content: str, color: int) -> discord.ui.LayoutView:
+def _sticky_view(content: str, color: int, locale=None) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=f"## 📌 Sticky Message"),
+        discord.ui.TextDisplay(content=msg(locale, "sticky_title")),
         discord.ui.Separator(),
         discord.ui.TextDisplay(content=f"{content}"),
         accent_colour=discord.Colour(color),
@@ -79,7 +87,7 @@ class StickyCog(commands.Cog, name="Sticky"):
 
     @commands.hybrid_group(
         name="sticky",
-        description="Create and manage sticky messages for this server.",
+        description=CMDS.text("sticky.description"),
         invoke_without_command=True,
     )
     @commands.guild_only()
@@ -87,22 +95,19 @@ class StickyCog(commands.Cog, name="Sticky"):
         prefix = ctx.prefix or "."
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### 📌 Sticky Messages"),
+            discord.ui.TextDisplay(content=msg(ctx, "sticky_help_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    "Sticky messages stay pinned to the bottom of a channel. I repost them "
-                    "after new messages, including Niko's starboard, level-up, and suggestion "
-                    "posts in their configured channels.\n\n"
-                    f"**`{prefix}sticky set <message>`** — create or update the sticky message here\n"
-                    f"**`{prefix}sticky remove`** — remove the sticky message from this channel\n"
-                    f"**`{prefix}sticky list`** — list every sticky message in this server"
-                )
+                content=msg(ctx, "sticky_help_body", prefix=prefix)
             ),
         ))
         await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
-    @sticky.command(name="set", description="Create or update the sticky message for this channel.")
+    @sticky.command(
+        name="set",
+        description=CMDS.text("sticky.set.description"),
+        help=CMDS.help("sticky.set"),
+    )
     @commands.has_permissions(manage_messages=True)
     @commands.guild_only()
     async def sticky_set(self, ctx: commands.Context, *, message: str):
@@ -110,10 +115,15 @@ class StickyCog(commands.Cog, name="Sticky"):
         ephemeral = bool(ctx.interaction)
 
         if not message:
-            return await ctx.send(view=_feedback("Please provide the message to stick.", ok=False), ephemeral=ephemeral)
+            return await ctx.send(
+                view=_feedback(msg(ctx, "sticky_set_missing"), ok=False),
+                ephemeral=ephemeral,
+            )
         if len(message) > MAX_CONTENT_LEN:
             return await ctx.send(
-                view=_feedback(f"Sticky messages can be at most {MAX_CONTENT_LEN} characters.", ok=False),
+                view=_feedback(
+                    msg(ctx, "sticky_too_long", max=MAX_CONTENT_LEN), ok=False
+                ),
                 ephemeral=ephemeral,
             )
 
@@ -122,7 +132,9 @@ class StickyCog(commands.Cog, name="Sticky"):
             count = await self._get_count(ctx.guild.id)
             if count >= MAX_STICKIES_PER_GUILD:
                 return await ctx.send(
-                    view=_feedback(f"This server already has the maximum of {MAX_STICKIES_PER_GUILD} sticky messages.", ok=False),
+                    view=_feedback(
+                        msg(ctx, "sticky_max", max=MAX_STICKIES_PER_GUILD), ok=False
+                    ),
                     ephemeral=ephemeral,
                 )
 
@@ -139,11 +151,11 @@ class StickyCog(commands.Cog, name="Sticky"):
         color = existing.get("color") if existing else DEFAULT_COLOR
 
         try:
-            posted = await ctx.channel.send(view=_sticky_view(message, color))
+            posted = await ctx.channel.send(view=_sticky_view(message, color, ctx))
             self._own_sticky_ids.add(posted.id)
         except discord.Forbidden:
             return await ctx.send(
-                view=_feedback("I don't have permission to send messages in this channel.", ok=False),
+                view=_feedback(msg(ctx, "sticky_no_permission"), ok=False),
                 ephemeral=ephemeral,
             )
 
@@ -160,11 +172,18 @@ class StickyCog(commands.Cog, name="Sticky"):
             )
 
         await ctx.send(
-            view=_feedback("Sticky message set." if existing is None else "Sticky message updated."),
+            view=_feedback(
+                msg(ctx, "sticky_set" if existing is None else "sticky_updated")
+            ),
             ephemeral=ephemeral,
         )
 
-    @sticky.command(name="remove", aliases=["clear", "delete"], description="Remove the sticky message from this channel.")
+    @sticky.command(
+        name="remove",
+        aliases=["clear", "delete"],
+        description=CMDS.text("sticky.remove.description"),
+        help=CMDS.help("sticky.remove"),
+    )
     @commands.has_permissions(manage_messages=True)
     @commands.guild_only()
     async def sticky_remove(self, ctx: commands.Context):
@@ -172,7 +191,7 @@ class StickyCog(commands.Cog, name="Sticky"):
         entry = await self._get(ctx.guild.id, ctx.channel.id)
         if entry is None:
             return await ctx.send(
-                view=_feedback("This channel doesn't have a sticky message.", ok=False),
+                view=_feedback(msg(ctx, "sticky_none_here"), ok=False),
                 ephemeral=ephemeral,
             )
 
@@ -189,9 +208,13 @@ class StickyCog(commands.Cog, name="Sticky"):
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 pass
 
-        await ctx.send(view=_feedback("Sticky message removed."), ephemeral=ephemeral)
+        await ctx.send(view=_feedback(msg(ctx, "sticky_removed")), ephemeral=ephemeral)
 
-    @sticky.command(name="list", description="List every sticky message in this server.")
+    @sticky.command(
+        name="list",
+        description=CMDS.text("sticky.list.description"),
+        help=CMDS.help("sticky.list"),
+    )
     @commands.has_permissions(manage_messages=True)
     @commands.guild_only()
     async def sticky_list(self, ctx: commands.Context):
@@ -202,7 +225,7 @@ class StickyCog(commands.Cog, name="Sticky"):
         )
         if not rows:
             return await ctx.send(
-                view=_feedback("This server has no sticky messages yet.", ok=False),
+                view=_feedback(msg(ctx, "sticky_none_yet"), ok=False),
                 ephemeral=ephemeral,
             )
 
@@ -214,7 +237,7 @@ class StickyCog(commands.Cog, name="Sticky"):
 
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### 📌 Sticky Messages ({len(rows)})"),
+            discord.ui.TextDisplay(content=msg(ctx, "sticky_list_title", count=len(rows))),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content="\n".join(lines)),
         ))
@@ -314,7 +337,11 @@ class StickyCog(commands.Cog, name="Sticky"):
                     pass
 
             try:
-                posted = await channel.send(view=_sticky_view(entry["content"], entry.get("color", DEFAULT_COLOR)))
+                posted = await channel.send(view=_sticky_view(
+                    entry["content"],
+                    entry.get("color", DEFAULT_COLOR),
+                    getattr(channel, "guild", None),
+                ))
                 self._own_sticky_ids.add(posted.id)
             except (discord.Forbidden, discord.HTTPException):
                 return

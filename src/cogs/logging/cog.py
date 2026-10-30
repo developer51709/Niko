@@ -4,6 +4,8 @@ import re
 import time
 
 import database
+from utils.command_locales import command_texts
+
 from .formatters import *
 from .revert import (
     channel_snapshot,
@@ -14,6 +16,8 @@ from .revert import (
     save_snapshot,
 )
 
+
+CMDS = command_texts(__package__)
 
 LOG_WEBHOOK_NAME = "Niko | Server Logs"
 
@@ -514,6 +518,7 @@ class ServerLogger(commands.Cog):
             action_key=action_key or title,
             channel_id=channel_id,
             thumbnail_url=thumbnail_url,
+            lang=_panel_lang(guild),
         )
         try:
             await log_channel_limiter.acquire((guild.id, pending.channel_id))
@@ -586,6 +591,7 @@ class ServerLogger(commands.Cog):
             files=files,
             file_components=file_components,
             revert=revert,
+            lang=_panel_lang(guild),
         )
         try:
             await log_channel_limiter.acquire((guild.id, getattr(channel, "id", 0)))
@@ -730,8 +736,16 @@ class ServerLogger(commands.Cog):
         description: str,
         target: discord.Member | discord.User | None = None,
         moderator: discord.Member | None = None,
+        display_title: str | None = None,
     ):
-        """Drop-in replacement for the old ModerationUtils.log_action."""
+        """Drop-in replacement for the old ModerationUtils.log_action.
+
+        ``title`` stays the entry's internal key: it decides which category
+        channel the entry goes to and what the revert buttons match on, so a
+        translated server keeps English routing. ``display_title`` is the
+        wording the channel actually reads; omit it and the key is shown, as
+        before.
+        """
         # Determine category from title
         category = _TITLE_CATEGORY.get(title)
         if not category:
@@ -745,7 +759,10 @@ class ServerLogger(commands.Cog):
             body += f"\n**Moderator:** {moderator.mention}"
 
         target_id = target.id if target else None
-        await self.log_event(guild, category, title, body, target_id=target_id, action_key=title)
+        await self.log_event(
+            guild, category, display_title or title, body,
+            target_id=target_id, action_key=title,
+        )
 
     # ── Gateway event listeners ───────────────────
 
@@ -2015,7 +2032,7 @@ class ServerLogger(commands.Cog):
 
     # ── Commands ──────────────────────────────────
 
-    @commands.group(name="logging", invoke_without_command=True)
+    @commands.group(name="logging", invoke_without_command=True, help=CMDS.help("logging"))
     @commands.has_permissions(manage_guild=True)
     async def logging_cmd(self, ctx: commands.Context):
         """Open the server logging configuration panel."""
@@ -2024,7 +2041,7 @@ class ServerLogger(commands.Cog):
             view=LoggingSetupView(ctx.guild.id, ctx.author, data=await _load_log_config())
         )
 
-    @logging_cmd.command(name="status")
+    @logging_cmd.command(name="status", help=CMDS.help("logging.status"))
     @commands.has_permissions(manage_guild=True)
     async def logging_status(self, ctx: commands.Context):
         """Show the current logging configuration."""

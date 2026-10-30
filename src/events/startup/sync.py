@@ -18,6 +18,7 @@ import json
 import os
 
 from utils import logging
+from utils.command_localization import apply_command_localizations
 from utils.emoji_sync import sync_application_emojis
 
 _FINGERPRINT_KEY = "slash_command_fingerprint"
@@ -34,7 +35,13 @@ def _command_to_dict(command, tree):
 
 
 def _command_fingerprint(bot) -> str:
-    """Deterministic hash of the current global application-command tree."""
+    """Deterministic hash of the current global application-command tree.
+
+    :func:`apply_command_localizations` runs first, so the serialized payload
+    includes the German and Spanish wording: editing a ``locales/*.json`` string
+    then changes the fingerprint and triggers a sync even though no command was
+    added or removed.
+    """
     payload = [
         _command_to_dict(command, bot.tree)
         for command in sorted(bot.tree.get_commands(), key=lambda command: command.name)
@@ -101,6 +108,8 @@ async def _db_store_fingerprint(bot, fingerprint: str) -> None:
 
 
 async def run_slash_sync(bot):
+    # Translations must be attached before the tree is hashed and sent.
+    apply_command_localizations(bot.tree)
     fingerprint = _command_fingerprint(bot)
     command_count = len(bot.tree.get_commands())
     try:

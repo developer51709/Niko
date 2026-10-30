@@ -29,8 +29,37 @@ from utils.verification import service as verification_service
 from utils.verification import store as verification_store
 from utils.ratelimit import role_assign_limiter, welcome_limiter
 from utils.prefix_manager import resolve_prefix
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from config.emojis import get_emoji
 from config import links
+
+MESSAGES = load_locales(__package__, "views")
+_MSG = make_flat_msg(MESSAGES, {
+    "tick": get_emoji("tick"),
+    "cross": get_emoji("cross"),
+})
+
+
+def _t(locale, key: str, **kwargs) -> str:
+    """Translated string for a context, interaction or guild (``None`` = en)."""
+    return _MSG(locale, key, **kwargs)
+
+
+def _menu_type_label(locale, key: str) -> str:
+    """A role-menu type's display name ("Dropdown — Multiple Roles")."""
+    return _t(locale, f"menu_type_{key}")
+
+
+def _mode_label(locale, mode: str) -> str:
+    """A verification mode's display name."""
+    return _t(locale, f"mode_{mode}_label")
+
+
+def _mode_description(locale, mode: str) -> str:
+    """One sentence on what pressing Verify does in this mode."""
+    return _t(locale, f"mode_{mode}_description")
+
 
 _pending_verifications: dict[int, dict] = {}
 
@@ -78,7 +107,7 @@ async def check_author(interaction: discord.Interaction, author: discord.abc.Use
     """Ensure only the person who ran the setup command can use its components."""
     if interaction.user != author:
         await interaction.response.send_message(
-            view=feedback_view("This button can only be used by the person that triggered the command.", ok=False),
+            view=feedback_view(_t(interaction, "not_allowed"), ok=False),
             ephemeral=True,
         )
         return False
@@ -107,31 +136,34 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
 # -------------------- MODALS --------------------
 
 class WelcomeMessageModal(Modal, title="Set Welcome Message"):
-    def __init__(self, guild_id: int, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, cfg: OnboardingConfig, locale=None):
         super().__init__()
+        # A modal's title is class-level on Modal, so it is set per instance to
+        # follow the guild's language.
+        self.title = _t(locale, "welcome_modal_title")
         self.guild_id = guild_id
 
         self.title_input = TextInput(
-            label="Title", 
+            label=_t(locale, "field_title"),
             required=False,
             default=cfg.welcome_title or None
         )
         self.desc_input = TextInput(
-            label="Description",
+            label=_t(locale, "field_description"),
             style=discord.TextStyle.long,
-            placeholder="Use {user} for mention, {name} for username, {guild} for the server.",
+            placeholder=_t(locale, "field_description_hint"),
             required=False,
             default=cfg.welcome_description or None
         )
         self.image_input = TextInput(
-            label="Image URL", 
+            label=_t(locale, "field_image_url"),
             required=False,
             default=cfg.welcome_image or None
         )
         self.color_input = TextInput(
-            label="Color (hex)",
+            label=_t(locale, "field_color"),
             required=False,
-            placeholder="RRGGBB or #RRGGBB",
+            placeholder=_t(locale, "field_color_hint"),
             default=format_hex_color(cfg.welcome_color),
         )
 
@@ -156,7 +188,7 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
             if color is None:
                 return await interaction.response.send_message(
                     view=feedback_view(
-                        "Color must be a six-digit hex value such as `5865F2` or `#5865F2`.",
+                        _t(interaction, "color_invalid", example="`5865F2` or `#5865F2`"),
                         ok=False,
                     ),
                     ephemeral=True,
@@ -169,7 +201,7 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Welcome message updated."
+                content=f"{get_emoji('tick')} {_t(interaction, 'welcome_updated')}"
             ),
             accent_colour=discord.Color.green()
         )
@@ -178,12 +210,13 @@ class WelcomeMessageModal(Modal, title="Set Welcome Message"):
 
 
 class RulesModal(Modal, title="Set Rules Text"):
-    def __init__(self, guild_id: int, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, cfg: OnboardingConfig, locale=None):
         super().__init__()
+        self.title = _t(locale, "rules_modal_title")
         self.guild_id = guild_id
 
         self.rules_input = TextInput(
-            label="Rules", 
+            label=_t(locale, "field_rules"),
             style=discord.TextStyle.long,
             default=cfg.rules_text or ""
         )
@@ -206,7 +239,7 @@ class RulesModal(Modal, title="Set Rules Text"):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Rules text updated."
+                content=f"{get_emoji('tick')} {_t(interaction, 'rules_updated')}"
             ),
             accent_colour=discord.Color.green()
         )
@@ -231,6 +264,7 @@ class RoleMenuOptionModal(Modal):
         cfg: OnboardingConfig | None = None,
         edit_index: int | None = None,
         wizard: bool = False,
+        locale=None,
     ):
         self._preload_cfg = cfg
         cfg = cfg  # callers fetch the config (async) and pass it in
@@ -241,8 +275,13 @@ class RoleMenuOptionModal(Modal):
             if 0 <= edit_index < len(options):
                 existing = options[edit_index]
 
-        role_label = existing["label"] if existing else (role.name if role else "Role")
-        super().__init__(title=(f"Edit Role: {role_label}" if existing else f"Add Role: {role_label}")[:45])
+        role_label = existing["label"] if existing else (
+            role.name if role else _t(locale, "fallback_role_label")
+        )
+        super().__init__(title=(
+            _t(locale, "role_option_edit_title", role=role_label)
+            if existing else _t(locale, "role_option_add_title", role=role_label)
+        )[:45])
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -252,21 +291,21 @@ class RoleMenuOptionModal(Modal):
         self.role_id = existing["role_id"] if existing else (role.id if role else None)
 
         self.label_input = TextInput(
-            label="Label", max_length=100,
+            label=_t(locale, "field_label"), max_length=100,
             default=existing["label"] if existing else role_label,
         )
         self.desc_input = TextInput(
-            label="Description", required=False, max_length=100,
+            label=_t(locale, "field_description"), required=False, max_length=100,
             default=(existing.get("description") if existing else None),
         )
         self.emoji_input = TextInput(
-            label="Emoji", required=False,
+            label=_t(locale, "field_emoji"), required=False,
             default=(existing.get("emoji") if existing else None),
         )
         self.style_input = TextInput(
-            label="Button style (primary/secondary/etc)",
+            label=_t(locale, "field_style"),
             required=False,
-            placeholder="Only used for button-type menus",
+            placeholder=_t(locale, "field_style_hint"),
             default=(existing.get("style") if existing else None),
         )
 
@@ -279,13 +318,16 @@ class RoleMenuOptionModal(Modal):
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None or self.role_id is None:
             return await interaction.followup.send(
-                view=feedback_view("This role menu no longer exists.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_menu_gone"), ok=False), ephemeral=True
             )
 
         style = self.style_input.value.strip().lower() or None
         if style and style not in BUTTON_STYLE_NAMES:
             return await interaction.followup.send(
-                view=feedback_view(f"Style must be one of: {', '.join(BUTTON_STYLE_NAMES)}.", ok=False), ephemeral=True
+                view=feedback_view(
+                    _t(interaction, "error_style_invalid", styles=", ".join(BUTTON_STYLE_NAMES)),
+                    ok=False,
+                ), ephemeral=True
             )
 
         options = menu.setdefault("options", [])
@@ -295,7 +337,7 @@ class RoleMenuOptionModal(Modal):
         )
         if duplicate:
             return await interaction.followup.send(
-                view=feedback_view("That role is already in this menu.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_role_in_menu"), ok=False), ephemeral=True
             )
 
         entry = build_role_menu_option(
@@ -308,39 +350,55 @@ class RoleMenuOptionModal(Modal):
 
         if self.edit_index is not None and 0 <= self.edit_index < len(options):
             options[self.edit_index] = entry
-            verb = "updated"
+            done_key = "role_option_updated"
         else:
             if len(options) >= 25:
                 return await interaction.followup.send(
-                    view=feedback_view("This menu already has the maximum of 25 roles.", ok=False), ephemeral=True
+                    view=feedback_view(_t(interaction, "error_menu_role_limit"), ok=False), ephemeral=True
                 )
             options.append(entry)
-            verb = "added"
+            done_key = "role_option_added"
 
         await update_config(self.guild_id, cfg)
-        await interaction.followup.send(view=feedback_view(f"Role option {verb}."), ephemeral=True)
+        await interaction.followup.send(
+            view=feedback_view(_t(interaction, done_key)), ephemeral=True
+        )
         next_view = (
-            RoleMenuWizardAddRolesView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id))
+            RoleMenuWizardAddRolesView(
+                self.guild_id, self.author, self.menu_id,
+                await get_config(self.guild_id), interaction,
+            )
             if self.wizard
-            else RoleMenuEditView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id))
+            else RoleMenuEditView(
+                self.guild_id, self.author, self.menu_id,
+                await get_config(self.guild_id), interaction,
+            )
         )
         await self.message.edit(view=next_view, allowed_mentions=discord.AllowedMentions.none())
         await refresh_posted_menu(interaction.client, self.guild_id, self.menu_id)
 
 
 class CreateRoleMenuModal(Modal, title="Create Role Menu"):
-    def __init__(self, guild_id: int, author: discord.Member, message: discord.Message):
+    def __init__(self, guild_id: int, author: discord.Member, message: discord.Message, locale=None):
         super().__init__()
+        self.title = _t(locale, "create_menu_modal_title")
         self.guild_id = guild_id
         self.author = author
         self.message = message
 
-        self.title_input = TextInput(label="Menu Title", default="Role Selection", max_length=100)
-        self.desc_input = TextInput(
-            label="Description", style=discord.TextStyle.long, required=False,
-            default="Choose your roles below.", max_length=300,
+        self.title_input = TextInput(
+            label=_t(locale, "field_menu_title"),
+            default=_t(locale, "default_menu_title"),
+            max_length=100,
         )
-        self.color_input = TextInput(label="Colour (hex, optional)", required=False, placeholder="57F287")
+        self.desc_input = TextInput(
+            label=_t(locale, "field_description"), style=discord.TextStyle.long, required=False,
+            default=_t(locale, "default_menu_description"), max_length=300,
+        )
+        self.color_input = TextInput(
+            label=_t(locale, "field_colour_optional"), required=False,
+            placeholder=_t(locale, "field_color_example"),
+        )
 
         for item in (self.title_input, self.desc_input, self.color_input):
             self.add_item(item)
@@ -352,7 +410,7 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
 
         if len(cfg.role_menus) >= 25:
             return await interaction.response.send_message(
-                view=feedback_view("You've reached the maximum of 25 role menus.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_menu_limit"), ok=False), ephemeral=True
             )
 
         color = None
@@ -362,7 +420,7 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
             except ValueError:
                 pass
 
-        title = self.title_input.value.strip() or "Role Selection"
+        title = self.title_input.value.strip() or _t(interaction, "default_menu_title")
         existing_names = {m["name"].lower() for m in cfg.role_menus.values()}
         name = _generate_menu_name(title, existing_names)
 
@@ -377,7 +435,7 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
         await update_config(self.guild_id, cfg)
 
         await interaction.response.send_message(
-            view=feedback_view(f"Role menu `{name}` created — let's set it up!"), ephemeral=True
+            view=feedback_view(_t(interaction, "menu_created", name=name)), ephemeral=True
         )
         await self.message.edit(
             view=RoleMenuWizardTypeView(self.guild_id, self.author, menu_id, cfg),
@@ -386,8 +444,9 @@ class CreateRoleMenuModal(Modal, title="Create Role Menu"):
 
 
 class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig, locale=None):
         super().__init__()
+        self.title = _t(locale, "edit_menu_info_modal_title")
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -395,14 +454,18 @@ class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
 
         menu = cfg.role_menus[menu_id]
 
-        self.name_input = TextInput(label="Internal Name", default=menu["name"], max_length=50)
-        self.title_input = TextInput(label="Menu Title", default=menu["title"], max_length=100)
+        self.name_input = TextInput(
+            label=_t(locale, "field_internal_name"), default=menu["name"], max_length=50,
+        )
+        self.title_input = TextInput(
+            label=_t(locale, "field_menu_title"), default=menu["title"], max_length=100,
+        )
         self.desc_input = TextInput(
-            label="Description", style=discord.TextStyle.long, required=False,
+            label=_t(locale, "field_description"), style=discord.TextStyle.long, required=False,
             default=menu["description"], max_length=300,
         )
         self.color_input = TextInput(
-            label="Colour (hex)", required=False,
+            label=_t(locale, "field_colour"), required=False,
             default=f"{menu['color']:06X}" if menu.get("color") is not None else None,
         )
 
@@ -414,7 +477,7 @@ class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
             return await interaction.response.send_message(
-                view=feedback_view("This role menu no longer exists.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_menu_gone"), ok=False), ephemeral=True
             )
 
         new_name = self.name_input.value.strip()
@@ -423,7 +486,9 @@ class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
             for mid, m in cfg.role_menus.items()
         ):
             return await interaction.response.send_message(
-                view=feedback_view(f"A role menu named `{new_name}` already exists.", ok=False), ephemeral=True
+                view=feedback_view(
+                    _t(interaction, "error_menu_name_taken", name=new_name), ok=False
+                ), ephemeral=True
             )
 
         if new_name:
@@ -437,9 +502,13 @@ class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
                 pass
 
         await update_config(self.guild_id, cfg)
-        await interaction.response.send_message(view=feedback_view("Role menu info updated."), ephemeral=True)
+        await interaction.response.send_message(
+            view=feedback_view(_t(interaction, "menu_info_updated")), ephemeral=True
+        )
         await self.message.edit(
-            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id, cfg),
+            view=RoleMenuEditView(
+                self.guild_id, self.author, self.menu_id, cfg, interaction,
+            ),
             allowed_mentions=discord.AllowedMentions.none(),
         )
         await refresh_posted_menu(interaction.client, self.guild_id, self.menu_id)
@@ -448,8 +517,10 @@ class EditMenuInfoModal(Modal, title="Edit Role Menu Info"):
 # ------------ ONBOARDING SETUP BUTTONS ------------
 
 class SetWelcomeMsgBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Set Welcome Message", style=discord.ButtonStyle.primary)
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_set_welcome_message"), style=discord.ButtonStyle.primary
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -459,18 +530,22 @@ class SetWelcomeMsgBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        await interaction.response.send_modal(WelcomeMessageModal(self.guild_id, await get_config(self.guild_id)))
+        await interaction.response.send_modal(
+            WelcomeMessageModal(self.guild_id, await get_config(self.guild_id), locale=interaction)
+        )
 
 
 class SetWelcomeChannelBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Set Welcome Channel", style=discord.ButtonStyle.secondary)
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_set_welcome_channel"), style=discord.ButtonStyle.secondary
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -480,7 +555,7 @@ class SetWelcomeChannelBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -492,7 +567,8 @@ class SetWelcomeChannelBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Welcome channel set to {interaction.channel.mention}."
+                content=f"{get_emoji('tick')} "
+                + _t(interaction, "welcome_channel_set", channel=interaction.channel.mention)
             ),
             accent_colour=discord.Color.green()
         )
@@ -501,31 +577,32 @@ class SetWelcomeChannelBtn(discord.ui.Button):
 
 
 class GoodbyeMessageModal(Modal, title="Set Goodbye Message"):
-    def __init__(self, guild_id: int, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, cfg: OnboardingConfig, locale=None):
         super().__init__()
+        self.title = _t(locale, "goodbye_modal_title")
         self.guild_id = guild_id
 
         self.title_input = TextInput(
-            label="Title",
+            label=_t(locale, "field_title"),
             required=False,
             default=cfg.goodbye_title or None
         )
         self.desc_input = TextInput(
-            label="Description",
+            label=_t(locale, "field_description"),
             style=discord.TextStyle.long,
-            placeholder="Use {user} for mention, {name} for username, {guild} for the server.",
+            placeholder=_t(locale, "field_description_hint"),
             required=False,
             default=cfg.goodbye_description or None
         )
         self.image_input = TextInput(
-            label="Image URL",
+            label=_t(locale, "field_image_url"),
             required=False,
             default=cfg.goodbye_image or None
         )
         self.color_input = TextInput(
-            label="Color (hex)",
+            label=_t(locale, "field_color"),
             required=False,
-            placeholder="RRGGBB or #RRGGBB",
+            placeholder=_t(locale, "field_color_hint"),
             default=format_hex_color(cfg.goodbye_color),
         )
 
@@ -549,7 +626,7 @@ class GoodbyeMessageModal(Modal, title="Set Goodbye Message"):
             if color is None:
                 return await interaction.response.send_message(
                     view=feedback_view(
-                        "Color must be a six-digit hex value such as `ED4245` or `#ED4245`.",
+                        _t(interaction, "color_invalid", example="`ED4245` or `#ED4245`"),
                         ok=False,
                     ),
                     ephemeral=True,
@@ -560,14 +637,16 @@ class GoodbyeMessageModal(Modal, title="Set Goodbye Message"):
 
         await update_config(self.guild_id, cfg)
         await interaction.response.send_message(
-            view=feedback_view("Goodbye message updated."),
+            view=feedback_view(_t(interaction, "goodbye_updated")),
             ephemeral=True,
         )
 
 
 class SetGoodbyeMsgBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Set Goodbye Message", style=discord.ButtonStyle.primary)
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_set_goodbye_message"), style=discord.ButtonStyle.primary
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -575,13 +654,15 @@ class SetGoodbyeMsgBtn(discord.ui.Button):
         if not await check_author(interaction, self.author):
             return
         await interaction.response.send_modal(
-            GoodbyeMessageModal(self.guild_id, await get_config(self.guild_id))
+            GoodbyeMessageModal(self.guild_id, await get_config(self.guild_id), locale=interaction)
         )
 
 
 class SetGoodbyeChannelBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Set Goodbye Channel", style=discord.ButtonStyle.secondary)
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_set_goodbye_channel"), style=discord.ButtonStyle.secondary
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -592,14 +673,18 @@ class SetGoodbyeChannelBtn(discord.ui.Button):
         cfg.goodbye_channel = interaction.channel.id
         await update_config(self.guild_id, cfg)
         await interaction.response.send_message(
-            view=feedback_view(f"Goodbye channel set to {interaction.channel.mention}."),
+            view=feedback_view(
+                _t(interaction, "goodbye_channel_set", channel=interaction.channel.mention)
+            ),
             ephemeral=True,
         )
 
 
 class SetRulesTextBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Set Rules Text", style=discord.ButtonStyle.primary)
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_set_rules_text"), style=discord.ButtonStyle.primary
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -609,18 +694,22 @@ class SetRulesTextBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
-        await interaction.response.send_modal(RulesModal(self.guild_id, await get_config(self.guild_id)))
+        await interaction.response.send_modal(
+            RulesModal(self.guild_id, await get_config(self.guild_id), locale=interaction)
+        )
 
 
 class PostRulesBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Post Rules Message Here", style=discord.ButtonStyle.secondary)
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_post_rules"), style=discord.ButtonStyle.secondary
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -630,7 +719,7 @@ class PostRulesBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -648,7 +737,7 @@ class PostRulesBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Rules message posted."
+                content=f"{get_emoji('tick')} {_t(interaction, 'rules_posted')}"
             ),
             accent_colour=discord.Color.green()
         )
@@ -657,8 +746,10 @@ class PostRulesBtn(discord.ui.Button):
 
 
 class SetRulesRoleBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Set Rules Role", style=discord.ButtonStyle.secondary)
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_set_rules_role"), style=discord.ButtonStyle.secondary
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -668,7 +759,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -677,7 +768,7 @@ class SetRulesRoleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('settings')} Reply in this channel with a role mention, ID, or name within 60 seconds."
+                content=f"{get_emoji('settings')} {_t(interaction, 'rules_role_prompt')}"
             )
         )
         view.add_item(container)
@@ -695,7 +786,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Timed out. Try again."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'rules_role_timeout')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -706,7 +797,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This must be used in a server."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'guild_only')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -718,7 +809,7 @@ class SetRulesRoleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Could not find that role. Use a mention, ID, or name."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'rules_role_not_found')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -732,7 +823,8 @@ class SetRulesRoleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} Rules role set to {role.mention}."
+                content=f"{get_emoji('tick')} "
+                + _t(interaction, "rules_role_set", role=role.mention)
             ),
             accent_colour=discord.Color.green()
         )
@@ -744,9 +836,9 @@ class SetRulesRoleBtn(discord.ui.Button):
 
 class AddAutoroleSelect(discord.ui.RoleSelect):
     """Ephemeral role picker — adds chosen roles to the autorole list."""
-    def __init__(self, guild_id: int, message: discord.Message):
+    def __init__(self, guild_id: int, message: discord.Message, locale=None):
         super().__init__(
-            placeholder="Choose roles to add as autoroles…",
+            placeholder=_t(locale, "autorole_add_placeholder"),
             min_values=1,
             max_values=10,
         )
@@ -769,7 +861,8 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('tick')} Added {', '.join(added)} as autorole(s)."
+                    content=f"{get_emoji('tick')} "
+                    + _t(interaction, "autorole_added", roles=", ".join(added))
                 ),
                 accent_colour=discord.Color.green()
             )
@@ -779,12 +872,18 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
                 view=view, allowed_mentions=discord.AllowedMentions.none()
             )
             # update the setup panel
-            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)), allowed_mentions=discord.AllowedMentions.none())
+            await self.message.edit(
+                view=AutoroleSetupView(
+                    self.guild_id, interaction.user, interaction.guild,
+                    await get_config(self.guild_id), interaction,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Those roles are already in the autorole list."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'autorole_already')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -795,27 +894,27 @@ class AddAutoroleSelect(discord.ui.RoleSelect):
 
 
 class AddAutoroleView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int, message: discord.Message):
+    def __init__(self, guild_id: int, message: discord.Message, locale=None):
         super().__init__()
-        self.add_item(AddAutoroleSelect(guild_id, message))
+        self.add_item(AddAutoroleSelect(guild_id, message, locale))
 
 
 class RemoveAutoroleSelect(discord.ui.Select):
     """Ephemeral select of current autoroles — removes chosen ones."""
-    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message, cfg: OnboardingConfig, locale=None):
         self.guild_id = guild_id
         self.message = message
         options = []
         for rid in (cfg.autorole_ids or []):
             role = guild.get_role(rid)
-            label = role.name if role else f"Unknown Role ({rid})"
+            label = role.name if role else _t(locale, "autorole_unknown_option", id=rid)
             options.append(discord.SelectOption(label=label, value=str(rid)))
 
         if not options:
-            options = [discord.SelectOption(label="No autoroles configured", value="none")]
+            options = [discord.SelectOption(label=_t(locale, "autorole_none_option"), value="none")]
 
         super().__init__(
-            placeholder="Choose autoroles to remove…",
+            placeholder=_t(locale, "autorole_remove_placeholder"),
             min_values=1,
             max_values=len(options),
             options=options,
@@ -840,7 +939,8 @@ class RemoveAutoroleSelect(discord.ui.Select):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('tick')} Removed {', '.join(removed)} from autoroles."
+                    content=f"{get_emoji('tick')} "
+                    + _t(interaction, "autorole_removed", roles=", ".join(removed))
                 ),
                 accent_colour=discord.Color.green()
             )
@@ -848,12 +948,18 @@ class RemoveAutoroleSelect(discord.ui.Select):
             await interaction.response.edit_message(
                 view=view, allowed_mentions=discord.AllowedMentions.none()
             )
-            await self.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)), allowed_mentions=discord.AllowedMentions.none())
+            await self.message.edit(
+                view=AutoroleSetupView(
+                    self.guild_id, interaction.user, interaction.guild,
+                    await get_config(self.guild_id), interaction,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Nothing was removed."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'autorole_none_removed')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -862,14 +968,16 @@ class RemoveAutoroleSelect(discord.ui.Select):
 
 
 class RemoveAutoroleView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message):
+    def __init__(self, guild_id: int, guild: discord.Guild, message: discord.Message, cfg: OnboardingConfig, locale=None):
         super().__init__()
-        self.add_item(RemoveAutoroleSelect(guild_id, guild, message, cfg))
+        self.add_item(RemoveAutoroleSelect(guild_id, guild, message, cfg, locale))
 
 
 class AddAutoroleBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Add Autorole", style=discord.ButtonStyle.primary, emoji="➕")
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_add_autorole"), style=discord.ButtonStyle.primary, emoji="➕"
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -878,7 +986,7 @@ class AddAutoroleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -888,9 +996,9 @@ class AddAutoroleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('settings')} Select one or more roles to automatically assign to new members:"
+                content=f"{get_emoji('settings')} {_t(interaction, 'autorole_add_prompt')}"
             ),
-            AddAutoroleView(self.guild_id, message)
+            AddAutoroleView(self.guild_id, message, interaction)
         )
         view.add_item(container)
         await interaction.response.send_message(
@@ -899,8 +1007,10 @@ class AddAutoroleBtn(discord.ui.Button):
 
 
 class RemoveAutoroleBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild):
-        super().__init__(label="Remove Autorole", style=discord.ButtonStyle.secondary, emoji="➖")
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_remove_autorole"), style=discord.ButtonStyle.secondary, emoji="➖"
+        )
         self.guild_id = guild_id
         self.author = author
         self.guild = guild
@@ -910,7 +1020,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -921,7 +1031,7 @@ class RemoveAutoroleBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} No autoroles are configured yet."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'autorole_none_yet')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -932,9 +1042,12 @@ class RemoveAutoroleBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('settings')} Select autoroles to remove:"
+                content=f"{get_emoji('settings')} {_t(interaction, 'autorole_remove_prompt')}"
             ),
-            RemoveAutoroleView(self.guild_id, self.guild, message, await get_config(self.guild_id))
+            RemoveAutoroleView(
+                self.guild_id, self.guild, message,
+                await get_config(self.guild_id), interaction,
+            )
         )
         view.add_item(container)
         await interaction.response.send_message(
@@ -943,8 +1056,11 @@ class RemoveAutoroleBtn(discord.ui.Button):
 
 
 class ClearAutorolesBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Clear All", style=discord.ButtonStyle.danger, emoji=get_emoji('trash'))
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_clear_all"), style=discord.ButtonStyle.danger,
+            emoji=get_emoji('trash'),
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -953,7 +1069,7 @@ class ClearAutorolesBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -965,17 +1081,20 @@ class ClearAutorolesBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} All autoroles cleared."
+                content=f"{get_emoji('tick')} {_t(interaction, 'autorole_cleared')}"
             ),
             accent_colour=discord.Color.green()
         )
         view.add_item(container)
         await interaction.response.send_message(view=view, ephemeral=True)
-        await interaction.message.edit(view=AutoroleSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)))
+        await interaction.message.edit(view=AutoroleSetupView(
+            self.guild_id, interaction.user, interaction.guild,
+            await get_config(self.guild_id), interaction,
+        ))
 
 
 class AutoroleSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
@@ -983,30 +1102,32 @@ class AutoroleSetupView(discord.ui.LayoutView):
 
         if role_ids:
             role_lines = "\n".join(
-                f"• {guild.get_role(rid).mention if guild.get_role(rid) else f'Unknown role `{rid}`'}"
+                f"• {guild.get_role(rid).mention if guild.get_role(rid) else _t(locale, 'autorole_unknown_line', id=rid)}"
                 for rid in role_ids
             )
-            current_text = f"**Current autoroles ({len(role_ids)}):**\n{role_lines}"
+            current_text = _t(
+                locale, "autorole_current", count=len(role_ids), lines=role_lines
+            )
         else:
-            current_text = "No autoroles configured yet.\nAdd roles with the buttons below."
+            current_text = _t(locale, "autorole_empty")
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### Autorole Configuration"),
+            discord.ui.TextDisplay(content=_t(locale, "autorole_panel_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="Autoroles are assigned to every new member the moment they join the server."
+                content=_t(locale, "autorole_panel_body")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=current_text),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                AddAutoroleBtn(guild_id, author),
-                RemoveAutoroleBtn(guild_id, author, guild),
-                ClearAutorolesBtn(guild_id, author),
+                AddAutoroleBtn(guild_id, author, locale),
+                RemoveAutoroleBtn(guild_id, author, guild, locale),
+                ClearAutorolesBtn(guild_id, author, locale),
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+                content=_t(locale, "help_footer", support=links.SUPPORT_SERVER, docs=links.DOCS)
             ),
             accent_colour=discord.Colour(0xFEE75C),
         )
@@ -1014,8 +1135,11 @@ class AutoroleSetupView(discord.ui.LayoutView):
 
 
 class ConfigureAutorolesBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Configure Autoroles", style=discord.ButtonStyle.secondary, emoji="🎭")
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_configure_autoroles"), style=discord.ButtonStyle.secondary,
+            emoji="🎭",
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -1024,14 +1148,17 @@ class ConfigureAutorolesBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_message(
-            view=AutoroleSetupView(self.guild_id, self.author, interaction.guild, await get_config(self.guild_id)),
+            view=AutoroleSetupView(
+                self.guild_id, self.author, interaction.guild,
+                await get_config(self.guild_id), interaction,
+            ),
             ephemeral=False,
             allowed_mentions=discord.AllowedMentions.none()
         )
@@ -1073,7 +1200,7 @@ async def refresh_posted_menu(bot, guild_id: int, menu_id: str):
 class RoleMenuManagerSelect(discord.ui.Select):
     """Pick an existing role menu to manage."""
 
-    def __init__(self, guild_id: int, author: discord.Member, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, author: discord.Member, cfg: OnboardingConfig, locale=None):
         self.guild_id = guild_id
         self.author = author
         menus = cfg.role_menus or {}
@@ -1082,8 +1209,8 @@ class RoleMenuManagerSelect(discord.ui.Select):
             discord.SelectOption(
                 label=m["name"][:100],
                 description=(
-                    f"{MENU_TYPE_LABELS.get(m['menu_type'], m['menu_type'])} · "
-                    f"{len(m.get('options') or [])} role(s)"
+                    f"{_menu_type_label(locale, m['menu_type'])} · "
+                    f"{_t(locale, 'role_count', count=len(m.get('options') or []))}"
                 )[:100],
                 value=mid,
             )
@@ -1091,26 +1218,36 @@ class RoleMenuManagerSelect(discord.ui.Select):
         ][:25]
 
         if not options:
-            options = [discord.SelectOption(label="No role menus yet", value="none")]
+            options = [discord.SelectOption(label=_t(locale, "menu_none_option"), value="none")]
 
-        super().__init__(placeholder="Manage a role menu...", options=options, min_values=1, max_values=1)
+        super().__init__(
+            placeholder=_t(locale, "menu_manager_placeholder"),
+            options=options, min_values=1, max_values=1,
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if not await check_author(interaction, self.author):
             return
         if self.values[0] == "none":
             return await interaction.response.send_message(
-                view=feedback_view("Create a role menu first.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_create_menu_first"), ok=False),
+                ephemeral=True,
             )
         await interaction.response.edit_message(
-            view=RoleMenuEditView(self.guild_id, self.author, self.values[0], await get_config(self.guild_id)),
+            view=RoleMenuEditView(
+                self.guild_id, self.author, self.values[0],
+                await get_config(self.guild_id), interaction,
+            ),
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
 
 class CreateRoleMenuBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Create Role Menu", style=discord.ButtonStyle.success, emoji=get_emoji('plus'))
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_create_menu"), style=discord.ButtonStyle.success,
+            emoji=get_emoji('plus'),
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -1118,13 +1255,16 @@ class CreateRoleMenuBtn(discord.ui.Button):
         if not await check_author(interaction, self.author):
             return
         await interaction.response.send_modal(
-            CreateRoleMenuModal(self.guild_id, self.author, interaction.message)
+            CreateRoleMenuModal(self.guild_id, self.author, interaction.message, interaction)
         )
 
 
 class BackToManagerBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Back", style=discord.ButtonStyle.secondary, emoji=get_emoji('arrow_left'))
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_back"), style=discord.ButtonStyle.secondary,
+            emoji=get_emoji('arrow_left'),
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -1132,14 +1272,16 @@ class BackToManagerBtn(discord.ui.Button):
         if not await check_author(interaction, self.author):
             return
         await interaction.response.edit_message(
-            view=RoleMenuManagerView(self.guild_id, self.author, await get_config(self.guild_id)),
+            view=RoleMenuManagerView(
+                self.guild_id, self.author, await get_config(self.guild_id), interaction,
+            ),
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
 
 class EditMenuInfoBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Edit Info", style=discord.ButtonStyle.primary)
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, locale=None):
+        super().__init__(label=_t(locale, "btn_edit_info"), style=discord.ButtonStyle.primary)
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1148,12 +1290,15 @@ class EditMenuInfoBtn(discord.ui.Button):
         if not await check_author(interaction, self.author):
             return
         await interaction.response.send_modal(
-            EditMenuInfoModal(self.guild_id, self.author, self.menu_id, interaction.message, await get_config(self.guild_id))
+            EditMenuInfoModal(
+                self.guild_id, self.author, self.menu_id, interaction.message,
+                await get_config(self.guild_id), interaction,
+            )
         )
 
 
 class ChangeMenuTypeSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig, locale=None):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1161,33 +1306,48 @@ class ChangeMenuTypeSelect(discord.ui.Select):
 
         current = cfg.role_menus[menu_id]["menu_type"]
         options = [
-            discord.SelectOption(label=label, value=key, default=(key == current))
-            for key, label in MENU_TYPE_LABELS.items()
+            discord.SelectOption(
+                label=_menu_type_label(locale, key), value=key, default=(key == current),
+            )
+            for key in MENU_TYPE_LABELS
         ]
-        super().__init__(placeholder="Choose a menu type...", options=options, min_values=1, max_values=1)
+        super().__init__(
+            placeholder=_t(locale, "menu_type_placeholder"),
+            options=options, min_values=1, max_values=1,
+        )
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
-            return await interaction.response.edit_message(view=feedback_view("This role menu no longer exists.", ok=False))
+            return await interaction.response.edit_message(
+                view=feedback_view(_t(interaction, "error_menu_gone"), ok=False)
+            )
 
         menu["menu_type"] = self.values[0]
         await update_config(self.guild_id, cfg)
 
         await interaction.response.edit_message(
-            view=feedback_view(f"Menu type set to **{MENU_TYPE_LABELS[self.values[0]]}**.")
+            view=feedback_view(
+                _t(interaction, "menu_type_set", label=_menu_type_label(interaction, self.values[0]))
+            )
         )
         await self.message.edit(
-            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id)),
+            view=RoleMenuEditView(
+                self.guild_id, self.author, self.menu_id,
+                await get_config(self.guild_id), interaction,
+            ),
             allowed_mentions=discord.AllowedMentions.none(),
         )
         await refresh_posted_menu(interaction.client, self.guild_id, self.menu_id)
 
 
 class ChangeMenuTypeBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Change Type", style=discord.ButtonStyle.secondary, emoji=get_emoji('shuffle'))
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_change_type"), style=discord.ButtonStyle.secondary,
+            emoji=get_emoji('shuffle'),
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1198,8 +1358,13 @@ class ChangeMenuTypeBtn(discord.ui.Button):
         message = interaction.message
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Choose the new menu type:"),
-            discord.ui.ActionRow(ChangeMenuTypeSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('settings')} {_t(interaction, 'menu_type_prompt')}"
+            ),
+            discord.ui.ActionRow(ChangeMenuTypeSelect(
+                self.guild_id, self.author, self.menu_id, message,
+                await get_config(self.guild_id), interaction,
+            )),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
@@ -1208,8 +1373,10 @@ class RoleMenuAddRoleSelect(discord.ui.RoleSelect):
     """Ephemeral role picker for adding a role option — no typing an ID/mention required.
     Once a role is chosen, a small modal collects the label/description/emoji/style."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, *, wizard: bool = False):
-        super().__init__(placeholder="Choose a role...", min_values=1, max_values=1)
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, *, wizard: bool = False, locale=None):
+        super().__init__(
+            placeholder=_t(locale, "role_pick_placeholder"), min_values=1, max_values=1,
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1221,23 +1388,38 @@ class RoleMenuAddRoleSelect(discord.ui.RoleSelect):
         cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
-            return await interaction.response.edit_message(view=feedback_view("This role menu no longer exists.", ok=False))
+            return await interaction.response.edit_message(
+                view=feedback_view(_t(interaction, "error_menu_gone"), ok=False)
+            )
         if any(o["role_id"] == role.id for o in (menu.get("options") or [])):
-            return await interaction.response.edit_message(view=feedback_view(f"{role.mention} is already in this menu.", ok=False))
+            return await interaction.response.edit_message(
+                view=feedback_view(
+                    _t(interaction, "error_role_in_menu_named", role=role.mention), ok=False
+                )
+            )
         if len(menu.get("options") or []) >= 25:
-            return await interaction.response.edit_message(view=feedback_view("This menu already has the maximum of 25 roles.", ok=False))
+            return await interaction.response.edit_message(
+                view=feedback_view(_t(interaction, "error_menu_role_limit"), ok=False)
+            )
 
         try:
             await interaction.response.send_modal(
-                RoleMenuOptionModal(self.guild_id, self.author, self.menu_id, self.message, role, cfg=await get_config(self.guild_id), wizard=self.wizard)
+                RoleMenuOptionModal(
+                    self.guild_id, self.author, self.menu_id, self.message, role,
+                    cfg=await get_config(self.guild_id), wizard=self.wizard,
+                    locale=interaction,
+                )
             )
         except Exception as e:
             print(f"Error adding role menu option: {e}")
 
 
 class AddMenuOptionBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, *, wizard: bool = False):
-        super().__init__(label="Add a Role", style=discord.ButtonStyle.success, emoji=get_emoji('plus'))
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, *, wizard: bool = False, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_add_role"), style=discord.ButtonStyle.success,
+            emoji=get_emoji('plus'),
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1250,18 +1432,23 @@ class AddMenuOptionBtn(discord.ui.Button):
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu and len(menu.get("options") or []) >= 25:
             return await interaction.response.send_message(
-                view=feedback_view("This menu already has the maximum of 25 roles.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_menu_role_limit"), ok=False), ephemeral=True
             )
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Which role should this option grant? Pick it from the dropdown below."),
-            discord.ui.ActionRow(RoleMenuAddRoleSelect(self.guild_id, self.author, self.menu_id, interaction.message, wizard=self.wizard)),
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('settings')} {_t(interaction, 'add_option_prompt')}"
+            ),
+            discord.ui.ActionRow(RoleMenuAddRoleSelect(
+                self.guild_id, self.author, self.menu_id, interaction.message,
+                wizard=self.wizard, locale=interaction,
+            )),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class EditMenuOptionSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig, locale=None):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1270,17 +1457,26 @@ class EditMenuOptionSelect(discord.ui.Select):
         menu = (cfg.role_menus or {}).get(menu_id)
         options_list = (menu.get("options") if menu else []) or []
         options = [
-            discord.SelectOption(label=o["label"][:100], description=f"role id: {o['role_id']}", value=str(i))
+            discord.SelectOption(
+                label=o["label"][:100],
+                description=_t(locale, "role_id_option", id=o["role_id"]),
+                value=str(i),
+            )
             for i, o in enumerate(options_list)
         ][:25]
         if not options:
-            options = [discord.SelectOption(label="No roles to edit", value="none")]
+            options = [discord.SelectOption(label=_t(locale, "no_roles_edit_option"), value="none")]
 
-        super().__init__(placeholder="Choose a role to edit...", options=options, min_values=1, max_values=1)
+        super().__init__(
+            placeholder=_t(locale, "edit_role_placeholder"),
+            options=options, min_values=1, max_values=1,
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "none":
-            return await interaction.response.edit_message(view=feedback_view("Nothing to edit yet.", ok=False))
+            return await interaction.response.edit_message(
+                view=feedback_view(_t(interaction, "error_nothing_to_edit"), ok=False)
+            )
 
         cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
@@ -1290,13 +1486,19 @@ class EditMenuOptionSelect(discord.ui.Select):
         role = interaction.guild.get_role(existing["role_id"]) if (existing and interaction.guild) else None
 
         await interaction.response.send_modal(
-            RoleMenuOptionModal(self.guild_id, self.author, self.menu_id, self.message, role, cfg=await get_config(self.guild_id), edit_index=idx)
+            RoleMenuOptionModal(
+                self.guild_id, self.author, self.menu_id, self.message, role,
+                cfg=await get_config(self.guild_id), edit_index=idx, locale=interaction,
+            )
         )
 
 
 class EditMenuOptionBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Edit Role", style=discord.ButtonStyle.secondary, emoji=get_emoji('edit'))
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_edit_role"), style=discord.ButtonStyle.secondary,
+            emoji=get_emoji('edit'),
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1307,14 +1509,19 @@ class EditMenuOptionBtn(discord.ui.Button):
         message = interaction.message
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Choose a role option to edit:"),
-            discord.ui.ActionRow(EditMenuOptionSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('settings')} {_t(interaction, 'edit_role_prompt')}"
+            ),
+            discord.ui.ActionRow(EditMenuOptionSelect(
+                self.guild_id, self.author, self.menu_id, message,
+                await get_config(self.guild_id), interaction,
+            )),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class RemoveMenuOptionSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, cfg: OnboardingConfig, locale=None):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1323,14 +1530,18 @@ class RemoveMenuOptionSelect(discord.ui.Select):
         menu = (cfg.role_menus or {}).get(menu_id)
         options_list = (menu.get("options") if menu else []) or []
         options = [
-            discord.SelectOption(label=o["label"][:100], description=f"role id: {o['role_id']}", value=str(i))
+            discord.SelectOption(
+                label=o["label"][:100],
+                description=_t(locale, "role_id_option", id=o["role_id"]),
+                value=str(i),
+            )
             for i, o in enumerate(options_list)
         ][:25]
         if not options:
-            options = [discord.SelectOption(label="No roles to remove", value="none")]
+            options = [discord.SelectOption(label=_t(locale, "no_roles_remove_option"), value="none")]
 
         super().__init__(
-            placeholder="Choose role(s) to remove...",
+            placeholder=_t(locale, "remove_role_placeholder"),
             options=options,
             min_values=1,
             max_values=len(options),
@@ -1340,7 +1551,9 @@ class RemoveMenuOptionSelect(discord.ui.Select):
         cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None or self.values[0] == "none":
-            return await interaction.response.edit_message(view=feedback_view("Nothing to remove.", ok=False))
+            return await interaction.response.edit_message(
+                view=feedback_view(_t(interaction, "error_nothing_to_remove"), ok=False)
+            )
 
         indices = sorted({int(v) for v in self.values}, reverse=True)
         options = menu.get("options") or []
@@ -1351,18 +1564,27 @@ class RemoveMenuOptionSelect(discord.ui.Select):
 
         await update_config(self.guild_id, cfg)
         await interaction.response.edit_message(
-            view=feedback_view(f"Removed: {', '.join(removed)}" if removed else "Nothing was removed.", ok=bool(removed))
+            view=feedback_view(
+                _t(interaction, "removed_list", roles=", ".join(removed)) if removed
+                else _t(interaction, "autorole_none_removed"),
+                ok=bool(removed),
+            )
         )
         await self.message.edit(
-            view=RoleMenuEditView(self.guild_id, self.author, self.menu_id),
+            view=RoleMenuEditView(
+                self.guild_id, self.author, self.menu_id, cfg, interaction,
+            ),
             allowed_mentions=discord.AllowedMentions.none(),
         )
         await refresh_posted_menu(interaction.client, self.guild_id, self.menu_id)
 
 
 class RemoveMenuOptionBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Remove Role", style=discord.ButtonStyle.danger, emoji=get_emoji('minus'))
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_remove_role"), style=discord.ButtonStyle.danger,
+            emoji=get_emoji('minus'),
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1374,20 +1596,27 @@ class RemoveMenuOptionBtn(discord.ui.Button):
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu or not menu.get("options"):
             return await interaction.response.send_message(
-                view=feedback_view("This menu has no roles yet.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_no_roles_yet"), ok=False), ephemeral=True
             )
         message = interaction.message
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"{get_emoji('settings')} Choose role option(s) to remove:"),
-            discord.ui.ActionRow(RemoveMenuOptionSelect(self.guild_id, self.author, self.menu_id, message, await get_config(self.guild_id))),
+            discord.ui.TextDisplay(
+                content=f"{get_emoji('settings')} {_t(interaction, 'remove_role_prompt')}"
+            ),
+            discord.ui.ActionRow(RemoveMenuOptionSelect(
+                self.guild_id, self.author, self.menu_id, message,
+                await get_config(self.guild_id), interaction,
+            )),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class PostMenuBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Post / Update Here", style=discord.ButtonStyle.primary, emoji="📌")
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_post_here"), style=discord.ButtonStyle.primary, emoji="📌"
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1402,11 +1631,11 @@ class PostMenuBtn(discord.ui.Button):
             menu = (cfg.role_menus or {}).get(self.menu_id)
             if menu is None:
                 return await interaction.followup.send(
-                    view=feedback_view("This role menu no longer exists.", ok=False), ephemeral=True
+                    view=feedback_view(_t(interaction, "error_menu_gone"), ok=False), ephemeral=True
                 )
             if not menu.get("options"):
                 return await interaction.followup.send(
-                    view=feedback_view("Add at least one role before posting.", ok=False), ephemeral=True
+                    view=feedback_view(_t(interaction, "error_add_role_first"), ok=False), ephemeral=True
                 )
 
             # If it's already posted in this exact channel, edit it in place instead of duplicating.
@@ -1415,7 +1644,7 @@ class PostMenuBtn(discord.ui.Button):
                     msg = await interaction.channel.fetch_message(menu["message_id"])
                     await msg.edit(view=RoleMenuView(self.guild_id, self.menu_id, cfg=cfg))
                     return await interaction.followup.send(
-                        view=feedback_view("Role menu updated in place."), ephemeral=True
+                        view=feedback_view(_t(interaction, "menu_updated_in_place")), ephemeral=True
                     )
                 except discord.NotFound:
                     pass  # message was deleted — fall through and re-post
@@ -1426,9 +1655,13 @@ class PostMenuBtn(discord.ui.Button):
             menu["message_id"] = msg.id
             await update_config(self.guild_id, cfg)
 
-            await interaction.followup.send(view=feedback_view("Role menu posted."), ephemeral=True)
+            await interaction.followup.send(
+                view=feedback_view(_t(interaction, "menu_posted")), ephemeral=True
+            )
             await interaction.message.edit(
-                view=RoleMenuEditView(self.guild_id, self.author, self.menu_id),
+                view=RoleMenuEditView(
+                    self.guild_id, self.author, self.menu_id, cfg, interaction,
+                ),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except Exception as e:
@@ -1436,8 +1669,11 @@ class PostMenuBtn(discord.ui.Button):
 
 
 class ConfirmDeleteMenuBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message):
-        super().__init__(label="Confirm Delete", style=discord.ButtonStyle.danger, emoji=get_emoji('trash'))
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, message: discord.Message, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_confirm_delete"), style=discord.ButtonStyle.danger,
+            emoji=get_emoji('trash'),
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1457,8 +1693,10 @@ class ConfirmDeleteMenuBtn(discord.ui.Button):
                 except (discord.NotFound, discord.Forbidden):
                     pass
 
-        name = menu["name"] if menu else "menu"
-        await interaction.response.edit_message(view=feedback_view(f"Role menu `{name}` deleted."))
+        name = menu["name"] if menu else _t(interaction, "fallback_menu_name")
+        await interaction.response.edit_message(
+            view=feedback_view(_t(interaction, "menu_deleted", name=name))
+        )
         await self.message.edit(
             view=RoleMenuManagerView(self.guild_id, self.author, await get_config(self.guild_id)),
             allowed_mentions=discord.AllowedMentions.none(),
@@ -1466,8 +1704,11 @@ class ConfirmDeleteMenuBtn(discord.ui.Button):
 
 
 class DeleteMenuBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Delete Menu", style=discord.ButtonStyle.danger, emoji=get_emoji('trash'))
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_delete_menu"), style=discord.ButtonStyle.danger,
+            emoji=get_emoji('trash'),
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -1479,9 +1720,11 @@ class DeleteMenuBtn(discord.ui.Button):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=f"{get_emoji('settings')} Are you sure you want to delete this role menu? This cannot be undone."
+                content=f"{get_emoji('settings')} {_t(interaction, 'delete_confirm')}"
             ),
-            discord.ui.ActionRow(ConfirmDeleteMenuBtn(self.guild_id, self.author, self.menu_id, message)),
+            discord.ui.ActionRow(ConfirmDeleteMenuBtn(
+                self.guild_id, self.author, self.menu_id, message, interaction,
+            )),
             accent_colour=discord.Color.red(),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
@@ -1500,9 +1743,9 @@ def _captcha_notice(content: str, colour: discord.Color = None) -> discord.ui.La
 
 
 class CaptchaVerifyButton(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, label: str = "Verify"):
         super().__init__(
-            label="Verify",
+            label=label,
             style=discord.ButtonStyle.success,
             emoji=get_emoji('tick'),
             custom_id=f"captcha_verify_{guild_id}",
@@ -1518,9 +1761,7 @@ class CaptchaVerifyButton(discord.ui.Button):
         if not cfg.captcha_enabled:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Captcha verification is currently disabled for this server."
-                ),
+                discord.ui.TextDisplay(content=_t(interaction, "captcha_disabled")),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
@@ -1535,9 +1776,7 @@ class CaptchaVerifyButton(discord.ui.Button):
         if user.id in _pending_verifications:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} You already have a captcha pending. Please check your DMs."
-                ),
+                discord.ui.TextDisplay(content=_t(interaction, "captcha_pending")),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
@@ -1555,12 +1794,10 @@ class CaptchaVerifyButton(discord.ui.Button):
             file = discord.File(img_bytes, filename="captcha.png")
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content="### Human Verification"
-                ),
+                discord.ui.TextDisplay(content=_t(interaction, "captcha_title")),
                 discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
                 discord.ui.TextDisplay(
-                    content="Type the code shown in the image below to verify you are human."
+                    content=_t(interaction, "captcha_dm_body")
                 ),
                 discord.ui.MediaGallery(
                     discord.MediaGalleryItem(
@@ -1568,16 +1805,14 @@ class CaptchaVerifyButton(discord.ui.Button):
                     )
                 ),
                 discord.ui.TextDisplay(
-                    content="-# The code is **case-insensitive**. You have **3 attempts**."
+                    content=_t(interaction, "captcha_dm_footer")
                 )
             )
             view.add_item(container)
             await dm.send(view=view, file=file)
             sent_view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('tick')} A captcha has been sent to your DMs. Please check and reply with the code."
-                ),
+                discord.ui.TextDisplay(content=_t(interaction, "captcha_sent")),
                 accent_colour=discord.Color.green()
             )
             sent_view.add_item(container)
@@ -1586,9 +1821,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             _pending_verifications.pop(user.id, None)
             error_view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} I couldn't send you a DM. Please enable DMs from server members and try again."
-                ),
+                discord.ui.TextDisplay(content=_t(interaction, "captcha_dm_blocked")),
                 accent_colour=discord.Color.red()
             )
             error_view.add_item(container)
@@ -1601,15 +1834,15 @@ class CaptchaVerifyButton(discord.ui.Button):
             interaction.client, guild_id, user.id, source=verification_modes.LABELS[verification_modes.CLICK],
         )
         if result["problem"] == "guild":
-            content = f"{get_emoji('tick')} Verification passed! However, I could not find the server to apply roles."
+            content = _t(interaction, "verified_no_guild")
         elif result["problem"] == "member":
-            content = f"{get_emoji('tick')} Verification passed! However, I could not find you in the server."
+            content = _t(interaction, "verified_no_member")
         else:
-            lines = ["### " + get_emoji('tick') + " Verification complete!", "You have been verified."]
+            lines = [_t(interaction, "verified_title"), _t(interaction, "verified_body")]
             if result["applied"]:
-                lines.append(f"Roles added: {', '.join(result['applied'])}")
+                lines.append(_t(interaction, "verified_roles_added", roles=", ".join(result["applied"])))
             if result["removed"]:
-                lines.append(f"Roles removed: {', '.join(result['removed'])}")
+                lines.append(_t(interaction, "verified_roles_removed", roles=", ".join(result["removed"])))
             content = "\n".join(lines)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
@@ -1626,7 +1859,7 @@ class CaptchaVerifyButton(discord.ui.Button):
         except verification_store.VerificationUnavailable:
             return await interaction.response.send_message(
                 view=_captcha_notice(
-                    f"{get_emoji('cross')} The verification page is unavailable right now. Please try again in a moment.",
+                    _t(interaction, "web_unavailable"),
                     discord.Color.red(),
                 ),
                 ephemeral=True,
@@ -1635,45 +1868,36 @@ class CaptchaVerifyButton(discord.ui.Button):
         link = verification_links.verification_url(challenge["token"])
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content="### Human Verification"),
+            discord.ui.TextDisplay(content=_t(interaction, "captcha_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=(
-                    "Open the page below and type the code it shows.\n\n"
-                    "The roles you need are added automatically as soon as the page confirms you."
-                )
-            ),
+            discord.ui.TextDisplay(content=_t(interaction, "web_body")),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Open verification page",
-                    style=discord.ButtonStyle.link,
+                    label=_t(interaction, "web_button"),
+                    style=discord.ui.ButtonStyle.link,
                     url=link,
                     emoji=get_emoji('tick'),
                 )
             ),
-            discord.ui.TextDisplay(
-                content="-# The link is personal to you and expires in 30 minutes."
-            ),
+            discord.ui.TextDisplay(content=_t(interaction, "web_footer")),
             accent_colour=discord.Colour(0x57F287),
         ))
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
 class CaptchaPanelView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, mode: str = None):
+    def __init__(self, guild_id: int, mode: str = None, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.mode = verification_modes.normalize_mode(mode)
 
-        prompt = verification_modes.PANEL_PROMPTS[self.mode]
+        prompt = _t(locale, f"prompt_{self.mode}")
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### Human Verification"),
+            discord.ui.TextDisplay(content=_t(locale, "captcha_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"Before you can access this server, you need to prove you're human.\n\n{prompt}"
-            ),
+            discord.ui.TextDisplay(content=_t(locale, "panel_intro", prompt=prompt)),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.ActionRow(CaptchaVerifyButton(guild_id)),
+            discord.ui.ActionRow(CaptchaVerifyButton(guild_id, _t(locale, "verify_button"))),
             accent_colour=discord.Colour(0x57F287),
         )
         self.add_item(container)
@@ -1682,9 +1906,9 @@ class CaptchaPanelView(discord.ui.LayoutView):
 # ------------ CAPTCHA SETUP COMPONENTS ------------
 
 class CaptchaAddRolesSelect(discord.ui.RoleSelect):
-    def __init__(self, guild_id: int, message: discord.Message):
+    def __init__(self, guild_id: int, message: discord.Message, locale=None):
         super().__init__(
-            placeholder="Choose roles to ADD after verification…",
+            placeholder=_t(locale, "captcha_add_roles_placeholder"),
             min_values=1,
             max_values=10,
         )
@@ -1705,18 +1929,22 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('tick')} Will **add** {', '.join(added)} on verification."
+                    content=f"{get_emoji('tick')} "
+                    + _t(interaction, "captcha_will_add", roles=", ".join(added))
                 ),
                 accent_colour=discord.Color.green()
             )
             view.add_item(container)
             await interaction.response.edit_message(view=view)
-            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)))
+            await self.message.edit(view=CaptchaSetupView(
+                self.guild_id, interaction.user, interaction.guild,
+                await get_config(self.guild_id), interaction,
+            ))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Those roles are already configured."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'captcha_already_configured')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1725,15 +1953,15 @@ class CaptchaAddRolesSelect(discord.ui.RoleSelect):
 
 
 class CaptchaAddRolesView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int, message: discord.Message):
+    def __init__(self, guild_id: int, message: discord.Message, locale=None):
         super().__init__()
-        self.add_item(CaptchaAddRolesSelect(guild_id, message))
+        self.add_item(CaptchaAddRolesSelect(guild_id, message, locale))
 
 
 class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
-    def __init__(self, guild_id: int, message: discord.Message):
+    def __init__(self, guild_id: int, message: discord.Message, locale=None):
         super().__init__(
-            placeholder="Choose roles to REMOVE after verification…",
+            placeholder=_t(locale, "captcha_remove_roles_placeholder"),
             min_values=1,
             max_values=10,
         )
@@ -1754,18 +1982,22 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('tick')} Will **remove** {', '.join(added)} on verification."
+                    content=f"{get_emoji('tick')} "
+                    + _t(interaction, "captcha_will_remove", roles=", ".join(added))
                 ),
                 accent_colour=discord.Color.green()
             )
             view.add_item(container)
             await interaction.response.edit_message(view=view)
-            await self.message.edit(view=CaptchaSetupView(self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id)))
+            await self.message.edit(view=CaptchaSetupView(
+                self.guild_id, interaction.user, interaction.guild,
+                await get_config(self.guild_id), interaction,
+            ))
         else:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Those roles are already configured."
+                    content=f"{get_emoji('cross')} {_t(interaction, 'captcha_already_configured')}"
                 ),
                 accent_colour=discord.Color.red()
             )
@@ -1774,9 +2006,9 @@ class CaptchaRemoveRolesSelect(discord.ui.RoleSelect):
 
 
 class CaptchaRemoveRolesView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int, message: discord.Message):
+    def __init__(self, guild_id: int, message: discord.Message, locale=None):
         super().__init__()
-        self.add_item(CaptchaRemoveRolesSelect(guild_id, message))
+        self.add_item(CaptchaRemoveRolesSelect(guild_id, message, locale))
 
 
 async def refresh_captcha_panel(interaction: discord.Interaction, guild_id: int, cfg: OnboardingConfig) -> bool:
@@ -1795,7 +2027,7 @@ async def refresh_captcha_panel(interaction: discord.Interaction, guild_id: int,
         return False
     try:
         message = await channel.fetch_message(cfg.captcha_panel_message_id)
-        view = CaptchaPanelView(guild_id, mode=cfg.captcha_mode)
+        view = CaptchaPanelView(guild_id, mode=cfg.captcha_mode, locale=guild)
         await message.edit(view=view)
         interaction.client.add_view(view, message_id=message.id)
         return True
@@ -1804,15 +2036,15 @@ async def refresh_captcha_panel(interaction: discord.Interaction, guild_id: int,
 
 
 class CaptchaModeSelect(discord.ui.Select):
-    def __init__(self, guild_id: int, message: discord.Message, current: str):
+    def __init__(self, guild_id: int, message: discord.Message, current: str, locale=None):
         current = verification_modes.normalize_mode(current)
         super().__init__(
-            placeholder="Choose how members prove they are human…",
+            placeholder=_t(locale, "captcha_mode_placeholder"),
             options=[
                 discord.SelectOption(
-                    label=verification_modes.LABELS[mode],
+                    label=_mode_label(locale, mode),
                     value=mode,
-                    description=verification_modes.DESCRIPTIONS[mode].replace("**", "")[:100],
+                    description=_mode_description(locale, mode).replace("**", "")[:100],
                     default=(mode == current),
                 )
                 for mode in verification_modes.MODES
@@ -1829,69 +2061,86 @@ class CaptchaModeSelect(discord.ui.Select):
         await refresh_captcha_panel(interaction, self.guild_id, cfg)
         await interaction.response.send_message(
             view=_captcha_notice(
-                f"{get_emoji('tick')} Verification method set to **{verification_modes.LABELS[mode]}**.\n"
-                f"{verification_modes.describe(mode)}",
+                f"{get_emoji('tick')} "
+                + _t(
+                    interaction, "captcha_mode_set",
+                    label=_mode_label(interaction, mode),
+                    description=_mode_description(interaction, mode),
+                ),
                 discord.Color.green(),
             ),
             ephemeral=True,
         )
         await self.message.edit(view=CaptchaSetupView(
-            self.guild_id, interaction.user, interaction.guild, await get_config(self.guild_id),
+            self.guild_id, interaction.user, interaction.guild,
+            await get_config(self.guild_id), interaction,
         ))
 
 
 class CaptchaModeView(discord.ui.ActionRow):
-    def __init__(self, guild_id: int, message: discord.Message, current: str):
+    def __init__(self, guild_id: int, message: discord.Message, current: str, locale=None):
         super().__init__()
-        self.add_item(CaptchaModeSelect(guild_id, message, current))
+        self.add_item(CaptchaModeSelect(guild_id, message, current, locale))
 
 
 class CaptchaSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig):
+    def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.author = author
         self.guild = guild
 
         mode = verification_modes.normalize_mode(cfg.captcha_mode)
-        status = f"{get_emoji('tick')} Enabled" if cfg.captcha_enabled else f"{get_emoji('cross')} Disabled"
-        channel_text = (
-            f"<#{cfg.captcha_channel_id}>" if cfg.captcha_channel_id else "Not set"
+        status = (
+            f"{get_emoji('tick')} {_t(locale, 'captcha_status_enabled')}" if cfg.captcha_enabled
+            else f"{get_emoji('cross')} {_t(locale, 'captcha_status_disabled')}"
         )
-        delivery_text = f"**{verification_modes.LABELS[mode]}**\n{verification_modes.describe(mode)}"
+        channel_text = (
+            f"<#{cfg.captcha_channel_id}>" if cfg.captcha_channel_id
+            else _t(locale, "not_set")
+        )
+        delivery_text = f"**{_mode_label(locale, mode)}**\n{_mode_description(locale, mode)}"
         restrictions = []
         if cfg.captcha_block_proxies:
-            restrictions.append("proxies, VPNs and Tor exits")
+            restrictions.append(_t(locale, "captcha_restrict_proxies"))
         if cfg.captcha_block_vpn:
-            restrictions.append("hosting and datacenter IP ranges")
+            restrictions.append(_t(locale, "captcha_restrict_vpn"))
         restrictions_text = (
-            f"Refused: {', '.join(restrictions)}" if restrictions else "None"
+            _t(locale, "captcha_refused", items=", ".join(restrictions)) if restrictions
+            else _t(locale, "none")
         )
         if restrictions and mode != verification_modes.WEB:
-            restrictions_text += "\n-# Only the website method can apply these, since it is the only one with an IP address."
+            restrictions_text += "\n" + _t(locale, "captcha_web_only_note")
         add_roles = (
             ", ".join(f"<@&{r}>" for r in cfg.captcha_add_role_ids)
             if cfg.captcha_add_role_ids
-            else "None"
+            else _t(locale, "none")
         )
         remove_roles = (
             ", ".join(f"<@&{r}>" for r in cfg.captcha_remove_role_ids)
             if cfg.captcha_remove_role_ids
-            else "None"
+            else _t(locale, "none")
         )
-        kick_text = "Yes" if cfg.captcha_kick_on_fail else "No"
-
-        info = (
-            f"**Status:** {status}\n"
-            f"**Verification panel channel:** {channel_text}\n"
-            f"**Verification method:** {delivery_text}\n"
-            f"**Proxy and VPN restrictions:** {restrictions_text}\n"
-            f"**Roles to add:** {add_roles}\n"
-            f"**Roles to remove:** {remove_roles}\n"
-            f"**Kick on 3 failed attempts:** {kick_text}"
+        kick_text = (
+            _t(locale, "captcha_kick_yes") if cfg.captcha_kick_on_fail
+            else _t(locale, "captcha_kick_no")
         )
 
-        toggle_label = "Disable Captcha" if cfg.captcha_enabled else "Enable Captcha"
+        info = _t(
+            locale, "captcha_info",
+            status=status,
+            channel=channel_text,
+            method=delivery_text,
+            restrictions=restrictions_text,
+            add=add_roles,
+            remove=remove_roles,
+            kick=kick_text,
+        )
+
+        toggle_label = (
+            _t(locale, "btn_disable_captcha") if cfg.captcha_enabled
+            else _t(locale, "btn_enable_captcha")
+        )
         toggle_style = discord.ButtonStyle.danger if cfg.captcha_enabled else discord.ButtonStyle.success
 
         class ToggleCaptchaBtn(discord.ui.Button):
@@ -1905,7 +2154,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -1927,11 +2176,17 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 # view.add_item(container)
                 # await interaction.response.send_message(view=view, ephemeral=True)
                 await interaction.response.defer()
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
+                await interaction.message.edit(view=CaptchaSetupView(
+                    self_inner.guild_id, interaction.user, interaction.guild,
+                    await get_config(self_inner.guild_id), interaction,
+                ))
 
         class PostPanelBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Post Verify Panel Here", style=discord.ButtonStyle.primary, emoji="📌")
+                super().__init__(
+                    label=_t(locale, "btn_post_verify_panel"),
+                    style=discord.ButtonStyle.primary, emoji="📌",
+                )
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -1940,14 +2195,16 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
                     view.add_item(container)
                     return await interaction.response.send_message(view=view, ephemeral=True)
                 c = await get_config(self_inner.guild_id)
-                panel_view = CaptchaPanelView(self_inner.guild_id, mode=c.captcha_mode)
+                panel_view = CaptchaPanelView(
+                    self_inner.guild_id, mode=c.captcha_mode, locale=interaction,
+                )
                 msg = None
                 if c.captcha_channel_id == interaction.channel.id and c.captcha_panel_message_id:
                     try:
@@ -1972,17 +2229,23 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('tick')} Verification panel posted in this channel."
+                        content=f"{get_emoji('tick')} {_t(interaction, 'captcha_panel_posted')}"
                     ),
                     accent_colour=discord.Color.green()
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
+                await interaction.message.edit(view=CaptchaSetupView(
+                    self_inner.guild_id, interaction.user, interaction.guild,
+                    await get_config(self_inner.guild_id), interaction,
+                ))
 
         class SetAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Set Roles to Add", style=discord.ButtonStyle.secondary, emoji="➕")
+                super().__init__(
+                    label=_t(locale, "btn_set_roles_add"),
+                    style=discord.ButtonStyle.secondary, emoji="➕",
+                )
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -1991,7 +2254,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -2001,16 +2264,19 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('settings')} Select roles to **add** to members after they pass verification:"
+                        content=f"{get_emoji('settings')} {_t(interaction, 'captcha_add_prompt')}"
                     ),
-                    CaptchaAddRolesView(self_inner.guild_id, message)
+                    CaptchaAddRolesView(self_inner.guild_id, message, interaction)
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
 
         class SetRemoveRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Set Roles to Remove", style=discord.ButtonStyle.secondary, emoji="➖")
+                super().__init__(
+                    label=_t(locale, "btn_set_roles_remove"),
+                    style=discord.ButtonStyle.secondary, emoji="➖",
+                )
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -2019,7 +2285,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -2029,16 +2295,19 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('settings')} Select roles to **remove** from members after they pass verification:"
+                        content=f"{get_emoji('settings')} {_t(interaction, 'captcha_remove_prompt')}"
                     ),
-                    CaptchaRemoveRolesView(self_inner.guild_id, message)
+                    CaptchaRemoveRolesView(self_inner.guild_id, message, interaction)
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
 
         class ToggleKickBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Toggle Kick on Fail", style=discord.ButtonStyle.secondary, emoji="🚫")
+                super().__init__(
+                    label=_t(locale, "btn_toggle_kick"),
+                    style=discord.ButtonStyle.secondary, emoji="🚫",
+                )
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -2047,7 +2316,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -2056,23 +2325,32 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 c = await get_config(self_inner.guild_id)
                 c.captcha_kick_on_fail = not c.captcha_kick_on_fail
                 await update_config(self_inner.guild_id, c)
-                state = "enabled" if c.captcha_kick_on_fail else "disabled"
-                emoji = get_emoji("tick") if state == "enabled" else get_emoji("cross")
-                color = discord.Color.green() if state == "enabled" else discord.Color.red()
+                state = (
+                    _t(interaction, "state_enabled") if c.captcha_kick_on_fail
+                    else _t(interaction, "state_disabled")
+                )
+                emoji = get_emoji("tick") if c.captcha_kick_on_fail else get_emoji("cross")
+                color = discord.Color.green() if c.captcha_kick_on_fail else discord.Color.red()
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{emoji} Kick on failed captcha **{state}**."
+                        content=f"{emoji} {_t(interaction, 'captcha_kick_state', state=state)}"
                     ),
                     accent_colour=color
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
+                await interaction.message.edit(view=CaptchaSetupView(
+                    self_inner.guild_id, interaction.user, interaction.guild,
+                    await get_config(self_inner.guild_id), interaction,
+                ))
 
         class ClearAddRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Clear Add Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("trash"))
+                super().__init__(
+                    label=_t(locale, "btn_clear_add_roles"),
+                    style=discord.ButtonStyle.danger, emoji=get_emoji("trash"),
+                )
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -2081,7 +2359,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -2093,17 +2371,23 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('tick')} Cleared all roles to add."
+                        content=f"{get_emoji('tick')} {_t(interaction, 'captcha_add_cleared')}"
                     ),
                     accent_colour=discord.Color.green()
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
+                await interaction.message.edit(view=CaptchaSetupView(
+                    self_inner.guild_id, interaction.user, interaction.guild,
+                    await get_config(self_inner.guild_id), interaction,
+                ))
 
         class ClearRemoveRolesBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Clear Remove Roles", style=discord.ButtonStyle.danger, emoji=get_emoji("trash"))
+                super().__init__(
+                    label=_t(locale, "btn_clear_remove_roles"),
+                    style=discord.ButtonStyle.danger, emoji=get_emoji("trash"),
+                )
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -2112,7 +2396,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -2124,17 +2408,23 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('tick')} Cleared all roles to remove."
+                        content=f"{get_emoji('tick')} {_t(interaction, 'captcha_remove_cleared')}"
                     ),
                     accent_colour=discord.Color.green()
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
+                await interaction.message.edit(view=CaptchaSetupView(
+                    self_inner.guild_id, interaction.user, interaction.guild,
+                    await get_config(self_inner.guild_id), interaction,
+                ))
 
         class ChangeMethodBtn(discord.ui.Button):
             def __init__(self_inner):
-                super().__init__(label="Change Method", style=discord.ButtonStyle.primary, emoji="🔀")
+                super().__init__(
+                    label=_t(locale, "btn_change_method"),
+                    style=discord.ButtonStyle.primary, emoji="🔀",
+                )
                 self_inner.guild_id = guild_id
                 self_inner.author = author
 
@@ -2143,7 +2433,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -2153,9 +2443,11 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{get_emoji('settings')} Choose how members prove they are human:"
+                        content=f"{get_emoji('settings')} {_t(interaction, 'captcha_method_prompt')}"
                     ),
-                    CaptchaModeView(self_inner.guild_id, interaction.message, c.captcha_mode),
+                    CaptchaModeView(
+                        self_inner.guild_id, interaction.message, c.captcha_mode, interaction,
+                    ),
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
@@ -2175,7 +2467,7 @@ class CaptchaSetupView(discord.ui.LayoutView):
                     view = discord.ui.LayoutView()
                     container = discord.ui.Container(
                         discord.ui.TextDisplay(
-                            content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                            content=_t(interaction, "not_allowed")
                         ),
                         accent_colour=discord.Color.red()
                     )
@@ -2190,16 +2482,25 @@ class CaptchaSetupView(discord.ui.LayoutView):
                 view = discord.ui.LayoutView()
                 container = discord.ui.Container(
                     discord.ui.TextDisplay(
-                        content=f"{emoji} Blocking {self_inner.noun} **{'enabled' if enabled else 'disabled'}**."
+                        content=f"{emoji} " + _t(
+                    interaction, "captcha_restriction_toggled",
+                    noun=self_inner.noun,
+                    state=_t(
+                        interaction, "state_enabled" if enabled else "state_disabled"
+                    ),
+                )
                     ),
                     accent_colour=color
                 )
                 view.add_item(container)
                 await interaction.response.send_message(view=view, ephemeral=True)
-                await interaction.message.edit(view=CaptchaSetupView(self_inner.guild_id, interaction.user, interaction.guild, await get_config(self_inner.guild_id)))
+                await interaction.message.edit(view=CaptchaSetupView(
+                    self_inner.guild_id, interaction.user, interaction.guild,
+                    await get_config(self_inner.guild_id), interaction,
+                ))
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### Captcha Verification Setup"),
+            discord.ui.TextDisplay(content=_t(locale, "captcha_setup_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=info),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
@@ -2208,12 +2509,18 @@ class CaptchaSetupView(discord.ui.LayoutView):
             discord.ui.ActionRow(ToggleKickBtn(), ClearAddRolesBtn(), ClearRemoveRolesBtn()),
             discord.ui.ActionRow(
                 ChangeMethodBtn(),
-                ToggleRestrictionBtn("captcha_block_proxies", "Block Proxies", "🛡️", "proxies and VPNs"),
-                ToggleRestrictionBtn("captcha_block_vpn", "Block VPNs", "🌐", "hosting addresses"),
+                ToggleRestrictionBtn(
+                    "captcha_block_proxies", _t(locale, "btn_block_proxies"), "🛡️",
+                    _t(locale, "captcha_proxies_noun"),
+                ),
+                ToggleRestrictionBtn(
+                    "captcha_block_vpn", _t(locale, "btn_block_vpn"), "🌐",
+                    _t(locale, "captcha_vpn_noun"),
+                ),
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+                content=_t(locale, "help_footer", support=links.SUPPORT_SERVER, docs=links.DOCS)
             ),
             accent_colour=discord.Colour(0x57F287),
         )
@@ -2221,8 +2528,11 @@ class CaptchaSetupView(discord.ui.LayoutView):
 
 
 class ConfigureCaptchaBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member):
-        super().__init__(label="Configure Captcha", style=discord.ButtonStyle.secondary, emoji="🔐")
+    def __init__(self, guild_id: int, author: discord.Member, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_configure_captcha"), style=discord.ButtonStyle.secondary,
+            emoji="🔐",
+        )
         self.guild_id = guild_id
         self.author = author
 
@@ -2231,14 +2541,17 @@ class ConfigureCaptchaBtn(discord.ui.Button):
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} This button can only be used by the person that triggered the command."
+                    content=_t(interaction, "not_allowed")
                 ),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
             return await interaction.response.send_message(view=view, ephemeral=True)
         await interaction.response.send_message(
-            view=CaptchaSetupView(self.guild_id, self.author, interaction.guild, await get_config(self.guild_id)),
+            view=CaptchaSetupView(
+                self.guild_id, self.author, interaction.guild,
+                await get_config(self.guild_id), interaction,
+            ),
             ephemeral=False,
         )
 
@@ -2246,9 +2559,9 @@ class ConfigureCaptchaBtn(discord.ui.Button):
 # -------------------- AGREE BUTTON & ROLE SELECT --------------------
 
 class AgreeButton(discord.ui.Button):
-    def __init__(self, guild_id: int):
+    def __init__(self, guild_id: int, label: str = "I Agree"):
         super().__init__(
-            label="I Agree",
+            label=label,
             style=discord.ButtonStyle.success,
             custom_id=f"rules_agree_{guild_id}"
         )
@@ -2261,9 +2574,7 @@ class AgreeButton(discord.ui.Button):
         if not cfg.rules_role_id:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} No role configured."
-                ),
+                discord.ui.TextDisplay(content=_t(interaction, "rules_no_role")),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
@@ -2273,9 +2584,7 @@ class AgreeButton(discord.ui.Button):
         if not role:
             view = discord.ui.LayoutView()
             container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} Configured role no longer exists."
-                ),
+                discord.ui.TextDisplay(content=_t(interaction, "rules_role_gone")),
                 accent_colour=discord.Color.red()
             )
             view.add_item(container)
@@ -2284,16 +2593,14 @@ class AgreeButton(discord.ui.Button):
         await interaction.user.add_roles(role, reason="Acknowledged rules")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"{get_emoji('tick')} You have acknowledged the rules."
-            ),
+            discord.ui.TextDisplay(content=_t(interaction, "rules_acknowledged")),
             accent_colour=discord.Color.green()
         )
         view.add_item(container)
         await interaction.followup.send(view=view, ephemeral=True)
 
 
-def _build_select_options(menu: dict) -> list[discord.SelectOption]:
+def _build_select_options(menu: dict, locale=None) -> list[discord.SelectOption]:
     options = []
     for o in (menu.get("options") or []):
         options.append(discord.SelectOption(
@@ -2303,7 +2610,7 @@ def _build_select_options(menu: dict) -> list[discord.SelectOption]:
             value=str(o["role_id"]),
         ))
     if not options:
-        options = [discord.SelectOption(label="No roles configured", value="none")]
+        options = [discord.SelectOption(label=_t(locale, "no_roles_option"), value="none")]
     return options
 
 
@@ -2315,7 +2622,8 @@ async def _apply_role_selection(interaction: discord.Interaction, guild_id: int,
     menu = (cfg.role_menus or {}).get(menu_id)
     if not menu:
         return await interaction.followup.send(
-            view=feedback_view("This role menu is no longer configured.", ok=False), ephemeral=True
+            view=feedback_view(_t(interaction, "error_menu_not_configured"), ok=False),
+            ephemeral=True,
         )
 
     member = interaction.user
@@ -2338,20 +2646,23 @@ async def _apply_role_selection(interaction: discord.Interaction, guild_id: int,
             await member.remove_roles(*to_remove, reason=f"Role menu: {menu['name']}")
     except discord.Forbidden:
         return await interaction.followup.send(
-            view=feedback_view("I don't have permission to manage one or more of these roles.", ok=False), ephemeral=True
+            view=feedback_view(_t(interaction, "error_no_permission_roles"), ok=False),
+            ephemeral=True,
         )
 
-    await interaction.followup.send(view=feedback_view("Roles updated."), ephemeral=True)
+    await interaction.followup.send(
+        view=feedback_view(_t(interaction, "roles_updated")), ephemeral=True
+    )
 
 
 class RoleMenuSelectMulti(discord.ui.Select):
-    def __init__(self, guild_id: int, menu_id: str, menu: dict):
+    def __init__(self, guild_id: int, menu_id: str, menu: dict, locale=None):
         self.guild_id = guild_id
         self.menu_id = menu_id
-        options = _build_select_options(menu)
+        options = _build_select_options(menu, locale)
         max_values = menu.get("max_values") or len(options)
         super().__init__(
-            placeholder="Select roles...",
+            placeholder=_t(locale, "select_roles_placeholder"),
             min_values=0,
             max_values=min(max_values, len(options)),
             options=options,
@@ -2364,12 +2675,12 @@ class RoleMenuSelectMulti(discord.ui.Select):
 
 
 class RoleMenuSelectSingle(discord.ui.Select):
-    def __init__(self, guild_id: int, menu_id: str, menu: dict):
+    def __init__(self, guild_id: int, menu_id: str, menu: dict, locale=None):
         self.guild_id = guild_id
         self.menu_id = menu_id
-        options = _build_select_options(menu)
+        options = _build_select_options(menu, locale)
         super().__init__(
-            placeholder="Select a role...",
+            placeholder=_t(locale, "select_role_placeholder"),
             min_values=0,
             max_values=1,
             options=options,
@@ -2402,23 +2713,27 @@ class RoleMenuToggleButton(discord.ui.Button):
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu:
             return await interaction.followup.send(
-                view=feedback_view("This role menu is no longer configured.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_menu_not_configured"), ok=False),
+                ephemeral=True,
             )
         role = interaction.guild.get_role(self.role_id)
         if not role:
-            return await interaction.followup.send(view=feedback_view("That role no longer exists.", ok=False), ephemeral=True)
+            return await interaction.followup.send(
+                view=feedback_view(_t(interaction, "error_role_gone"), ok=False), ephemeral=True
+            )
 
         member = interaction.user
         try:
             if role in member.roles:
                 await member.remove_roles(role, reason=f"Role menu: {menu['name']}")
-                msg = f"Removed {role.mention}."
+                msg = _t(interaction, "role_removed", role=role.mention)
             else:
                 await member.add_roles(role, reason=f"Role menu: {menu['name']}")
-                msg = f"Added {role.mention}."
+                msg = _t(interaction, "role_added", role=role.mention)
         except discord.Forbidden:
             return await interaction.followup.send(
-                view=feedback_view("I don't have permission to manage that role.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_no_permission_role"), ok=False),
+                ephemeral=True,
             )
         await interaction.followup.send(view=feedback_view(msg), ephemeral=True)
 
@@ -2445,11 +2760,14 @@ class RoleMenuRadioButton(discord.ui.Button):
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu:
             return await interaction.followup.send(
-                view=feedback_view("This role menu is no longer configured.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_menu_not_configured"), ok=False),
+                ephemeral=True,
             )
         role = interaction.guild.get_role(self.role_id)
         if not role:
-            return await interaction.followup.send(view=feedback_view("That role no longer exists.", ok=False), ephemeral=True)
+            return await interaction.followup.send(
+                view=feedback_view(_t(interaction, "error_role_gone"), ok=False), ephemeral=True
+            )
 
         member = interaction.user
         already_has = role in member.roles
@@ -2463,13 +2781,14 @@ class RoleMenuRadioButton(discord.ui.Button):
                 await member.remove_roles(*to_remove, reason=f"Role menu: {menu['name']}")
             if already_has:
                 await member.remove_roles(role, reason=f"Role menu: {menu['name']}")
-                msg = f"Removed {role.mention}."
+                msg = _t(interaction, "role_removed", role=role.mention)
             else:
                 await member.add_roles(role, reason=f"Role menu: {menu['name']}")
-                msg = f"Set your role to {role.mention}."
+                msg = _t(interaction, "role_set", role=role.mention)
         except discord.Forbidden:
             return await interaction.followup.send(
-                view=feedback_view("I don't have permission to manage one or more of these roles.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_no_permission_roles"), ok=False),
+                ephemeral=True,
             )
         await interaction.followup.send(view=feedback_view(msg), ephemeral=True)
 
@@ -2477,19 +2796,19 @@ class RoleMenuRadioButton(discord.ui.Button):
 # -------------------- PERSISTENT VIEWS --------------------
 
 class RulesAcknowledgeView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, cfg=None):
+    def __init__(self, guild_id: int, cfg=None, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
-        rules_text = (cfg.rules_text if cfg else None) or "No rules have been set yet."
+        rules_text = (cfg.rules_text if cfg else None) or _t(locale, "rules_default")
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### Server Rules"),
+            discord.ui.TextDisplay(content=_t(locale, "rules_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=rules_text),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content="-# Click the button below to acknowledge the rules."),
-            discord.ui.ActionRow(AgreeButton(guild_id)),
+            discord.ui.TextDisplay(content=_t(locale, "rules_footer")),
+            discord.ui.ActionRow(AgreeButton(guild_id, _t(locale, "rules_agree_button"))),
             accent_colour=discord.Colour(0xED4245)
         )
         self.add_item(container)
@@ -2499,14 +2818,14 @@ class RoleMenuView(discord.ui.LayoutView):
     """The live, persistent menu members interact with. Renders differently
     depending on the menu's configured menu_type."""
 
-    def __init__(self, guild_id: int, menu_id: str, cfg=None):
+    def __init__(self, guild_id: int, menu_id: str, cfg=None, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.menu_id = menu_id
         menu = (cfg.role_menus or {}).get(menu_id) or {}
 
-        title = menu.get("title") or "Role Selection"
-        description = menu.get("description") or "Choose your roles below."
+        title = menu.get("title") or _t(locale, "default_menu_title")
+        description = menu.get("description") or _t(locale, "default_menu_description")
         menu_type = menu.get("menu_type", DEFAULT_MENU_TYPE)
         options = menu.get("options") or []
 
@@ -2519,9 +2838,13 @@ class RoleMenuView(discord.ui.LayoutView):
         )
 
         if not options:
-            container.add_item(discord.ui.TextDisplay(content="*No roles have been configured for this menu yet.*"))
+            container.add_item(discord.ui.TextDisplay(
+                content=_t(locale, "no_roles_configured_body")
+            ))
         elif menu_type == "select_single":
-            container.add_item(discord.ui.ActionRow(RoleMenuSelectSingle(guild_id, menu_id, menu)))
+            container.add_item(
+                discord.ui.ActionRow(RoleMenuSelectSingle(guild_id, menu_id, menu, locale))
+            )
         elif menu_type in ("button_multi", "button_single"):
             all_role_ids = [o["role_id"] for o in options]
             row = discord.ui.ActionRow()
@@ -2541,7 +2864,9 @@ class RoleMenuView(discord.ui.LayoutView):
             if row_count:
                 container.add_item(row)
         else:  # select_multi (default)
-            container.add_item(discord.ui.ActionRow(RoleMenuSelectMulti(guild_id, menu_id, menu)))
+            container.add_item(
+                discord.ui.ActionRow(RoleMenuSelectMulti(guild_id, menu_id, menu, locale))
+            )
 
         self.add_item(container)
 
@@ -2549,37 +2874,37 @@ class RoleMenuView(discord.ui.LayoutView):
 # -------------------- SETUP VIEWS --------------------
 
 class OnboardingSetupView(discord.ui.LayoutView):
-    def __init__(self, guild_id: int, author: discord.Member, prefix: str = "."):
+    def __init__(self, guild_id: int, author: discord.Member, prefix: str = ".", locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### Onboarding Setup"),
+            discord.ui.TextDisplay(content=_t(locale, "setup_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="Use the buttons below to configure the onboarding system for your server."
+                content=_t(locale, "setup_body")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                SetWelcomeMsgBtn(guild_id, author),
-                SetWelcomeChannelBtn(guild_id, author),
+                SetWelcomeMsgBtn(guild_id, author, locale),
+                SetWelcomeChannelBtn(guild_id, author, locale),
             ),
             discord.ui.ActionRow(
-                SetGoodbyeMsgBtn(guild_id, author),
-                SetGoodbyeChannelBtn(guild_id, author),
+                SetGoodbyeMsgBtn(guild_id, author, locale),
+                SetGoodbyeChannelBtn(guild_id, author, locale),
             ),
             discord.ui.ActionRow(
-                SetRulesTextBtn(guild_id, author),
-                PostRulesBtn(guild_id, author),
-                SetRulesRoleBtn(guild_id, author),
+                SetRulesTextBtn(guild_id, author, locale),
+                PostRulesBtn(guild_id, author, locale),
+                SetRulesRoleBtn(guild_id, author, locale),
             ),
             discord.ui.ActionRow(
-                ConfigureAutorolesBtn(guild_id, author),
-                ConfigureCaptchaBtn(guild_id, author),
+                ConfigureAutorolesBtn(guild_id, author, locale),
+                ConfigureCaptchaBtn(guild_id, author, locale),
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+                content=_t(locale, "help_footer", support=links.SUPPORT_SERVER, docs=links.DOCS)
             ),
             accent_colour=discord.Colour(0x5865F2)
         )
@@ -2589,7 +2914,7 @@ class OnboardingSetupView(discord.ui.LayoutView):
 class RoleMenuManagerView(discord.ui.LayoutView):
     """Top-level `.onboarding role-menu` panel: lists all menus for the guild."""
 
-    def __init__(self, guild_id: int, author: discord.Member, cfg):
+    def __init__(self, guild_id: int, author: discord.Member, cfg, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
 
@@ -2598,60 +2923,71 @@ class RoleMenuManagerView(discord.ui.LayoutView):
         if menus:
             lines = []
             for m in menus.values():
-                posted = f" · posted in <#{m['channel_id']}>" if m.get("channel_id") and m.get("message_id") else ""
-                lines.append(
-                    f"• **{m['name']}** — {MENU_TYPE_LABELS.get(m['menu_type'], m['menu_type'])} · "
-                    f"{len(m.get('options') or [])} role(s){posted}"
+                posted = (
+                    _t(locale, "menu_posted_in", channel=m["channel_id"])
+                    if m.get("channel_id") and m.get("message_id") else ""
                 )
+                lines.append(_t(
+                    locale, "menu_line",
+                    name=m["name"],
+                    type=_menu_type_label(locale, m["menu_type"]),
+                    count=len(m.get("options") or []),
+                    posted=posted,
+                ))
             body = "\n".join(lines)
         else:
-            body = "No role menus configured yet. Create one to get started."
+            body = _t(locale, "menus_empty")
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content="### Role Menus"),
+            discord.ui.TextDisplay(content=_t(locale, "menus_title")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    f"Your server has **{len(menus)}** role menu(s).\n{body}\n\n"
-                    "-# Click **Create Role Menu** and I'll walk you through the rest step by step — "
-                    "everything is done with buttons and dropdowns, no role IDs to type."
-                )
+                content=_t(locale, "menus_summary", count=len(menus), body=body)
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         )
         if menus:
-            container.add_item(discord.ui.ActionRow(RoleMenuManagerSelect(guild_id, author, cfg)))
-        container.add_item(discord.ui.ActionRow(CreateRoleMenuBtn(guild_id, author)))
+            container.add_item(
+                discord.ui.ActionRow(RoleMenuManagerSelect(guild_id, author, cfg, locale))
+            )
+        container.add_item(discord.ui.ActionRow(CreateRoleMenuBtn(guild_id, author, locale)))
         container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         container.add_item(discord.ui.TextDisplay(
-            content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+            content=_t(locale, "help_footer", support=links.SUPPORT_SERVER, docs=links.DOCS)
         ))
         container.accent_colour = discord.Colour(0x57F287)
         self.add_item(container)
 
 
-WIZARD_TYPE_HINTS = {
-    "select_multi":  "One dropdown — members can pick several roles at once",
-    "select_single": "One dropdown — members can only pick one role",
-    "button_multi":  "Buttons — members can toggle any number on or off",
-    "button_single": "Buttons — picking one clears any other role in this menu",
+#: Locale key suffix for the plain-language hint under each menu type.
+WIZARD_TYPE_HINT_KEYS = {
+    "select_multi":  "wizard_hint_select_multi",
+    "select_single": "wizard_hint_select_single",
+    "button_multi":  "wizard_hint_button_multi",
+    "button_single": "wizard_hint_button_single",
 }
 
 
 class RoleMenuWizardTypeSelect(discord.ui.Select):
     """Step 2 of the guided setup: pick a menu type, described in plain language."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg, locale=None):
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
 
         current = cfg.role_menus[menu_id]["menu_type"]
         options = [
-            discord.SelectOption(label=label, value=key, description=WIZARD_TYPE_HINTS.get(key))
-            for key, label in MENU_TYPE_LABELS.items()
+            discord.SelectOption(
+                label=_menu_type_label(locale, key), value=key,
+                description=_t(locale, WIZARD_TYPE_HINT_KEYS[key]),
+            )
+            for key in MENU_TYPE_LABELS
         ]
-        super().__init__(placeholder="Choose how members will pick roles...", options=options, min_values=1, max_values=1)
+        super().__init__(
+            placeholder=_t(locale, "wizard_pick_placeholder"),
+            options=options, min_values=1, max_values=1,
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if not await check_author(interaction, self.author):
@@ -2659,34 +2995,46 @@ class RoleMenuWizardTypeSelect(discord.ui.Select):
         cfg = await get_config(self.guild_id)
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if menu is None:
-            return await interaction.response.edit_message(view=feedback_view("This role menu no longer exists.", ok=False))
+            return await interaction.response.edit_message(
+                view=feedback_view(_t(interaction, "error_menu_gone"), ok=False)
+            )
 
         menu["menu_type"] = self.values[0]
         await update_config(self.guild_id, cfg)
-        await interaction.response.edit_message(view=RoleMenuWizardAddRolesView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id)))
+        await interaction.response.edit_message(view=RoleMenuWizardAddRolesView(
+            self.guild_id, self.author, self.menu_id,
+            await get_config(self.guild_id), interaction,
+        ))
 
 
 class RoleMenuWizardTypeView(discord.ui.LayoutView):
     """Step 2 of 3 in the guided setup: choose the menu type."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg, locale=None):
         super().__init__(timeout=None)
         menu = cfg.role_menus[menu_id]
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### Setting up “{menu['name']}” — Step 2 of 3"),
+            discord.ui.TextDisplay(
+                content=_t(locale, "wizard_step2_title", name=menu["name"])
+            ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(content="Nice! Now pick how members will choose their roles from this menu."),
+            discord.ui.TextDisplay(content=_t(locale, "wizard_step2_body")),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.ActionRow(RoleMenuWizardTypeSelect(guild_id, author, menu_id, cfg)),
+            discord.ui.ActionRow(RoleMenuWizardTypeSelect(
+                guild_id, author, menu_id, cfg, locale,
+            )),
             accent_colour=discord.Colour(menu.get("color") or 0x57F287),
         )
         self.add_item(container)
 
 
 class WizardFinishBtn(discord.ui.Button):
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str):
-        super().__init__(label="Finish Setup", style=discord.ButtonStyle.primary, emoji=get_emoji('tick'))
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, locale=None):
+        super().__init__(
+            label=_t(locale, "btn_finish_setup"), style=discord.ButtonStyle.primary,
+            emoji=get_emoji('tick'),
+        )
         self.guild_id = guild_id
         self.author = author
         self.menu_id = menu_id
@@ -2698,15 +3046,19 @@ class WizardFinishBtn(discord.ui.Button):
         menu = (cfg.role_menus or {}).get(self.menu_id)
         if not menu or not menu.get("options"):
             return await interaction.response.send_message(
-                view=feedback_view("Add at least one role before finishing.", ok=False), ephemeral=True
+                view=feedback_view(_t(interaction, "error_add_role_first_finish"), ok=False),
+                ephemeral=True,
             )
-        await interaction.response.edit_message(view=RoleMenuEditView(self.guild_id, self.author, self.menu_id, await get_config(self.guild_id)))
+        await interaction.response.edit_message(view=RoleMenuEditView(
+            self.guild_id, self.author, self.menu_id,
+            await get_config(self.guild_id), interaction,
+        ))
 
 
 class RoleMenuWizardAddRolesView(discord.ui.LayoutView):
     """Step 3 of 3 in the guided setup: add roles via RoleSelect, no typing needed."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg, locale=None):
         super().__init__(timeout=None)
         menu = cfg.role_menus[menu_id]
         options = menu.get("options") or []
@@ -2714,22 +3066,23 @@ class RoleMenuWizardAddRolesView(discord.ui.LayoutView):
         opt_lines = "\n".join(
             f"{i + 1}. {(o.get('emoji') or '').strip()} **{o['label']}** — <@&{o['role_id']}>"
             for i, o in enumerate(options)
-        ) or "*No roles added yet.*"
+        ) or _t(locale, "no_roles_added")
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### Setting up “{menu['name']}” — Step 3 of 3"),
+            discord.ui.TextDisplay(
+                content=_t(locale, "wizard_step3_title", name=menu["name"])
+            ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=(
-                    "Add the roles members can choose from. Click **Add a Role**, then pick it from the "
-                    "dropdown that appears — no typing required.\n\n"
-                    f"**Roles added ({len(options)}/25):**\n{opt_lines}"
+                content=_t(
+                    locale, "wizard_step3_body",
+                    count=len(options), lines=opt_lines,
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                AddMenuOptionBtn(guild_id, author, menu_id, wizard=True),
-                WizardFinishBtn(guild_id, author, menu_id),
+                AddMenuOptionBtn(guild_id, author, menu_id, wizard=True, locale=locale),
+                WizardFinishBtn(guild_id, author, menu_id, locale),
             ),
             accent_colour=discord.Colour(menu.get("color") or 0x57F287),
         )
@@ -2739,7 +3092,7 @@ class RoleMenuWizardAddRolesView(discord.ui.LayoutView):
 class RoleMenuEditView(discord.ui.LayoutView):
     """Per-menu management panel: edit info/type, manage roles, post, delete."""
 
-    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg):
+    def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         self.menu_id = menu_id
@@ -2747,8 +3100,10 @@ class RoleMenuEditView(discord.ui.LayoutView):
 
         if menu is None:
             container = discord.ui.Container(
-                discord.ui.TextDisplay(content=f"{get_emoji('cross')} This role menu no longer exists."),
-                discord.ui.ActionRow(BackToManagerBtn(guild_id, author)),
+                discord.ui.TextDisplay(
+                    content=f"{get_emoji('cross')} {_t(locale, 'error_menu_gone')}"
+                ),
+                discord.ui.ActionRow(BackToManagerBtn(guild_id, author, locale)),
                 accent_colour=discord.Color.red(),
             )
             self.add_item(container)
@@ -2759,40 +3114,45 @@ class RoleMenuEditView(discord.ui.LayoutView):
             f"{i + 1}. {(o.get('emoji') or '').strip()} **{o['label']}** — <@&{o['role_id']}>"
             + (f" · _{o['description']}_" if o.get("description") else "")
             for i, o in enumerate(options)
-        ) or "No roles added yet."
+        ) or _t(locale, "no_roles_added_plain")
 
-        posted = f"\n📌 Posted in <#{menu['channel_id']}>" if menu.get("channel_id") and menu.get("message_id") else ""
+        posted = (
+            _t(locale, "menu_posting_line", channel=menu["channel_id"])
+            if menu.get("channel_id") and menu.get("message_id") else ""
+        )
 
-        info = (
-            f"**Title:** {menu['title']}\n"
-            f"**Description:** {menu['description']}\n"
-            f"**Type:** {MENU_TYPE_LABELS.get(menu['menu_type'], menu['menu_type'])}\n"
-            f"**Roles ({len(options)}/25):**\n{opt_lines}"
-            f"{posted}"
+        info = _t(
+            locale, "menu_edit_info",
+            title=menu["title"],
+            description=menu["description"],
+            type=_menu_type_label(locale, menu["menu_type"]),
+            count=len(options),
+            lines=opt_lines,
+            posted=posted,
         )
 
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### Managing: {menu['name']}"),
+            discord.ui.TextDisplay(content=_t(locale, "menu_managing_title", name=menu["name"])),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=info),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                EditMenuInfoBtn(guild_id, author, menu_id),
-                ChangeMenuTypeBtn(guild_id, author, menu_id),
-                AddMenuOptionBtn(guild_id, author, menu_id),
+                EditMenuInfoBtn(guild_id, author, menu_id, locale),
+                ChangeMenuTypeBtn(guild_id, author, menu_id, locale),
+                AddMenuOptionBtn(guild_id, author, menu_id, locale=locale),
             ),
             discord.ui.ActionRow(
-                EditMenuOptionBtn(guild_id, author, menu_id),
-                RemoveMenuOptionBtn(guild_id, author, menu_id),
+                EditMenuOptionBtn(guild_id, author, menu_id, locale),
+                RemoveMenuOptionBtn(guild_id, author, menu_id, locale),
             ),
             discord.ui.ActionRow(
-                PostMenuBtn(guild_id, author, menu_id),
-                DeleteMenuBtn(guild_id, author, menu_id),
-                BackToManagerBtn(guild_id, author),
+                PostMenuBtn(guild_id, author, menu_id, locale),
+                DeleteMenuBtn(guild_id, author, menu_id, locale),
+                BackToManagerBtn(guild_id, author, locale),
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Need help?**\n-# Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+                content=_t(locale, "help_footer", support=links.SUPPORT_SERVER, docs=links.DOCS)
             ),
             accent_colour=discord.Colour(menu.get("color") or 0x57F287),
         )

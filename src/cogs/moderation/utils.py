@@ -422,11 +422,19 @@ class ModerationUtils(commands.Cog):
         description: str,
         target: discord.Member | discord.User | None = None,
         moderator: discord.Member | None = None,
+        display_title: str | None = None,
     ):
-        """Delegate to the ServerLogger cog for structured, categorised logging."""
+        """Delegate to the ServerLogger cog for structured, categorised logging.
+
+        ``display_title`` is the translated heading; ``title`` stays the
+        English key that picks the log category.
+        """
         logger = self.bot.get_cog("ServerLogger")
         if logger:
-            await logger.log_action(guild, title, description, target=target, moderator=moderator)
+            await logger.log_action(
+                guild, title, description,
+                target=target, moderator=moderator, display_title=display_title,
+            )
 
     # ---------- WARN SYSTEM (DATABASE) ----------
 

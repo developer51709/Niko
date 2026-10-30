@@ -2,9 +2,10 @@
 
 Niko publishes its Privacy Policy and Terms of Service in four places: the
 website (`web/src/pages/LegalPage.tsx`), the repository docs, and the
-`/legal` command in three languages. They are maintained by hand, so these
-checks pin the payment, refund, and volunteer-run language that the premium
-update depends on.
+`/legal` command in three languages (the strings live in
+`src/cogs/legal/locales/`). They are maintained by hand, so these checks pin
+the payment, refund, and volunteer-run language that the premium update depends
+on.
 """
 
 from pathlib import Path
@@ -13,9 +14,17 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+#: The three `/legal` catalogues, one per language.
+LEGAL_LOCALES = [f"src/cogs/legal/locales/{lang}.json" for lang in ("en", "de", "es")]
+
 
 def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def _legal_copy() -> str:
+    """Every `/legal` string in every language, as one searchable blob."""
+    return "\n".join(_read(path) for path in LEGAL_LOCALES)
 
 
 @pytest.mark.parametrize(
@@ -24,7 +33,7 @@ def _read(path: str) -> str:
         "web/src/pages/LegalPage.tsx",
         "docs/privacy-policy.md",
         "docs/terms-of-service.md",
-        "src/cogs/legal/cog.py",
+        *LEGAL_LOCALES,
     ],
 )
 def test_every_legal_copy_names_the_payment_processor(path):
@@ -55,7 +64,7 @@ def test_the_privacy_policy_covers_payment_records_and_premium_images():
 
 
 def test_the_legal_command_carries_the_same_payment_sections_in_all_languages():
-    cog = _read("src/cogs/legal/cog.py")
+    cog = _legal_copy()
 
     assert "**8. Payments & crypto**" in cog
     assert "**8. Zahlungen & Krypto**" in cog
@@ -82,7 +91,6 @@ def test_the_data_removal_page_is_linked_from_the_legal_pages():
         "web/src/pages/LegalPage.tsx",
         "docs/privacy-policy.md",
         "docs/terms-of-service.md",
-        "src/cogs/legal/cog.py",
     ],
 )
 def test_every_legal_copy_says_moderation_records_are_preserved(path):
@@ -92,8 +100,21 @@ def test_every_legal_copy_says_moderation_records_are_preserved(path):
     assert "blacklist" in text
     assert "giveaway ban" in text
     assert "court record" in text
-    # The website copies use the literal URL; the bot imports the shared link.
+    # The website copies use the literal URL; the bot's catalogue uses a token
+    # that resolves to the shared link from config/links.py.
     assert "sorenthedev.indevs.in" in text or "owner_contact" in text
+
+
+def test_the_legal_command_says_moderation_records_are_preserved():
+    """German and Spanish translate the wording, so the bot's copies are read
+    together: at least the English one carries the English phrases."""
+    text = _legal_copy().lower()
+
+    assert "moderation" in text
+    assert "blacklist" in text
+    assert "giveaway ban" in text
+    assert "court record" in text
+    assert "owner_contact" in text
 
 
 def test_the_effective_date_moved_with_the_premium_launch():

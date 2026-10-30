@@ -6,6 +6,10 @@ from discord.ext import commands
 from ._messages import msg, _cv2, _chunked_purge
 from config.emojis import get_emoji
 
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 
 class MessagesMixin:
     """clear and purge commands."""
@@ -52,14 +56,14 @@ class MessagesMixin:
         await ctx.send(f"{get_emoji('broom')} {message}", delete_after=5, ephemeral=True)
         await self.logger().log_event(ctx.guild, category, action, body, target_id=target_id, action_key=action)
 
-    @commands.hybrid_command(name="clear", aliases=["purge"], description="Clear messages, optionally from one member",
-                             help="{ 'en': 'Clear messages in this channel. Use an amount first, then optionally a member.', 'de': 'Nachrichten löschen. Gib zuerst eine Anzahl und danach optional einen Nutzer an.', 'es': 'Borra mensajes. Indica primero una cantidad y luego opcionalmente un usuario.' }")
+    @commands.hybrid_command(name="clear", aliases=["purge"], description=CMDS.text("clear.description"),
+                             help=CMDS.help("clear"))
     @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
     async def clear(
         self,
         ctx,
-        count: int = commands.parameter(description="How many recent messages to delete (1–1000)."),
-        user: discord.Member = commands.parameter(default=None, description="Optionally limit deletion to this member's messages."),
+        count: int = commands.parameter(description=CMDS.arg("clear", "count")),
+        user: discord.Member = commands.parameter(default=None, description=CMDS.arg("clear", "user")),
     ):
         await self._purge_messages(ctx, user, count)

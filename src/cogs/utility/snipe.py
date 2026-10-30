@@ -6,62 +6,20 @@ import discord
 from discord.ext import commands
 from datetime import datetime, timezone
 
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
+
+from utils.command_locales import command_texts
+
+CMDS = command_texts(__package__)
+
 MAX_HISTORY = 10   # deleted messages kept per channel
 MAX_CONTENT = 900  # characters shown before truncation
 
-MESSAGES = {
-    "normal": {
-        "en": {
-            "empty":     "No recently deleted messages in this channel.",
-            "header":    "Sniped Message",
-            "no_text":   "*(no text content)*",
-            "attach":    "📎 {n} attachment(s)",
-            "footer":    "Deleted message {cur} of {total}",
-            "sticker":   "🎟️ Sticker: {name}",
-            "embed_msg": "*(had an embed)*",
-            "cleared":   "🧹 Cleared the snipe history for this channel.",
-            "already_empty": "There's nothing to clear — no recently deleted messages in this channel.",
-        },
-        "de": {
-            "empty":     "Keine kürzlich gelöschten Nachrichten in diesem Kanal.",
-            "header":    "Abgefangene Nachricht",
-            "no_text":   "*(kein Textinhalt)*",
-            "attach":    "📎 {n} Anhang/Anhänge",
-            "footer":    "Gelöschte Nachricht {cur} von {total}",
-            "sticker":   "🎟️ Aufkleber: {name}",
-            "embed_msg": "*(hatte einen Embed)*",
-            "cleared":   "🧹 Snipe-Verlauf für diesen Kanal wurde gelöscht.",
-            "already_empty": "Es gibt nichts zu löschen — keine kürzlich gelöschten Nachrichten in diesem Kanal.",
-        },
-        "es": {
-            "empty":     "No hay mensajes eliminados recientemente en este canal.",
-            "header":    "Mensaje cazado",
-            "no_text":   "*(sin contenido de texto)*",
-            "attach":    "📎 {n} archivo(s) adjunto(s)",
-            "footer":    "Mensaje eliminado {cur} de {total}",
-            "sticker":   "🎟️ Pegatina: {name}",
-            "embed_msg": "*(tenía un embed)*",
-            "cleared":   "🧹 Se borró el historial de mensajes cazados de este canal.",
-            "already_empty": "No hay nada que borrar — no hay mensajes eliminados recientemente en este canal.",
-        },
-    },
-}
+MESSAGES = load_locales("cogs.utility", "snipe")
 
 
-def get_lang(ctx: commands.Context) -> str:
-    if ctx and ctx.guild and ctx.guild.preferred_locale:
-        if str(ctx.guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(ctx.guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
-
-
-def msg_raw(ctx, key: str, **kwargs) -> str:
-    text = MESSAGES["normal"].get(get_lang(ctx), {}).get(key)
-    if text is None:
-        text = MESSAGES["normal"]["en"].get(key, key)
-    return text.format(**kwargs) if kwargs else text
+msg_raw = make_flat_msg(MESSAGES)
 
 
 # ───────────────────────────────────────────────────
@@ -233,8 +191,7 @@ class Snipe(commands.Cog):
     @commands.command(
         name="snipe",
         aliases=["sn", "s"],
-        help="{ 'en': 'see recently deleted messages 🔍', 'de': 'sieh kürzlich gelöschte nachrichten' }"
-    )
+        help=CMDS.help("snipe"))
     async def snipe(self, ctx: commands.Context):
         """Show the last deleted messages in this channel."""
         history = self._history.get(ctx.channel.id, [])
@@ -252,8 +209,7 @@ class Snipe(commands.Cog):
     @commands.command(
         name="clearsnipe",
         aliases=["cs"],
-        help="{ 'en': 'clear the deleted-message history for this channel 🧹', 'de': 'lösche den snipe-verlauf für diesen kanal' }"
-    )
+        help=CMDS.help("clearsnipe"))
     @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
     async def clearsnipe(self, ctx: commands.Context):
