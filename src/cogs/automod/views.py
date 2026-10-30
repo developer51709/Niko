@@ -5,6 +5,7 @@ import re
 import asyncio
 from utils import logging as log
 from config.emojis import get_emoji
+from utils.i18n import get_lang
 from utils.locales import load_locales
 
 # Every invite host Discord hands out: discord.gg short links plus the two
@@ -46,21 +47,6 @@ def _is_user_installed_app(meta) -> bool:
 # ──────────────────────────────────────────────────
 
 MESSAGES = load_locales("cogs.automod", "views")
-
-
-def get_lang(ctx_or_guild=None) -> str:
-    """Return 'de' when the guild's preferred locale is German, else 'en'."""
-    guild = None
-    if isinstance(ctx_or_guild, commands.Context):
-        guild = ctx_or_guild.guild
-    elif isinstance(ctx_or_guild, discord.Guild):
-        guild = ctx_or_guild
-    if guild and guild.preferred_locale:
-        if str(guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
 
 
 # Niko's own emojis, filled into the panel strings by _t(). Declared once here

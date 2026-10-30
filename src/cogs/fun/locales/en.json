@@ -51,7 +51,8 @@
     "unblock_success": "✅ {target} can use roleplay commands on you again.",
     "not_blocked": "You haven't blocked {target}.",
     "cannot_block_self": "You can't block yourself — pick someone else!",
-    "db_fail": "Something went wrong saving that — try again in a moment!"
+    "db_fail": "Something went wrong saving that — try again in a moment!",
+    "pick_placeholder": "🎭 Pick a roleplay action…"
   },
   "roleplay_actions": {
     "hug_back": "Hug back",

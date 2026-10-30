@@ -43,7 +43,11 @@
     "steal_overview_slots": "Estáticos {static}/{limit} · Animados {animated}/{limit} espacios libres",
     "steal_aborted": "Subida detenida — ya no puedo gestionar emojis.",
     "steal_nothing_title": "No se robó nada",
-    "steal_full_title": "No quedan espacios de emoji"
+    "steal_full_title": "No quedan espacios de emoji",
+    "emoji_stats_title": "### Espacios de emojis 📊",
+    "emoji_stats_body": "**Estáticos**\n{static}/{limit}\n**Animados**\n{animated}/{limit}",
+    "emoji_removed": "🗑️ ¡`:{name}:` eliminado del servidor!",
+    "invalid_url": "URL no válida"
   },
   "prefix": {
     "production_only_title": "### {warning} Solo en Production",

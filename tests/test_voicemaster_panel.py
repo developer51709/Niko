@@ -281,12 +281,14 @@ class VoiceMasterSetupTests(unittest.TestCase):
 
 
 class VoiceMasterLocalizationTests(unittest.TestCase):
-    def test_german_and_spanish_translations_are_resolved(self):
+    def test_german_spanish_and_french_translations_are_resolved(self):
         self.assertEqual(vm_messages.text("de", "locked"), "Sprachkanal gesperrt.")
         self.assertEqual(vm_messages.text("es", "locked"), "Canal de voz bloqueado.")
+        self.assertEqual(vm_messages.text("fr", "locked"), "Salon vocal verrouillé.")
 
     def test_an_unsupported_language_falls_back_to_english(self):
-        self.assertEqual(vm_messages.text("fr", "locked"), "Voice channel locked.")
+        # Italian ships no catalogue, so it takes the English wording.
+        self.assertEqual(vm_messages.text("it", "locked"), "Voice channel locked.")
 
     def test_an_unknown_key_falls_back_to_the_key_itself(self):
         self.assertEqual(vm_messages.text("de", "not_a_real_key"), "not_a_real_key")
@@ -468,7 +470,7 @@ class VoiceMasterCommandMetadataTests(unittest.TestCase):
 
         for command in commands_seen:
             parsed = json.loads(str(command.help))
-            self.assertEqual(set(parsed), {"en", "de", "es"}, command.qualified_name)
+            self.assertEqual(set(parsed), {"en", "de", "es", "fr"}, command.qualified_name)
             self.assertTrue(all(parsed.values()), command.qualified_name)
 
     def test_every_command_help_matches_the_locale_catalog(self):
@@ -476,7 +478,7 @@ class VoiceMasterCommandMetadataTests(unittest.TestCase):
             key = self._help_key(command)
             self.assertIn(key, COMMAND_CATALOGUE["en"], command.qualified_name)
             parsed = json.loads(str(command.help))
-            for lang in ("en", "de", "es"):
+            for lang in ("en", "de", "es", "fr"):
                 self.assertEqual(
                     parsed[lang], COMMAND_CATALOGUE[lang][key],
                     f"{lang}:{key} drifted from the catalog",

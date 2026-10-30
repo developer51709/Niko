@@ -71,7 +71,9 @@
     "queue_more_other": "*…y {count} canciones más*",
     "queue_ghost_header": "-# 📻 **Sugerencias automáticas** (suenan cuando la cola se agota):",
     "queue_ghost_track": "   📻 {i}. **{title}** — {author} `[{dur}]`",
-    "queue_unknown": "Desconocido"
+    "queue_unknown": "Desconocido",
+    "queue_added_multi_title": "### {count} pista(s) añadida(s) a la cola",
+    "queue_added_multi_body": "Reproduciendo **{title}** + {count} más en cola."
   },
   "commands": {
     "autoplay.help": "activa o desactiva el autoplay de Last.fm 📻",

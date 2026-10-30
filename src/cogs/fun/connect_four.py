@@ -15,6 +15,7 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
+from utils.i18n import get_lang
 from utils.locales import load_locales
 
 from utils.command_locales import command_texts
@@ -51,22 +52,6 @@ _UI = load_locales("cogs.fun", "connect_four")
 def _t(lang: str, key: str, **kw) -> str:
     text = _UI.get(lang, _UI["en"]).get(key, _UI["en"].get(key, key))
     return text.format(**kw) if kw else text
-
-
-def get_lang(ctx_or_interaction=None) -> str:
-    guild = None
-    if isinstance(ctx_or_interaction, commands.Context):
-        guild = ctx_or_interaction.guild
-    elif isinstance(ctx_or_interaction, discord.Interaction):
-        guild = ctx_or_interaction.guild
-    elif isinstance(ctx_or_interaction, discord.Guild):
-        guild = ctx_or_interaction
-    if guild and guild.preferred_locale:
-        if str(guild.preferred_locale).lower().startswith("de"):
-            return "de"
-        if str(guild.preferred_locale).lower().startswith("es"):
-            return "es"
-    return "en"
 
 
 # ───────────────────────────────────────────────────

@@ -51,7 +51,8 @@
     "unblock_success": "✅ {target} ya puede usar comandos de roleplay contigo de nuevo.",
     "not_blocked": "No has bloqueado a {target}.",
     "cannot_block_self": "¡No puedes bloquearte a ti mismo — elige a otra persona!",
-    "db_fail": "¡Algo salió mal al guardar eso — inténtalo en un momento!"
+    "db_fail": "¡Algo salió mal al guardar eso — inténtalo en un momento!",
+    "pick_placeholder": "🎭 Elige una acción de rol…"
   },
   "roleplay_actions": {
     "hug_back": "Abrazo de vuelta",

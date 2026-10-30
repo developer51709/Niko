@@ -1,5 +1,11 @@
 {
   "messages": {
-    "paused": "Diese Funktion ist pausiert, solange dein Server bei Niko gesperrt ist."
+    "paused": "Diese Funktion ist pausiert, solange dein Server bei Niko gesperrt ist.",
+    "blacklist_title": "# Server gesperrt",
+    "blacklist_from": "**Niko-Moderationsteam** · Offizielle Server-Kommunikation",
+    "blacklist_reason_title": "### Grund",
+    "blacklist_no_reason": "Kein Grund angegeben.",
+    "blacklist_body": "Nikos Funktionen wurden für diesen Server deaktiviert. Gespeicherte Einstellungen, Umfragen, Giveaways und das Starboard bleiben erhalten: Wird ein Einspruch angenommen, kommen sie unverändert zurück — außer dem Social-Notifier, den der Server im Dashboard selbst wieder einschaltet.",
+    "blacklist_appeal": "Lege Einspruch ein unter {url} oder wende dich an den Niko-Support."
   }
 }

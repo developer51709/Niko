@@ -19,7 +19,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
+#: Languages held to full key parity with English.
 LANGS = ("en", "de", "es")
+#: Shipped languages that may still lag behind English. Missing keys fall back
+#: to English at load time, so a rollout can grow batch by batch.
+ROLLOUT_LANGS = ("fr",)
+SHIPPED_LANGS = LANGS + ROLLOUT_LANGS
 
 #: A dict key that is a language code, at the start of a line — the shape of the
 #: old inline tables. Command decorators carry their translations inside a
@@ -47,19 +52,46 @@ def _catalogue_folder_ids() -> list[str]:
     return [str(folder.relative_to(ROOT)) for folder in _catalogue_folders()]
 
 
-def _read_catalogues(folder: Path) -> dict[str, dict]:
+def _read_catalogues(folder: Path, langs=LANGS) -> dict[str, dict]:
     return {
         lang: json.loads((folder / f"{lang}.json").read_text(encoding="utf-8"))
-        for lang in LANGS
+        for lang in langs
     }
 
 
-def test_every_catalogue_ships_english_german_and_spanish():
+def test_every_catalogue_ships_all_shipped_languages():
     folders = _catalogue_folders()
     assert folders, "no locales folders found"
     for folder in folders:
-        present = {lang for lang in LANGS if (folder / f"{lang}.json").is_file()}
-        assert present == set(LANGS), f"{folder} is missing {sorted(set(LANGS) - present)}"
+        present = {lang for lang in SHIPPED_LANGS if (folder / f"{lang}.json").is_file()}
+        assert present == set(SHIPPED_LANGS), (
+            f"{folder} is missing {sorted(set(SHIPPED_LANGS) - present)}"
+        )
+
+
+@pytest.mark.parametrize("relative", _catalogue_folder_ids())
+@pytest.mark.parametrize("language", ROLLOUT_LANGS)
+def test_rollout_catalogues_only_translate_known_keys(relative, language):
+    """A lagging language may skip keys, but never invent a dead one."""
+    folder = ROOT / relative
+    english = _read_catalogues(folder)["en"]
+    try:
+        translated = _read_catalogues(folder, (language,))[language]
+    except FileNotFoundError:
+        return
+    unknown = set(translated) - set(english)
+    assert not unknown, f"{relative}/{language}.json has unknown namespaces: {sorted(unknown)}"
+    for namespace, table in translated.items():
+        assert isinstance(table, dict), f"{relative}/{language}.json: {namespace} is not an object"
+        extra = set(table) - set(english[namespace])
+        assert not extra, (
+            f"{relative}/{language}.json/{namespace} has keys English does not define: {sorted(extra)}"
+        )
+        for key, value in table.items():
+            assert isinstance(value, type(english[namespace][key])), (
+                f"{relative}/{language}.json {namespace}.{key} must stay "
+                f"{type(english[namespace][key]).__name__}"
+            )
 
 
 @pytest.mark.parametrize("relative", _catalogue_folder_ids())
@@ -149,7 +181,7 @@ def test_every_command_text_reference_resolves():
 
 def test_command_text_entries_are_never_empty():
     for folder in _catalogue_folders():
-        for lang, data in _read_catalogues(folder).items():
+        for lang, data in _read_catalogues(folder, SHIPPED_LANGS).items():
             for key, value in data.get("commands", {}).items():
                 assert isinstance(value, str) and value.strip(), (
                     f"{folder.relative_to(ROOT)}/{lang}.json: commands.{key} is empty"
@@ -166,17 +198,23 @@ def test_every_load_locales_call_resolves():
 
     from utils.locales import load_locales
 
+    from utils.locales import SUPPORTED_LANGUAGES
+
     for path, package, namespace in calls:
         table = load_locales(package, namespace or None)
-        assert set(table) == set(LANGS), f"{path}: {package} is missing a language"
+        assert set(table) == set(SUPPORTED_LANGUAGES), f"{path}: {package} is missing a language"
         assert table["en"], f"{path}: {package}/{namespace or ''} is empty"
 
 
-def _write_package(root: Path, english: dict, german: dict, spanish: dict) -> str:
+def _write_package(root: Path, english: dict, german: dict, spanish: dict,
+                   french: dict | None = None) -> str:
     package = root / "locale_contract_pkg"
     (package / "locales").mkdir(parents=True)
     (package / "__init__.py").write_text("", encoding="utf-8")
-    for lang, data in (("en", english), ("de", german), ("es", spanish)):
+    # French is a rollout language: the contract allows it to lag behind, so a
+    # fixture that does not provide it still loads (English fills the gaps).
+    for lang, data in (("en", english), ("de", german), ("es", spanish),
+                       ("fr", english if french is None else french)):
         (package / "locales" / f"{lang}.json").write_text(
             json.dumps(data, ensure_ascii=False), encoding="utf-8"
         )
@@ -191,12 +229,14 @@ def _write_package(root: Path, english: dict, german: dict, spanish: dict) -> st
 def temporary_package(tmp_path, monkeypatch):
     created: list[str] = []
 
-    def make(english: dict, german: dict | None = None, spanish: dict | None = None) -> str:
+    def make(english: dict, german: dict | None = None, spanish: dict | None = None,
+             french: dict | None = None, *, partial_french: bool = False) -> str:
         name = _write_package(
             tmp_path,
             english,
             english if german is None else german,
             english if spanish is None else spanish,
+            {} if partial_french else french,
         )
         created.append(name)
         return name

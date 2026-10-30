@@ -1,0 +1,11 @@
+{
+  "messages": {
+    "rules_title": "### Serverregeln",
+    "rules_hint": "-# Klicke unten auf den Button, um die Regeln zu bestätigen.",
+    "rules_default": "Es wurden noch keine Regeln festgelegt.",
+    "goodbye_default_title": "Auf Wiedersehen!",
+    "goodbye_default_body": "Ein Mitglied hat den Server verlassen.",
+    "welcome_default_title": "Willkommen!",
+    "welcome_default_body": "Willkommen auf dem Server!"
+  }
+}

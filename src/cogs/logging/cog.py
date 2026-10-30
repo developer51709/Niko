@@ -5,6 +5,7 @@ import time
 
 import database
 from utils.command_locales import command_texts
+from utils.i18n import get_lang
 
 from .formatters import *
 from .revert import (
@@ -518,7 +519,7 @@ class ServerLogger(commands.Cog):
             action_key=action_key or title,
             channel_id=channel_id,
             thumbnail_url=thumbnail_url,
-            lang=_panel_lang(guild),
+            lang=get_lang(guild),
         )
         try:
             await log_channel_limiter.acquire((guild.id, pending.channel_id))
@@ -591,7 +592,7 @@ class ServerLogger(commands.Cog):
             files=files,
             file_components=file_components,
             revert=revert,
-            lang=_panel_lang(guild),
+            lang=get_lang(guild),
         )
         try:
             await log_channel_limiter.acquire((guild.id, getattr(channel, "id", 0)))
@@ -2048,19 +2049,21 @@ class ServerLogger(commands.Cog):
         await self._reload()
         cfg = self._get_cfg(ctx.guild.id)
         icon = get_emoji("settings")
+        lang = get_lang(ctx)
 
         lines = []
         for key, info in CATEGORIES.items():
             ch_id = cfg.get(key)
-            ch_text = f"<#{ch_id}>" if ch_id else "`Not set`"
+            ch_text = f"<#{ch_id}>" if ch_id else _t(lang, "status_not_set")
             disabled = key in cfg.get("disabled", [])
             status = get_emoji("disabled") if disabled else get_emoji("enabled")
-            lines.append(f"{status} **{info['label']}** — {ch_text}")
+            label = _t(lang, f"cat_{key}") or info["label"]
+            lines.append(f"{status} **{label}** — {ch_text}")
 
         body = "\n".join(lines)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {icon} Logging Status"),
+            discord.ui.TextDisplay(content=f"### {icon} {_t(lang, 'status_title')}"),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=body),
             accent_colour=discord.Colour(0x5865F2),

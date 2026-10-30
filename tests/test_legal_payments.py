@@ -63,6 +63,42 @@ def test_the_privacy_policy_covers_payment_records_and_premium_images():
     assert "wallet private keys" in privacy
 
 
+#: The phrase that publishes the bot-wide analytics disclosure, per copy.
+#: The website and docs are English; `/legal` carries all three languages.
+ANALYTICS_DISCLOSURE = {
+    "web/src/pages/LegalPage.tsx": (
+        "Global analytics",
+        "anonymous aggregate counters only",
+        "never seen, published, shared, or sold",
+    ),
+    "docs/privacy-policy.md": (
+        "Global analytics (anonymous)",
+        "never seen, published, shared, or sold",
+        "last 90 days",
+    ),
+    "src/cogs/legal/locales/en.json": (
+        "Global analytics (anonymous)",
+        "never seen, published, shared, or sold",
+    ),
+    "src/cogs/legal/locales/de.json": (
+        "Globale Analyse (anonym)",
+        "an Unternehmen oder Einzelpersonen verkauft",
+    ),
+    "src/cogs/legal/locales/es.json": (
+        "An\u00e1lisis global (an\u00f3nimo)",
+        "a ninguna empresa ni persona ajena",
+    ),
+}
+
+
+@pytest.mark.parametrize("path,tokens", ANALYTICS_DISCLOSURE.items())
+def test_every_privacy_copy_discloses_the_anonymous_global_analytics(path, tokens):
+    text = _read(path)
+
+    for token in tokens:
+        assert token in text, f"{path} is missing the analytics disclosure: {token!r}"
+
+
 def test_the_legal_command_carries_the_same_payment_sections_in_all_languages():
     cog = _legal_copy()
 
@@ -117,9 +153,9 @@ def test_the_legal_command_says_moderation_records_are_preserved():
     assert "owner_contact" in text
 
 
-def test_the_effective_date_moved_with_the_premium_launch():
-    assert "20 October 2026" in _read("web/src/pages/LegalPage.tsx")
-    assert "2026-10-20" in _read("docs/privacy-policy.md")
-    assert "2026-10-20" in _read("docs/terms-of-service.md")
-    # 20 October 2026 00:00 UTC, rendered as a Discord timestamp.
-    assert "1792454400" in _read("src/cogs/legal/cog.py")
+def test_the_effective_date_moved_with_the_analytics_disclosure():
+    assert "30 October 2026" in _read("web/src/pages/LegalPage.tsx")
+    assert "2026-10-30" in _read("docs/privacy-policy.md")
+    assert "2026-10-30" in _read("docs/terms-of-service.md")
+    # 30 October 2026 00:00 UTC, rendered as a Discord timestamp.
+    assert "1793318400" in _read("src/cogs/legal/cog.py")

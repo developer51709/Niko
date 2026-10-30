@@ -3,6 +3,7 @@ import time
 from types import SimpleNamespace
 
 from .views import *
+from utils.i18n import get_lang
 
 from utils.command_locales import command_texts
 
@@ -35,7 +36,7 @@ class Tickets(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def ticket_setup(self, ctx: commands.Context):
-        view = TicketSetupView(ctx.guild.id, ctx.author, lang=_ctx_lang(ctx))
+        view = TicketSetupView(ctx.guild.id, ctx.author, lang=get_lang(ctx))
         await ctx.send(view=view)
 
     # ───── admin: post panel here ─────────────────

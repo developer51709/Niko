@@ -1,0 +1,8 @@
+{
+  "blacklist": {
+    "title": "### {danger} Gesperrt",
+    "user_body": "Du bist für die Nutzung dieses Bots gesperrt.\n**Grund:** {reason}\n\nWenn du glaubst, dass das ein Fehler ist, lege hier Einspruch ein: {url}.",
+    "guild_body": "Dieser Server ist für die Nutzung dieses Bots gesperrt.\n**Grund:** {reason}\n\nWenn du glaubst, dass das ein Fehler ist, lege hier Einspruch ein: {url}.",
+    "no_reason": "Kein Grund angegeben."
+  }
+}

@@ -278,7 +278,7 @@ def _build_action_message(ctx_or_interaction, action: str, gif: str, actor, targ
     return title, desc, footer, view
 
 
-def build_picker_view(*, target_id: int, hint: str) -> discord.ui.LayoutView:
+def build_picker_view(*, target_id: int, hint: str, lang: str = "en") -> discord.ui.LayoutView:
     """Build the ephemeral CV2 action picker behind the ``Roleplay`` menu.
 
     A single select lists every action (in ``ACTIONS`` insertion order). The
@@ -288,7 +288,7 @@ def build_picker_view(*, target_id: int, hint: str) -> discord.ui.LayoutView:
     """
     select = discord.ui.Select(
         custom_id=f"{PICK_PREFIX}{int(target_id)}",
-        placeholder="🎭 Pick a roleplay action…",
+        placeholder=_STRINGS.get(lang, {}).get("pick_placeholder") or _STRINGS["en"]["pick_placeholder"],
         min_values=1,
         max_values=1,
     )
@@ -444,6 +444,7 @@ class RolePlayCog(commands.Cog):
         view = build_picker_view(
             target_id=member.id,
             hint=msg(interaction, "pick_hint", target=member.mention),
+            lang=get_lang(interaction),
         )
         try:
             await interaction.response.send_message(view=view, ephemeral=True)

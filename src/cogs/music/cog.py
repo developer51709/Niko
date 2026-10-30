@@ -1370,8 +1370,8 @@ class MusicSystem(commands.Cog):
                 multi.add_item(discord.ui.Container(
                     discord.ui.TextDisplay(
                         content=(
-                            f"### Added {queued_count} track{'s' if queued_count != 1 else ''} to the queue\n"
-                            f"Now playing **{now_playing.title}** + {queued_count} more queued."
+                            f"{msg(ctx, 'queue_added_multi_title', count=queued_count)}\n"
+                            f"{msg(ctx, 'queue_added_multi_body', title=now_playing.title, count=queued_count)}"
                         )
                     ),
                     accent_colour=_source_colour(now_playing),

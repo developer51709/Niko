@@ -125,7 +125,12 @@
     "panel_invalid_hex_top": "Color hex no válido. Usa el formato `#261a16` o `261a16`.",
     "panel_bg_bottom_modal_title": "Color del fondo inferior",
     "panel_bg_bottom_label": "Color hex (p. ej. #120c0a)",
-    "panel_invalid_hex_bottom": "Color hex no válido. Usa el formato `#120c0a` o `120c0a`."
+    "panel_invalid_hex_bottom": "Color hex no válido. Usa el formato `#120c0a` o `120c0a`.",
+    "panel_level_number_ph": "p. ej. 5",
+    "panel_accent_ph": "d96545",
+    "leaderboard_panel_title": "### 🏆 Tabla de niveles",
+    "leaderboard_panel_body": "La clasificación en vivo del servidor está en la web y se actualiza sola a medida que los miembros ganan XP.",
+    "leaderboard_panel_link": "[Abrir la clasificación del servidor]({url})"
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Segundos entre ganancias de XP (0 desactiva el enfriamiento).",

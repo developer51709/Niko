@@ -12,7 +12,8 @@ from utils import logging
 import utils.emojis as E
 from config.emojis import get_emoji
 from config import links
-from .messages import language_of, msg, text
+from utils.i18n import get_lang
+from .messages import msg, text
 
 from utils.command_locales import command_texts
 
@@ -223,7 +224,7 @@ class VoiceMasterInterface(discord.ui.LayoutView):
             return
         await interaction.response.send_message(
             view=DisconnectMemberView(
-                members, interaction.user, language_of(interaction)
+                members, interaction.user, get_lang(interaction)
             ),
             ephemeral=True
         )
@@ -785,7 +786,7 @@ class VoiceMaster(commands.Cog):
     @_voicemaster.command(help=CMDS.help("voicemaster.sendinterface"))
     @checks.has_perms(manage_guild=True)
     async def sendinterface(self, ctx):
-        await ctx.send(view=VoiceMasterInterface(language_of(ctx)))
+        await ctx.send(view=VoiceMasterInterface(get_lang(ctx)))
 
     @_voicemaster.command(help=CMDS.help("voicemaster.reset"))
     @checks.has_perms(manage_guild=True)

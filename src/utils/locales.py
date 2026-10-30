@@ -24,9 +24,9 @@ Modules load their slice with::
     from utils.locales import load_locales
     MESSAGES = load_locales(__package__, "birthdays")
 
-``load_locales`` returns ``{lang: {key: text}}`` with German and Spanish filled
-in from English for any key a translation has not caught up with yet, so a new
-English string never crashes a guild that speaks another language. Keys may map
+``load_locales`` returns ``{lang: {key: text}}`` with German, Spanish, and
+French filled in from English for any key a translation has not caught up with
+yet, so a new English string never crashes a guild that speaks another language. Keys may map
 to a string or to a list of strings (roleplay keeps its sentence variants in
 lists).
 """
@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 #: Languages the bot ships. English is the fallback for everything else.
-SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "de", "es")
+SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "de", "es", "fr")
 FALLBACK_LANGUAGE = "en"
 
 #: Folder name inside a cog package.

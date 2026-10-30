@@ -63,7 +63,14 @@
   "images": {
     "edit_removed_title": "### {image} Bildbearbeitung wurde entfernt",
     "edit_removed_body": "Die KI-Bildbearbeitung wurde eingestellt, weil die gehosteten Modelle pro Bearbeitung abgerechnet haben und wir keinen kostenlosen Anbieter gefunden haben, dessen Ergebnisse wir guten Gewissens ausliefern würden.\n\nDie **Bildgenerierung** ist weiterhin kostenlos und praktisch unbegrenzt — probiere `{prefix}imagine <prompt>`.\n\nWenn du einen Anbieter kennst, der einen Versuch wert ist (ein großzügiges Gratis-Kontingent oder etwas, das wir selbst hosten könnten), komm auf den Support-Server und lass einen Vorschlag da. Wir würden die Bearbeitung wirklich gern zurückbringen.",
-    "suggest_provider": "Anbieter vorschlagen"
+    "suggest_provider": "Anbieter vorschlagen",
+    "generation_failed_title": "### {danger} Generierung fehlgeschlagen",
+    "generated_title": "{image} Generiertes Bild",
+    "generated_prompt": "-# Prompt: *{prompt}*",
+    "provider_busy": "Der Bildanbieter ist gerade ausgelastet. Versuch es gleich noch einmal.",
+    "provider_unreachable": "Der Bildanbieter war nicht erreichbar. Versuch es gleich noch einmal.",
+    "provider_empty": "Der Bildanbieter hat ein leeres Bild zurückgegeben. Versuch es gleich noch einmal.",
+    "provider_nothing": "Der Bildanbieter hat nichts zurückgegeben. Versuch es gleich noch einmal."
   },
   "commands": {
     "ai-config.description": "Konfiguriere die KI-Einstellungen für diesen Server",

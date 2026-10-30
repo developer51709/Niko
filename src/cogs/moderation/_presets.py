@@ -121,11 +121,13 @@ PRESET_FILTERS: tuple[PresetFilter, ...] = (
             "en": "Slurs & hate speech",
             "de": "Beleidigungen & Hassrede",
             "es": "Insultos y discurso de odio",
+            "fr": "Insultes et discours haineux",
         },
         descriptions={
             "en": "Racial, ethnic, religious, homophobic and ableist slurs, including leet or spaced-out spellings.",
             "de": "Rassistische, ethnische, religiöse, homophobe und ableistische Beleidigungen — auch in Leet- oder getrennter Schreibweise.",
             "es": "Insultos raciales, étnicos, religiosos, homófobos y capacitistas, incluso escritos con leet o separados.",
+            "fr": "Insultes racistes, ethniques, religieuses, homophobes et validistes, y compris en écriture leet ou espacée.",
         },
         terms=(
             "nigger", "nigga", "niglet", "nigglet", "faggot", "fagg", "fag",
@@ -144,11 +146,13 @@ PRESET_FILTERS: tuple[PresetFilter, ...] = (
             "en": "Severe profanity",
             "de": "Derbe Flüche",
             "es": "Palabrotas graves",
+            "fr": "Jurements violents",
         },
         descriptions={
             "en": "The heavy swear words, matched as whole words so ordinary words are safe.",
             "de": "Die derben Schimpfwörter — als ganze Wörter, damit normale Wörter sicher bleiben.",
             "es": "Las palabrotas más fuertes, como palabras completas para no afectar a otras.",
+            "fr": "Les jurons les plus violents, détectés comme mots entiers pour épargner les mots courants.",
         },
         terms=(
             "fuck", "motherfucker", "shit", "bullshit", "dipshit", "dumbass",
@@ -164,11 +168,13 @@ PRESET_FILTERS: tuple[PresetFilter, ...] = (
             "en": "Sexual content",
             "de": "Sexuelle Inhalte",
             "es": "Contenido sexual",
+            "fr": "Contenu sexuel",
         },
         descriptions={
             "en": "Explicit sexual terms and adult-platform spam bait.",
             "de": "Explizite sexuelle Begriffe und Werbe-Köder von Erwachsenenportalen.",
             "es": "Términos sexuales explícitos y cebos de spam de plataformas para adultos.",
+            "fr": "Termes sexuels explicites et appâts de spam des plateformes pour adultes.",
         },
         terms=(
             # "onlyfans" is deliberately absent: bridging the space would flag
@@ -186,11 +192,13 @@ PRESET_FILTERS: tuple[PresetFilter, ...] = (
             "en": "Threats & self-harm bait",
             "de": "Drohungen & Selbstverletzung",
             "es": "Amenazas y autolesión",
+            "fr": "Menaces et incitation à l'automutilation",
         },
         descriptions={
             "en": "Telling someone to kill themselves, and the short forms used for it.",
             "de": "Aufforderungen, sich umzubringen, samt der üblichen Kurzformen.",
             "es": "Decirle a alguien que se mate, incluidas las formas cortas.",
+            "fr": "Dire à quelqu'un de se tuer, ainsi que les formes abrégées employées pour le faire.",
         },
         terms=(
             "kill yourself", "kill yourselves", "kill urself", "kill ur self",

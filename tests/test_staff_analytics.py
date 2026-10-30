@@ -72,17 +72,21 @@ def test_the_language_census_ranks_guilds_and_marks_supported_locales(monkeypatc
         _guild("en-US", 200),
         _guild("en-GB", 60),
         _guild("fr", 30),
+        _guild("ja", 10),
     ])
 
-    assert census["guilds"] == 4
-    assert census["members"] == 330
-    assert [row["code"] for row in census["languages"]] == ["en", "de", "fr"]
+    assert census["guilds"] == 5
+    assert census["members"] == 340
+    assert [row["code"] for row in census["languages"]] == ["en", "de", "fr", "ja"]
     english = census["languages"][0]
     assert english["guilds"] == 2
     assert english["members"] == 260
-    assert english["share"] == 0.5
+    assert english["share"] == 0.4
     assert english["supported"] is True
-    assert census["languages"][2]["supported"] is False
+    # French ships, Japanese does not, and the census says which is worth a
+    # translation rollout.
+    assert census["languages"][2]["supported"] is True
+    assert census["languages"][3]["supported"] is False
 
 
 def test_the_endpoint_is_staff_only(monkeypatch, tmp_path):

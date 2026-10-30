@@ -778,11 +778,11 @@ def test_the_catalog_describes_every_filter_in_three_languages():
         assert entry["label"] == preset.labels["en"]
         assert entry["description"]
         assert entry["terms"] == len(preset.terms) > 0
-        for lang in ("en", "de", "es"):
+        for lang in ("en", "de", "es", "fr"):
             assert preset_label(preset, lang) and preset_description(preset, lang)
     # An unknown language falls back to English rather than raising.
-    assert preset_label(PRESET_FILTERS[0], "fr") == PRESET_FILTERS[0].labels["en"]
-    assert preset_description(PRESET_FILTERS[0], "fr") == PRESET_FILTERS[0].descriptions["en"]
+    assert preset_label(PRESET_FILTERS[0], "ja") == PRESET_FILTERS[0].labels["en"]
+    assert preset_description(PRESET_FILTERS[0], "ja") == PRESET_FILTERS[0].descriptions["en"]
     assert preset_catalog("de")[0]["label"] == PRESET_FILTERS[0].labels["de"]
 
 
@@ -962,11 +962,14 @@ def test_the_panel_speaks_the_guild_language_and_falls_back_to_english():
     utils = make_utils(presets=["slurs"])
     german = _panel_text(_panel(utils, "overview", discord.Locale.german))
     spanish = _panel_text(_panel(utils, "overview", discord.Locale.spain_spanish))
-    english = _panel_text(_panel(utils, "overview", discord.Locale.french))
+    french = _panel_text(_panel(utils, "overview", discord.Locale.french))
+    # An unsupported locale is the fallback case: French ships a catalogue.
+    english = _panel_text(_panel(utils, "overview", discord.Locale.italian))
     assert "Gesperrte Wörter" in german
     assert "Palabras bloqueadas" in spanish
+    assert "Mots bloqués" in french
     assert "Blocked Words" in english
-    assert len({german, spanish, english}) == 3
+    assert len({german, spanish, french, english}) == 4
 
 
 def test_every_panel_string_exists_in_every_language():

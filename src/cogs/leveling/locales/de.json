@@ -125,7 +125,12 @@
     "panel_invalid_hex_top": "Ungültige Hex-Farbe. Nutze das Format `#261a16` oder `261a16`.",
     "panel_bg_bottom_modal_title": "Hintergrundfarbe unten",
     "panel_bg_bottom_label": "Hex-Farbe (z. B. #120c0a)",
-    "panel_invalid_hex_bottom": "Ungültige Hex-Farbe. Nutze das Format `#120c0a` oder `120c0a`."
+    "panel_invalid_hex_bottom": "Ungültige Hex-Farbe. Nutze das Format `#120c0a` oder `120c0a`.",
+    "panel_level_number_ph": "z. B. 5",
+    "panel_accent_ph": "d96545",
+    "leaderboard_panel_title": "### 🏆 Leveling-Bestenliste",
+    "leaderboard_panel_body": "Die Live-Rangliste des Servers liegt auf der Website und aktualisiert sich, während Mitglieder XP sammeln.",
+    "leaderboard_panel_link": "[Server-Rangliste öffnen]({url})"
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Sekunden zwischen XP-Zugewinnen (0 deaktiviert den Cooldown).",

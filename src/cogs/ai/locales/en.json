@@ -63,7 +63,14 @@
   "images": {
     "edit_removed_title": "### {image} Image editing was removed",
     "edit_removed_body": "AI image editing was retired because the hosted models charged per edit, and we have not found a free provider that produces results we would be happy to ship.\n\nImage **generation** is still free and unlimited-ish — try `{prefix}imagine <prompt>`.\n\nIf you know a provider worth trying (a generous free tier or something we could self-host), join the support server and leave a suggestion. We would genuinely like to bring editing back.",
-    "suggest_provider": "Suggest a provider"
+    "suggest_provider": "Suggest a provider",
+    "generation_failed_title": "### {danger} Generation Failed",
+    "generated_title": "{image} Generated Image",
+    "generated_prompt": "-# Prompt: *{prompt}*",
+    "provider_busy": "The image provider is busy right now. Try again in a moment.",
+    "provider_unreachable": "The image provider could not be reached. Try again in a moment.",
+    "provider_empty": "The image provider sent back an empty image. Try again in a moment.",
+    "provider_nothing": "The image provider returned nothing. Try again in a moment."
   },
   "commands": {
     "ai-config.description": "Configure the AI settings for this server",

@@ -71,7 +71,9 @@
     "queue_more_other": "*…und {count} weitere Titel*",
     "queue_ghost_header": "-# 📻 **Autoplay-Vorschläge** (laufen, wenn die Warteschlange leer ist):",
     "queue_ghost_track": "   📻 {i}. **{title}** — {author} `[{dur}]`",
-    "queue_unknown": "Unbekannt"
+    "queue_unknown": "Unbekannt",
+    "queue_added_multi_title": "### {count} Titel zur Warteschlange hinzugefügt",
+    "queue_added_multi_body": "Läuft jetzt: **{title}** + {count} weitere in der Warteschlange."
   },
   "commands": {
     "autoplay.help": "schaltet Last.fm-Autoplay um",

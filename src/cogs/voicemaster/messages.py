@@ -14,8 +14,6 @@ they are literal commands, not prose.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from utils.i18n import get_lang, make_flat_msg
 from utils.locales import load_locales
 
@@ -40,16 +38,4 @@ def text(lang: str, key: str, **values) -> str:
     return template.format(**values) if values else template
 
 
-def language_of(context) -> str:
-    """The language code for a context, an interaction, or a raw guild.
-
-    Panels posted outside a command (the support server's seeded panels) only
-    have the guild to read from, and a guild carries the locale directly while
-    ``get_lang`` expects something that holds a ``guild``.
-    """
-    if context is not None and hasattr(context, "preferred_locale"):
-        context = SimpleNamespace(guild=context)
-    return get_lang(context)
-
-
-__all__ = ["MESSAGES", "msg", "text", "language_of"]
+__all__ = ["MESSAGES", "msg", "text"]

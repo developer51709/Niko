@@ -92,6 +92,11 @@ def test_the_prompt_is_url_encoded(cog):
     assert _Session.params["seed"] >= 1
 
 
+def _wording(key: str) -> str:
+    """The English text a failure key renders to."""
+    return images.MESSAGES["en"][key]
+
+
 def test_a_provider_error_becomes_a_friendly_message(cog):
     _Session.response = _Response(status=502, body=b"", text="upstream down")
 
@@ -100,7 +105,10 @@ def test_a_provider_error_becomes_a_friendly_message(cog):
 
     image, error = asyncio.run(run())
     assert image is None
-    assert "busy" in error.lower()
+    # The provider layer reports a catalogue key; the command renders it in the
+    # guild's language.
+    assert error == "provider_busy"
+    assert "busy" in _wording(error).lower()
 
 
 def test_an_empty_body_is_an_error(cog):
@@ -111,7 +119,8 @@ def test_an_empty_body_is_an_error(cog):
 
     image, error = asyncio.run(run())
     assert image is None
-    assert "empty" in error.lower()
+    assert error == "provider_empty"
+    assert "empty" in _wording(error).lower()
 
 
 def test_a_network_failure_is_caught(cog):
@@ -122,7 +131,8 @@ def test_a_network_failure_is_caught(cog):
 
     image, error = asyncio.run(run())
     assert image is None
-    assert "could not be reached" in error.lower()
+    assert error == "provider_unreachable"
+    assert "could not be reached" in _wording(error).lower()
 
 
 def test_generation_is_rate_limited_per_user(cog):

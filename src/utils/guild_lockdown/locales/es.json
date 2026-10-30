@@ -1,5 +1,11 @@
 {
   "messages": {
-    "paused": "Esta función está en pausa mientras tu servidor esté bloqueado en Niko."
+    "paused": "Esta función está en pausa mientras tu servidor esté bloqueado en Niko.",
+    "blacklist_title": "# Servidor en la lista negra",
+    "blacklist_from": "**Equipo de moderación de Niko** · Comunicación oficial del servidor",
+    "blacklist_reason_title": "### Motivo",
+    "blacklist_no_reason": "No se ha indicado ningún motivo.",
+    "blacklist_body": "Las funciones de Niko se han desactivado en este servidor. Los ajustes guardados, las encuestas, los sorteos y el starboard se conservan: si se acepta una apelación vuelven tal como estaban, excepto el notificador social, que el servidor vuelve a activar desde el panel.",
+    "blacklist_appeal": "Presenta una apelación en {url} o contacta con el soporte de Niko."
   }
 }

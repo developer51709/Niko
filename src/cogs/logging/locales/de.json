@@ -84,7 +84,8 @@
     "act_ban_failed": "Dieser Nutzer konnte nicht gebannt werden.",
     "act_not_banned": "Dieser Nutzer ist nicht gebannt.",
     "act_unmute_failed": "Entstummen fehlgeschlagen: {error}",
-    "act_not_in_voice": "**{member}** ist in keinem Sprachkanal."
+    "act_not_in_voice": "**{member}** ist in keinem Sprachkanal.",
+    "panel_footer": "-# **Brauchst du Hilfe?** Frag im [Support-Server]({support}) oder schau in die [Dokumentation]({docs})"
   },
   "titles": {
     "Anti-Link": "Anti-Link",
@@ -275,7 +276,10 @@
     "Verification Level": "Verifizierungsstufe",
     "View online": "Online ansehen",
     "Webhook": "Webhook",
-    "Word": "Wort"
+    "Word": "Wort",
+    "Global profile picture": "Globales Profilbild",
+    "Profile banner": "Profilbanner",
+    "Server profile picture": "Server-Profilbild"
   },
   "revert": {
     "btn_restore_role": "Rolle wiederherstellen",

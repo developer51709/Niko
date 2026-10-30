@@ -50,23 +50,13 @@ from utils.locales import load_locales
 MESSAGES = load_locales("cogs.tickets", "views")
 
 
-def _ctx_lang(ctx_or_int) -> str:
-    """The guild's language, from a command context, interaction or guild.
-
-    Delegates to :func:`utils.i18n.get_lang` so a panel that only has a
-    language shim (and not a real context) resolves the same way as everywhere
-    else in the bot.
-    """
-    return get_lang(ctx_or_int)
-
-
 def msg(ctx_or_int, key: str, **kwargs) -> str:
     """Resolve a ticket message in the guild's language.
 
     The café voice was retired, so every guild gets the same wording; only the
     language changes.
     """
-    lang = _ctx_lang(ctx_or_int)
+    lang = get_lang(ctx_or_int)
     text = (
         MESSAGES.get(lang, {}).get(key)
         or MESSAGES["en"].get(key, key)

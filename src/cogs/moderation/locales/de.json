@@ -116,7 +116,10 @@
     "response_placeholder": "Reaktion wählen…",
     "remove_placeholder": "Wort zum Entfernen wählen…",
     "words_label": "Wörter",
-    "presets_label": "Presets"
+    "presets_label": "Presets",
+    "add_word_placeholder": "z. B. schlechtwort, schlecht*, *schlecht*",
+    "mode_delete_desc": "Nachricht löschen und protokollieren",
+    "mode_censor_desc": "Über einen Webhook als Autor neu posten, Wörter maskiert"
   },
   "commands": {
     "badwords.add.args.word": "Das Wort oder die Phrase, die blockiert werden soll.",

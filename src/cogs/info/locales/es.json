@@ -127,7 +127,8 @@
     "shardinfo_total": "Shards Totales",
     "shardinfo_guild_count": "Servidores",
     "shardinfo_member_count": "Miembros",
-    "shardinfo_latency": "Latencia"
+    "shardinfo_latency": "Latencia",
+    "not_sharded": "{cross} El bot no está fragmentado."
   },
   "commands": {
     "about.description": "Conoce más sobre Niko",

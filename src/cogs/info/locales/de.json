@@ -127,7 +127,8 @@
     "shardinfo_total": "Gesamtshards",
     "shardinfo_guild_count": "Server",
     "shardinfo_member_count": "Mitglieder",
-    "shardinfo_latency": "Latenz"
+    "shardinfo_latency": "Latenz",
+    "not_sharded": "{cross} Der Bot läuft ohne Sharding."
   },
   "commands": {
     "about.description": "Erfahre mehr über Niko",

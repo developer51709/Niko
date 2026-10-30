@@ -34,7 +34,7 @@ from utils.economy_jobs import (
     vote_reward_multiplier,
 )
 from .data import ACCENT_GOLD, _check_achievements, _info_view, _log_tx, locale_t, topgg_emoji
-from utils.i18n import get_lang
+from utils.i18n import get_lang, lang_from_locale
 from utils.locales import load_locales
 
 from utils.command_locales import command_texts
@@ -46,12 +46,7 @@ T = locale_t(load_locales("cogs.economy", "vote"))
 
 def _member_lang(user) -> str:
     """A DM carries no guild, so fall back to the recipient's own locale."""
-    locale = str(getattr(user, "locale", "") or "").lower()
-    if locale.startswith("de"):
-        return "de"
-    if locale.startswith("es"):
-        return "es"
-    return "en"
+    return lang_from_locale(getattr(user, "locale", None))
 
 
 #: Heading every voting card with the listing site's own logo: the logo is an
