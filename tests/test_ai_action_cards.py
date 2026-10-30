@@ -156,6 +156,36 @@ class Bot:
         return None
 
 
+class CardResponse:
+    def __init__(self):
+        self.edits = 0
+        self.messages = []
+
+    async def edit_message(self, *, view=None, **kwargs):
+        self.edits += 1
+
+    async def send_message(self, **kwargs):
+        self.messages.append(kwargs)
+
+
+class CardInteraction:
+    def __init__(self, user_id=42):
+        self.user = SimpleNamespace(id=user_id)
+        self.response = CardResponse()
+
+
+def _confirm_card(world):
+    view = actions.AIActionConfirmView(
+        "Change the channel name",
+        "Rename #general to #lounge",
+        invoker_id=world.author.id,
+        text={key: actions.t(world, key) for key in actions._CONFIRM_TEXT_KEYS},
+    )
+    card = SentMessage(view)
+    view.message = card
+    return view, card
+
+
 @pytest.fixture
 def world(monkeypatch):
     guild = Guild()
@@ -304,6 +334,43 @@ def test_the_layout_lists_categories_channels_and_roles(world):
     assert "Category 'Community' (11): general (text, 102), memes-and-gifs (text, 103)" in layout
     assert "Roles (highest to lowest): Moderator (id 301, #00aaff, hoisted) | Member (id 300)" in layout
     assert "Niko's highest role is 'Moderator'" in layout
+
+
+def test_an_approved_request_never_turns_into_an_expired_card(world):
+    """Confirming cancels the card's countdown, so a card the user approved (and
+    whose action already ran) cannot be overwritten by the expiry notice later."""
+    view, card = _confirm_card(world)
+    interaction = CardInteraction()
+
+    asyncio.run(view._on_confirm(interaction))
+    assert view.confirmed is True
+    assert interaction.response.edits == 1
+
+    asyncio.run(view.on_timeout())
+    assert card.edits == [], "an approved card must not be replaced by the expiry notice"
+    assert view.confirmed is True
+
+
+def test_an_unanswered_card_still_shows_the_expiry_notice(world):
+    view, card = _confirm_card(world)
+
+    asyncio.run(view.on_timeout())
+
+    assert view.confirmed is False
+    assert len(card.edits) == 1
+    assert actions.t(world, "expired_title") in card.edits[0].children[0].children[0].content
+
+
+def test_cancelling_also_stops_the_countdown(world):
+    view, card = _confirm_card(world)
+    interaction = CardInteraction()
+
+    asyncio.run(view._on_cancel(interaction))
+    asyncio.run(view.on_timeout())
+
+    assert view.confirmed is False
+    assert interaction.response.edits == 1
+    assert card.edits == [], "a cancelled card must not get an expiry notice on top"
 
 
 def test_the_layout_is_only_added_for_action_requests(world):

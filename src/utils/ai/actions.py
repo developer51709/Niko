@@ -328,6 +328,9 @@ class AIActionConfirmView(discord.ui.LayoutView):
         if not await self._gate(interaction):
             return
         self.confirmed = True
+        # The decision is made — cancel the countdown so it cannot later replace
+        # the card with the expiry notice.
+        self.stop()
         await self._disable_buttons()
         await interaction.response.edit_message(view=self)
         self._event.set()
@@ -336,6 +339,7 @@ class AIActionConfirmView(discord.ui.LayoutView):
         if not await self._gate(interaction):
             return
         self.confirmed = False
+        self.stop()
         await self._disable_buttons()
         await interaction.response.edit_message(
             view=_info_view(
@@ -348,8 +352,11 @@ class AIActionConfirmView(discord.ui.LayoutView):
         self._event.set()
 
     async def on_timeout(self):
-        if self.confirmed is None:
-            self.confirmed = False
+        if self.confirmed is not None:
+            # Already confirmed or cancelled: the card has been (or is about to
+            # be) replaced by the outcome, so it must never read as expired.
+            return
+        self.confirmed = False
         self._event.set()
         # A timed-out card used to keep its buttons, which then failed when
         # clicked. Replace it with an explicit expiry notice.
