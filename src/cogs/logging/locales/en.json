@@ -84,7 +84,8 @@
     "act_ban_failed": "Could not ban that user.",
     "act_not_banned": "That user isn't banned.",
     "act_unmute_failed": "Failed to unmute: {error}",
-    "act_not_in_voice": "**{member}** is not in a voice channel."
+    "act_not_in_voice": "**{member}** is not in a voice channel.",
+    "panel_footer": "-# **Need help?** Ask in the [support server]({support}) or check the [documentation]({docs})"
   },
   "titles": {
     "Anti-Link": "Anti-Link",
@@ -275,7 +276,10 @@
     "Verification Level": "Verification Level",
     "View online": "View online",
     "Webhook": "Webhook",
-    "Word": "Word"
+    "Word": "Word",
+    "Global profile picture": "Global profile picture",
+    "Profile banner": "Profile banner",
+    "Server profile picture": "Server profile picture"
   },
   "revert": {
     "btn_restore_role": "Restore Role",

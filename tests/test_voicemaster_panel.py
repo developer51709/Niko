@@ -281,12 +281,14 @@ class VoiceMasterSetupTests(unittest.TestCase):
 
 
 class VoiceMasterLocalizationTests(unittest.TestCase):
-    def test_german_and_spanish_translations_are_resolved(self):
+    def test_german_spanish_and_french_translations_are_resolved(self):
         self.assertEqual(vm_messages.text("de", "locked"), "Sprachkanal gesperrt.")
         self.assertEqual(vm_messages.text("es", "locked"), "Canal de voz bloqueado.")
+        self.assertEqual(vm_messages.text("fr", "locked"), "Salon vocal verrouillé.")
 
     def test_an_unsupported_language_falls_back_to_english(self):
-        self.assertEqual(vm_messages.text("fr", "locked"), "Voice channel locked.")
+        # Italian ships no catalogue, so it takes the English wording.
+        self.assertEqual(vm_messages.text("it", "locked"), "Voice channel locked.")
 
     def test_an_unknown_key_falls_back_to_the_key_itself(self):
         self.assertEqual(vm_messages.text("de", "not_a_real_key"), "not_a_real_key")

@@ -71,7 +71,9 @@
     "queue_more_other": "*…and {count} more tracks*",
     "queue_ghost_header": "-# 📻 **Autoplay suggestions** (play when the queue runs dry):",
     "queue_ghost_track": "   📻 {i}. **{title}** — {author} `[{dur}]`",
-    "queue_unknown": "Unknown"
+    "queue_unknown": "Unknown",
+    "queue_added_multi_title": "### Added {count} track(s) to the queue",
+    "queue_added_multi_body": "Now playing **{title}** + {count} more queued."
   },
   "commands": {
     "autoplay.help": "toggle Last.fm autoplay 📻",

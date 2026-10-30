@@ -662,7 +662,7 @@ class EmojiManagerCog(commands.Cog):
     @has_permissions(manage_guild=True)
     async def steal_from_url(self, ctx, url: str, name: Optional[str] = None):
         if not _is_http_url(url):
-            return await ctx.send(msg(ctx, "error", error="Invalid URL"))
+            return await ctx.send(msg(ctx, "error", error=msg(ctx, "invalid_url")))
         await ctx.typing()
         await self._steal(ctx, [url], override_name=name)
 
@@ -697,11 +697,11 @@ class EmojiManagerCog(commands.Cog):
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
-                content="### Emoji Slots 📊"
+                content=msg(ctx, "emoji_stats_title")
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"**Static**\n{static}/{limit}\n**Animated**\n{animated}/{limit}"
+                content=msg(ctx, "emoji_stats_body", static=static, animated=animated, limit=limit)
             )
         )
         view.add_item(container)
@@ -714,7 +714,7 @@ class EmojiManagerCog(commands.Cog):
         try:
             name = emoji.name
             await emoji.delete()
-            await ctx.send(f"🗑️ removed `:{name}:` from the server!")
+            await ctx.send(msg(ctx, "emoji_removed", name=name))
         except Exception:
             await ctx.send(msg(ctx, "no_perms"))
 

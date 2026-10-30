@@ -51,7 +51,8 @@
     "unblock_success": "✅ {target} kann wieder Roleplay-Befehle auf dich anwenden.",
     "not_blocked": "Du hast {target} nicht gesperrt.",
     "cannot_block_self": "Du kannst dich nicht selbst sperren — wähle jemand anderen!",
-    "db_fail": "Beim Speichern ist etwas schiefgelaufen — versuch es gleich nochmal!"
+    "db_fail": "Beim Speichern ist etwas schiefgelaufen — versuch es gleich nochmal!",
+    "pick_placeholder": "🎭 Wähle eine Roleplay-Aktion…"
   },
   "roleplay_actions": {
     "hug_back": "Umarm zurück",

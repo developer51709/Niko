@@ -1,6 +1,6 @@
 ### Terms of Service
 
-**Effective date:** 2026-10-20
+**Effective date:** 2026-10-30
 
 **1. Acceptance**
 By using Niko in any Discord server you agree to these Terms and Discord's own Terms of Service (https://discord.com/terms) and Community Guidelines (https://discord.com/guidelines).

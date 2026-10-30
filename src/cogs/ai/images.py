@@ -47,7 +47,11 @@ class AiImageTools(commands.Cog):
     # ── Provider ──────────────────────────────────
 
     async def generate_image(self, prompt: str) -> tuple[io.BytesIO | None, str | None]:
-        """Render one image, returning ``(image, error)``."""
+        """Render one image, returning ``(image, error key)``.
+
+        The failure is returned as a catalogue key rather than a sentence so the
+        caller can render it in the guild's language.
+        """
         url = f"{PROVIDER_URL}/{quote(prompt.strip(), safe='')}"
         try:
             async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
@@ -57,15 +61,15 @@ class AiImageTools(commands.Cog):
                         logging.warning(
                             "AiImageTools", f"Provider returned {response.status}: {detail}"
                         )
-                        return None, "The image provider is busy right now. Try again in a moment."
+                        return None, "provider_busy"
                     data = await response.read()
         except Exception as error:
             logging.warning("AiImageTools", f"Generation request failed: {error}")
-            return None, "The image provider could not be reached. Try again in a moment."
+            return None, "provider_unreachable"
 
         if not data:
             logging.warning("AiImageTools", "Provider returned an empty body.")
-            return None, "The image provider sent back an empty image. Try again in a moment."
+            return None, "provider_empty"
         return io.BytesIO(data), None
 
     # ── Response builders ─────────────────────────
@@ -86,10 +90,12 @@ class AiImageTools(commands.Cog):
         view.add_item(container)
         return view
 
-    def _error_view(self, detail: str) -> discord.ui.LayoutView:
+    def _error_view(self, source, detail: str) -> discord.ui.LayoutView:
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
-            discord.ui.TextDisplay(content=f"### {get_emoji('danger')} Generation Failed"),
+            discord.ui.TextDisplay(
+                content=msg(source, "generation_failed_title", danger=get_emoji("danger"))
+            ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=detail),
             accent_colour=discord.Color.red(),
@@ -110,17 +116,17 @@ class AiImageTools(commands.Cog):
             image, error = await self.generate_image(prompt)
 
         if error or image is None:
-            detail = error or "The image provider returned nothing. Try again in a moment."
+            detail = msg(ctx, error or "provider_nothing")
             try:
-                return await ctx.reply(view=self._error_view(detail))
+                return await ctx.reply(view=self._error_view(ctx, detail))
             except Exception:
-                return await ctx.send(view=self._error_view(detail))
+                return await ctx.send(view=self._error_view(ctx, detail))
 
         image.seek(0)
         file = discord.File(image, filename="generated_image.png")
         view = self.build_cv2_container(
-            f"{get_emoji('image')} Generated Image",
-            f"-# Prompt: *{discord.utils.escape_markdown(prompt[:200])}*",
+            msg(ctx, "generated_title", image=get_emoji("image")),
+            msg(ctx, "generated_prompt", prompt=discord.utils.escape_markdown(prompt[:200])),
             file.filename,
         )
         try:

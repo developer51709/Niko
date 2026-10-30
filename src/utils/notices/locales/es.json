@@ -1,0 +1,8 @@
+{
+  "blacklist": {
+    "title": "### {danger} En la lista negra",
+    "user_body": "Estás en la lista negra de este bot.\n**Motivo:** {reason}\n\nSi crees que es un error, presenta una apelación aquí: {url}.",
+    "guild_body": "Este servidor está en la lista negra de este bot.\n**Motivo:** {reason}\n\nSi crees que es un error, presenta una apelación aquí: {url}.",
+    "no_reason": "No se ha indicado ningún motivo."
+  }
+}

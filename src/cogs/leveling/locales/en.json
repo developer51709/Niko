@@ -125,7 +125,12 @@
     "panel_invalid_hex_top": "Invalid hex colour. Use format `#261a16` or `261a16`.",
     "panel_bg_bottom_modal_title": "Background Bottom Colour",
     "panel_bg_bottom_label": "Hex colour (e.g. #120c0a)",
-    "panel_invalid_hex_bottom": "Invalid hex colour. Use format `#120c0a` or `120c0a`."
+    "panel_invalid_hex_bottom": "Invalid hex colour. Use format `#120c0a` or `120c0a`.",
+    "panel_level_number_ph": "e.g. 5",
+    "panel_accent_ph": "d96545",
+    "leaderboard_panel_title": "### 🏆 Leveling Leaderboard",
+    "leaderboard_panel_body": "The live server leaderboard lives on the website and keeps itself up to date as members earn XP.",
+    "leaderboard_panel_link": "[Open the server leaderboard]({url})"
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Seconds between XP gains (0 disables the cooldown).",

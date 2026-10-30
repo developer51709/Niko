@@ -16,7 +16,7 @@ from utils.command_locales import command_texts
 
 CMDS = command_texts(__package__)
 
-EFFECTIVE_DATE = "<t:1792454400:F>"  # 20 October 2026
+EFFECTIVE_DATE = "<t:1793318400:F>"  # 30 October 2026
 
 MESSAGES = load_locales("cogs.legal", "cog")
 

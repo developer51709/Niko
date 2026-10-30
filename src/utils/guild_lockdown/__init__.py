@@ -324,25 +324,21 @@ async def _step_giveaways(pool, guild_id: int) -> dict:
     )
 
 
-def _owner_notice_view(reason: Optional[str]) -> "discord.ui.LayoutView":
-    """The DM a blacklisted server's owner receives."""
+def _owner_notice_view(reason: Optional[str], source=None) -> "discord.ui.LayoutView":
+    """The DM a blacklisted server's owner receives, in the server's language."""
+    text = lambda key, **kwargs: _paused(source, key, **kwargs)  # noqa: E731
+    appeal_url = "https://niko.sryze.cc/appeals/blacklist"
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content="# Server blacklisted"),
+        discord.ui.TextDisplay(content=text("blacklist_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="**Niko Moderation Team** · Formal server communication"),
-        discord.ui.TextDisplay(content=f"### Reason\n{reason or 'No reason provided.'}"),
-        discord.ui.TextDisplay(
-            content=(
-                "Niko's features have been switched off for this server. Saved settings, "
-                "polls, giveaways and the starboard are kept: if an appeal is approved they "
-                "come back as they were, except the social notifier, which the server turns "
-                "back on itself in the dashboard."
-            )
-        ),
-        discord.ui.TextDisplay(
-            content="Submit an appeal at https://niko.sryze.cc/appeals/blacklist, or contact Niko support for clarification."
-        ),
+        discord.ui.TextDisplay(content=text("blacklist_from")),
+        discord.ui.TextDisplay(content=(
+            f"{text('blacklist_reason_title')}\n"
+            f"{reason or text('blacklist_no_reason')}"
+        )),
+        discord.ui.TextDisplay(content=text("blacklist_body")),
+        discord.ui.TextDisplay(content=text("blacklist_appeal", url=appeal_url)),
         accent_colour=discord.Colour.red(),
     ))
     return view
@@ -362,7 +358,7 @@ async def _step_notification(pool, guild_id: int, reason: Optional[str], bot=Non
     if owner is None:
         return _result("notification", "skipped", "The guild owner could not be resolved, so no notification was sent.")
     try:
-        await owner.send(view=_owner_notice_view(reason))
+        await owner.send(view=_owner_notice_view(reason, guild))
     except discord.Forbidden:
         return _result("notification", "failed", "The guild owner has direct messages closed.")
     except Exception as exc:

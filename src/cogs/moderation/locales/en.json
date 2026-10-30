@@ -116,7 +116,10 @@
     "response_placeholder": "Choose the response…",
     "remove_placeholder": "Choose a word to remove…",
     "words_label": "Words",
-    "presets_label": "Presets"
+    "presets_label": "Presets",
+    "add_word_placeholder": "e.g. badword, bad*, *bad*",
+    "mode_delete_desc": "Remove the message and log it",
+    "mode_censor_desc": "Repost it through a webhook as the author, words masked"
   },
   "commands": {
     "badwords.add.args.word": "The word or phrase to block.",

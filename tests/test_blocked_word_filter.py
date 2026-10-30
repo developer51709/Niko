@@ -962,11 +962,14 @@ def test_the_panel_speaks_the_guild_language_and_falls_back_to_english():
     utils = make_utils(presets=["slurs"])
     german = _panel_text(_panel(utils, "overview", discord.Locale.german))
     spanish = _panel_text(_panel(utils, "overview", discord.Locale.spain_spanish))
-    english = _panel_text(_panel(utils, "overview", discord.Locale.french))
+    french = _panel_text(_panel(utils, "overview", discord.Locale.french))
+    # An unsupported locale is the fallback case: French ships a catalogue.
+    english = _panel_text(_panel(utils, "overview", discord.Locale.italian))
     assert "Gesperrte Wörter" in german
     assert "Palabras bloqueadas" in spanish
+    assert "Mots bloqués" in french
     assert "Blocked Words" in english
-    assert len({german, spanish, english}) == 3
+    assert len({german, spanish, french, english}) == 4
 
 
 def test_every_panel_string_exists_in_every_language():

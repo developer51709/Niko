@@ -1341,7 +1341,10 @@ class LoggingSetupView(discord.ui.LayoutView):
             discord.ui.ActionRow(_SetAllBtn(), _ClearAllBtn()),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content=f"-# **Need help?** Ask in the [support server]({links.SUPPORT_SERVER}) or check the [documentation]({links.DOCS})"
+                content=_t(
+                    effective_lang, "panel_footer",
+                    support=links.SUPPORT_SERVER, docs=links.DOCS,
+                )
             ),
         )
         self.add_item(container)

@@ -1,5 +1,10 @@
 import discord
+from utils.i18n import make_flat_msg
+from utils.locales import load_locales
 from utils.onboarding.config import load_config, save_config, OnboardingConfig
+
+MESSAGES = load_locales(__package__, "messages")
+msg = make_flat_msg(MESSAGES)
 
 
 async def get_config(guild_id: int) -> OnboardingConfig:
@@ -70,11 +75,12 @@ def build_welcome_view(
     member: discord.Member | None = None,
     guild: discord.Guild | None = None,
 ) -> discord.ui.LayoutView:
+    source = guild or member
     desc = fill_greeting_placeholders(
-        cfg.welcome_description or "Welcome to the server!", member, guild
+        cfg.welcome_description or msg(source, "welcome_default_body"), member, guild
     )
     return _build_greeting_view(
-        cfg.welcome_title or "Welcome!",
+        cfg.welcome_title or msg(source, "welcome_default_title"),
         desc,
         cfg.welcome_color,
         cfg.welcome_image,
@@ -91,25 +97,29 @@ def build_goodbye_view(
     Only sent when a goodbye channel is configured, so servers that have not
     opted in keep posting nothing when a member leaves.
     """
+    source = guild or member
     desc = fill_greeting_placeholders(
-        cfg.goodbye_description or "A member has left the server.", member, guild
+        cfg.goodbye_description or msg(source, "goodbye_default_body"), member, guild
     )
     return _build_greeting_view(
-        cfg.goodbye_title or "Goodbye!",
+        cfg.goodbye_title or msg(source, "goodbye_default_title"),
         desc,
         cfg.goodbye_color,
         cfg.goodbye_image,
     )
 
 
-def build_rules_view(cfg: OnboardingConfig) -> discord.ui.LayoutView:
-    rules_text = cfg.rules_text or "No rules have been set yet."
+def build_rules_view(
+    cfg: OnboardingConfig,
+    guild: discord.Guild | None = None,
+) -> discord.ui.LayoutView:
+    rules_text = cfg.rules_text or msg(guild, "rules_default")
     container = discord.ui.Container(
-        discord.ui.TextDisplay(content="### Server Rules"),
+        discord.ui.TextDisplay(content=msg(guild, "rules_title")),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=rules_text),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-        discord.ui.TextDisplay(content="-# Click the button below to acknowledge the rules."),
+        discord.ui.TextDisplay(content=msg(guild, "rules_hint")),
         accent_colour=discord.Colour(0xED4245)
     )
     view = discord.ui.LayoutView()

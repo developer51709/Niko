@@ -1,0 +1,11 @@
+{
+  "messages": {
+    "rules_title": "### Règles du serveur",
+    "rules_hint": "-# Clique sur le bouton ci-dessous pour accepter les règles.",
+    "rules_default": "Aucune règle n'a encore été définie.",
+    "goodbye_default_title": "Au revoir !",
+    "goodbye_default_body": "Un membre a quitté le serveur.",
+    "welcome_default_title": "Bienvenue !",
+    "welcome_default_body": "Bienvenue sur le serveur !"
+  }
+}

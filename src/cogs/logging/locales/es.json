@@ -84,7 +84,8 @@
     "act_ban_failed": "No se pudo banear a ese usuario.",
     "act_not_banned": "Ese usuario no está baneado.",
     "act_unmute_failed": "No se pudo reactivar: {error}",
-    "act_not_in_voice": "**{member}** no está en un canal de voz."
+    "act_not_in_voice": "**{member}** no está en un canal de voz.",
+    "panel_footer": "-# **¿Necesitas ayuda?** Pregunta en el [servidor de soporte]({support}) o consulta la [documentación]({docs})"
   },
   "titles": {
     "Anti-Link": "Anti-enlaces",
@@ -275,7 +276,10 @@
     "Verification Level": "Nivel de verificación",
     "View online": "Ver en línea",
     "Webhook": "Webhook",
-    "Word": "Palabra"
+    "Word": "Palabra",
+    "Global profile picture": "Foto de perfil global",
+    "Profile banner": "Banner del perfil",
+    "Server profile picture": "Foto de perfil del servidor"
   },
   "revert": {
     "btn_restore_role": "Restaurar rol",

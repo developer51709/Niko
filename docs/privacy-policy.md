@@ -1,6 +1,6 @@
 ### Privacy Policy
 
-**Effective date:** 2026-10-20
+**Effective date:** 2026-10-30
 
 This is the repository copy of the policy published at https://niko.sryze.cc/privacy.
 Keep both in sync, along with `/legal privacy` in `src/cogs/legal/cog.py`.
@@ -13,15 +13,16 @@ Niko stores only what is strictly necessary to provide its features:
 • **User presence & status** — read to support member-list and bot-status features; not stored.
 • **Voice state** — used only during active music or VoiceMaster sessions; not stored.
 • **Social notifier** — if a server follows social accounts, only the account name, platform, last-seen post ID, and target channel are stored.
+• **Global analytics (anonymous)** — bot-wide usage counters, kept so that updates can target what servers actually use: a daily count per command name, how each command was invoked (slash command, prefix command, or right-click/context command), the Discord language each server is set to, the number of distinct servers that used Niko that day, and the daily total of servers and members. Only aggregate numbers are stored — no message content, no user ID, no server or channel ID, and nothing traceable to a server or a person. The counters are kept for the last 90 days plus all-time totals, are visible only to Niko staff, and are used solely to decide which features, fixes, and language translations to build and release next. Global analytics data is anonymous and is never seen, published, shared, or sold to any third-party company or individual.
 • **Scam-image filter (experimental)** — when a member reports a message through the right-click scam report, the reported images and message context are sent to Niko staff for review. On confirmation, a perceptual hash (a compact numeric fingerprint) and a copy of the image are stored so similar images can be detected and removed automatically. Nothing is stored for servers without the filter enabled.
 • **Premium image moderation** — on a server with an active premium subscription, the URL of each image attachment posted in that server is sent to fal.ai's NSFW model so it can be scored. Niko stores the verdict (confidence score, file name, and moderation action), not the image itself. Nothing is sent for servers without premium.
 • **Payments** — premium subscriptions and donations are processed by OxaPay. We store the order reference, the OxaPay payment reference, the Discord user and server the payment belongs to, the amount and currency, the chosen crypto asset, the deposit address shown at checkout, and the payment status and timestamps. Niko never receives or stores card numbers, bank details, wallet private keys, or seed phrases. Payment records are kept for accounting, fraud prevention, refund handling, and billing support, including after a subscription ends.
 
 **2. How we use it**
-All data is used exclusively to run Niko's features within Discord. We never sell, share, or transfer your data to third parties.
+All data is used exclusively to run Niko's features within Discord, and the anonymous global analytics are used only to prioritise the next updates. We never sell, share, or transfer your data to third parties.
 
 **3. Storage & security**
-Data is stored by the server hosting Niko in a database — SQLite or MongoDB, depending on how that deployment is configured. Some smaller stores are kept as JSON files alongside it. No external analytics service is used.
+Data is stored by the server hosting Niko in a database — SQLite or MongoDB, depending on how that deployment is configured. Some smaller stores are kept as JSON files alongside it. No external analytics service is used; the anonymous usage counters described above are kept by Niko itself.
 
 **4. Data retention**
 Economy, leveling, and configuration data persist until you or a server admin removes it. Daily server activity totals are retained as aggregates. AI conversation history is capped at your last 3 exchanges and is automatically overwritten. You may erase your own AI memory at any time with `/clearhistory`.

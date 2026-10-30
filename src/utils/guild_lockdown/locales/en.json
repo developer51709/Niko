@@ -1,5 +1,11 @@
 {
   "messages": {
-    "paused": "This feature is paused while your server is blacklisted from Niko."
+    "paused": "This feature is paused while your server is blacklisted from Niko.",
+    "blacklist_title": "# Server blacklisted",
+    "blacklist_from": "**Niko Moderation Team** · Formal server communication",
+    "blacklist_reason_title": "### Reason",
+    "blacklist_no_reason": "No reason provided.",
+    "blacklist_body": "Niko's features have been switched off for this server. Saved settings, polls, giveaways and the starboard are kept: if an appeal is approved they come back as they were, except the social notifier, which the server turns back on itself in the dashboard.",
+    "blacklist_appeal": "Submit an appeal at {url}, or contact Niko support for clarification."
   }
 }

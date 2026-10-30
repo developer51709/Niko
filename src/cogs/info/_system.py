@@ -91,7 +91,7 @@ class SystemMixin:
     async def shards_command(self, ctx):
         """Display current shard information."""
         if not self.bot.shards:
-            return await ctx.send(f"{get_emoji('cross')} Bot is not sharded.")
+            return await ctx.send(msg(ctx, "not_sharded", cross=get_emoji("cross")))
 
         shard_guilds = {}
         shard_members = {}

@@ -116,7 +116,10 @@
     "response_placeholder": "Elige la respuesta…",
     "remove_placeholder": "Elige una palabra para eliminar…",
     "words_label": "Palabras",
-    "presets_label": "Filtros"
+    "presets_label": "Filtros",
+    "add_word_placeholder": "p. ej. malapalabra, mala*, *mala*",
+    "mode_delete_desc": "Eliminar el mensaje y registrarlo",
+    "mode_censor_desc": "Republicarlo con un webhook como el autor, palabras ocultas"
   },
   "commands": {
     "badwords.add.args.word": "La palabra o frase que se va a bloquear.",

@@ -267,7 +267,7 @@ class AddWordModal(discord.ui.Modal):
         # the guild's language, and a modal is assembled per interaction.
         self.word = discord.ui.TextInput(
             label=_t(lang, "add_word_label"),
-            placeholder="e.g. badword, bad*, *bad*",
+            placeholder=_t(lang, "add_word_placeholder"),
             max_length=MAX_BLOCKED_WORD_LENGTH,
         )
         self.add_item(self.word)
@@ -463,13 +463,13 @@ class ResponseSelect(discord.ui.Select):
                 discord.SelectOption(
                     label=_t(lang, "mode_delete"),
                     value="delete",
-                    description="Remove the message and log it",
+                    description=_t(lang, "mode_delete_desc"),
                     default=(current == "delete"),
                 ),
                 discord.SelectOption(
                     label=_t(lang, "mode_censor"),
                     value="censor",
-                    description="Repost it through a webhook as the author, words masked",
+                    description=_t(lang, "mode_censor_desc"),
                     default=(current == "censor"),
                 ),
             ],

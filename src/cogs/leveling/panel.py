@@ -625,7 +625,8 @@ class _LvAddRoleModal(discord.ui.Modal):
         self._cog          = cog
         self._guild_id     = guild_id
         self.level_num = discord.ui.TextInput(
-            label=msg(ctx, "panel_level_number_label"), placeholder="e.g. 5",
+            label=msg(ctx, "panel_level_number_label"),
+            placeholder=msg(ctx, "panel_level_number_ph"),
             min_length=1, max_length=4,
         )
         self.add_item(self.level_num)
@@ -760,7 +761,8 @@ class _LvAccentColourModal(discord.ui.Modal):
         self._cog      = cog
         self._guild_id = guild_id
         self.hex_colour = discord.ui.TextInput(
-            label=msg(ctx, "panel_accent_label"), placeholder="d96545",
+            label=msg(ctx, "panel_accent_label"),
+            placeholder=msg(ctx, "panel_accent_ph"),
             min_length=1, max_length=7,
         )
         self.add_item(self.hex_colour)

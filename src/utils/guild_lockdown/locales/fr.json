@@ -1,5 +1,11 @@
 {
   "messages": {
-    "paused": "Cette fonctionnalité est en pause tant que votre serveur est sur liste noire de Niko."
+    "paused": "Cette fonctionnalité est en pause tant que votre serveur est sur liste noire de Niko.",
+    "blacklist_title": "# Serveur sur liste noire",
+    "blacklist_from": "**Équipe de modération Niko** · Communication officielle du serveur",
+    "blacklist_reason_title": "### Raison",
+    "blacklist_no_reason": "Aucune raison fournie.",
+    "blacklist_body": "Les fonctionnalités de Niko ont été désactivées pour ce serveur. Les réglages enregistrés, les sondages, les giveaways et le starboard sont conservés : si un recours est accepté, ils reviennent tels quels, sauf le notificateur social, que le serveur réactive lui-même depuis le tableau de bord.",
+    "blacklist_appeal": "Dépose un recours sur {url} ou contacte le support Niko pour plus de précisions."
   }
 }

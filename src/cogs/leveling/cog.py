@@ -584,10 +584,9 @@ class Leveling(commands.Cog):
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=(
-                "### 🏆 Leveling Leaderboard\n"
-                "The live server leaderboard lives on the website and keeps itself "
-                "up to date as members earn XP.\n\n"
-                f"[Open the server leaderboard]({WEBSITE}/levels/{ctx.guild.id})"
+                f"{msg(ctx, 'leaderboard_panel_title')}\n"
+                f"{msg(ctx, 'leaderboard_panel_body')}\n\n"
+                f"{msg(ctx, 'leaderboard_panel_link', url=f'{WEBSITE}/levels/{ctx.guild.id}')}"
             )),
             accent_colour=accent_colour,
         ))

@@ -63,7 +63,14 @@
   "images": {
     "edit_removed_title": "### {image} La edición de imágenes se retiró",
     "edit_removed_body": "La edición de imágenes con IA se retiró porque los modelos alojados cobraban por edición y no hemos encontrado un proveedor gratuito cuyos resultados nos parezcan dignos de publicar.\n\nLa **generación** de imágenes sigue siendo gratis y casi ilimitada — prueba `{prefix}imagine <prompt>`.\n\nSi conoces un proveedor que merezca la pena (un plan gratuito generoso o algo que podamos alojar nosotros), entra en el servidor de soporte y deja una sugerencia. Nos gustaría mucho recuperar la edición.",
-    "suggest_provider": "Sugerir un proveedor"
+    "suggest_provider": "Sugerir un proveedor",
+    "generation_failed_title": "### {danger} Error de generación",
+    "generated_title": "{image} Imagen generada",
+    "generated_prompt": "-# Indicación: *{prompt}*",
+    "provider_busy": "El proveedor de imágenes está ocupado ahora mismo. Inténtalo de nuevo en un momento.",
+    "provider_unreachable": "No se pudo contactar con el proveedor de imágenes. Inténtalo de nuevo en un momento.",
+    "provider_empty": "El proveedor de imágenes devolvió una imagen vacía. Inténtalo de nuevo en un momento.",
+    "provider_nothing": "El proveedor de imágenes no devolvió nada. Inténtalo de nuevo en un momento."
   },
   "commands": {
     "ai-config.description": "Configura los ajustes de IA de este servidor",
