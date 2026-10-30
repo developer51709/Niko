@@ -120,6 +120,16 @@ deleted until the bot owner approves the request in the owner-only queue.
 | GET | `/api/staff/data-removal` | Owner-only review queue |
 | POST | `/api/staff/data-removal/<request_id>/review` | Approve (run the scoped deletion) or deny a request |
 
+### Staff analytics
+
+Any official staff session can read bot-wide aggregate analytics. The counters
+begin at the first command the bot records and hold 90 days of daily history;
+no user ID, guild ID, or message content is stored or returned.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/staff/analytics` | Live gateway figures, daily command usage, invocation mix, top commands, guild language census, growth, and economy totals; accepts `?days=7\|14\|30\|…\|90` |
+
 ### Owner operations
 
 The bot owner can manage optional Discord proxy workers. These routes require a

@@ -18,7 +18,8 @@ from utils.interaction_endpoint import install_interaction_endpoint
 from utils.interaction_priority import install_interaction_priority
 from utils.proxy_manager import WebshareProxyManager
 from utils.discord_proxy import DiscordProxyManager
-from utils import logging
+from utils import analytics, logging
+from utils.i18n import get_lang
 from events.on_ready import handle_ready
 from events.on_message import handle_message
 import database
@@ -92,9 +93,38 @@ async def on_ready():
         proxy = getattr(bot, "discord_proxy", None)
         if proxy is not None:
             proxy.attach(bot)
+        # The staff analytics tab reads these counters, so the periodic writer
+        # starts before startup finishes and is idempotent across reconnects.
+        analytics.start_flush_task(bot)
         await handle_ready(bot)
     except Exception as e:
         logging.error("on_ready", f"An error occurred: {e}")
+
+
+# ── Usage analytics ──────────────────────────────────────────────────────────
+# Counters are aggregate only (command, invocation kind, guild language). The
+# staff dashboard renders them as daily charts; nothing here can fail a command.
+async def _record_usage(command, kind, source) -> None:
+    try:
+        analytics.record_command(
+            getattr(command, "qualified_name", None) or getattr(command, "name", ""),
+            kind,
+            get_lang(source),
+            getattr(source, "guild_id", None),
+        )
+    except Exception as e:
+        logging.debug("Analytics", f"Could not record {kind} command usage: {e}")
+
+
+@bot.event
+async def on_command_completion(ctx: commands.Context):
+    await _record_usage(ctx.command, "prefix", ctx)
+
+
+@bot.event
+async def on_app_command_completion(interaction: discord.Interaction, command):
+    kind = "context" if isinstance(command, discord.app_commands.ContextMenu) else "slash"
+    await _record_usage(command, kind, interaction)
 
 
 @bot.event
@@ -112,6 +142,8 @@ if __name__ == "__main__":
 
     async def _shutdown(signal_name: str):
         logging.info("Shutdown", f"Received {signal_name}, closing bot...")
+        # Persist the commands recorded since the last periodic flush.
+        analytics.stop_flush_task()
         if bot.proxy_manager is not None:
             try:
                 await bot.proxy_manager.close()

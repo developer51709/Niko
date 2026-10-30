@@ -7,6 +7,79 @@ export type BotStats = {
   economy_users: number;
 };
 
+/** One day of bot-wide command usage; the API zero-fills the window. */
+export type StaffAnalyticsDay = {
+  date: string;
+  total: number;
+  slash: number;
+  prefix: number;
+  context: number;
+  guilds: number;
+  languages: Record<string, number>;
+};
+
+export type StaffAnalyticsCommand = {
+  name: string;
+  count: number;
+  share: number;
+  category: string;
+};
+
+export type StaffAnalyticsLanguageUse = {
+  code: string;
+  label: string;
+  count: number;
+  share: number;
+  supported: boolean;
+};
+
+export type StaffAnalyticsGuildLanguage = {
+  code: string;
+  label: string;
+  guilds: number;
+  members: number;
+  share: number;
+  supported: boolean;
+};
+
+export type StaffAnalyticsEconomy = {
+  profiles: number;
+  circulating: number;
+  banked: number;
+  average: number;
+  median: number;
+  average_level: number;
+  active_streaks: number;
+  top_jobs: { id: string; name: string; emoji: string; count: number; share: number }[];
+};
+
+/** Everything the staff analytics tab draws, from ``/api/staff/analytics``. */
+export type StaffAnalytics = {
+  generated_at: string;
+  bot: {
+    online: boolean;
+    source: "live" | "snapshot";
+    guilds: number;
+    members: number;
+    latency_ms: number | null;
+    uptime_seconds: number | null;
+    shard_count: number;
+    shards: { id: number; latency_ms: number | null }[];
+  };
+  usage: {
+    days: StaffAnalyticsDay[];
+    window_days: number;
+    today: { total: number; slash: number; prefix: number; context: number; guilds: number };
+    totals: { today: number; last_7_days: number; last_30_days: number; lifetime: number };
+    by_kind: { slash: number; prefix: number; context: number };
+    top_commands: StaffAnalyticsCommand[];
+    by_language: StaffAnalyticsLanguageUse[];
+  };
+  languages: { guilds: number; members: number; languages: StaffAnalyticsGuildLanguage[] };
+  economy: StaffAnalyticsEconomy | null;
+  growth: { date: string; guilds: number; users: number }[];
+};
+
 export type PublicConfig = {
   application_id: string;
   bot_avatar_url?: string | null;
