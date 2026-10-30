@@ -8,5 +8,6 @@ The most useful entry points for the current web stack are:
 - [Maintenance](maintenance.md)
 - [AI provider compatibility](ai-providers.md)
 - [Intent verification](intent-verification.md)
+- [Discovery listing](discovery/README.md)
 # Niko Documentation
 > This is where you can find information about how the bot works and even how to host it yourself.
