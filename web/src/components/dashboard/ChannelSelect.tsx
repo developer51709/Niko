@@ -1,4 +1,5 @@
-import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 import type { GuildResources } from "../../types";
 
@@ -41,10 +42,16 @@ function glyphStyle(name: string) {
  * A channel picker built on Discord's own channel icons. A native `<select>`
  * cannot hold images, so the list is a custom popup while the trigger keeps the
  * form-field shape every other settings control uses.
+ *
+ * The list renders in a portal anchored to the trigger: settings cards carry a
+ * backdrop-filter, which makes each card its own stacking context, so a list
+ * drawn inside a card would paint underneath the card below it (a picker in the
+ * last logging row was covered by the privacy card).
  */
 export function ChannelSelect({ channels, value, onChange, placeholder = "Choose a channel", ariaLabel, disabled, id }: Props) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
+  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -67,12 +74,45 @@ export function ChannelSelect({ channels, value, onChange, placeholder = "Choose
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
+      const target = event.target;
+      if (target instanceof Node && (rootRef.current?.contains(target) || listRef.current?.contains(target))) return;
       setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
+
+  // Anchor the list to its trigger, flipping above and clamping inside the
+  // viewport so it stays reachable on short screens and in narrow columns.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const trigger = buttonRef.current;
+      const list = listRef.current;
+      if (!trigger || !list) return;
+      const anchor = trigger.getBoundingClientRect();
+      const size = list.getBoundingClientRect();
+      const gap = 6;
+      const pad = 12;
+      let top = anchor.bottom + gap;
+      if (top + size.height > window.innerHeight - pad && anchor.top - gap - size.height >= pad) {
+        top = anchor.top - gap - size.height;
+      }
+      const width = Math.min(anchor.width, window.innerWidth - pad * 2);
+      setPosition({
+        top: Math.max(pad, Math.min(top, window.innerHeight - pad - size.height)),
+        left: Math.min(Math.max(pad, anchor.left), Math.max(pad, window.innerWidth - pad - width)),
+        width,
+      });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, entries.length]);
 
   useEffect(() => {
     setOpen(false);
@@ -86,6 +126,7 @@ export function ChannelSelect({ channels, value, onChange, placeholder = "Choose
 
   const openList = (from?: number) => {
     if (disabled) return;
+    setPosition(null);
     setHighlighted(from ?? (selectedIndex >= 0 ? selectedIndex : 0));
     setOpen(true);
   };
@@ -147,7 +188,18 @@ export function ChannelSelect({ channels, value, onChange, placeholder = "Choose
       </span>
       <ChevronDown className="channel-select-chevron" size={14} aria-hidden="true" />
     </button>
-    {open && <div className="channel-select-list" role="listbox" aria-label={ariaLabel} ref={listRef}>
+    {open && createPortal(<div
+      className="channel-select-list"
+      role="listbox"
+      aria-label={ariaLabel}
+      ref={listRef}
+      style={{
+        top: position?.top ?? 0,
+        left: position?.left ?? 0,
+        width: position?.width,
+        visibility: position ? "visible" : "hidden",
+      }}
+    >
       {entries.map((entry, index) => {
         const isSelected = String(entry.id) === String(value);
         return <button
@@ -166,6 +218,6 @@ export function ChannelSelect({ channels, value, onChange, placeholder = "Choose
           {isSelected && <span className="channel-select-check" aria-hidden="true">✓</span>}
         </button>;
       })}
-    </div>}
+    </div>, document.body)}
   </div>;
 }
