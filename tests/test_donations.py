@@ -209,6 +209,28 @@ def test_the_poller_sees_invoices_it_never_held_in_memory(pool):
     assert [row["track_id"] for row in pending] == ["track-1"]
 
 
+def test_the_pending_invoice_query_is_understood_by_the_mongo_parser():
+    """The SQLite test pool accepts `IN (...)`, the Mongo pool's parser must too.
+
+    It did not: every 45-second poll logged "Cannot parse WHERE condition" and
+    the poller never saw a pending invoice.
+    """
+    from database import _ConditionParser
+
+    class RecordingPool:
+        async def fetch(self, query, *args):
+            self.query = query
+            return []
+
+    pool = RecordingPool()
+    asyncio.run(donations.get_pending_invoices(SimpleNamespace(cxn=pool)))
+
+    where = re.search(r"WHERE\s+(.+)$", pool.query, re.S).group(1)
+    assert _ConditionParser([]).parse(where) == {
+        "status": {"$in": ["Waiting", "Paying", "Confirming"]}
+    }
+
+
 def test_the_cog_credits_and_messages_a_donation_once(pool):
     async def run():
         await _invoice(pool, channel_id=99)

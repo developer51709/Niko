@@ -26,7 +26,7 @@ from utils.music.constants import (
 )
 from utils.music.format import _fmt_dur, _progress_bar, _source_colour
 from utils.music.messages import MESSAGES, msg
-from utils.music.autoplay import lastfm_similar as _lastfm_similar
+from utils.music.autoplay import clean_seed, lastfm_similar as _lastfm_similar
 from utils.music.spotify import (
     _SPOTIFY_ALBUM_RE,
     _SPOTIFY_PLAYLIST_RE,

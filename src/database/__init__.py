@@ -233,8 +233,8 @@ def _composite_id(doc: dict, key_cols: tuple) -> str:
 class _ConditionParser:
     """Parses SQL WHERE/ON clauses into MongoDB filter documents.
 
-    Supports: =, !=, <>, >, <, >=, <=, IS NULL, IS NOT NULL, LIKE, NOT LIKE,
-    AND / OR with parentheses, placeholders (?) and inline literals.
+    Supports: =, !=, <>, >, <, >=, <=, IS NULL, IS NOT NULL, IN, NOT IN, LIKE,
+    NOT LIKE, AND / OR with parentheses, placeholders (?) and inline literals.
     """
 
     def __init__(self, args: list):
@@ -326,6 +326,15 @@ class _ConditionParser:
             column, op, literal = m.groups()
             return self._op_filter(self._strip_quotes(column), op, self._coerce_literal(literal))
 
+        # col IN (?, ?, ?) / col IN ('a', 2, TRUE) / col NOT IN (...)
+        m = re.match(
+            r"(\w+)\s+(NOT\s+)?IN\s*\((.*)\)\s*$", cond, re.IGNORECASE | re.DOTALL
+        )
+        if m:
+            column, negated, inner = m.groups()
+            values = self._parse_in_list(inner)
+            return {self._strip_quotes(column): {"$nin" if negated else "$in": values}}
+
         m = re.match(r"(\w+)\s+IS\s+NOT\s+NULL\s*$", cond, re.IGNORECASE)
         if m:
             return {self._strip_quotes(m.group(1)): {"$ne": None}}
@@ -347,6 +356,39 @@ class _ConditionParser:
             return {self._strip_quotes(m.group(1)): {"$regex": pattern, "$options": "i"}}
 
         raise ValueError(f"Cannot parse WHERE condition: {cond}")
+
+    def _parse_in_list(self, inner: str) -> list:
+        """Values of an ``IN (...)`` list; ``?`` items are drawn from the args."""
+        inner = inner.strip()
+        if not inner:
+            return []
+        values = []
+        for part in self._split_list(inner):
+            part = part.strip()
+            values.append(self._next_arg() if part == "?" else self._coerce_literal(part))
+        return values
+
+    @staticmethod
+    def _split_list(text: str) -> list:
+        """Split a comma-separated SQL list, ignoring commas inside quotes."""
+        parts: list = []
+        buf: list = []
+        quote = ""
+        for ch in text:
+            if quote:
+                buf.append(ch)
+                if ch == quote:
+                    quote = ""
+            elif ch in ("'", '"'):
+                quote = ch
+                buf.append(ch)
+            elif ch == ",":
+                parts.append("".join(buf))
+                buf = []
+            else:
+                buf.append(ch)
+        parts.append("".join(buf))
+        return parts
 
     def _op_filter(self, column: str, op: str, value):
         if op == "=":

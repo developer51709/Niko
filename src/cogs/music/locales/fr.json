@@ -27,6 +27,7 @@
     "loop_off": "Boucle désactivée.",
     "spotify_disabled": "Le support Spotify n'est pas configuré.",
     "spotify_resolving": "Résolution du lien Spotify…",
+    "spotify_progress": "Résolution du lien Spotify… {done}/{total} titres prêts",
     "spotify_fail": "Impossible de résoudre ce lien Spotify.",
     "like_on": "**{title}** ajouté à tes favoris ♥",
     "like_off": "**{title}** retiré de tes favoris.",
