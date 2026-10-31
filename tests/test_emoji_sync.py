@@ -296,7 +296,7 @@ def _forbidden():
 
 
 def test_replaceemojis_is_owner_only():
-    from cogs.staff.staff import OWNER_ONLY_COMMANDS, command_allowed_for_role
+    from cogs.staff.permissions import OWNER_ONLY_COMMANDS, command_allowed_for_role
 
     assert "replaceemojis" in OWNER_ONLY_COMMANDS
     assert command_allowed_for_role("owner", "replaceemojis") is True
@@ -306,7 +306,7 @@ def test_replaceemojis_is_owner_only():
 
 def test_the_force_argument_skips_the_confirmation_prompt():
     """Only a deliberate flag bypasses the prompt; anything else still asks."""
-    from cogs.staff.development import skips_confirmation
+    from cogs.staff.commands.emojis import skips_confirmation
 
     for argument in ("--force", "-f", "force", "--yes", "-y", "YES"):
         assert skips_confirmation(argument), argument

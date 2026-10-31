@@ -104,6 +104,10 @@ def ensure_access_token(force: bool = False) -> bool:
         session["access_token"] = token_data["access_token"]
         session["refresh_token"] = token_data.get("refresh_token", refresh_token)
         session["token_exp"] = time.time() + token_data.get("expires_in", 604800)
+        # A refresh can add a scope that was granted since (``guilds.join`` for
+        # referral links), so the stored list follows the token.
+        if token_data.get("scope"):
+            session["oauth_scopes"] = str(token_data["scope"]).split()
         return True
     except Exception:
         session.clear()

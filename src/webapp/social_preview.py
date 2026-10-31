@@ -35,6 +35,11 @@ what ``context`` carries in:
 * ``kind="application"`` — one role's application form. Describes that role and
   says whether it is accepting applications right now, so a closed role does
   not read as if it were still hiring.
+* ``kind="partnership"`` — the partnership ad partners paste into their own
+  servers. It is a full Components V2 layout of its own (headline, sections
+  behind separators, a gallery, and its own button row), because the ad used to
+  be a bot-posted message and a link is both easier to share and completely in
+  our control.
 
 A context is only ever built from data the page itself already publishes.
 
@@ -60,6 +65,11 @@ COMMANDS_PATH = "/commands"
 # The support button points at the website's /discord page, which resolves the
 # current invite from the live bot instead of a raw discord.gg link.
 SUPPORT_PATH = "/discord"
+# The partnership ad: one link partners paste into their own servers, which
+# Discord renders as the Components V2 layout built by ``_partnership_components``
+# instead of a bot-posted message.
+PARTNERSHIP_PATH = "/discord/partnership"
+PARTNERSHIP_KIND = "partnership"
 
 # Component types from Discord's schema (see the module docstring).
 CONTAINER, SECTION, TEXT_DISPLAY, THUMBNAIL, MEDIA_GALLERY, SEPARATOR, ACTION_ROW, BUTTON = 17, 9, 10, 11, 12, 14, 1, 2
@@ -199,6 +209,55 @@ def _standard_components(page: dict, description: str, stats: dict | None, invit
     ]
 
 
+def _clip(text: str, limit: int = 120) -> str:
+    """*text*, shortened to *limit* characters with an ellipsis when it is longer."""
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _partnership_buttons(invite_url: str) -> dict:
+    """The ad's closing row: install Niko, or talk partnerships."""
+    return {
+        "type": ACTION_ROW,
+        "components": [
+            {"type": BUTTON, "style": 5, "url": invite_url, "label": "Add Niko"},
+            {"type": BUTTON, "style": 5, "url": f"{SITE_URL}{PARTNERSHIP_PATH}", "label": "Partner with us"},
+            {"type": BUTTON, "style": 5, "url": f"{SITE_URL}{SUPPORT_PATH}", "label": "Join the server"},
+        ],
+    }
+
+
+def _partnership_components(context: dict, invite_url: str, detail: int = 2) -> list:
+    """The partnership ad, built from the page's own copy.
+
+    This is the one page type that does not get the standard Niko card: the
+    whole point is to hand a partner something they can paste, so it leads with a
+    headline and a pitch, then states what each side gets behind separators, and
+    closes with the gallery and the links. ``detail`` is how much of that still
+    fits Discord's byte budget: 2 is the whole ad, 1 drops the gallery, and 0
+    keeps only the opening section and the buttons.
+    """
+    lead = [f"# {context['name']}"]
+    if context.get("section"):
+        lead.append(f"-# {context['section']}")
+    if context.get("description"):
+        lead.append(context["description"])
+    components = [_section(_clip("\n".join(lead), 700), context.get("thumbnail"))]
+    # An ad is only as good as its links, and a payload Discord rejects loses
+    # them, so each section is clipped to a length the whole ad can afford.
+    sections = [
+        (_clip(str(heading)), [_clip(str(line), 240) for line in lines])
+        for heading, lines in context.get("sections", ()) if heading or lines
+    ]
+    for heading, lines in (sections if detail else ()):
+        components.append({"type": SEPARATOR})
+        components.append({"type": TEXT_DISPLAY, "content": _clip("\n".join([f"## {heading}", *lines]), 700)})
+    media = [url for url in context.get("media", ()) if url]
+    if media and detail >= 2:
+        components.append({"type": MEDIA_GALLERY, "items": [{"media": {"url": url}} for url in media]})
+    components.extend(({"type": SEPARATOR}, _partnership_buttons(invite_url)))
+    return components
+
+
 def _subject_components(context: dict, description: str, invite_url: str) -> list:
     """A page about a subject rather than about Niko.
 
@@ -231,7 +290,10 @@ def component_embed_payload(
 ) -> dict:
     """The Components V2 payload Discord renders for a page."""
     body = page["description"] if description is None else description
-    if context and context.get("kind"):
+    if context and context.get("kind") == PARTNERSHIP_KIND:
+        components = _partnership_components(context, invite_url, int(context.get("detail", 2)))
+        accent = BRAND_ACCENT
+    elif context and context.get("kind"):
         components = _subject_components(context, body, invite_url)
         # A subject can colour its own container: a team member's card accent,
         # for instance. Everything else keeps Niko's.
@@ -267,25 +329,30 @@ def component_embed_script(
         (f"{page['description'][:160]}…" if page["description"] else "", None),
         ("", None),
     )
+    # The partnership ad carries its own copy, so trimming the description does
+    # not make it smaller; it is shortened by dropping detail instead.
+    details = (2, 1, 0) if context and context.get("kind") == PARTNERSHIP_KIND else (None,)
     for description, attempt_stats in attempts:
-        payload = component_embed_payload(page, invite_url, attempt_stats, description, context)
-        container = payload["component"]
-        if 1 + len(container["components"]) > EMBED_COMPONENT_LIMIT:
-            continue
-        # The element lives in the markup, so anything that could end it early is
-        # escaped; Discord counts those escapes at full length, hence measuring
-        # the escaped form.
-        escaped = (
-            json.dumps(payload, separators=(",", ":"))
-            .replace("<", "\\u003c")
-            .replace(">", "\\u003e")
-            .replace("&", "\\u0026")
-        )
-        if len(escaped.encode("utf-8")) <= EMBED_BYTE_LIMIT:
-            return (
-                '<script id="discord:component-embed" type="application/json">'
-                f"{escaped}</script>"
+        for detail in details:
+            attempt_context = context if detail is None else {**context, "detail": detail}
+            payload = component_embed_payload(page, invite_url, attempt_stats, description, attempt_context)
+            container = payload["component"]
+            if 1 + len(container["components"]) > EMBED_COMPONENT_LIMIT:
+                continue
+            # The element lives in the markup, so anything that could end it early
+            # is escaped; Discord counts those escapes at full length, hence
+            # measuring the escaped form.
+            escaped = (
+                json.dumps(payload, separators=(",", ":"))
+                .replace("<", "\\u003c")
+                .replace(">", "\\u003e")
+                .replace("&", "\\u0026")
             )
+            if len(escaped.encode("utf-8")) <= EMBED_BYTE_LIMIT:
+                return (
+                    '<script id="discord:component-embed" type="application/json">'
+                    f"{escaped}</script>"
+                )
     return ""
 
 
@@ -311,7 +378,8 @@ def render_head(
     # A subject page describes itself, so its own copy wins over the section's.
     if subject:
         page = {**page, "title": subject.get("title") or page["title"],
-                "description": subject.get("description") or page["description"]}
+                "description": subject.get("description") or page["description"],
+                "image": subject.get("image") or page["image"]}
     # The counts are only wanted on the landing pages, so the provider (which
     # may go as far as the bot loop) is never called for the others.
     stats = stats_provider() if (page["landing"] and callable(stats_provider)) else None

@@ -312,7 +312,11 @@
     "winter_shopper.name": "Holiday Shopper",
     "new_year_level.name": "Midnight Ambition",
     "valentine_wallet.name": "Heart of Gold",
-    "summer_streak.name": "Summer Streak"
+    "summer_streak.name": "Summer Streak",
+    "referral_first.name": "First Invite",
+    "referral_5.name": "Good Company",
+    "referral_15.name": "Community Builder",
+    "referral_50.name": "Ambassador"
   },
   "commands": {
     "balance.args.member": "Whose wallet to check (defaults to you)",

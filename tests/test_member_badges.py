@@ -63,7 +63,7 @@ def support_roles(monkeypatch):
 @pytest.fixture
 def staff_role(monkeypatch):
     """Set the stored staff role the DB-backed lookup would return."""
-    from cogs.staff import staff as staff_cog
+    from cogs.staff import records as staff_cog
 
     async def set_role(bot, user_id):
         return set_role.value

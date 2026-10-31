@@ -488,7 +488,7 @@ def api_save_staff_profile():
                 *params,
             )
             try:
-                from cogs.staff.staff import sync_member_staff_roles
+                from cogs.staff.records import sync_member_staff_roles
                 guild = _discord_bot.get_guild(SUPPORT_GUILD)
                 member = guild.get_member(user_id) if guild else None
                 if member:

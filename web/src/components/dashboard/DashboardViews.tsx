@@ -9,7 +9,7 @@ import { GuildIcon } from "./GuildIcon";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards } from "./SettingCards";
 import { MemberAvatar, UserAvatar } from "./UserAvatar";
-import type { Guild, GuildConfig, GuildResources, GuildOverview, LevelRow, User, UserOverview } from "../../types";
+import type { Guild, GuildConfig, GuildResources, GuildOverview, LevelRow, ReferralSummary, User, UserOverview } from "../../types";
 import { LevelingSettings } from "./SettingsViews";
 import { ServerStatsCard } from "./ServerStatsCard";
 
@@ -59,7 +59,56 @@ export function CoinLabel() {
   return <span className="economy-coin">coins</span>;
 }
 
-export function UserOverviewView({ user, overview, guilds, onServers, onManage, csrfToken, guildsUnavailable = "" }: { user: User; overview: UserOverview | null; guilds: Guild[]; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string; guildsUnavailable?: string }) {
+/**
+ * The referral card: one link the member shares, and what it has brought in.
+ *
+ * The link is the website's ``/discord`` page carrying their id, so it resolves
+ * to that member's own invite and every credited join pays them once. The
+ * invite is minted on the bot, so the card still renders (and the link still
+ * works) while that request is in flight.
+ */
+function ReferralCard({ referrals, userId }: { referrals: ReferralSummary | null; userId: string }) {
+  const [copied, setCopied] = useState(false);
+  const link = referrals?.link || `${window.location.origin}/discord?ref=${userId}`;
+  const invited = referrals?.invited ?? 0;
+  const coins = referrals?.coins ?? 0;
+  const reward = referrals?.reward ?? 0;
+  const recent = referrals?.recent ?? [];
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // The link is printed below the button, so a refused clipboard is not
+      // worth an error toast.
+    }
+  };
+  return <section className="dash-panel referral-panel">
+    <div className="panel-heading"><div><span className="panel-kicker">Referrals</span><h3>Bring a friend, earn coins</h3></div><span className="panel-icon"><Icon name="users" /></span></div>
+    <p className="referral-copy">Share this link anywhere. Opening it joins people to the Niko support server through their own Discord account, and every first-time join pays you <strong>{formatNumber(reward)} coins</strong> — once per member, and never for inviting yourself.</p>
+    <div className="referral-link">
+      <code>{link}</code>
+      <button type="button" className="button button-muted button-small" onClick={() => void copyLink()}>{copied ? "Copied" : "Copy link"}</button>
+    </div>
+    <div className="referral-stats">
+      <div><span>Members invited</span><AnimatedValue value={invited}>{formatNumber(invited)}</AnimatedValue></div>
+      <div><span>Coins earned</span><AnimatedValue value={coins}>{formatNumber(coins)}</AnimatedValue></div>
+      <div><span>Per join</span><AnimatedValue value={reward}>{formatNumber(reward)}</AnimatedValue></div>
+    </div>
+    {recent.length > 0
+      ? <ul className="referral-recent">
+          {recent.map((entry) => <li key={entry.member_id}>
+            <MemberAvatar name={entry.name || "Niko member"} avatarUrl={entry.avatar_url} />
+            <span className="referral-who"><strong>{entry.name || "Member"}</strong><small>{new Date(entry.joined_at * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</small></span>
+            <span className="referral-paid">+{formatNumber(entry.reward)}</span>
+          </li>)}
+        </ul>
+      : <p className="referral-empty">No one has joined through your link yet — the first one also unlocks the <strong>First Invite</strong> badge.</p>}
+  </section>;
+}
+
+export function UserOverviewView({ user, overview, guilds, referrals, onServers, onManage, csrfToken, guildsUnavailable = "" }: { user: User; overview: UserOverview | null; guilds: Guild[]; referrals: ReferralSummary | null; onServers: () => void; onManage: (guild: Guild) => void; csrfToken?: string; guildsUnavailable?: string }) {
   const installed = guilds.filter((guild) => guild.installed !== false);
   const [privateLeaderboard, setPrivateLeaderboard] = useState(Boolean(overview?.leaderboard_private));
   // A poll can land between the switch flipping and the save finishing. While a
@@ -98,6 +147,7 @@ export function UserOverviewView({ user, overview, guilds, onServers, onManage, 
       <StatCard label="In your vault" value={formatNumber(overview?.bank)} note="Saved for later" accent="accent-blue" />
       <StatCard label="Current level" value={formatNumber(overview?.level)} note={overview?.job_name ? `Working as a ${overview.job_name}` : "Keep showing up"} accent="accent-green" />
     </div>
+    <ReferralCard referrals={referrals} userId={user.id} />
     <section className="dash-panel economy-privacy-panel">
       <div className="panel-heading"><div><span className="panel-kicker">Leaderboard privacy</span><h3>Choose who sees your identity</h3></div><span className="panel-icon"><Icon name="shield" /></span></div>
       <SettingCards>

@@ -860,24 +860,6 @@ def api_save_server(guild_id):
             except Exception as error:
                 return jsonify({"error": f"Verification settings saved, but the panel could not be posted: {error}"}), 503
 
-    privacy_data = body.get("privacy")
-    if privacy_data is not None:
-        if not isinstance(privacy_data, dict):
-            return jsonify({"error": "Privacy settings must be an object."}), 400
-        if "private" in privacy_data and not isinstance(privacy_data["private"], bool):
-            return jsonify({"error": "privacy.private must be true or false."}), 400
-        from utils.guild_privacy import set_guild_privacy
-        try:
-            run_on_bot_loop(
-                set_guild_privacy(
-                    numeric_guild_id,
-                    bool(privacy_data.get("private")),
-                    getattr(_discord_bot, "cxn", None),
-                )
-            )
-        except Exception as error:
-            return jsonify({"error": f"The privacy setting could not be saved: {error}"}), 503
-
     logging_data = body.get("logging")
     if logging_data is not None:
         if not isinstance(logging_data, dict):
@@ -1269,9 +1251,25 @@ def api_save_leveling(guild_id):
             })
             if excluded is not None:
                 current["xp_excluded_channels"] = excluded
+            previous_roles = {}
             if level_roles is not None:
+                previous_roles = dict(current.get("level_roles") or {})
                 current["level_roles"] = level_roles
             run_on_bot_loop(leveling._save_guild_cfg(int(guild_id), current))
+            if level_roles is not None and level_roles != previous_roles:
+                # Reward edits from the dashboard have to reach the members who
+                # already passed (or no longer pass) the level, exactly like the
+                # in-Discord panel does. The reconcile is rate limited, so it
+                # runs on the bot loop instead of holding the request open.
+                guild = _discord_bot.get_guild(int(guild_id))
+                if guild is not None and hasattr(leveling, "_sync_level_roles"):
+                    try:
+                        schedule_on_bot_loop(leveling._sync_level_roles(
+                            guild, level_roles, previous_roles))
+                    except RuntimeError:
+                        # The settings are already saved; only the role
+                        # reconcile could not be queued.
+                        pass
             return jsonify({"ok": True, "config": _serialize_level_config(current)})
         except Exception:
             return jsonify({"error": "The leveling settings could not be saved through the live bot."}), 503

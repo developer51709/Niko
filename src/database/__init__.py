@@ -150,6 +150,10 @@ PRIMARY_KEYS: dict = {
     "voicemaster_channels": "channel_id",
     "support_server_config": "guild_id",
     "support_server_panels": ("guild_id", "panel_key"),
+    # One credited join per member. Without this the Mongo backend would key the
+    # ledger on the referrer and collapse a member's whole recruitment into a
+    # single row.
+    "support_referral_joins": "member_id",
     "onboarding": "guild_id",
     "ai_config": "guild_id",
     "ai_memory": ("guild_id", "user_id"),
@@ -159,7 +163,6 @@ PRIMARY_KEYS: dict = {
     "moderation_config": "guild_id",
     "modlog": "guild_id",
     "guild_profiles": "guild_id",
-    "guild_privacy": "guild_id",
     "donation_invoices": "order_id",
     "premium_subscriptions": "guild_id",
     "premium_payments": "order_id",

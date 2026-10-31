@@ -116,7 +116,10 @@ def test_a_stub_emoji_id_is_marked_instead_of_drawn():
 def test_retired_owner_and_developer_emojis_are_removed():
     config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
     web = (ROOT / "web" / "src" / "data" / "botEmojis.ts").read_text(encoding="utf-8")
-    owner = (ROOT / "src" / "cogs" / "staff" / "owner.py").read_text(encoding="utf-8")
+    owner = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src" / "cogs" / "staff").rglob("*.py"))
+    )
 
     # These two old application emojis are retired; neither the bot nor the
     # rendering lab should still carry their names or ids.
@@ -133,9 +136,11 @@ def test_retired_owner_and_developer_emojis_are_removed():
     assert "badge_developer" not in names
     assert "bot_owner" not in names
 
-    # Owner-only command panels use the owner role badge instead.
+    # Owner-only command panels use the owner role badge instead. The staff
+    # help panel is shared by every staff role, so the owner badge belongs only
+    # to the owner-only cards.
     assert "get_emoji('bot_owner')" not in owner
-    assert owner.count("get_emoji('badge_owner')") >= 2
+    assert owner.count("get_emoji('badge_owner')") >= 1
     assert "badge_owner" in names
 
 

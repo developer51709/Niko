@@ -57,6 +57,13 @@
       "landing": true,
       "image": "https://niko.sryze.cc/og/discord.png"
     },
+    "/discord/partnership": {
+      "title": "Niko partnerships",
+      "description": "Share one link and Discord renders the Niko partnership ad: what members get, what partners get, and how to apply.",
+      "section": "Partnership ad",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/discord/partnership.png"
+    },
     "/docs": {
       "title": "Documentation — Niko",
       "description": "Guides, command references, and practical tips for getting the most out of Niko.",

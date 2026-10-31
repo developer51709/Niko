@@ -505,3 +505,91 @@ def test_subject_contexts_are_cached_per_route(monkeypatch):
     social._social_context("/levels/999")
     assert len(calls) == 2
     assert social._social_context("/commands") is None
+
+
+# ── The partnership ad ────────────────────────────────────────────────────────
+
+
+def partnership_page() -> dict:
+    """The manifest entry the build writes for the ad page."""
+    return {
+        "title": "Niko partnerships",
+        "description": "Share one link and Discord renders the Niko partnership ad.",
+        "section": "Partnership ad",
+        "landing": False,
+        "image": f"{social_preview.SITE_URL}/og/discord/partnership.png",
+    }
+
+
+def test_the_partnership_link_renders_the_ad_card_partners_paste():
+    """The ad is a shared link, so it gets a page type and a layout of its own.
+
+    Partners post one URL into their own partnership channel and Discord renders
+    the pitch, the terms, a gallery and link buttons from it. A component embed
+    is the only way to get all of that without a bot or webhook posting the ad,
+    which is what made it read as automated in the first place.
+    """
+    context = social._partnership_embed_context()
+    assert context["kind"] == social_preview.PARTNERSHIP_KIND
+    html = render(social_preview.PARTNERSHIP_PATH, stats=False, context=context)
+    payload = embed(html)
+    container = payload["component"]
+    kinds = [component["type"] for component in container["components"]]
+    assert kinds[0] == social_preview.SECTION, "the ad leads with its own headline"
+    if context["media"]:
+        assert social_preview.MEDIA_GALLERY in kinds
+    assert kinds[-1] == social_preview.ACTION_ROW, "the buttons close the ad"
+    assert container["accent_color"] == 0x8BD5B1
+
+    heading = container["components"][0]["components"][0]["content"]
+    assert heading.startswith("# Partner with Niko\n")
+    text = "\n".join(
+        component["content"] for component in container["components"]
+        if component["type"] == social_preview.TEXT_DISPLAY
+    )
+    for needle in ("What your members get", "What partners get", "What we look for"):
+        assert needle in text, needle
+
+    buttons = container["components"][-1]["components"]
+    assert [button["label"] for button in buttons] == ["Add Niko", "Partner with us", "Join the server"]
+    assert [button["style"] for button in buttons] == [5, 5, 5]
+    assert buttons[1]["url"] == f"{social_preview.SITE_URL}{social_preview.PARTNERSHIP_PATH}"
+    assert buttons[2]["url"] == f"{social_preview.SITE_URL}{social_preview.SUPPORT_PATH}"
+
+    # Clients without component support still get a preview describing the ad.
+    assert f"<title>{context['title']}</title>" in html
+    assert '<link rel="canonical" href="https://niko.sryze.cc/discord/partnership" />' in html
+    escaped = json.dumps(payload, separators=(",", ":")).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    assert len(escaped.encode("utf-8")) <= PAYLOAD_LIMIT
+
+
+def test_a_long_ad_is_clipped_and_keeps_its_buttons():
+    """Discord discards an over-limit payload entirely, which would lose the links.
+
+    So the ad clips its own copy — the headline, each line and each section —
+    and then drops the gallery, then the later sections, until it fits. The
+    button row is never what is given up.
+    """
+    context = {
+        **social._partnership_embed_context(),
+        "description": "word " * 900,
+        "sections": [("Long section", ["word " * 700]) for _ in range(3)],
+    }
+    script = social_preview.component_embed_script(partnership_page(), INVITE, None, context)
+    assert script, "a long ad must still render"
+    raw = script.split(">", 1)[1].rsplit("</script>", 1)[0]
+    assert len(raw.encode("utf-8")) <= PAYLOAD_LIMIT
+    components = json.loads(raw)["component"]["components"]
+    assert components[-1]["type"] == social_preview.ACTION_ROW
+    text = [item["content"] for item in components if item["type"] == social_preview.TEXT_DISPLAY]
+    assert all(len(block) <= 700 for block in text)
+    assert all(len(item["content"]) <= 700 for item in components if item["type"] == social_preview.SECTION for item in item["components"])
+
+
+def test_the_partnership_route_has_no_bot_or_webhook_dependency():
+    """The ad is copy plus links, so it renders with the bot offline."""
+    from webapp import server
+
+    html = server.social._social_context(social_preview.PARTNERSHIP_PATH)
+    assert html["kind"] == social_preview.PARTNERSHIP_KIND
+    assert html["sections"] and html["media"] is not None

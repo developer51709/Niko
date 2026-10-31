@@ -22,6 +22,7 @@ from .routes import (  # noqa: E402,F401
     application_routes,
     team_recruitment_routes,
     economy_routes,
+    referral_routes,
     site_routes,
     security_decoy_routes,
     appeal_routes,

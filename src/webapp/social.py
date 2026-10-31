@@ -84,6 +84,11 @@ _APPLICATION_LIST_LIMIT = 6
 # crowd the roles a reader can actually apply to out of the capped list.
 _APPLICATION_READ_LIMIT = 20
 
+# The partnership ad's own art, relative to the built site. The card is written
+# by the website build (``web/vite.config.ts``); the icon ships with every build.
+PARTNERSHIP_OG_CARD = "og/discord/partnership.png"
+PARTNERSHIP_ICON = "icons/niko-512.png"
+
 
 def _staff_card_accent(member: dict) -> int | None:
     """A team member's own card colour, as the integer Discord wants."""
@@ -309,6 +314,74 @@ def _team_application_embed_context(opening_id: str) -> dict | None:
     }
 
 
+def _partnership_media() -> list[str]:
+    """Images the ad can show, keeping only the ones this build actually has.
+
+    A media gallery pointing at a missing file invalidates the whole payload, so
+    a build without the generated card falls back to the icon that always ships.
+    """
+    return [
+        f"{social_preview.SITE_URL}/{relative}"
+        for relative in (PARTNERSHIP_OG_CARD, PARTNERSHIP_ICON)
+        if os.path.isfile(os.path.join(config.WEB_DIST_DIR, relative))
+    ]
+
+
+def _partnership_og_image() -> str | None:
+    """The generated ad card, and only once the build has written it.
+
+    A link without a card image still previews; pointing ``og:image`` at a file
+    that is not there, and claiming a 1200×630 size for the square icon, does not.
+    """
+    if not os.path.isfile(os.path.join(config.WEB_DIST_DIR, PARTNERSHIP_OG_CARD)):
+        return None
+    return f"{social_preview.SITE_URL}/{PARTNERSHIP_OG_CARD}"
+
+
+def _partnership_embed_context() -> dict:
+    """The partnership ad, in full.
+
+    This is the copy partners paste into their own servers: one link that
+    Discord renders as a Components V2 layout, so it can carry separators, a
+    gallery and buttons — and so it reads as a recommendation from that server's
+    own partnership channel rather than as a bot or webhook posting.
+    """
+    media = _partnership_media()
+    description = (
+        "Niko keeps the busywork off your staff: AutoMod that explains itself, "
+        "private tickets, leveling, music, games and a full economy, all "
+        "configured from a dashboard instead of a wall of commands."
+    )
+    return {
+        "kind": social_preview.PARTNERSHIP_KIND,
+        "template": social_preview.PARTNERSHIP_PATH,
+        "title": "Partner with Niko — Niko partnerships",
+        "description": description,
+        "name": "Partner with Niko",
+        "section": "A friendly bot for communities that care",
+        "thumbnail": _bot_avatar_url(),
+        "image": _partnership_og_image(),
+        "sections": [
+            ("What your members get", [
+                "**Moderation that stays calm** — warnings, timeouts and AutoMod answers, explained in plain language",
+                "**Reasons to stay** — leveling, an economy, games, music and a weekly lottery",
+                "**Help without a queue** — private tickets, a public help forum and an AI assistant",
+            ]),
+            ("What partners get", [
+                "A permanent listing with your own description in our partners channel",
+                "A shout-out for your community from the partnerships team",
+                "A direct line to us when something needs a human",
+            ]),
+            ("What we look for", [
+                "An active, well-moderated community with a clear purpose",
+                "Advertisements people opt into — no mass DMs, no invite bait",
+                "Nothing built around scams, hate, or NSFW content",
+            ]),
+        ],
+        "media": media,
+    }
+
+
 def _social_context(route: str) -> dict | None:
     """The subject of a page, when it is not Niko itself (cached briefly).
 
@@ -322,7 +395,10 @@ def _social_context(route: str) -> dict | None:
     if cached is not None and now - cached[0] < _SOCIAL_CONTEXT_TTL:
         return cached[1]
     context = None
-    if key == _TEAM_APPLY_PAGE:
+    if key == social_preview.PARTNERSHIP_PATH:
+        # The ad is the same for everybody, so it needs no subject lookup.
+        context = _partnership_embed_context()
+    elif key == _TEAM_APPLY_PAGE:
         context = _team_apply_embed_context()
     elif (match := _TEAM_APPLICATION_PAGE.match(key)):
         # An unknown role borrows the applications page's copy rather than

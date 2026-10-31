@@ -30,7 +30,7 @@ Niko's configuration and content for the server: AutoMod and logging settings,
 AI settings and conversation memory, leveling configuration and XP, tickets
 configuration, giveaways and entries,
 polls and votes, starboard entries, social notifier follows, voicemaster
-settings, prefix, profile, privacy, triggers, onboarding, suggestions, and the
+settings, prefix, profile, triggers, onboarding, suggestions, and the
 server activity totals. Premium subscriptions and payment records are separate
 financial records and are retained.
 

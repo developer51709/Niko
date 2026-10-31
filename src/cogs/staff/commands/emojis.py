@@ -1,27 +1,13 @@
-import discord
-import asyncio
-import traceback
-import textwrap
-import time
-import os
-import psutil
+"""``.staff syncemojis`` and friends: the application emoji set."""
+
 import aiohttp
+import discord
 from discord.ext import commands
-import colorama
-from utils.paginator import PaginatedView, paginate
-from utils.emoji_sync import sync_application_emojis, list_application_emojis, parse_config
-from utils.prefix_manager import resolve_prefix
+
 from config.emojis import get_emoji
-from config.ids import OWNER_IDS
-
-from utils.command_locales import command_texts
-
-CMDS = command_texts(__package__)
-
-async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
-    """Return the primary prefix for this context, honouring a dynamic prefix."""
-    return await resolve_prefix(bot, ctx_or_interaction)
-
+from cogs.staff.base import CMDS, StaffCommands
+from utils.emoji_sync import sync_application_emojis, list_application_emojis, parse_config
+from utils.paginator import PaginatedView, paginate
 
 # Arguments accepted after ``.staff replaceemojis`` to skip its confirmation
 # prompt. Deleting every application emoji cannot be undone, so the bypass is
@@ -34,202 +20,10 @@ def skips_confirmation(raw: str = None) -> bool:
     return (raw or "").strip().lower() in SKIP_CONFIRM_ARGS
 
 
-class Development(commands.Cog):
-    """Developer-only debugging and control commands."""
+class EmojiCommands:
+    """Sync, replace and inspect the emojis registered to the application."""
 
-    def __init__(self, bot):
-        self.bot = bot
-        self.start_time = time.time()
-
-    # -------------------------------
-    # Developer-only check
-    # -------------------------------
-    async def cog_check(self, ctx: commands.Context):
-        # These commands are registered under ``.staff`` and gated by the staff
-        # role allow-lists; the check only applies if this module is loaded on
-        # its own, where the bot owner is the only permitted caller.
-        return ctx.author.id in OWNER_IDS
-
-    # -------------------------------
-    # Developer Help
-    # -------------------------------
-    @commands.command(name="devhelp", help=CMDS.help("devhelp"))
-    async def dev_help(self, ctx):
-        prefix = await _resolve_prefix(self.bot, ctx)
-
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"# {get_emoji('bug')} Developer Toolkit\n> Easy-to-use debugging and control commands."
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"### Diagnostics\n`{prefix}devping`\n`{prefix}devlatency`\n`{prefix}devuptime`\n`{prefix}devmem`\n`{prefix}devtasks`"
-            ),
-            discord.ui.TextDisplay(
-                content=f"### Guild Tools\n`{prefix}devguild`\n`{prefix}devchannels`\n`{prefix}devroles`\n`{prefix}devmembers`"
-            ),
-            discord.ui.TextDisplay(
-                content=f"### Eval / Exec\n`{prefix}devexec <code>` (executes code; owner eval is available in the owner command set)"
-            ),
-            discord.ui.TextDisplay(
-                content=f"### Bot Control\n`{prefix}devsay <msg>`"
-            ),
-            discord.ui.TextDisplay(
-                content=f"### Emoji Sync\n`{prefix}syncemojis`\n`{prefix}appemojis`\n`{prefix}emojistatus`"
-            )
-        )
-        view.add_item(container)
-
-        await ctx.send(view=view)
-
-    # -------------------------------
-    # Diagnostics
-    # -------------------------------
-    @commands.command(name="devping", help=CMDS.help("devping"))
-    async def dev_ping(self, ctx):
-        before = time.monotonic()
-        msg = await ctx.send("Pinging…")
-        ping = (time.monotonic() - before) * 1000
-        await msg.edit(content=f"Pong! `{ping:.2f}ms`")
-
-    @commands.command(name="devlatency", help=CMDS.help("devlatency"))
-    async def dev_latency(self, ctx):
-        await ctx.send(f"Websocket latency: `{self.bot.latency * 1000:.2f}ms`")
-
-    @commands.command(name="devuptime", help=CMDS.help("devuptime"))
-    async def dev_uptime(self, ctx):
-        delta = time.time() - self.start_time
-        hours, remainder = divmod(delta, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        await ctx.send(f"Uptime: `{int(hours)}h {int(minutes)}m {int(seconds)}s`")
-
-    @commands.command(name="devmem", help=CMDS.help("devmem"))
-    async def dev_memory(self, ctx):
-        try:
-            process = psutil.Process(os.getpid())
-            mem = process.memory_info().rss / 1024 / 1024
-            mem_str = f"{mem:.2f} MB"
-        except Exception:
-            mem_str = "N/A"
-        await ctx.send(f"Memory usage: `{mem_str}`")
-
-    @commands.command(name="devtasks", help=CMDS.help("devtasks"))
-    async def dev_tasks(self, ctx):
-        tasks = asyncio.all_tasks()
-        await ctx.send(f"Active asyncio tasks: `{len(tasks)}`")
-
-    # -------------------------------
-    # Guild Inspection
-    # -------------------------------
-    @commands.command(name="devguild", help=CMDS.help("devguild"))
-    async def dev_guild(self, ctx, guild_id: int = None):
-        if guild_id:
-            g = self.bot.get_guild(guild_id)
-            if not g:
-                return await ctx.send("Guild not found.")
-        else:
-            g = ctx.guild
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"## ℹ️ Guild Information\nGuild: {g.name}"
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content=f"### Details\n\n**ID:** `{g.id}`\n**Members:** `{g.member_count}`\n**Owner:** `{g.owner}`\n**Channels:** `{len(g.channels)}`\n**Roles:** `{len(g.roles)}`\n**Created:** `{g.created_at.strftime('%Y-%m-%d %H:%M:%S')}`"
-            )
-        )
-        view.add_item(container)
-        await ctx.send(view=view)
-
-    @commands.command(name="devchannels", help=CMDS.help("devchannels"))
-    async def dev_channels(self, ctx):
-        lines = [
-            f"`{c.id}` — **{c.name}** ({type(c).__name__})"
-            for c in sorted(ctx.guild.channels, key=lambda c: c.name)
-        ]
-        pages = paginate(lines, per_page=15)
-        view = PaginatedView(
-            title=f"📋 Channels — {ctx.guild.name}",
-            pages=pages,
-        )
-        await ctx.send(view=view)
-
-    @commands.command(name="devroles", help=CMDS.help("devroles"))
-    async def dev_roles(self, ctx):
-        lines = [
-            f"`{r.id}` — **{r.name}**"
-            + (" *(managed)*" if r.managed else "")
-            for r in sorted(ctx.guild.roles, key=lambda r: -r.position)
-        ]
-        pages = paginate(lines, per_page=15)
-        view = PaginatedView(
-            title=f"🏷️ Roles — {ctx.guild.name}",
-            pages=pages,
-        )
-        await ctx.send(view=view)
-
-    @commands.command(name="devmembers", help=CMDS.help("devmembers"))
-    async def dev_members(self, ctx):
-        lines = [
-            f"`{m.id}` — **{m.display_name}** ({m.name})"
-            + (f" {get_emoji('bot')}" if m.bot else "")
-            for m in sorted(ctx.guild.members, key=lambda m: m.display_name.lower())
-        ]
-        pages = paginate(lines, per_page=15)
-        view = PaginatedView(
-            title=f"👥 Members — {ctx.guild.name} ({len(ctx.guild.members)} total)",
-            pages=pages,
-        )
-        await ctx.send(view=view)
-
-    # -------------------------------
-    # Eval / Exec
-    # -------------------------------
-    @commands.command(name="devexec", help=CMDS.help("devexec"))
-    async def dev_exec(self, ctx, *, code: str):
-        """Execute Python code."""
-        code = textwrap.dedent(code.strip("` "))
-
-        env = {
-            "bot": self.bot,
-            "ctx": ctx,
-            "discord": discord,
-            "asyncio": asyncio,
-            "__import__": __import__,
-            "self": self,
-        }
-
-        try:
-            exec(code, env)
-            await ctx.send("Executed successfully.")
-        except Exception:
-            view = discord.ui.LayoutView()
-            container = discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=f"## {get_emoji('danger')} Execution Error\nAn error occurred while executing the code."
-                ),
-                discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-                discord.ui.TextDisplay(
-                    content=f"### Traceback\n```\n{traceback.format_exc()}\n```"
-                )
-            )
-            view.add_item(container)
-            await ctx.send(view=view)
-
-    # -------------------------------
-    # Bot Control
-    # -------------------------------
-    @commands.command(name="devsay", help=CMDS.help("devsay"))
-    async def dev_say(self, ctx, *, message: str):
-        await ctx.message.delete()
-        await ctx.send(message)
-
-    # -------------------------------
-    # Emoji Sync
-    # -------------------------------
-    @commands.command(name="syncemojis", help=CMDS.help("syncemojis"))
+    @StaffCommands.staff.command(name="syncemojis", help=CMDS.help("syncemojis"), hidden=True)
     async def sync_emojis(self, ctx):
         """Manually trigger the application emoji sync."""
         status_msg = await ctx.send(f"{get_emoji('loading')} Syncing application emojis…")
@@ -261,9 +55,10 @@ class Development(commands.Cog):
         await status_msg.delete()
         await ctx.send(view=view)
 
-    @commands.command(
+    @StaffCommands.staff.command(
         name="replaceemojis",
         help=CMDS.help("replaceemojis"),
+        hidden=True,
     )
     async def replace_emojis(self, ctx, force: str = None):
         """Owner-only: rebuild the application emoji set from ``src/assets/emojis``.
@@ -276,11 +71,6 @@ class Development(commands.Cog):
         There is no way to undo a replacement, so it is confirmed first; an
         explicit ``--force`` skips that prompt for an already-decided run.
         """
-        if ctx.author.id not in OWNER_IDS:
-            return await ctx.send(
-                f"{get_emoji('cross')} Only the bot owner can replace application emojis."
-            )
-
         if not skips_confirmation(force) and not await self._confirm_replacement(ctx):
             return
 
@@ -383,7 +173,7 @@ class Development(commands.Cog):
             return False
         return True
 
-    @commands.command(name="appemojis", help=CMDS.help("appemojis"))
+    @StaffCommands.staff.command(name="appemojis", help=CMDS.help("appemojis"), hidden=True)
     async def list_app_emojis(self, ctx):
         """Show all emojis registered to this application."""
         try:
@@ -397,12 +187,11 @@ class Development(commands.Cog):
             return
 
         lines = [f"{e} `:{e.name}:` — `{e.id}`" for e in sorted(emojis, key=lambda e: e.name.lower())]
-        from utils.paginator import PaginatedView, paginate
         pages = paginate(lines, per_page=15)
         view = PaginatedView(title=f"{get_emoji('paint')} Application Emojis ({len(emojis)} total)", pages=pages)
         await ctx.send(view=view)
 
-    @commands.command(name="emojistatus", help=CMDS.help("emojistatus"))
+    @StaffCommands.staff.command(name="emojistatus", help=CMDS.help("emojistatus"), hidden=True)
     async def emoji_status(self, ctx):
         """Compare config emojis vs registered application emojis."""
         try:
@@ -433,7 +222,3 @@ class Development(commands.Cog):
         )
         view.add_item(container)
         await ctx.send(view=view)
-
-
-async def setup(bot):
-    await bot.add_cog(Development(bot))

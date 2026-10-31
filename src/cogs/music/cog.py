@@ -57,6 +57,24 @@ _LAVELINK_500_DELAY   = 1.0  # seconds between retries
 _TRACK_START_TIMEOUT = 6.0  # wait for TrackStart before failing over
 _TRACK_START_RETRY   = 8.0  # wait after switching to another node
 
+# Lavalink search prefixes. ``wavelink.Playable.search`` prepends the ``source``
+# prefix itself, so a query that already carries one has to be passed with
+# ``source=None``. Without this, "ytsearch:Song" went out as
+# "ytmsearch:ytsearch:Song": Lavalink searched YouTube Music for the literal text
+# "ytsearch:Song", whose matches are empty or unrelated — which is why every
+# autoplay candidate search came back with nothing to play.
+_SEARCH_PREFIXES = (
+    "ytsearch:", "ytmsearch:", "scsearch:", "spsearch:", "amsearch:", "dzsearch:", "ymsearch:",
+)
+
+
+async def _search_tracks(query: str, node=None):
+    """wavelink search that respects a source prefix already inside the query."""
+    if query.strip().lower().startswith(_SEARCH_PREFIXES):
+        return await wavelink.Playable.search(query, source=None, node=node)
+    return await wavelink.Playable.search(query, node=node)
+
+
 # Node pool maintenance.
 _NODE_RESCAN_INTERVAL = 3600.0  # full pool: hourly top-up
 _NODE_PARTIAL_INTERVAL = 600.0  # some capacity, but below the target
@@ -411,9 +429,7 @@ class MusicSystem(commands.Cog):
                 # Bound the search: a hung request would keep this background
                 # refill alive forever and block every later refill.
                 results = await asyncio.wait_for(
-                    wavelink.Playable.search(
-                        f"ytsearch:{similar_artist} - {similar_title}"
-                    ),
+                    _search_tracks(f"ytsearch:{similar_artist} - {similar_title}"),
                     timeout=10,
                 )
             except Exception:
@@ -1015,7 +1031,7 @@ class MusicSystem(commands.Cog):
                         # guaranteed to be playable there, and bound the wait so
                         # a stuck node cannot stall the queue forever.
                         results = await asyncio.wait_for(
-                            wavelink.Playable.search(query, node=player.node),
+                            _search_tracks(query, node=player.node),
                             timeout=10,
                         )
                     except Exception as exc:
@@ -1030,6 +1046,15 @@ class MusicSystem(commands.Cog):
                     )
                     await self._update_np_message(player.guild)
                     return
+
+                # Neither the ghost queue nor a direct lookup produced a
+                # playable track. Say so: otherwise "autoplay did nothing" is
+                # indistinguishable from a broken Last.fm key in the logs.
+                log.info(
+                    "Music",
+                    f"Autoplay found nothing playable for {title_raw!r} "
+                    f"({len(similars)} Last.fm suggestions) in guild {guild_id}.",
+                )
             except Exception as exc:
                 log.error("Music", f"Autoplay failed: {exc}")
         else:
@@ -1187,7 +1212,7 @@ class MusicSystem(commands.Cog):
 
         try:
             results = await asyncio.wait_for(
-                wavelink.Playable.search(f"ytsearch:{current}"),
+                _search_tracks(f"ytsearch:{current}"),
                 timeout=2.5,
             )
         except (asyncio.TimeoutError, Exception):
@@ -1277,7 +1302,7 @@ class MusicSystem(commands.Cog):
                 # Search on the player's own node: the encoded track is then
                 # guaranteed to be decodable by the node that must stream it.
                 results = await asyncio.wait_for(
-                    wavelink.Playable.search(query, node=player.node), timeout=15
+                    _search_tracks(query, node=player.node), timeout=15
                 )
             except asyncio.TimeoutError:
                 log.warning("Music", "Lavalink search timed out.")

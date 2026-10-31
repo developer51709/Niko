@@ -361,15 +361,14 @@ def test_profile_payload_carries_the_public_server_tag_details(monkeypatch):
         created_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
         vanity_url="https://discord.gg/gamernation",
         invites=None,
+        # Discord publishes the profile outside the server for a listed guild.
+        features=["DISCOVERABLE"],
+        widget_enabled=False,
         members=[member],
         get_member=lambda user_id: member if user_id == 456 else None,
         fetch_member=lambda user_id: asyncio.sleep(0, result=member),
     )
-    async def public(guild_id):
-        return {"private": False}
-
     monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
-    monkeypatch.setattr(routes, "_guild_privacy", public)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
     server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
@@ -389,7 +388,7 @@ def test_profile_payload_carries_the_public_server_tag_details(monkeypatch):
     assert server["viewer_is_member"] is False
 
 
-def test_profile_payload_hides_a_private_servers_details(monkeypatch):
+def test_profile_payload_hides_a_server_discord_does_not_list_publicly(monkeypatch):
     user = _tagged_profile_user(SimpleNamespace(id=123, tag="MOON", badge=None))
     member = _presence_member(user)
     guild = SimpleNamespace(
@@ -402,15 +401,17 @@ def test_profile_payload_hides_a_private_servers_details(monkeypatch):
         created_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
         vanity_url="https://discord.gg/gamernation",
         invites=None,
+        # No Discovery, announcement channel, or widget: Discord's Server
+        # Profile stays private, so a visitor who has not joined sees the
+        # limited state.
+        features=[],
+        widget_enabled=False,
         members=[member],
         get_member=lambda user_id: member if user_id == 456 else None,
         fetch_member=lambda user_id: asyncio.sleep(0, result=member),
     )
-    async def private(guild_id):
-        return {"private": True}
 
     monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
-    monkeypatch.setattr(routes, "_guild_privacy", private)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
     server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
@@ -443,15 +444,13 @@ def test_profile_payload_reports_membership_for_the_signed_in_viewer(monkeypatch
         # Join for a vanity invite.
         invites=lambda: asyncio.sleep(0, result=[SimpleNamespace(code="not-a-vanity")]),
         features=[],
+        widget_enabled=False,
         members=[member, viewer],
         get_member=lambda user_id: member if user_id == 456 else viewer if user_id == 789 else None,
         fetch_member=lambda user_id: asyncio.sleep(0, result=member if user_id == 456 else viewer if user_id == 789 else None),
     )
-    async def public(guild_id):
-        return {"private": False}
 
     monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
-    monkeypatch.setattr(routes, "_guild_privacy", public)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
     with app.test_client() as client:
@@ -461,14 +460,20 @@ def test_profile_payload_reports_membership_for_the_signed_in_viewer(monkeypatch
 
     assert server["available"] is True
     assert server["viewer_is_member"] is True
+    # A private profile is still visible to the people who already joined.
+    assert server["private"] is False
+    assert server["name"] == "The Gamer Nation"
     assert "invite_url" not in server
 
 
 def test_profile_payload_reports_a_server_niko_is_not_in(monkeypatch):
     user = _tagged_profile_user(SimpleNamespace(id=123, tag="MOON", badge=None))
     member = _presence_member(user)
+    async def no_widget(guild_id):
+        return None
 
     monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([], user, None))
+    monkeypatch.setattr(routes, "_fetch_guild_widget", no_widget)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
     server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
@@ -477,6 +482,32 @@ def test_profile_payload_reports_a_server_niko_is_not_in(monkeypatch):
     assert server["private"] is False
     assert "name" not in server
     assert "invite_url" not in server
+
+
+def test_profile_payload_reads_a_guild_niko_is_not_in_through_its_widget(monkeypatch):
+    """The widget is public, so it still fills the popup for a foreign guild."""
+    user = _tagged_profile_user(SimpleNamespace(id=123, tag="MOON", badge=None))
+    member = _presence_member(user)
+    async def widget(guild_id):
+        return {
+            "id": "123",
+            "name": "The Gamer Nation",
+            "instant_invite": "https://discord.com/invite/gamernation",
+            "presence_count": 33,
+        }
+
+    monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([], user, None))
+    monkeypatch.setattr(routes, "_fetch_guild_widget", widget)
+    monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
+
+    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+
+    assert server["available"] is True
+    assert server["private"] is False
+    assert server["name"] == "The Gamer Nation"
+    assert server["online_count"] == 33
+    assert server["invite_url"] == "https://discord.com/invite/gamernation"
+    assert server["tag"] == "MOON"
 
 
 def test_public_discord_user_profile_re_reads_presence_on_every_request(monkeypatch):

@@ -674,13 +674,6 @@ async def _create_tables(bot):
             pass
 
     await bot.cxn.execute("""
-        CREATE TABLE IF NOT EXISTS guild_privacy (
-            guild_id       INTEGER PRIMARY KEY,
-            private_server INTEGER NOT NULL DEFAULT 0
-        )
-    """)
-
-    await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS triggers (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             guild_id   INTEGER NOT NULL,
@@ -735,7 +728,8 @@ async def _create_tables(bot):
             votes            INTEGER DEFAULT 0,
             vote_streak      INTEGER DEFAULT 0,
             best_vote_streak INTEGER DEFAULT 0,
-            last_vote        INTEGER DEFAULT 0
+            last_vote        INTEGER DEFAULT 0,
+            referral_count   INTEGER DEFAULT 0
         )
     """)
 
@@ -790,6 +784,30 @@ async def _create_tables(bot):
             )
         except Exception:
             pass  # column already exists; MongoDB is schema-less
+
+    # Referrals are verified by adding the member through their own Discord
+    # account, so there is no invite to store: this is the ledger of who arrived
+    # through whose link, one row per member, ever.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS support_referral_joins (
+            member_id   INTEGER PRIMARY KEY,
+            referrer_id INTEGER NOT NULL,
+            joined_at   INTEGER DEFAULT 0,
+            reward      INTEGER DEFAULT 0
+        )
+    """)
+
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_support_referral_joins_referrer "
+        "ON support_referral_joins (referrer_id)"
+    )
+
+    try:
+        await bot.cxn.execute(
+            "ALTER TABLE economy_users ADD COLUMN referral_count INTEGER DEFAULT 0"
+        )
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
 
     # Migrate economy data from JSON files to database
     await _migrate_economy_data(bot)
