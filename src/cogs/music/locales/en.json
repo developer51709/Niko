@@ -27,6 +27,7 @@
     "loop_off": "Loop disabled.",
     "spotify_disabled": "Spotify support is not configured.",
     "spotify_resolving": "Resolving Spotify link…",
+    "spotify_progress": "Resolving Spotify link… {done}/{total} tracks ready",
     "spotify_fail": "Couldn't resolve that Spotify link.",
     "like_on": "Liked **{title}** ♥",
     "like_off": "Removed **{title}** from your likes.",
