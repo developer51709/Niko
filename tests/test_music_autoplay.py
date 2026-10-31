@@ -180,6 +180,38 @@ class SearchPrefixTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetch.await_args[0][0], url)
 
 
+class ProviderRelatedTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_search_query_is_the_seed_itself(self):
+        cog, _, _ = _build_cog()
+        seed = SimpleNamespace(title="Mirrors Demo", author="Overtonight")
+
+        with patch.object(music_cog, "_search_tracks", new=AsyncMock(return_value=[])) as search:
+            await cog._provider_related(seed, set())
+
+        self.assertEqual(search.await_args[0][0], "ytsearch:Overtonight Mirrors Demo")
+
+    async def test_already_played_tracks_are_skipped(self):
+        cog, _, _ = _build_cog()
+        seed = SimpleNamespace(title="Mirrors Demo", author="Overtonight")
+        played = {("overtonight", "static")}
+        results = [
+            SimpleNamespace(title="Static", author="Overtonight"),
+            SimpleNamespace(title="Neon", author="Overtonight"),
+        ]
+
+        with patch.object(music_cog, "_search_tracks", new=AsyncMock(return_value=results)):
+            related = await cog._provider_related(seed, played)
+
+        self.assertEqual([track.title for track in related], ["Neon"])
+
+    async def test_a_failed_search_is_not_fatal(self):
+        cog, _, _ = _build_cog()
+        seed = SimpleNamespace(title="Mirrors Demo", author="Overtonight")
+
+        with patch.object(music_cog, "_search_tracks", new=AsyncMock(side_effect=RuntimeError("boom"))):
+            self.assertEqual(await cog._provider_related(seed, set()), [])
+
+
 class _Queue:
     def __init__(self, items=()):
         self._items = list(items)
@@ -288,6 +320,24 @@ class AutoplayDrainTests(unittest.IsolatedAsyncioTestCase):
             await _end_track(cog, player, seed)
 
         self.assertEqual([track.title for track in player.played], ["Fresh Track"])
+
+    async def test_a_seed_last_fm_has_never_seen_still_continues(self):
+        """Obscure uploads have no Last.fm neighbours; provider results keep going."""
+        seed = SimpleNamespace(title="overtonight - mirrors demo (official video)", author="overtonight")
+        cog, player, _ = _build_cog()
+        player.current = seed
+        results = [
+            SimpleNamespace(title="overtonight - mirrors demo (official video)", author="overtonight"),
+            SimpleNamespace(title="Overtonight - Mirrors Demo", author="Some Reuploads"),
+            SimpleNamespace(title="overtonight - static", author="overtonight"),
+        ]
+
+        with patch.object(music_cog, "_lastfm_similar", new=AsyncMock(return_value=[])), \
+                patch.object(music_cog, "_search_tracks", new=AsyncMock(return_value=results)):
+            await _end_track(cog, player, seed)
+
+        # The seed and its re-uploads are skipped; the artist's other track plays.
+        self.assertEqual([track.title for track in player.played], ["overtonight - static"])
 
     async def test_a_stopped_player_does_not_start_autoplay(self):
         cog, player, seed = _build_cog()

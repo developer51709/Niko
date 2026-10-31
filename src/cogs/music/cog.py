@@ -33,6 +33,7 @@ from utils.music import (
     _lastfm_similar,
     _normalize_spotify_reference,
     _source_colour,
+    clean_seed,
     msg,
 )
 from utils.music.database import MusicDatabase
@@ -73,6 +74,18 @@ async def _search_tracks(query: str, node=None):
     if query.strip().lower().startswith(_SEARCH_PREFIXES):
         return await wavelink.Playable.search(query, source=None, node=node)
     return await wavelink.Playable.search(query, node=node)
+
+
+def _title_key(author: str, title: str) -> str:
+    """Normalised title used to spot a re-upload of the same song.
+
+    Upload noise is stripped and a leading "Artist - " is dropped, because
+    re-uploads by other channels keep it even when the author does not match.
+    """
+    name = clean_seed(author or "", title or "")[1]
+    if " - " in name:
+        name = name.split(" - ", 1)[1]
+    return "".join(ch for ch in name.lower() if ch.isalnum())
 
 
 # Node pool maintenance.
@@ -231,14 +244,17 @@ class MusicSystem(commands.Cog):
         # really started streaming before the now-playing panel is sent.
         self._track_start_events: dict[int, asyncio.Event] = {}
 
-        # Optional integrations — silently disabled if env vars are absent
+        # Spotify links resolve without credentials (public embed page); the
+        # Web API is only used when both env vars are present, as an extra hop
+        # that still works for tracks and albums.
         sp_id     = os.environ.get("SPOTIFY_CLIENT_ID")
         sp_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
-        self._spotify: _SpotifyClient | None = (
-            _SpotifyClient(sp_id, sp_secret) if sp_id and sp_secret else None
+        self._spotify = _SpotifyClient(sp_id or "", sp_secret or "")
+        log.debug(
+            "Music",
+            "Spotify URL support enabled"
+            + (" (Web API + embed fallback)." if self._spotify.has_credentials else " (embed lookup only)."),
         )
-        if self._spotify:
-            log.debug("Music", "Spotify URL support enabled.")
 
         self._lastfm_key: str | None = os.environ.get("LASTFM_API_KEY")
         if self._lastfm_key:
@@ -441,7 +457,53 @@ class MusicSystem(commands.Cog):
             played.add((similar_artist.lower(), similar_title.lower()))
             if len(found) >= GHOST_QUEUE_LEN:
                 break
+
+        if not found:
+            # Last.fm has never scrobbled this upload (demos, local edits,
+            # small artists), so there is nothing to be "similar" to. Continue
+            # from the provider's own related results instead of dead-airing.
+            found = await self._provider_related(seed, played)
         return found
+
+    async def _provider_related(self, seed, played: set, node=None) -> list:
+        """Continuation candidates when Last.fm knows nothing about the seed.
+
+        The search results for the seed itself always include its neighbours.
+        Candidates whose cleaned title matches the seed are dropped, which
+        leaves the same artist's other uploads rather than a re-upload of the
+        track that just ended.
+        """
+        artist = (seed.author or "").strip()
+        title = (seed.title or "").strip()
+        # Search the cleaned seed: "(Official Video)" and a repeated artist
+        # prefix only dilute relevance.
+        query = " ".join(part for part in clean_seed(artist, title) if part)
+        if not query:
+            return []
+
+        try:
+            results = await asyncio.wait_for(
+                _search_tracks(f"ytsearch:{query}", node=node), timeout=10
+            )
+        except Exception as exc:
+            log.warning("Music", f"Autoplay related search failed: {exc}")
+            return []
+        if not results:
+            return []
+
+        seed_title = _title_key(artist, title)
+        related: list = []
+        for track in list(results):
+            key = ((track.author or "").lower(), (track.title or "").lower())
+            if key in played:
+                continue
+            if _title_key(track.author or "", track.title or "") == seed_title:
+                continue
+            related.append(track)
+            played.add(key)
+            if len(related) >= GHOST_QUEUE_LEN:
+                break
+        return related
 
     # ─── NODE FAILOVER ──────────────────────────
 
@@ -1045,11 +1107,32 @@ class MusicSystem(commands.Cog):
                         failover=self._make_failover(player, nxt),
                     )
                     await self._update_np_message(player.guild)
+                    self._schedule_ghost_refill(guild_id, seed_track=nxt, delay=0.5)
                     return
 
-                # Neither the ghost queue nor a direct lookup produced a
-                # playable track. Say so: otherwise "autoplay did nothing" is
-                # indistinguishable from a broken Last.fm key in the logs.
+                # Last.fm returned nothing for this seed — either it never
+                # scrobbled the upload or the track is too obscure to have
+                # neighbours. Keep the session alive with the provider's own
+                # related results; only report a dead end when even those are
+                # empty.
+                related = await self._provider_related(track, played, node=player.node)
+                if related:
+                    log.info(
+                        "Music",
+                        f"Autoplay: Last.fm had no suggestions for {title_raw!r} "
+                        f"({len(similars)}); continuing with provider results.",
+                    )
+                    nxt = related[0]
+                    await _player_op(
+                        lambda t=nxt: player.play(t),
+                        failover=self._make_failover(player, nxt),
+                    )
+                    await self._update_np_message(player.guild)
+                    self._schedule_ghost_refill(guild_id, seed_track=nxt, delay=0.5)
+                    return
+
+                # Nothing could be found at all. Say so: otherwise "autoplay did
+                # nothing" is indistinguishable from an idle bot in the logs.
                 log.info(
                     "Music",
                     f"Autoplay found nothing playable for {title_raw!r} "
@@ -1090,8 +1173,6 @@ class MusicSystem(commands.Cog):
 
         # ── Spotify ───────────────────────────────
         if "open.spotify.com" in q or q.startswith("spotify:"):
-            if not self._spotify:
-                return None
             normalized = _normalize_spotify_reference(q)
             if not normalized:
                 return None
@@ -1257,8 +1338,6 @@ class MusicSystem(commands.Cog):
 
         # Handle Spotify URL feedback before long resolution
         is_spotify = "open.spotify.com" in search or search.startswith("spotify:")
-        if is_spotify and not self._spotify:
-            return await ctx.send(msg(ctx, "spotify_disabled"))
 
         if is_spotify:
             resolving = discord.ui.LayoutView()
