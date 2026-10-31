@@ -538,6 +538,14 @@ def test_the_partnership_link_renders_the_ad_card_partners_paste():
     assert kinds[0] == social_preview.SECTION, "the ad leads with its own headline"
     if context["media"]:
         assert social_preview.MEDIA_GALLERY in kinds
+        gallery = next(
+            component for component in container["components"]
+            if component["type"] == social_preview.MEDIA_GALLERY
+        )
+        # ``items`` is a list of UnfurledMediaItem objects, never the URL string
+        # itself: Discord discards the whole payload when a ListType is handed a
+        # bare string ("Only iterables may be used in a ListType").
+        assert gallery["items"] == [{"media": {"url": context["media"]}}]
     assert kinds[-1] == social_preview.ACTION_ROW, "the buttons close the ad"
     assert container["accent_color"] == 0x8BD5B1
 
