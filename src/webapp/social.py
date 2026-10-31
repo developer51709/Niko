@@ -314,19 +314,6 @@ def _team_application_embed_context(opening_id: str) -> dict | None:
     }
 
 
-def _partnership_media() -> list[str]:
-    """Images the ad can show, keeping only the ones this build actually has.
-
-    A media gallery pointing at a missing file invalidates the whole payload, so
-    a build without the generated card falls back to the icon that always ships.
-    """
-    return [
-        f"{social_preview.SITE_URL}/{relative}"
-        for relative in (PARTNERSHIP_OG_CARD, PARTNERSHIP_ICON)
-        if os.path.isfile(os.path.join(config.WEB_DIST_DIR, relative))
-    ]
-
-
 def _partnership_og_image() -> str | None:
     """The generated ad card, and only once the build has written it.
 
@@ -346,7 +333,6 @@ def _partnership_embed_context() -> dict:
     gallery and buttons — and so it reads as a recommendation from that server's
     own partnership channel rather than as a bot or webhook posting.
     """
-    media = _partnership_media()
     description = (
         "Niko keeps the busywork off your staff: AutoMod that explains itself, "
         "private tickets, leveling, music, games and a full economy, all "
@@ -378,7 +364,7 @@ def _partnership_embed_context() -> dict:
                 "Nothing built around scams, hate, or NSFW content",
             ]),
         ],
-        "media": media,
+        "media": _partnership_og_image(),
     }
 
 

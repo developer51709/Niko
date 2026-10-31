@@ -251,9 +251,14 @@ def _partnership_components(context: dict, invite_url: str, detail: int = 2) -> 
     for heading, lines in (sections if detail else ()):
         components.append({"type": SEPARATOR})
         components.append({"type": TEXT_DISPLAY, "content": _clip("\n".join([f"## {heading}", *lines]), 700)})
-    media = [url for url in context.get("media", ()) if url]
-    if media and detail >= 2:
-        components.append({"type": MEDIA_GALLERY, "items": [{"media": {"url": url}} for url in media]})
+    # ``media`` is the card's URL, but a gallery's ``items`` is a list of
+    # UnfurledMediaItem wrappers: Discord rejects the payload outright when it is
+    # handed a bare string ("Only iterables may be used in a ListType").
+    media = context.get("media")
+    if isinstance(media, str):
+        media = [{"media": {"url": media}}] if media else []
+    if media:
+        components.append({"type": MEDIA_GALLERY, "items": list(media)})
     components.extend(({"type": SEPARATOR}, _partnership_buttons(invite_url)))
     return components
 
