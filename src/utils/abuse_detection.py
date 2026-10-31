@@ -10,6 +10,7 @@ from typing import Deque
 
 from discord.ext import commands
 
+from config.ids import is_owner_id
 from utils.blacklist_manager import BlacklistManager
 
 
@@ -47,7 +48,14 @@ def _get_lock(user_id: int) -> asyncio.Lock:
 
 
 async def record_request(user_id: int, *, reason: str) -> dict:
-    """Return abuse status; the ninth request in 10 seconds earns a strike."""
+    """Return abuse status; the ninth request in 10 seconds earns a strike.
+
+    Bot owners are never counted or struck: the automated system must not be
+    able to blacklist the account that runs the bot, which would take the
+    owner's own dashboard and staff commands away from them.
+    """
+    if is_owner_id(user_id):
+        return {"abuse": False, "strikes": 0, "blacklisted": False, "permanent": False, "expires_at": None}
     async with _get_lock(user_id):
         manager = BlacklistManager()
         await manager._ensure_loaded()

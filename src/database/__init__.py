@@ -211,6 +211,7 @@ PRIMARY_KEYS: dict = {
     "music_liked_songs": ("user_id", "track_key"),
     "music_playlists": ("user_id", "name"),
     "music_playlist_tracks": ("user_id", "name", "track_key"),
+    "music_lavalink_nodes": "identifier",
     # Dedicated error-report database (same cluster, isolated from the main DB).
     "error_reports": "code",
     # Bot-wide usage counters, one row per (day or "lifetime", bucket, name).

@@ -50,12 +50,26 @@ async def _report_failure(interaction: discord.Interaction, exc: BaseException) 
 
     Panel buttons used to call straight into the player, so a Lavalink 500
     escaped as an unhandled interaction error and the button looked dead.
+
+    A ``404`` is not that kind of failure: the node answered, it just has no
+    player for this guild any more (see ``drop_dead_session``). Promising a
+    retry there left every control stuck on the same message forever.
     """
     log.warning("Music", f"Panel action failed: {exc}")
+
+    cog    = interaction.client.get_cog("MusicSystem")
+    player = getattr(interaction.guild, "voice_client", None)
+    if (
+        cog is not None
+        and isinstance(player, wavelink.Player)
+        and await cog.drop_dead_session(interaction.guild, player, exc)
+    ):
+        key = "panel_session_expired"
+    else:
+        key = "panel_action_failed"
+
     try:
-        await interaction.followup.send(
-            msg(interaction, "panel_action_failed"), ephemeral=True
-        )
+        await interaction.followup.send(msg(interaction, key), ephemeral=True)
     except Exception:
         pass
 

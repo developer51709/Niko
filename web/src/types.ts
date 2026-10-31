@@ -973,6 +973,28 @@ export type StaffBroadcast = {
   media: StaffBroadcastMedia[];
 };
 
+/** One Lavalink node as the owner dashboard sees it — never includes secrets. */
+export type LavalinkNodeRow = {
+  identifier: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  label: string;
+  /** Where the node came from: committed catalogue, database, or a stale pool entry. */
+  source: "static" | "private" | "orphan";
+  status: string;
+  players: number;
+  heartbeat: number;
+};
+
+export type LavalinkPoolResponse = {
+  nodes: LavalinkNodeRow[];
+  connected: number;
+  target: number;
+  private_count: number;
+  static_count: number;
+};
+
 export type DocPage = {
   slug: string;
   title: string;

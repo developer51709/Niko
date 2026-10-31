@@ -1,14 +1,17 @@
 """
-Music System — Lavalink node discovery.
+Music System — Lavalink node catalogue.
 
-Fetches public v4 nodes from the community node list (DarrenOfficial/
-lavalink-list markdown), probes them for responsiveness, and dedupes by
-unique host (an SSL twin and a non-SSL twin of the same server count as one
-physical node). Falls back to a small embedded list when upstreams are down.
+The catalogue has exactly two sources: the hardcoded list in
+``src/config/lavalink.py`` and the private nodes the bot owner saved from the
+dashboard (stored in the music database, never in the repository). Nothing is
+fetched from a public node list, so the pool is predictable and no third-party
+markdown can inject — or withdraw — a node.
+
+Candidates are probed for responsiveness and deduped by unique host (an SSL
+twin and a non-SSL twin of the same server count as one physical node).
 """
 
 import asyncio
-import re
 import time as _time
 
 import aiohttp
@@ -17,18 +20,10 @@ from config.lavalink import LAVALINK_NODES
 from utils import logging as log
 from utils.music.constants import _MAX_PROBERS, _PROBE_TIMEOUT
 
-# The bot defaults to the comprehensive hardcoded list in src/config/lavalink.py
-# and only merges extra nodes from DarrenOfficial/lavalink-list when the
-# upstream is reachable. The hardcoded list is updated periodically and is
-# the authoritative source at startup.
-_DN_SSL_RAW    = "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/SSL/Lavalink-SSL.md"
-_DN_NOSSL_RAW  = "https://raw.githubusercontent.com/DarrenOfficial/lavalink-list/master/docs/NoSSL/Lavalink-NonSSL.md"
-
 _FALLBACK_NODES: list[dict] = list(LAVALINK_NODES)
 
 
 # Nodes that use the Nodelink protocol are not compatible with Wavelink.
-# We strip them out before merging any upstream results.
 _NODELINK_HOSTS: set[str] = {
     "nodelink.triniumhost.com",
     "nodelink-02.triniumhost.com",
@@ -37,49 +32,9 @@ _NODELINK_HOSTS: set[str] = {
 }
 
 
-# Match a fenced ``bash``…`` block containing Host/Port/Password/Secure lines.
-_DN_NODE_RE = re.compile(
-    r"```bash\s*\n"
-    r"\s*Host\s*:\s*(?P<host>\S+).*?\n"
-    r"\s*Port\s*:\s*(?P<port>\d+).*?\n"
-    r"\s*Password\s*:\s*(?P<password>.+?)\s*\n"
-    r"\s*Secure\s*:\s*(?P<secure>[A-Za-z]+)\s*\n"
-    r"```",
-    re.IGNORECASE | re.DOTALL,
-)
-
-
-def _parse_dn_markdown(md: str, default_secure: bool) -> list[dict]:
-    nodes: list[dict] = []
-    for m in _DN_NODE_RE.finditer(md):
-        host = m.group("host").strip()
-        try:
-            port = int(m.group("port").strip())
-        except ValueError:
-            continue
-        # Strip surrounding quotes if present in the password field.
-        password = m.group("password").strip().strip('"').strip("'")
-        secure_raw = m.group("secure").strip().lower()
-        secure = secure_raw in ("true", "yes", "1") if secure_raw else default_secure
-        nodes.append({
-            "host": host,
-            "port": port,
-            "password": password,
-            "secure": secure,
-            "version": "v4",
-        })
-    return nodes
-
-
-async def _fetch_dn_source(session: aiohttp.ClientSession, url: str, default_secure: bool) -> list[dict]:
-    try:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as r:
-            if r.status != 200:
-                return []
-            text = await r.text()
-        return _parse_dn_markdown(text, default_secure)
-    except Exception:
-        return []
+def node_identifier(node: dict) -> str:
+    """``host:port`` — the pool key wavelink uses for a node."""
+    return f"{node['host']}:{node['port']}"
 
 
 def _dedupe_nodes(nodes: list[dict]) -> list[dict]:
@@ -94,61 +49,17 @@ def _dedupe_nodes(nodes: list[dict]) -> list[dict]:
     return unique
 
 
-# The discovered pool only changes slowly, so cache it. Without this, retries
-# after a failed connect (which back off from 30s) refetched both upstream
-# markdown files every attempt.
-_NODE_LIST_TTL = 1800.0
-_cached_nodes: list[dict] | None = None
-_cached_at: float = 0.0
+def node_catalog(private_nodes: list[dict] | None = None) -> list[dict]:
+    """Return the pool catalogue: the owner's private nodes, then the static list.
 
-
-async def fetch_node_list() -> list[dict]:
-    """Return the hardcoded node list, optionally merged with upstream nodes.
-
-    The hardcoded list is always the baseline.  When the public list is
-    reachable, any nodes not already in the baseline are appended so the
-    pool is as large as possible.  Nodelink entries are filtered out.
-
-    Results are cached for ``_NODE_LIST_TTL`` seconds so reconnect retries
-    do not refetch both upstream files on every attempt.
+    Private nodes come first and win duplicate ``host:port`` keys, so an owner
+    entry with a working password replaces a stale public one instead of being
+    silently dropped by the merge. The ``private`` flag travels with each entry
+    so the cog can keep owner nodes ahead of public ones in the pool.
     """
-    global _cached_nodes, _cached_at
-
-    if _cached_nodes is not None and _time.monotonic() - _cached_at < _NODE_LIST_TTL:
-        return list(_cached_nodes)
-
-    baseline: list[dict] = list(_FALLBACK_NODES)
-
-    try:
-        async with aiohttp.ClientSession() as s:
-            ssl_nodes, nossl_nodes = await asyncio.gather(
-                _fetch_dn_source(s, _DN_SSL_RAW, default_secure=True),
-                _fetch_dn_source(s, _DN_NOSSL_RAW, default_secure=False),
-                return_exceptions=False,
-            )
-        upstream = _dedupe_nodes(list(ssl_nodes) + list(nossl_nodes))
-        # Remove Nodelink nodes that are not compatible with Wavelink.
-        upstream = [n for n in upstream if n["host"] not in _NODELINK_HOSTS]
-        if upstream:
-            # Merge: keep baseline first, then append any new upstream nodes.
-            merged = _dedupe_nodes(baseline + upstream)
-            new_count = len(merged) - len(baseline)
-            if new_count > 0:
-                log.info(
-                    "Lavalink",
-                    f"Merged {new_count} extra nodes from DarrenOfficial/lavalink-list "
-                    f"({len(merged)} total).",
-                )
-            else:
-                log.info("Lavalink", f"Hardcoded list covers all upstream nodes ({len(merged)} total).")
-            _cached_nodes, _cached_at = merged, _time.monotonic()
-            return merged
-    except Exception as e:
-        log.warning("Lavalink", f"Upstream fetch failed (using hardcoded list): {e}")
-
-    log.info("Lavalink", f"Using hardcoded Lavalink node list ({len(baseline)} nodes).")
-    _cached_nodes, _cached_at = baseline, _time.monotonic()
-    return baseline
+    private = [{**dict(node), "private": True} for node in (private_nodes or [])]
+    merged = _dedupe_nodes(private + list(_FALLBACK_NODES))
+    return [node for node in merged if node["host"] not in _NODELINK_HOSTS]
 
 
 async def _probe_node(
@@ -201,9 +112,11 @@ async def find_responsive_nodes(nodes: list[dict]) -> list[dict]:
             return_exceptions=True,
         )
     alive = [r for r in results if r and not isinstance(r, BaseException)]
-    alive.sort(key=lambda x: x[1])
+    # Private nodes are the owner's own servers, so they lead the group even
+    # when a public node probes faster; latency orders the rest.
+    alive.sort(key=lambda x: (not x[0].get("private"), x[1]))
 
-    # The public list often carries the same host twice (an SSL and a non-SSL
+    # The catalogue often carries the same host twice (an SSL and a non-SSL
     # twin, e.g. host:443 + host:80) — that is one physical server, so keep
     # only its fastest responding port. Two sessions to the same host would
     # both die together and inflate the "connected" count.

@@ -231,6 +231,61 @@ class PlayerOpRetryTests(unittest.TestCase):
         self.assertFalse(music_cog._is_lavalink_500(ValueError("nope")))
 
 
+class ConnectCandidateTests(unittest.IsolatedAsyncioTestCase):
+    """A node that hangs must not cost the rest of the pool.
+
+    ``Pool.connect`` walks the nodes it is given one after another, so a batch
+    call plus one timeout cancelled every node queued behind the hanging one.
+    That left the pool on serenetia alone, where every search is answered with
+    429, and /play resolved nothing at all.
+    """
+
+    async def test_a_hanging_candidate_does_not_block_the_others(self):
+        cog  = object.__new__(music_cog.MusicSystem)
+        cog.bot = object()
+        slow = mock.Mock(identifier="slow.example:2333")
+        fast = mock.Mock(identifier="fast.example:2333")
+
+        async def fake_connect(*, nodes, client=None):
+            if nodes[0].identifier == slow.identifier:
+                await asyncio.sleep(60)      # handshake that never completes
+            return {}
+
+        async def fake_wait(identifiers, timeout=8.0):
+            return [n for n in (slow, fast) if n.identifier in identifiers]
+
+        cog._wait_for_connected_nodes = fake_wait
+
+        with mock.patch.object(music_cog.wavelink.Pool, "connect", fake_connect), \
+                mock.patch.object(music_cog, "_CONNECT_TIMEOUT", 0.05):
+            results = await asyncio.gather(
+                cog._connect_candidate(slow),
+                cog._connect_candidate(fast),
+            )
+
+        self.assertEqual(results, [False, True])
+
+    async def test_a_candidate_that_never_reports_ready_is_not_counted(self):
+        cog  = object.__new__(music_cog.MusicSystem)
+        cog.bot = object()
+        node = mock.Mock(identifier="quiet.example:2333")
+
+        async def fake_connect(*, nodes, client=None):
+            return {}
+
+        async def fake_wait(identifiers, timeout=8.0):
+            return []
+
+        cog._wait_for_connected_nodes = fake_wait
+
+        with mock.patch.object(music_cog.wavelink.Pool, "connect", fake_connect):
+            self.assertFalse(await cog._connect_candidate(node))
+
+    def test_the_pool_is_never_filled_by_one_batch_call(self):
+        self.assertIn("self._connect_candidate(node) for node in targets", COG_SOURCE)
+        self.assertNotIn("Pool.connect(nodes=targets", COG_SOURCE)
+
+
 class WavelinkApiTests(unittest.TestCase):
     """Guards against drifting back onto wavelink 2 API names."""
 
