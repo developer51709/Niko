@@ -146,6 +146,32 @@ class SupportServerStructureTests(unittest.TestCase):
                 self.assertFalse(permissions.administrator)
                 self.assertFalse(permissions.manage_guild)
 
+    def test_moderators_and_head_admins_hold_the_permissions_their_jobs_need(self):
+        moderator = ROLE_PERMISSIONS["moderator"]
+        for flag in (
+            "view_audit_log", "kick_members", "moderate_members", "manage_messages",
+            "manage_threads", "mute_members", "deafen_members", "move_members",
+        ):
+            self.assertTrue(getattr(moderator, flag), flag)
+        # Bans and server layout stay with the administrators.
+        for flag in ("ban_members", "manage_guild", "manage_channels", "manage_roles"):
+            self.assertFalse(getattr(moderator, flag), flag)
+
+        head_admin = ROLE_PERMISSIONS["head_admin"]
+        for flag in (
+            "view_audit_log", "kick_members", "moderate_members", "manage_messages",
+            "manage_threads", "mute_members", "deafen_members", "move_members",
+            "ban_members", "manage_nicknames", "manage_roles", "manage_channels",
+            "manage_webhooks", "manage_events", "manage_guild",
+        ):
+            self.assertTrue(getattr(head_admin, flag), flag)
+
+        # ADMINISTRATOR would bypass the read-only channel overwrites, and the
+        # shared staff role stays permission-free for every staff member.
+        for key in ("moderator", "head_admin"):
+            self.assertFalse(ROLE_PERMISSIONS[key].administrator, key)
+        self.assertEqual(ROLE_PERMISSIONS["staff"], discord.Permissions.none())
+
     def test_member_role_panels_are_onboarding_role_menus(self):
         roles = {key: index for index, key in enumerate(ROLE_SPECS, 500)}
         menus = support_role_menus(roles)
