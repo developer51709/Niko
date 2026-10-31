@@ -8,7 +8,7 @@ tested, and reused without loading any Discord command layer:
   • messages  — trilingual EN/DE/ES catalog (strings live in cogs/music/locales)
   • spotify   — Spotify URL/URI resolution client
   • autoplay  — Last.fm similar-track helper
-  • nodes     — Lavalink node discovery + probing
+  • nodes     — Lavalink node catalogue + probing
   • database  — dedicated secondary database (liked songs, playlists)
 """
 
@@ -36,8 +36,9 @@ from utils.music.spotify import (
 )
 from utils.music.nodes import (
     _FALLBACK_NODES,
-    fetch_node_list as _fetch_node_list,
     find_responsive_nodes as _find_responsive_nodes,
+    node_catalog as _node_catalog,
+    node_identifier as _node_identifier,
 )
 
 __all__ = [
@@ -63,6 +64,7 @@ __all__ = [
     "_SpotifyClient",
     "_normalize_spotify_reference",
     "_FALLBACK_NODES",
-    "_fetch_node_list",
     "_find_responsive_nodes",
+    "_node_catalog",
+    "_node_identifier",
 ]

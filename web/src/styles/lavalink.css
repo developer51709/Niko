@@ -1,0 +1,374 @@
+/* Owner-only Lavalink pool controls.
+   Surfaces use the same glass tokens as the rest of the dashboard
+   (`rgba(255, 255, 255, .035)`, 1px `--line`, `--shadow-soft`,
+   `blur(18px) saturate(140%)`) so this tab reads as part of the page rather
+   than a darker panel dropped into it. */
+.lavalink-view {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.dashboard-layout .lavalink-view .staff-guilds-heading {
+  align-items: flex-start;
+}
+
+.lavalink-view code {
+  padding: 1px 5px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  font: 11px "Space Mono", monospace;
+}
+
+/* ── Glass surfaces ─────────────────────────────────────────────────────── */
+
+/* The headline and each section carry `.staff-panel`, which already supplies
+   the dashboard glass; these rules only adjust the layout inside it. */
+.dashboard-layout .lavalink-headline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.dashboard-layout .lavalink-headline h2 {
+  margin: 6px 0 7px;
+  font-size: 20px;
+  letter-spacing: -.05em;
+}
+
+.dashboard-layout .lavalink-headline p {
+  margin: 0;
+  max-width: 66ch;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.dashboard-layout .lavalink-section {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-layout .lavalink-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-layout .lavalink-section-heading h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  letter-spacing: -.02em;
+}
+
+.dashboard-layout .lavalink-section-heading p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.lavalink-section-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Pool badge ─────────────────────────────────────────────────────────── */
+
+.lavalink-pool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 11px 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.lavalink-pool-badge > i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: var(--dot, #6f7680);
+  border-radius: 50%;
+}
+
+.lavalink-pool-badge.is-on {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--sage) 9%, rgba(255, 255, 255, .035));
+  border-color: color-mix(in srgb, var(--sage) 38%, var(--line));
+}
+
+.lavalink-pool-badge.is-on > i {
+  background: var(--sage);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sage) 16%, transparent);
+}
+
+.lavalink-pool-badge span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lavalink-pool-badge small {
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  font: 9px "Space Mono", monospace;
+}
+
+.lavalink-pool-badge strong {
+  color: inherit;
+  font-size: 12px;
+}
+
+/* ── Node rows ──────────────────────────────────────────────────────────── */
+
+.lavalink-empty {
+  padding: 18px;
+  color: var(--dim);
+  text-align: center;
+  background: rgba(255, 255, 255, .025);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.lavalink-node-list {
+  display: grid;
+  gap: 8px;
+}
+
+.lavalink-node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .14);
+  backdrop-filter: blur(20px) saturate(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.lavalink-node:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent-dark) 38%, var(--line));
+  box-shadow: var(--shadow-soft);
+}
+
+.lavalink-node.is-private {
+  background: color-mix(in srgb, var(--sage) 7%, rgba(255, 255, 255, .045));
+  border-color: color-mix(in srgb, var(--sage) 26%, var(--line));
+}
+
+.lavalink-node.is-private:hover {
+  border-color: color-mix(in srgb, var(--sage) 40%, var(--line));
+}
+
+.lavalink-node-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.lavalink-node-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: #5b616b;
+  border-radius: 50%;
+}
+
+.lavalink-node-dot.is-online {
+  background: var(--sage);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sage) 15%, transparent);
+}
+
+.lavalink-node-dot.is-connecting {
+  background: #d9b56c;
+}
+
+.lavalink-node-dot.is-offline {
+  background: #e47878;
+}
+
+.lavalink-node-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lavalink-node-title strong {
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.lavalink-node-title small {
+  color: var(--dim);
+  font: 11px "Space Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
+.lavalink-node-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.lavalink-node-stats b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lavalink-node-status {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: 10px "Space Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.lavalink-node-status.is-online {
+  color: var(--sage);
+  border-color: color-mix(in srgb, var(--sage) 40%, var(--line));
+}
+
+.lavalink-node-status.is-connecting {
+  color: #d9b56c;
+  border-color: color-mix(in srgb, #d9b56c 40%, var(--line));
+}
+
+.lavalink-node-status.is-offline {
+  color: #e47878;
+  border-color: color-mix(in srgb, #e47878 40%, var(--line));
+}
+
+/* ── Add form ───────────────────────────────────────────────────────────── */
+
+/* Same inner-card glass as `.staff-links-section`. */
+.dashboard-layout .lavalink-add {
+  display: grid;
+  gap: 14px;
+  padding: 17px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.lavalink-add-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.lavalink-add-heading small {
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.lavalink-add-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 110px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.lavalink-add-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lavalink-add-secure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lavalink-add-secure span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lavalink-add-secure small {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+/* Browsers without backdrop-filter keep the same wash, just unblurred — the
+   dashboard itself degrades the same way. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lavalink-node,
+  .lavalink-pool-badge,
+  .dashboard-layout .lavalink-add {
+    background: rgba(255, 255, 255, .05);
+  }
+}
+
+/* Same opt-out the shared glass rules honour. */
+@media (prefers-reduced-transparency: reduce) {
+  .lavalink-node,
+  .lavalink-pool-badge,
+  .dashboard-layout .lavalink-add {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, .055);
+  }
+}
+
+@media (max-width: 900px) {
+  .lavalink-add-fields {
+    grid-template-columns: minmax(0, 1fr) 110px;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-layout .lavalink-headline {
+    display: block;
+  }
+
+  .lavalink-pool-badge {
+    margin-top: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .lavalink-add-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lavalink-node-stats {
+    gap: 10px;
+  }
+}

@@ -26,6 +26,7 @@ import time
 from typing import List, Dict, Optional, Any
 
 import database as database_module
+from config.ids import OWNER_IDS, is_owner_id
 from utils import logging
 from utils.guild_lockdown import (
     FEATURE_STEPS,
@@ -120,11 +121,55 @@ class BlacklistManager:
 
         self.blacklist["users"]  = [self._row_to_entry(r) for r in user_rows]
         self.blacklist["guilds"] = [self._row_to_entry(r) for r in guild_rows]
+        await self._release_owner_entries(pool)
         self._loaded = True
         logging.debug(
             "blacklist_manager",
             f"Loaded {len(self.blacklist['users'])} users and {len(self.blacklist['guilds'])} guilds from database.",
         )
+
+    async def _release_owner_entries(self, pool) -> None:
+        """Drop blacklist rows and abuse strikes that target a bot owner.
+
+        An owner row can only exist because of a strike or a manual/erroneous
+        dashboard action, and keeping it would lock the account out of every
+        command and the dashboard with no way back in. Clearing it here means
+        the next boot heals such a row instead of needing an offline database
+        edit and a restart to bypass the cache. Strikes are cleared as well:
+        they are the input to the next blacklist, so an owner carrying any
+        would be one burst away from being locked out again.
+        """
+        owners = [entry for entry in self.blacklist["users"] if is_owner_id(entry["id"])]
+        if owners:
+            self.blacklist["users"] = [
+                entry for entry in self.blacklist["users"] if not is_owner_id(entry["id"])
+            ]
+            for entry in owners:
+                try:
+                    await pool.execute(
+                        "DELETE FROM blacklist_users WHERE id = $1", int(entry["id"])
+                    )
+                except Exception as exc:
+                    logging.warning(
+                        "blacklist_manager",
+                        f"Could not remove the blacklist row for owner {entry['id']}: {exc}",
+                    )
+                logging.warning(
+                    "blacklist_manager",
+                    f"Ignored blacklist entry for bot owner {entry['id']} "
+                    f"(reason: {entry.get('reason')}). Owners cannot be blacklisted.",
+                )
+
+        for owner_id in OWNER_IDS:
+            try:
+                await pool.execute(
+                    "DELETE FROM abuse_strikes WHERE user_id = $1", int(owner_id)
+                )
+            except Exception as exc:
+                logging.debug(
+                    "blacklist_manager",
+                    f"Could not clear abuse strikes for owner {owner_id}: {exc}",
+                )
 
     async def _ensure_loaded(self) -> None:
         if not self._loaded:
@@ -158,6 +203,12 @@ class BlacklistManager:
         added_by: Optional[int],
         expires_at: Optional[float],
     ) -> bool:
+        if is_owner_id(user_id):
+            logging.warning(
+                "blacklist_manager",
+                f"Refused to blacklist bot owner {user_id} (reason: {reason}).",
+            )
+            return False
         if self.is_user_blacklisted(user_id):
             return False
         entry = {
@@ -310,7 +361,17 @@ class BlacklistManager:
         return True
 
     async def register_abuse_strike(self, user_id: int, *, reason: str) -> Dict[str, Any]:
-        """Persist a strike and apply an escalating blacklist, permanently on strike three."""
+        """Persist a strike and apply an escalating blacklist, permanently on strike three.
+
+        Bot owners are exempt: a strike on the account that runs the bot used to
+        end with it blacklisted and locked out of its own dashboard.
+        """
+        if is_owner_id(user_id):
+            logging.info(
+                "blacklist_manager",
+                f"Skipped an abuse strike for bot owner {user_id} ({reason}).",
+            )
+            return {"strikes": 0, "blacklisted": False, "permanent": False, "expires_at": None}
         await self._ensure_loaded()
         async with self._write_lock:
             pool = self._pool()
@@ -467,6 +528,10 @@ class BlacklistManager:
     # Lookup
     # -----------------------------
     def get_user_entry(self, user_id: int) -> Optional[Dict[str, Any]]:
+        # Belt and braces for a cache that was populated before the owner
+        # exemption existed: the owner is never reported as blacklisted.
+        if is_owner_id(user_id):
+            return None
         now = time.time()
         for e in self.blacklist["users"]:
             if e["id"] == user_id:

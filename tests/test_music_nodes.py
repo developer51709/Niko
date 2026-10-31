@@ -33,6 +33,119 @@ class HardcodedCatalogTests(unittest.TestCase):
         assert '"password":' in source
 
 
+class _FakeResponse:
+    def __init__(self, status, payload=None):
+        self.status = status
+        self._payload = payload
+
+    async def json(self, content_type=None):
+        if isinstance(self._payload, BaseException):
+            raise self._payload
+        return self._payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    """Answers like a Lavalink node that only serves /v4/info with a password."""
+
+    def __init__(self, status, payload=None, *, password=None):
+        self.status = status
+        self.payload = payload
+        self.password = password
+        self.calls = []
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append((url, dict(headers or {})))
+        authorized = self.password is not None and (headers or {}).get(
+            "Authorization"
+        ) == self.password
+        if self.password is not None and not authorized:
+            return _FakeResponse(401, {"error": "Unauthorized"})
+        return _FakeResponse(self.status, self.payload)
+
+
+class NodeProbeTests(unittest.TestCase):
+    """The probe decides which hardcoded nodes the pool is allowed to use.
+
+    It used to call an unauthenticated ``/version`` and require a 200, which
+    only the two serenetia twins answer: everything else — including nodes that
+    serve the API fine with their password — was discarded as "failed" with no
+    reason logged, leaving the pool on the one host with the tightest
+    loadtracks rate limit.
+    """
+
+    def setUp(self):
+        from utils.music import nodes as nodes_mod
+
+        self.nodes = nodes_mod
+        self.node = {
+            "host": "lava2.kasawa.pro",
+            "port": 2334,
+            "password": "youshallnotpass",
+            "secure": False,
+            "version": "v4",
+        }
+
+    def _probe(self, session):
+        return asyncio.run(
+            self.nodes._probe_node(session, self.node, asyncio.Semaphore(1))
+        )
+
+    def test_probe_authenticates_against_the_v4_api(self):
+        session = _FakeSession(200, {"version": {"semver": "4.2.2"}})
+
+        result = self._probe(session)
+
+        self.assertIsNotNone(result)
+        url, headers = session.calls[0]
+        self.assertTrue(url.endswith("/v4/info"), url)
+        self.assertEqual(headers["Authorization"], "youshallnotpass")
+        self.assertFalse(
+            [u for u, _ in session.calls if "/version" in u],
+            "the unauthenticated /version route must not decide the pool",
+        )
+
+    def test_a_node_that_401s_without_a_password_is_usable(self):
+        # millohost and kasawa answer "Who are you??" to unauthenticated calls.
+        session = _FakeSession(
+            200, {"version": {"semver": "4.2.2"}}, password="youshallnotpass"
+        )
+
+        self.assertIsNotNone(self._probe(session))
+
+    def test_a_wrong_password_is_rejected(self):
+        session = _FakeSession(200, {"version": {}}, password="something-else")
+
+        with mock.patch.object(self.nodes.log, "info") as log_info:
+            self.assertIsNone(self._probe(session))
+
+        logged = " ".join(str(c) for c in log_info.call_args_list)
+        self.assertIn("Probe rejected lava2.kasawa.pro:2334", logged)
+        self.assertIn("401", logged)
+
+    def test_a_200_that_is_not_lavalink_is_rejected(self):
+        session = _FakeSession(200, ValueError("not json"))
+
+        self.assertIsNone(self._probe(session))
+
+        session = _FakeSession(200, {"hello": "cloudflare"})
+        with mock.patch.object(self.nodes.log, "info"):
+            self.assertIsNone(self._probe(session))
+
+    def test_every_rejection_is_logged_with_its_reason(self):
+        with mock.patch.object(self.nodes.log, "info") as log_info:
+            self.assertIsNone(self._probe(_FakeSession(530, {})))
+
+        logged = " ".join(str(c) for c in log_info.call_args_list)
+        self.assertIn("Probe rejected lava2.kasawa.pro:2334", logged)
+        self.assertIn("530", logged)
+
+
 class RescanBackoffTests(unittest.TestCase):
     """An empty pool must not wait an hour before trying again."""
 
@@ -116,6 +229,61 @@ class PlayerOpRetryTests(unittest.TestCase):
             music_cog._is_lavalink_500(RuntimeError("500 Internal Server Error"))
         )
         self.assertFalse(music_cog._is_lavalink_500(ValueError("nope")))
+
+
+class ConnectCandidateTests(unittest.IsolatedAsyncioTestCase):
+    """A node that hangs must not cost the rest of the pool.
+
+    ``Pool.connect`` walks the nodes it is given one after another, so a batch
+    call plus one timeout cancelled every node queued behind the hanging one.
+    That left the pool on serenetia alone, where every search is answered with
+    429, and /play resolved nothing at all.
+    """
+
+    async def test_a_hanging_candidate_does_not_block_the_others(self):
+        cog  = object.__new__(music_cog.MusicSystem)
+        cog.bot = object()
+        slow = mock.Mock(identifier="slow.example:2333")
+        fast = mock.Mock(identifier="fast.example:2333")
+
+        async def fake_connect(*, nodes, client=None):
+            if nodes[0].identifier == slow.identifier:
+                await asyncio.sleep(60)      # handshake that never completes
+            return {}
+
+        async def fake_wait(identifiers, timeout=8.0):
+            return [n for n in (slow, fast) if n.identifier in identifiers]
+
+        cog._wait_for_connected_nodes = fake_wait
+
+        with mock.patch.object(music_cog.wavelink.Pool, "connect", fake_connect), \
+                mock.patch.object(music_cog, "_CONNECT_TIMEOUT", 0.05):
+            results = await asyncio.gather(
+                cog._connect_candidate(slow),
+                cog._connect_candidate(fast),
+            )
+
+        self.assertEqual(results, [False, True])
+
+    async def test_a_candidate_that_never_reports_ready_is_not_counted(self):
+        cog  = object.__new__(music_cog.MusicSystem)
+        cog.bot = object()
+        node = mock.Mock(identifier="quiet.example:2333")
+
+        async def fake_connect(*, nodes, client=None):
+            return {}
+
+        async def fake_wait(identifiers, timeout=8.0):
+            return []
+
+        cog._wait_for_connected_nodes = fake_wait
+
+        with mock.patch.object(music_cog.wavelink.Pool, "connect", fake_connect):
+            self.assertFalse(await cog._connect_candidate(node))
+
+    def test_the_pool_is_never_filled_by_one_batch_call(self):
+        self.assertIn("self._connect_candidate(node) for node in targets", COG_SOURCE)
+        self.assertNotIn("Pool.connect(nodes=targets", COG_SOURCE)
 
 
 class WavelinkApiTests(unittest.TestCase):

@@ -3,6 +3,21 @@ OWNER_IDS = {
     1052690741874401360
 }
 
+
+def is_owner_id(user_id) -> bool:
+    """Whether this user is a configured bot owner.
+
+    Owners are exempt from the blacklist. Without that exemption an automated
+    strike (or a mistyped dashboard action) could blacklist the account that
+    runs the bot, and recovering meant editing the database by hand and
+    restarting to clear the cached entry — with no way back in from Discord or
+    the dashboard in the meantime.
+    """
+    try:
+        return int(user_id) in OWNER_IDS
+    except (TypeError, ValueError):
+        return False
+
 # support server guild id
 SUPPORT_GUILD  = 1497250915034337330
 

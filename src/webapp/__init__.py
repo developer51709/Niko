@@ -27,6 +27,7 @@ from .routes import (  # noqa: E402,F401
     security_decoy_routes,
     appeal_routes,
     proxy_worker_routes,
+    lavalink_routes,
     interaction_routes,
     verification_routes,
 )

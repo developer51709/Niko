@@ -57,6 +57,19 @@ _TABLE_SQL = [
         added_at   TEXT    NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (user_id, name, track_key)
     )""",
+    # Owner-added Lavalink nodes. They live here — never in the repository and
+    # never in the hardcoded catalogue — because their passwords are private.
+    """CREATE TABLE IF NOT EXISTS music_lavalink_nodes (
+        identifier TEXT    NOT NULL,
+        host       TEXT    NOT NULL,
+        port       INTEGER NOT NULL,
+        password   TEXT    NOT NULL,
+        secure     INTEGER DEFAULT 0,
+        label      TEXT    DEFAULT '',
+        added_by   INTEGER DEFAULT 0,
+        added_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (identifier)
+    )""",
 ]
 
 
@@ -286,6 +299,74 @@ class MusicDatabase:
             name,
             key,
         )
+
+    # ────────────────────────────────────────────── private Lavalink nodes ──
+    async def lavalink_nodes(self) -> list[dict]:
+        """Every owner-added node, ready for the node catalogue."""
+        if not await self.ensure():
+            return []
+        rows = await self.pool.fetch(
+            "SELECT identifier, host, port, password, secure, label, added_by, added_at "
+            "FROM music_lavalink_nodes ORDER BY added_at ASC"
+        )
+        return [
+            {
+                "identifier": row["identifier"],
+                "host": row["host"],
+                "port": int(row["port"]),
+                "password": row["password"],
+                "secure": bool(row["secure"]),
+                "label": row.get("label") or "",
+                "added_by": int(row.get("added_by") or 0),
+                "added_at": row.get("added_at"),
+                "version": "v4",
+            }
+            for row in rows
+        ]
+
+    async def save_lavalink_node(
+        self,
+        *,
+        host: str,
+        port: int,
+        password: str,
+        secure: bool = False,
+        label: str = "",
+        added_by: int = 0,
+    ) -> str:
+        """Add or update a private node; returns its ``host:port`` identifier."""
+        if not await self.ensure():
+            raise RuntimeError("The music database is not available.")
+        identifier = f"{host}:{port}"
+        await self.pool.execute(
+            "INSERT OR REPLACE INTO music_lavalink_nodes "
+            "(identifier, host, port, password, secure, label, added_by) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            identifier,
+            host,
+            int(port),
+            password,
+            1 if secure else 0,
+            label,
+            int(added_by),
+        )
+        return identifier
+
+    async def remove_lavalink_node(self, identifier: str) -> bool:
+        """Forget a private node. The static catalogue is never affected."""
+        if not await self.ensure():
+            return False
+        row = await self.pool.fetchrow(
+            "SELECT identifier FROM music_lavalink_nodes WHERE identifier = $1",
+            identifier,
+        )
+        if row is None:
+            return False
+        await self.pool.execute(
+            "DELETE FROM music_lavalink_nodes WHERE identifier = $1",
+            identifier,
+        )
+        return True
 
     async def get_playlist_tracks(self, user_id: int, name: str) -> list:
         if not await self.ensure():

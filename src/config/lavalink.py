@@ -1,10 +1,15 @@
-"""Static Lavalink candidates — the default node pool.
+"""Static Lavalink candidates — the committed node pool.
+
+This file is the only public node source: no remote list is fetched at
+runtime, so what ships here is exactly what the bot probes. Private nodes the
+owner adds in the dashboard are stored in the music database instead and are
+always preferred over these.
 
 Every entry is health-checked before it is handed to Wavelink.  Public nodes
 can disappear or change credentials, so keeping this list comprehensive and
 easy to replace is intentional.
 
-Last synced: 2026-09-21 from DarrenOfficial/lavalink-list (SSL + NonSSL).
+Last reviewed: 2026-09-21 (originally collected from DarrenOfficial/lavalink-list).
 """
 
 LAVALINK_NODES: list[dict] = [

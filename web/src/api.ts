@@ -11,6 +11,7 @@ import type {
   BoosterSettings,
   GuildOverview,
   GuildTicketsResponse,
+  LavalinkPoolResponse,
   LevelRow,
   GuildLevelsResponse,
   PublicConfig,
@@ -98,6 +99,13 @@ export const getStaffMe = () => api<{ role: string; role_label: string; profile:
 export const getStaffMembers = () => api<StaffManagementResponse>("/api/staff/members");
 export const getStaffAnalytics = (days = 30) => api<StaffAnalytics>(`/api/staff/analytics?days=${days}`);
 export const manageStaffMember = (userId: string, body: { action: "assign" | "demote" | "suspend" | "lift"; role?: string; reason?: string }, csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/staff/members/${encodeURIComponent(userId)}/manage`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const getStaffLavalinkPool = () => api<LavalinkPoolResponse>("/api/staff/lavalink");
+export const addStaffLavalinkNode = (
+  node: { host: string; port: string; password: string; secure: boolean; label: string },
+  csrfToken?: string,
+) => api<{ ok: boolean; identifier: string; applied: boolean }>("/api/staff/lavalink/nodes", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(node) });
+export const removeStaffLavalinkNode = (identifier: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/lavalink/nodes/${encodeURIComponent(identifier)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const applyStaffLavalinkChanges = (csrfToken?: string) => api<{ ok: boolean }>("/api/staff/lavalink/apply", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const getStaffProxyWorkers = () => api<ProxyWorkersResponse>("/api/staff/proxy-workers");
 export const addStaffProxyWorker = (name: string, url: string, csrfToken?: string) => api<{ ok: boolean }>("/api/staff/proxy-workers", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, url }) });
 export const removeStaffProxyWorker = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/proxy-workers/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
