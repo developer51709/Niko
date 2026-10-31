@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
@@ -28,6 +28,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
   if (path === "/team") return "team";
   if (path === "/support") return "support";
+  if (path === "/discord/partnership") return "partnership";
   if (path === "/discord") return "discord";
   if (path.startsWith("/team/")) return "team-member";
   if (path === "/privacy") return "privacy";

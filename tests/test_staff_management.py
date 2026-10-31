@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import cogs.staff.staff as staff_cog  # noqa: E402
+import cogs.staff.records as staff_cog  # noqa: E402
 import utils.data_removal as removal  # noqa: E402
 from config.ids import OWNER_IDS, SUPPORT_GUILD  # noqa: E402
 from webapp import app  # noqa: E402

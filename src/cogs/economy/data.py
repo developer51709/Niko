@@ -164,6 +164,8 @@ def _default_user() -> dict:
         "vote_streak":      0,
         "best_vote_streak": 0,
         "last_vote":        0,
+        # support-server referrals: members one invite link has brought in
+        "referral_count":   0,
         # transaction log (most recent first, capped)
         "transactions":  [],
         # achievements (list of ids)
@@ -537,6 +539,33 @@ ACHIEVEMENTS = {
         "description": "Win the weekly lottery 10 times.",
         "test": lambda d: int(d.get("lottery_wins", 0)) >= 10,
         "progress": lambda d: (int(d.get("lottery_wins", 0)), 10),
+    },
+    # ── Support-server referrals ─────────────────────────────────────────
+    # ``referral_count`` counts the members who arrived through this member's
+    # own invite link, each credited once (``cogs/staff/support_referrals.py``).
+    "referral_first": {
+        "name": "First Invite", "emoji": "📨", "reward": 500,
+        "description": "Bring one new member into the Niko support server.",
+        "test": lambda d: int(d.get("referral_count", 0)) >= 1,
+        "progress": lambda d: (int(d.get("referral_count", 0)), 1),
+    },
+    "referral_5": {
+        "name": "Good Company", "emoji": "🤝", "reward": 2_500,
+        "description": "Bring 5 members into the Niko support server.",
+        "test": lambda d: int(d.get("referral_count", 0)) >= 5,
+        "progress": lambda d: (int(d.get("referral_count", 0)), 5),
+    },
+    "referral_15": {
+        "name": "Community Builder", "emoji": "🌱", "reward": 7_500,
+        "description": "Bring 15 members into the Niko support server.",
+        "test": lambda d: int(d.get("referral_count", 0)) >= 15,
+        "progress": lambda d: (int(d.get("referral_count", 0)), 15),
+    },
+    "referral_50": {
+        "name": "Ambassador", "emoji": "🏡", "reward": 25_000,
+        "description": "Bring 50 members into the Niko support server.",
+        "test": lambda d: int(d.get("referral_count", 0)) >= 50,
+        "progress": lambda d: (int(d.get("referral_count", 0)), 50),
     },
     # ── Seasonal events ──────────────────────────────────────────────────
     # Each window is an inclusive MM-DD range in local time and repeats every
@@ -930,6 +959,7 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
             int(data.get("vote_streak", 0)),
             int(data.get("best_vote_streak", 0)),
             int(data.get("last_vote", 0)),
+            int(data.get("referral_count", 0)),
         ]
         await bot.cxn.execute(f"""
             INSERT OR REPLACE INTO economy_users (
@@ -941,7 +971,7 @@ async def _save_user_to_db(bot, user_id: int, data: dict) -> None:
                 last_fight, last_duel, inventory, effects, lottery_tickets,
                 lottery_tickets_bought, lottery_wins,
                 transactions, achievements, season_progress, votes, vote_streak,
-                best_vote_streak, last_vote
+                best_vote_streak, last_vote, referral_count
             ) VALUES ({', '.join(['?'] * len(values))})
         """, *values)
     except Exception as e:

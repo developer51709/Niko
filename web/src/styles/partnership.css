@@ -1,0 +1,136 @@
+/* The partnership ad page: one link partners paste, shown next to the card
+   Discord renders for it. Same surfaces and type scale as the rest of the
+   public site, with the sage accent reserved for the card's own furniture. */
+
+.partner-page { max-width: 1060px; }
+
+.partner-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  align-items: start;
+  gap: 54px;
+  padding: 10px 0 58px;
+  border-bottom: 1px solid var(--line);
+}
+
+.partner-hero h1 {
+  margin: 17px 0 18px;
+  font-size: clamp(40px, 5.4vw, 62px);
+  line-height: 1.02;
+  letter-spacing: -.075em;
+}
+
+.partner-hero h1 em { color: var(--sage); font-style: italic; }
+.partner-hero-copy > p { max-width: 540px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.85; }
+
+.partner-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+
+.partner-link-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 11px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 11px "Space Mono", monospace;
+}
+.partner-link-field span { overflow: hidden; color: var(--accent-dark); text-overflow: ellipsis; white-space: nowrap; }
+.partner-link-field a { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.partner-link-field a:hover { color: var(--sage); }
+.partner-link-field .icon { width: 12px; height: 12px; }
+.partner-note { margin: 11px 0 0; color: var(--dim); font-size: 11px; }
+
+/* ── The card, as the link renders in Discord ─────────────────────────────── */
+
+.partner-card { position: relative; padding-top: 6px; }
+.partner-card-inner {
+  padding: 20px 20px 18px;
+  background: #17191c;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sage);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.partner-card-head { display: flex; align-items: center; gap: 11px; }
+.partner-card-mark {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  flex: 0 0 auto;
+  color: #0c0d0e;
+  background: var(--sage);
+  border-radius: 50%;
+  font-size: 17px; font-weight: 800;
+}
+.partner-card-head strong { display: block; font-size: 15px; letter-spacing: -.03em; }
+.partner-card-head small { display: block; color: var(--dim); font-size: 11px; }
+.partner-card-lead { margin: 13px 0 16px; color: var(--muted); font-size: 11.5px; line-height: 1.65; }
+.partner-card-section { padding: 2px 0 4px; }
+.partner-card-heading { margin: 0 0 7px; color: var(--sage); font-size: 12px; font-weight: 700; letter-spacing: -.02em; }
+.partner-card-section ul { display: grid; gap: 5px; padding: 0; margin: 0; list-style: none; }
+.partner-card-section li { color: var(--muted); font-size: 11px; line-height: 1.55; }
+.partner-card-section b { color: var(--ink); font-weight: 700; }
+.partner-card-rule { height: 1px; margin: 12px 0; background: var(--line); }
+.partner-card-gallery { display: grid; grid-template-columns: 1.6fr 1fr; gap: 6px; margin-top: 13px; }
+.partner-card-gallery span { display: block; height: 62px; background: linear-gradient(135deg, #1d2124, #131518); border: 1px solid var(--line-soft); border-radius: 5px; }
+.partner-card-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.partner-card-buttons span { padding: 6px 11px; color: var(--accent-dark); background: var(--surface-muted); border: 1px solid var(--line); border-radius: 4px; font-size: 10px; font-weight: 700; }
+.partner-card-caption { display: block; margin-top: 11px; color: var(--dim); font: 10px "Space Mono", monospace; text-align: right; }
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+
+.partner-section { padding: 60px 0 0; }
+.partner-section-heading { max-width: 620px; }
+.partner-section-heading h2 { margin: 11px 0 12px; font-size: clamp(26px, 3.6vw, 38px); line-height: 1.08; letter-spacing: -.065em; }
+.partner-section-heading p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+
+.partner-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 30px; }
+.partner-tile { padding: 22px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+.partner-tile-icon { width: 34px; height: 34px; display: grid; place-items: center; margin-bottom: 18px; color: var(--sage); background: var(--surface-muted); border-radius: 6px; }
+.partner-tile-icon .icon { width: 16px; height: 16px; }
+.partner-tile h3 { margin: 0 0 8px; font-size: 14px; letter-spacing: -.03em; }
+.partner-tile p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+
+.partner-terms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.partner-terms-card { padding: 26px 24px; background: var(--callout); border: 1px solid var(--line); border-radius: 8px; }
+.partner-terms-card h2 { margin: 10px 0 16px; font-size: 21px; line-height: 1.15; letter-spacing: -.05em; }
+.partner-terms-card ul { display: grid; gap: 9px; padding: 0; margin: 0; list-style: none; }
+.partner-terms-card li { position: relative; padding-left: 19px; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+.partner-terms-card li::before { content: ""; position: absolute; top: 8px; left: 0; width: 7px; height: 7px; background: var(--sage); border-radius: 50%; opacity: .8; }
+
+.partner-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 34px 36px;
+  margin-top: 60px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.partner-cta h2 { margin: 12px 0 12px; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.1; letter-spacing: -.06em; }
+.partner-cta p { max-width: 470px; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.8; }
+.partner-cta-actions { display: flex; flex: 0 0 auto; flex-direction: column; gap: 9px; }
+.partner-cta-actions .button { white-space: nowrap; }
+
+@media (max-width: 980px) {
+  .partner-hero { grid-template-columns: minmax(0, 1fr); gap: 34px; }
+  .partner-grid { grid-template-columns: 1fr; }
+  .partner-terms { grid-template-columns: 1fr; }
+  .partner-cta { flex-direction: column; align-items: flex-start; gap: 22px; }
+  .partner-cta-actions { width: 100%; }
+  .partner-cta-actions .button { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 640px) {
+  .partner-hero { padding-top: 0; padding-bottom: 40px; }
+  .partner-actions { flex-direction: column; align-items: stretch; }
+  .partner-actions .button { width: 100%; }
+  .partner-card-gallery { grid-template-columns: 1fr; }
+  .partner-card-gallery span { height: 48px; }
+  .partner-section { padding-top: 40px; }
+  .partner-cta { padding: 24px; margin-top: 40px; }
+}

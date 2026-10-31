@@ -4,28 +4,28 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
-from cogs.staff import owner
+from cogs.staff.panels import status as owner
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_status_collection_reads_live_music_node_state():
-    source = (ROOT / "src/cogs/staff/owner.py").read_text(encoding="utf-8")
+    source = (ROOT / "src/cogs/staff/panels/status.py").read_text(encoding="utf-8")
     assert 'bot.get_cog("MusicSystem")' in source
     assert 'status["music_nodes"] = len(node_labels)' in source
     assert 'status["music_ok"]' in source
 
 
 def test_system_health_renders_active_music_node_count():
-    source = (ROOT / "src/cogs/staff/owner.py").read_text(encoding="utf-8")
+    source = (ROOT / "src/cogs/staff/panels/status.py").read_text(encoding="utf-8")
     assert 'music_nodes = int(status.get("music_nodes") or 0)' in source
     assert 'line(f"{state_emoji(music_ok)} **Music** — {state_of(music_ok)} · {music_nodes} active node' in source
     assert "music_nodes != 1" in source
 
 
 def test_public_website_health_uses_configured_public_url():
-    source = (ROOT / "src/cogs/staff/owner.py").read_text(encoding="utf-8")
+    source = (ROOT / "src/cogs/staff/panels/status.py").read_text(encoding="utf-8")
     assert 'os.environ.get("PUBLIC_URL", "").strip().rstrip("/")' in source
     assert 'await _probe_http(f"{public_url}/")' in source
     assert 'await _probe_http(f"{local_base}/")' not in source
@@ -34,7 +34,7 @@ def test_public_website_health_uses_configured_public_url():
 
 
 def test_website_health_is_independent_of_local_api_health():
-    source = (ROOT / "src/cogs/staff/owner.py").read_text(encoding="utf-8")
+    source = (ROOT / "src/cogs/staff/panels/status.py").read_text(encoding="utf-8")
     assert 'status["api_ok"] = await _probe_http(f"{local_base}/api/health")' in source
     assert 'if api_ok:' not in source
     assert "**Website** — {website_text}" in source

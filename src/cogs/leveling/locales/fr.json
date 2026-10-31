@@ -171,5 +171,19 @@
     "leveling.rank.args.member": "Membre à afficher (toi par défaut).",
     "leveling.rank.description": "Voir tes statistiques de niveau avec une jolie carte image",
     "leveling.rank.help": "Voir tes statistiques de niveau"
+  },
+  "migration": {
+    "title": "### Merci d'avoir ajouté Niko à **{guild}**",
+    "settings": "Les réglages de ton serveur — niveaux, rôles, modération et plus — se trouvent dans le tableau de bord :\n{url}",
+    "detected": "Je vois que **{bot}** suit déjà les niveaux ici. Veux-tu que je copie son classement dans Niko ? Chacun garde le niveau atteint, et les membres déjà plus avancés sur Niko restent tels quels.",
+    "migrate_button": "Importer depuis {bot}",
+    "decline_button": "Non merci",
+    "migrating": "Je lis le classement de {bot} — sur un grand serveur, cela peut prendre une minute. Je mettrai ce message à jour une fois terminé.",
+    "declined": "Pas de souci — rien n'a été importé. Tu peux configurer les niveaux à tout moment depuis le tableau de bord :\n{url}",
+    "done": "{tick} **{imported}** membres importés depuis {bot} — {skipped} étaient déjà plus avancés sur Niko, {total} entrées lues.",
+    "failed_unavailable": "{cross} Je n'ai pas pu lire le classement de {bot} : il est peut-être privé, ou {bot} n'a pas de données pour ce serveur. Une fois qu'il est lisible, relance l'importation :\n{url}",
+    "failed_key": "{cross} {bot} a refusé la clé d'API avec laquelle Niko est configuré. Une clé valide doit être renseignée dans `AMARIBOT_API_KEY` avant de pouvoir importer — puis réessaie :\n{url}",
+    "failed": "{cross} L'importation s'est arrêtée avant la fin : {error}",
+    "already_running": "Une importation est déjà en cours pour ce serveur — un instant."
   }
 }

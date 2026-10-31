@@ -48,7 +48,7 @@ _ACCOUNT_COLUMNS = (
     "user_id, balance, bank, level, job, daily_streak, total_earned, total_spent, "
     "times_worked, bank_tier, achievements, transactions, season_progress, "
     "votes, vote_streak, best_vote_streak, last_vote, lottery_tickets, "
-    "lottery_tickets_bought, lottery_wins"
+    "lottery_tickets_bought, lottery_wins, referral_count"
 )
 
 
@@ -62,6 +62,7 @@ TRANSACTION_LABELS = {
     "achievement": "Achievement",
     "interest": "Bank interest",
     "vote": "top.gg vote",
+    "referral": "Referral reward",
     "daily": "Daily reward",
     "work": "Work shift",
     "pay": "Payment sent",

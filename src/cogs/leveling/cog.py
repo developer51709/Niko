@@ -12,6 +12,7 @@ from utils.image.level_card import render_level_card
 from utils.image.economy_card import fetch_avatar_bytes
 
 from utils.command_locales import command_texts
+from utils.ratelimit import mass_role_limiter
 
 CMDS = command_texts(__package__)
 
@@ -108,6 +109,22 @@ def _json_mapping(value) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _level_role_map(value) -> dict:
+    """Normalise a stored reward mapping into ``{level: role_id}`` integers.
+
+    The mapping is stored as text keys (JSON object keys are always strings)
+    and both SQLite and MongoDB can hand the values back as text, so every
+    comparison against a member's level has to go through the same cast.
+    """
+    out = {}
+    for level, role_id in _json_mapping(value).items():
+        try:
+            out[int(level)] = int(role_id)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _channel_id_list(value) -> list:
     """Normalise a stored channel list into a list of integer IDs."""
     if isinstance(value, str):
@@ -195,6 +212,98 @@ class Leveling(commands.Cog):
             json.dumps(cfg.get("card_bg_top"))    if cfg.get("card_bg_top")    else None,
             json.dumps(cfg.get("card_bg_bottom")) if cfg.get("card_bg_bottom") else None,
         )
+
+    # ── REWARD ROLE SYNC ───────────────────────────
+
+    async def _sync_level_roles(self, guild, level_roles: dict,
+                                previous_roles: dict = None,
+                                members=None) -> tuple:
+        """Make every member's reward roles match their stored level.
+
+        Called whenever the reward mapping changes (a reward is added, moved to
+        another level, or removed) and when a member's level is moved, so the
+        roles a member holds always reflect the rewards they have reached:
+        rewards above their level are stripped and everything they earned is
+        granted. A reward role that is no longer part of the mapping is removed
+        from everyone who still holds it.
+
+        Every member update goes through ``mass_role_limiter`` — the same
+        guild-scoped bucket ``/massrole`` uses — so reconciling a large server
+        cannot burn through Discord's role-edit budget on top of a mass role
+        job already running in the same guild.
+
+        Returns ``(updated, failed)`` counts.
+        """
+        if guild is None:
+            return 0, 0
+
+        rewards = _level_role_map(level_roles)
+        rewarded = set(rewards.values())
+        stale = set(_level_role_map(previous_roles or {}).values()) - rewarded
+        if not rewarded and not stale:
+            return 0, 0
+
+        levels = {}
+        try:
+            rows = await self.bot.cxn.fetch(
+                "SELECT * FROM levels WHERE guild_id = $1", int(guild.id)
+            )
+        except Exception:
+            rows = []
+        for row in rows or []:
+            try:
+                levels[int(row["user_id"])] = int(row["level"])
+            except (KeyError, IndexError, TypeError, ValueError):
+                continue
+
+        candidates = list(members) if members is not None else list(
+            getattr(guild, "members", None) or []
+        )
+        updated = failed = 0
+        for member in candidates:
+            if getattr(member, "bot", False):
+                continue
+            member_level = levels.get(member.id, 0)
+            claimed = {role for level, role in rewards.items() if level <= member_level}
+            held = {role.id for role in getattr(member, "roles", None) or []}
+            to_add = claimed - held
+            to_remove = (rewarded | stale) & (held - claimed)
+            if not to_add and not to_remove:
+                continue
+
+            await mass_role_limiter.acquire(guild.id)
+            try:
+                if to_add:
+                    await member.add_roles(
+                        *[role for role in (guild.get_role(rid) for rid in to_add) if role],
+                        reason="Leveling reward role sync",
+                    )
+                if to_remove:
+                    await member.remove_roles(
+                        *[role for role in (guild.get_role(rid) for rid in to_remove) if role],
+                        reason="Leveling reward role sync",
+                    )
+                updated += 1
+            except Exception:
+                # A missing permission or a role above the bot's own top role
+                # must not stop the rest of the server from being reconciled.
+                failed += 1
+        return updated, failed
+
+    def _queue_level_role_sync(
+        self, guild, level_roles: dict, previous_roles: dict = None, members=None,
+    ) -> None:
+        """Reconcile reward roles in the background after a mapping edit.
+
+        The sync is rate limited, so a large server would otherwise make the
+        command or panel interaction wait for every member update.
+        """
+        try:
+            asyncio.create_task(
+                self._sync_level_roles(guild, level_roles, previous_roles, members)
+            )
+        except RuntimeError:
+            pass
 
     async def _get_user_data(self, guild_id, user_id) -> dict:
         row = await self.bot.cxn.fetchrow(
@@ -792,9 +901,11 @@ class Leveling(commands.Cog):
             return await ctx.send(msg(ctx, "cfg_levelrole_invalid_level"))
         cfg = await self._guild_cfg(ctx.guild.id)
         lr  = cfg.setdefault("level_roles", {})
+        previous = dict(lr)
         if role is None:
             lr.pop(str(level), None)
             await self._save_guild_cfg(ctx.guild.id, cfg)
+            self._queue_level_role_sync(ctx.guild, lr, previous)
             await ctx.send(
                 msg(ctx, "cfg_updated")
                 + " "
@@ -803,6 +914,7 @@ class Leveling(commands.Cog):
         else:
             lr[str(level)] = role.id
             await self._save_guild_cfg(ctx.guild.id, cfg)
+            self._queue_level_role_sync(ctx.guild, lr, previous)
             await ctx.send(
                 msg(ctx, "cfg_updated")
                 + " "
@@ -819,6 +931,11 @@ class Leveling(commands.Cog):
         if not member:
             return await ctx.send(msg(ctx, "cfg_reset_member_missing"))
         await self._save_user_data(ctx.guild.id, member.id, 0, 0)
+        # The member's level just moved to 0, so any reward role they had
+        # already reached has to come back off with it.
+        cfg = await self._guild_cfg(ctx.guild.id)
+        await self._sync_level_roles(
+            ctx.guild, cfg.get("level_roles", {}), members=[member])
         await ctx.send(
             f"{get_emoji('tick')} " + msg(ctx, "cfg_reset_done", name=member.display_name)
         )

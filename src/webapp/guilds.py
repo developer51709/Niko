@@ -254,7 +254,6 @@ def _get_runtime_server_config(guild_id: str) -> dict:
     """Read all server-management settings from their existing owners."""
     from utils.prefix_manager import DEFAULT_PREFIX, PREFIX_OVERRIDE, get_prefixes
     from config.status import DEVELOPMENT
-    from utils.guild_privacy import get_guild_privacy
     from utils.onboarding.config import load_config
     from cogs.logging.formatters import _load_log_config, _guild_config
     from utils.tickets.utils import get_ticket_config
@@ -279,10 +278,6 @@ def _get_runtime_server_config(guild_id: str) -> dict:
         "logging_categories": _serialize_logging_categories(),
         "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),
         "profile": _get_runtime_guild_profile(guild_id),
-        # Whether the server tag popups in transcripts hide this server.
-        "privacy": runtime.run_on_bot_loop(
-            get_guild_privacy(int(guild_id), getattr(runtime._discord_bot, "cxn", None))
-        ),
         # Niko's own identity, so the customization tab can show what a server
         # inherits until it uploads its own avatar or banner.
         "global_profile": _global_profile_assets(),

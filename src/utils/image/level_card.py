@@ -119,7 +119,14 @@ def _render_level_sync(
 
     # ── Header ──
     d.text((36, 28), "NIKO LEVELING", fill=ACCENT, font=_bold(16))
-    d.text((36, 52), f"Level Stats — {name}", fill=INK, font=_bold(28))
+    # The header carries the member's display name, so it is drawn exactly like
+    # the economy cards draw theirs: Discord emoji markup is stripped and each
+    # glyph picks the first font in the resolved family that covers it, which
+    # keeps names with symbols outside the primary face from rendering as tofu.
+    draw_text_with_fallback(
+        d, (36, 52), _strip_discord_emoji(f"Level Stats — {name}"),
+        size=28, bold=True, fill=INK,
+    )
 
     # rank pill (top-right)
     pill_text = f"#{rank} in this server"

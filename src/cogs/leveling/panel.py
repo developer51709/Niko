@@ -597,8 +597,13 @@ class _LvRoleAssignSelect(discord.ui.RoleSelect):
     async def callback(self, interaction: discord.Interaction):
         role = self.values[0]
         cfg  = await self._cog._guild_cfg(self._guild_id)
+        previous = dict(cfg.setdefault("level_roles", {}))
         cfg.setdefault("level_roles", {})[str(self._level)] = role.id
         await self._cog._save_guild_cfg(self._guild_id, cfg)
+        # Members who already passed this level get the reward now, and a role
+        # moved here from another level is taken back from those below it.
+        self._cog._queue_level_role_sync(
+            interaction.guild, cfg["level_roles"], previous)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(
@@ -686,9 +691,12 @@ class _LvRemoveRoleSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
         lr  = cfg.setdefault("level_roles", {})
+        previous = dict(lr)
         for val in self.values:
             lr.pop(val, None)
         await self._cog._save_guild_cfg(self._guild_id, cfg)
+        # A removed reward is taken off the members who had earned it.
+        self._cog._queue_level_role_sync(interaction.guild, lr, previous)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(

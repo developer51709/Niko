@@ -62,7 +62,6 @@ GUILD_DELETIONS: tuple[str, ...] = (
     "level_config",
     "prefix_config",
     "guild_profiles",
-    "guild_privacy",
     "triggers",
     "onboarding",
     "logging_config",

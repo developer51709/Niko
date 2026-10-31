@@ -76,7 +76,7 @@ def api_manage_staff_member(user_id):
     actor_id = int(session["user"]["id"])
 
     async def apply():
-        from cogs.staff.staff import set_staff_role, set_staff_suspension
+        from cogs.staff.records import set_staff_role, set_staff_suspension
 
         if action == "assign":
             return await set_staff_role(

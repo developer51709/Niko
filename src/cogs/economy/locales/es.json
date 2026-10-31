@@ -312,7 +312,11 @@
     "winter_shopper.name": "Comprador navideño",
     "new_year_level.name": "Ambición de medianoche",
     "valentine_wallet.name": "Corazón de oro",
-    "summer_streak.name": "Racha de verano"
+    "summer_streak.name": "Racha de verano",
+    "referral_first.name": "Primera invitación",
+    "referral_5.name": "Buena compañía",
+    "referral_15.name": "Constructor de comunidad",
+    "referral_50.name": "Embajador"
   },
   "commands": {
     "balance.args.member": "De quién quieres ver la cartera (por defecto la tuya)",

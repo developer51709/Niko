@@ -22,6 +22,7 @@ import { BlacklistAppealPage } from "./pages/BlacklistAppealPage";
 import { StaffApplicationPage } from "./pages/StaffApplicationPage";
 import { TeamStaffApplicationPage } from "./pages/TeamStaffApplicationPage";
 import { DiscordRedirectPage, SupportPage } from "./pages/SupportPage";
+import { PartnershipPage } from "./pages/PartnershipPage";
 import { ToastHost } from "./components/ToastHost";
 import { pageFromPath, type Page } from "./router";
 
@@ -53,6 +54,7 @@ export function App() {
   else if (page === "team-member") pageContent = <TeamMemberPage id={window.location.pathname.split("/").filter(Boolean)[1] || ""} />;
   else if (page === "support") pageContent = <SupportPage />;
   else if (page === "discord") pageContent = <DiscordRedirectPage />;
+  else if (page === "partnership") pageContent = <PartnershipPage />;
   else if (page === "privacy") pageContent = <LegalPage type="privacy" />;
   else if (page === "terms") pageContent = <LegalPage type="terms" />;
   else if (page === "data-removal") pageContent = <DataRemovalPage />;

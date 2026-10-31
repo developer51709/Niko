@@ -7,7 +7,6 @@ import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
 import { ChannelSelect } from "./ChannelSelect";
 import { DashHeading } from "./DashboardViews";
 import { Switch } from "./Switch";
-import { SettingCard, SettingCards } from "./SettingCards";
 
 // Only the in-flight flag belongs in state now: every result is announced with a
 // toast (see ../../utils/toast) instead of an inline line in the card footer.
@@ -82,7 +81,6 @@ function initialValues(server?: ServerConfig) {
       Object.entries(server?.logging || {}).map(([key, value]) => [key, value === null || value === undefined ? "" : String(value)]),
     ),
     disabled_logging: [...(server?.logging?.disabled || [])].map(String),
-    private_server: Boolean(server?.privacy?.private),
   };
 }
 
@@ -115,7 +113,6 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
         ...values.logging,
         disabled: values.disabled_logging,
       },
-      privacy: { private: values.private_server },
     }, csrfToken).then((result) => {
       setValues(initialValues(result.config as ServerConfig));
       setState({ saving: false });
@@ -141,8 +138,6 @@ export function ServerSettingsView({ guildId, config, resources, csrfToken }: { 
       <section className="dash-panel settings-panel"><SectionTitle label="Audit trail" title="Logging destinations" detail="Pick a channel for each event type and disable categories you do not need." icon="book" /><div className="server-logging-list">
         {loggingCategories.map(([key, label, description]) => { const channels = channelsWithSelected(resources, values.logging[key]); return <div className="server-logging-row" key={key} title={description || undefined}><div className="form-field"><span className="form-label">{label} logs</span><ChannelSelect channels={channels} value={String(values.logging[key] || "")} placeholder="Not set" ariaLabel={`${label} logs`} onChange={(value) => setLoggingChannel(key, value)} /></div><div className="server-logging-toggle"><span><strong>Enabled</strong><small>{channelLabel(resources, values.logging[key])}</small></span><Switch checked={!values.disabled_logging.includes(key)} onCheckedChange={() => toggleLogging(key)} aria-label={`Enable ${label} logging`} /></div></div>; })}
       </div></section>
-
-      <section className="dash-panel settings-panel"><SectionTitle label="Privacy" title="Server tag popups" detail="Control what people see when they open this server's tag on a profile." icon="shield" /><SettingCards><SettingCard title="Private server" hint="Hide this server's name, icon, description, member counts, and invite from server tag popups. The tag itself stays visible." action={<Switch checked={values.private_server} onCheckedChange={(value) => setValue("private_server", value)} aria-label="Private server" />} /></SettingCards></section>
 
       <SaveFooter state={state} />
     </form>

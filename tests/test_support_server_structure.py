@@ -11,8 +11,13 @@ from discord.ext import commands
 
 sys.path.insert(0, "src")
 
-from cogs.staff import staff as staff_module
-from cogs.staff.staff import StaffCog, _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
+from config.ids import OWNER_IDS, SUPPORT_GUILD
+from cogs.staff import support_setup as staff_module
+from cogs.staff.commands import support as support_commands
+from cogs.staff.panels import rules as rules_module
+from cogs.staff.panels import status as status_module
+from cogs.staff.staff import StaffCog
+from cogs.staff.support_setup import _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
 from webapp.routes import team_recruitment_routes
 from cogs.staff.support_server import AGE_GROUP_ROLE_KEYS, CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, LOG_CHANNEL_KEYS, LOG_ROLE_KEYS, PRONOUN_ROLE_KEYS, ROLE_ICON_ASSETS, ROLE_PERMISSIONS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SUPPORT_ROLE_MENUS, SupportGuidePanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available, support_role_menus
 from cogs.automod import mrbeast_scam
@@ -207,7 +212,7 @@ class SupportServerStructureTests(unittest.TestCase):
     def test_support_guild_branding_sets_name_description_and_server_tag(self):
         async def check():
             guild = SimpleNamespace(
-                id=staff_module.SUPPORT_GUILD,
+                id=SUPPORT_GUILD,
                 name="Old name",
                 description="Old description",
                 features=["COMMUNITY", "GUILD_TAGS"],
@@ -246,7 +251,7 @@ class SupportServerStructureTests(unittest.TestCase):
     def test_support_guild_branding_skips_community_and_tag_dependent_fields(self):
         async def check():
             guild = SimpleNamespace(
-                id=staff_module.SUPPORT_GUILD,
+                id=SUPPORT_GUILD,
                 name="Old name",
                 description=None,
                 features=[],
@@ -468,9 +473,7 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertGreaterEqual(sum(isinstance(item, discord.ui.Separator) for item in view.walk_children()), 1)
 
     def test_support_rules_panel_prints_every_rule_without_navigation_buttons(self):
-        import cogs.staff.owner as owner_module
-
-        view = owner_module._build_rules_panel(SimpleNamespace(user=None))
+        view = rules_module._build_rules_panel(SimpleNamespace(user=None))
         text = "\n".join(
             component.content
             for component in view.walk_children()
@@ -481,6 +484,13 @@ class SupportServerStructureTests(unittest.TestCase):
         for rule in range(1, 21):
             self.assertIn(f"**{rule}.", text)
         self.assertLessEqual(len(text), 4000)
+        # Each rule group gets its own card, so the panel scans as sections
+        # instead of one uninterrupted block of text.
+        containers = [item for item in view.walk_children() if isinstance(item, discord.ui.Container)]
+        self.assertEqual(len(containers), 6)
+        # A V2 message allows at most ten top-level components.
+        self.assertLessEqual(len(view.children), 10)
+        self.assertNotIn("What's in here", text)
         buttons = [
             item.item
             for item in view.walk_children()
@@ -544,8 +554,8 @@ class SupportServerStructureTests(unittest.TestCase):
         async def check():
             operations = []
             bot = SimpleNamespace()
-            author = SimpleNamespace(id=next(iter(staff_module.OWNER_IDS)))
-            guild = SimpleNamespace(id=staff_module.SUPPORT_GUILD)
+            author = SimpleNamespace(id=next(iter(OWNER_IDS)))
+            guild = SimpleNamespace(id=SUPPORT_GUILD)
             progress = SimpleNamespace(edit=AsyncMock())
             async def send(*args, **kwargs):
                 operations.append("progress")
@@ -562,13 +572,12 @@ class SupportServerStructureTests(unittest.TestCase):
                 operations.append("post_panels")
                 self.assertEqual(args[3]["support_guide"], 2)
             async def roles(*args): operations.append("assign_roles")
-            with patch.object(staff_module, "_is_owner_user", return_value=True), \
-                 patch.object(staff_module, "reconcile_structure", new=reconcile), \
-                 patch.object(staff_module, "persist_support_ids", new=persist), \
-                 patch.object(staff_module, "create_support_invite", new=invite), \
-                 patch.object(staff_module, "_configure_support_systems", new=configure), \
-                 patch.object(staff_module, "_send_support_panels", new=panels), \
-                 patch.object(staff_module, "assign_support_roles", new=roles):
+            with patch.object(support_commands, "reconcile_structure", new=reconcile), \
+                 patch.object(support_commands, "persist_support_ids", new=persist), \
+                 patch.object(support_commands, "create_support_invite", new=invite), \
+                 patch.object(support_commands, "_configure_support_systems", new=configure), \
+                 patch.object(support_commands, "_send_support_panels", new=panels), \
+                 patch.object(support_commands, "assign_support_roles", new=roles):
                 await StaffCog.support_update.callback(SimpleNamespace(bot=bot), ctx)
             self.assertEqual(operations, [
                 "progress", "reconcile_permissions", "persist", "invite",
@@ -589,7 +598,7 @@ class SupportServerStructureTests(unittest.TestCase):
                     await confirm.callback(interaction)
                     self.assertNotIn("content", interaction.response.edit_message.await_args.kwargs)
                 return response
-            ctx = SimpleNamespace(author=author, bot=bot, guild=SimpleNamespace(id=staff_module.SUPPORT_GUILD), send=send)
+            ctx = SimpleNamespace(author=author, bot=bot, guild=SimpleNamespace(id=SUPPORT_GUILD), send=send)
             cog = SimpleNamespace(bot=bot)
             operations = []
             async def preflight(guild): operations.append("preflight")
@@ -603,14 +612,13 @@ class SupportServerStructureTests(unittest.TestCase):
             async def panels(*args, **kwargs): operations.append("panels")
             async def roles(*args): operations.append("roles")
             with patch.object(discord.ui.LayoutView, "wait", new=AsyncMock(return_value=False)), \
-                 patch.object(staff_module, "_is_owner_user", return_value=True), \
-                 patch.object(staff_module, "bot_member_preflight", new=preflight), \
-                 patch.object(staff_module, "reconcile_structure", new=reconcile), \
-                 patch.object(staff_module, "persist_support_ids", new=persist), \
-                 patch.object(staff_module, "create_support_invite", new=invite), \
-                 patch.object(staff_module, "_configure_support_systems", new=configure), \
-                 patch.object(staff_module, "_send_support_panels", new=panels), \
-                 patch.object(staff_module, "assign_support_roles", new=roles):
+                 patch.object(support_commands, "bot_member_preflight", new=preflight), \
+                 patch.object(support_commands, "reconcile_structure", new=reconcile), \
+                 patch.object(support_commands, "persist_support_ids", new=persist), \
+                 patch.object(support_commands, "create_support_invite", new=invite), \
+                 patch.object(support_commands, "_configure_support_systems", new=configure), \
+                 patch.object(support_commands, "_send_support_panels", new=panels), \
+                 patch.object(support_commands, "assign_support_roles", new=roles):
                 await StaffCog.support_setup.callback(cog, ctx)
             self.assertEqual(operations, ["preflight", "reconcile", "persist", "invite", "configure", "panels", "roles"])
             author.send.assert_awaited()
@@ -626,12 +634,11 @@ class SupportServerStructureTests(unittest.TestCase):
                     confirm = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.label == "Rebuild server")
                     await confirm.callback(SimpleNamespace(user=author, response=SimpleNamespace(edit_message=AsyncMock())))
                 return response
-            ctx = SimpleNamespace(author=author, bot=SimpleNamespace(), guild=SimpleNamespace(id=staff_module.SUPPORT_GUILD), send=send)
+            ctx = SimpleNamespace(author=author, bot=SimpleNamespace(), guild=SimpleNamespace(id=SUPPORT_GUILD), send=send)
             cog = SimpleNamespace(bot=ctx.bot)
             with patch.object(discord.ui.LayoutView, "wait", new=AsyncMock(return_value=False)), \
-                 patch.object(staff_module, "_is_owner_user", return_value=True), \
-                 patch.object(staff_module, "bot_member_preflight", new=AsyncMock()) as preflight, \
-                 patch.object(staff_module, "reconcile_structure", new=AsyncMock()) as reconcile:
+                 patch.object(support_commands, "bot_member_preflight", new=AsyncMock()) as preflight, \
+                 patch.object(support_commands, "reconcile_structure", new=AsyncMock()) as reconcile:
                 await StaffCog.support_setup.callback(cog, ctx)
             preflight.assert_not_awaited()
             reconcile.assert_not_awaited()
@@ -645,7 +652,7 @@ class SupportServerStructureTests(unittest.TestCase):
             pool = SimpleNamespace(fetchrow=AsyncMock(return_value={"role_ids": '{"staff":12}', "channel_ids": '{"polls":44}'}), execute=AsyncMock())
             channel = SimpleNamespace(id=11, create_invite=AsyncMock(return_value=SimpleNamespace(url="https://discord.gg/current")))
 
-            guild = SimpleNamespace(id=staff_module.SUPPORT_GUILD, get_channel=lambda _: channel)
+            guild = SimpleNamespace(id=SUPPORT_GUILD, get_channel=lambda _: channel)
             url = await create_support_invite(SimpleNamespace(cxn=pool), guild, {"welcome": 11, "general": 22})
             self.assertEqual(url, "https://discord.gg/current")
             args = pool.execute.await_args.args
@@ -664,7 +671,7 @@ class SupportServerStructureTests(unittest.TestCase):
             await connection.commit()
             pool = SQLitePool(connection)
             bot = SimpleNamespace(cxn=pool)
-            guild = SimpleNamespace(id=staff_module.SUPPORT_GUILD)
+            guild = SimpleNamespace(id=SUPPORT_GUILD)
 
             await persist_support_ids(bot, guild, {"staff": 12}, {"welcome": 21})
             await persist_support_ids(bot, guild, {"staff": 13}, {"welcome": 22, "rules": 23})
@@ -698,7 +705,7 @@ class SupportServerStructureTests(unittest.TestCase):
             """)
             await connection.commit()
             pool = SQLitePool(connection)
-            guild_id = staff_module.SUPPORT_GUILD
+            guild_id = SUPPORT_GUILD
             bot = SimpleNamespace(cxn=pool)
             guild = SimpleNamespace(id=guild_id, get_channel=lambda _: SimpleNamespace(id=31, create_invite=AsyncMock(return_value=SimpleNamespace(url="https://discord.gg/sqlite"))))
 
@@ -785,14 +792,14 @@ class SupportServerStructureTests(unittest.TestCase):
                  patch.object(voice_cog_module, "VoiceMasterInterface", FakeVoiceMasterInterface), \
                  patch.object(ticket_utils, "get_ticket_config", return_value=ticket_cfg), \
                  patch.object(ticket_utils, "async_update_ticket_config", new=update_config), \
-                 patch("cogs.staff.owner._collect_status", new=AsyncMock(return_value={})), \
-                 patch("cogs.staff.owner._build_status_panel", return_value=object()), \
-                 patch("cogs.staff.owner._build_rules_panel", return_value=object()), \
-                 patch("cogs.staff.staff._staff_rules_panel", return_value=object()), \
+                 patch.object(staff_module, "_collect_status", new=AsyncMock(return_value={})), \
+                 patch.object(staff_module, "_build_status_panel", return_value=object()), \
+                 patch.object(staff_module, "_build_rules_panel", return_value=object()), \
+                 patch.object(staff_module, "_staff_rules_panel", return_value=object()), \
                  patch("utils.onboarding.utils.get_config", new=get_onboarding), \
                  patch("utils.onboarding.utils.update_config", new=update_onboarding), \
                  patch("cogs.onboarding.views.RoleMenuView", new=FakeRoleMenuView), \
-                 patch("cogs.staff.staff._support_api_pause", new=AsyncMock()):
+                 patch.object(staff_module, "_support_api_pause", new=AsyncMock()):
                 await _send_support_panels(
                     bot,
                     FlexibleGuild(),
@@ -823,23 +830,29 @@ class SupportServerStructureTests(unittest.TestCase):
                 if call.args and "INSERT INTO support_server_panels" in call.args[0]
             }
             self.assertFalse(registered_panel_keys & {"notification_roles", "pronoun_roles", "age_roles"})
-            partnership_ad_text = "\\n".join(
+            # The ad is a link partners paste into their own server now, not a
+            # pitch the bot writes for them, so the panel hands over the URL and
+            # the buttons instead of the copy itself.
+            ad_components = list(sent_views[channels["partnership_ad"]].walk_children())
+            partnership_ad_text = "\n".join(
                 component.content
-                for component in sent_views[channels["partnership_ad"]].walk_children()
+                for component in ad_components
                 if isinstance(component, discord.ui.TextDisplay)
             )
-            self.assertIn("https://niko.sryze.cc/discord", partnership_ad_text)
-            self.assertIn("https://discord.com/oauth2/authorize?client_id=4242&permissions=8", partnership_ad_text)
-            self.assertIn("moderation", partnership_ad_text)
-            self.assertIn("AutoMod", partnership_ad_text)
-            self.assertIn("support tickets", partnership_ad_text)
-            self.assertIn("friendly AI chat", partnership_ad_text)
-            self.assertIn("configurable AutoMod", partnership_ad_text)
-            self.assertIn("activity rewards", partnership_ad_text)
-            self.assertIn("less time putting out tiny fires", partnership_ad_text)
-            self.assertIn("(Even the person who always forgets the command.)", partnership_ad_text)
-            self.assertIn("Curious? Give Niko a spot in your server.", partnership_ad_text)
-            self.assertGreaterEqual(len(partnership_ad_text), 700)
+            self.assertIn("https://niko.sryze.cc/discord/partnership", partnership_ad_text)
+            self.assertIn("What the card shows", partnership_ad_text)
+            ad_buttons = [
+                component for component in ad_components
+                if isinstance(component, discord.ui.Button)
+            ]
+            self.assertEqual(
+                [button.label for button in ad_buttons],
+                ["Open the ad", "Partnership info"],
+            )
+            self.assertEqual(
+                [button.url for button in ad_buttons],
+                ["https://niko.sryze.cc/discord/partnership", "https://niko.sryze.cc/discord"],
+            )
             panel_registry_calls = [
                 call for call in pool.execute.await_args_list
                 if call.args and "INSERT INTO support_server_panels" in call.args[0]
@@ -886,7 +899,7 @@ class SupportServerStructureTests(unittest.TestCase):
             member_role = SimpleNamespace(id=78)
             member = SimpleNamespace(
                 id=owner_id,
-                guild=SimpleNamespace(id=staff_module.SUPPORT_GUILD, get_role=lambda role_id: {77: owner_role, 78: member_role}.get(role_id)),
+                guild=SimpleNamespace(id=SUPPORT_GUILD, get_role=lambda role_id: {77: owner_role, 78: member_role}.get(role_id)),
                 roles=[],
                 add_roles=AsyncMock(),
             )
@@ -918,7 +931,7 @@ class SupportServerStructureTests(unittest.TestCase):
         async def check():
             client = Client()
             pool = MongoPool(client, "test")
-            guild_id = staff_module.SUPPORT_GUILD
+            guild_id = SUPPORT_GUILD
             await pool.execute(
                 "INSERT INTO support_server_config (guild_id, role_ids, channel_ids, updated_at) VALUES ($1, $2, $3, datetime('now')) "
                 "ON CONFLICT (guild_id) DO UPDATE SET role_ids = $4, channel_ids = $5, updated_at = datetime('now')",

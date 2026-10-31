@@ -155,6 +155,10 @@ const PAGE_METADATA: PageMetadata[] = [
   { path: "/levels", title: "Server Leaderboard — Niko", description: "Live leveling standings for one Discord server, ranked by level and XP.", section: "Server leaderboard" },
   { path: "/support", title: "Support — Niko", description: "Find answers, browse Niko documentation, and connect with the community for help.", section: "Niko support", landing: true },
   { path: "/discord", title: "Niko support server", description: "Join the official Niko Discord support server for help, community updates, and feedback.", section: "Join the community", landing: true },
+  // The partnership ad. Partners paste this one link; Discord renders the card
+  // from the backend (``webapp/social.py``), so only its Open Graph fallback and
+  // the page copy live here.
+  { path: "/discord/partnership", title: "Niko partnerships", description: "Share one link and Discord renders the Niko partnership ad: what members get, what partners get, and how to apply.", section: "Partnership ad" },
   { path: "/docs", title: "Documentation — Niko", description: "Guides, command references, and practical tips for getting the most out of Niko.", section: "Documentation center" },
   { path: "/changelog", title: "Changelog — Niko", description: "A clear record of every improvement, fix, and new feature added to Niko.", section: "What's new" },
   { path: "/privacy", title: "Privacy policy — Niko", description: "Learn what information Niko uses and how it supports Discord communities.", section: "Niko legal" },

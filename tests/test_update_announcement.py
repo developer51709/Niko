@@ -14,7 +14,8 @@ from discord.ext import commands
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from cogs.staff.owner import OwnerCog  # noqa: E402
+from cogs.staff.commands.administration import AdministrationCommands  # noqa: E402
+from cogs.staff.permissions import HEAD_ADMIN_COMMANDS  # noqa: E402
 from cogs.staff.staff import StaffCog  # noqa: E402
 from config import links  # noqa: E402
 
@@ -50,9 +51,9 @@ class FakeBot:
 
 def run_announce(topic=""):
     """Run the real command callback and return the context it posted into."""
-    cog = OwnerCog(FakeBot())
+    cog = AdministrationCommands()
     ctx = FakeContext()
-    asyncio.run(OwnerCog.announce.callback(cog, ctx, topic))
+    asyncio.run(AdministrationCommands.announce.callback(cog, ctx, topic))
     return ctx
 
 
@@ -83,8 +84,8 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
     view = ctx.sent[0]
 
     assert ctx.message.deleted, "an announcement should replace the invoking message"
-    assert OwnerCog.UPDATE_DOCS_URL in view_urls(view)
-    assert OwnerCog.UPDATE_CHANGELOG_URL in view_urls(view)
+    assert AdministrationCommands.UPDATE_DOCS_URL in view_urls(view)
+    assert AdministrationCommands.UPDATE_CHANGELOG_URL in view_urls(view)
     # The update announcement carries exactly the two links it is announced
     # with: the docs page and the changelog entry. (The Support Server button
     # belongs to the policy notice, which ``_policy_view`` still carries.)
@@ -121,7 +122,7 @@ def test_changelog_entry_is_the_newest_release():
     body = changelog.split("CHANGELOG: ChangelogEntry[] = [", 1)[1]
     assert body.lstrip().startswith("{")
     first_slug = body.split('slug: "', 1)[1].split('"', 1)[0]
-    announced = OwnerCog.UPDATE_CHANGELOG_URL.rsplit("/", 1)[-1]
+    announced = AdministrationCommands.UPDATE_CHANGELOG_URL.rsplit("/", 1)[-1]
 
     assert first_slug == announced
 
@@ -140,11 +141,11 @@ def test_changelog_entry_covers_the_legal_update():
 
 def test_announcement_links_point_at_pages_that_exist():
     """A renamed docs page or changelog slug must fail here, not in Discord."""
-    docs_slug = OwnerCog.UPDATE_DOCS_URL.removeprefix(f"{links.DOCS}/")
-    changelog_slug = OwnerCog.UPDATE_CHANGELOG_URL.removeprefix(f"{links.WEBSITE}/changelog/")
+    docs_slug = AdministrationCommands.UPDATE_DOCS_URL.removeprefix(f"{links.DOCS}/")
+    changelog_slug = AdministrationCommands.UPDATE_CHANGELOG_URL.removeprefix(f"{links.WEBSITE}/changelog/")
 
-    assert OwnerCog.UPDATE_DOCS_URL == f"{links.WEBSITE}/docs/{docs_slug}"
-    assert OwnerCog.UPDATE_CHANGELOG_URL == f"{links.WEBSITE}/changelog/{changelog_slug}"
+    assert AdministrationCommands.UPDATE_DOCS_URL == f"{links.WEBSITE}/docs/{docs_slug}"
+    assert AdministrationCommands.UPDATE_CHANGELOG_URL == f"{links.WEBSITE}/changelog/{changelog_slug}"
     assert (ROOT / "web/src/content/docs" / f"{docs_slug}.mdx").exists()
 
     changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
@@ -174,20 +175,17 @@ def test_staff_announce_posts_the_update_with_both_links():
     asyncio.run(bot.add_cog(StaffCog(bot)))
     command = next(item for item in bot.get_command("staff").commands if item.name == "announce")
     ctx = FakeContext()
-    asyncio.run(command.callback(ctx, ""))
+    asyncio.run(command.callback(AdministrationCommands(), ctx, ""))
 
     urls = view_urls(ctx.sent[0])
-    assert OwnerCog.UPDATE_DOCS_URL in urls
-    assert OwnerCog.UPDATE_CHANGELOG_URL in urls
+    assert AdministrationCommands.UPDATE_DOCS_URL in urls
+    assert AdministrationCommands.UPDATE_CHANGELOG_URL in urls
 
 
 def test_announce_role_policy_is_the_head_admin_allow_listed_name():
     """``.staff announce`` is granted by name, so the command must keep it."""
-    staff = (ROOT / "src/cogs/staff/staff.py").read_text(encoding="utf-8")
-    head_admin = staff.split("HEAD_ADMIN_COMMANDS = {", 1)[1].split("}", 1)[0]
-
-    assert '"announce"' in head_admin
-    assert OwnerCog.announce.name == "announce"
+    assert "announce" in HEAD_ADMIN_COMMANDS
+    assert AdministrationCommands.announce.name == "announce"
 
 
 def test_announce_can_still_post_the_community_policy():
@@ -196,7 +194,7 @@ def test_announce_can_still_post_the_community_policy():
 
     assert "Community Policy" in view_text(view)
     assert "Read the Community Policy" in view_labels(view)
-    assert OwnerCog.UPDATE_DOCS_URL not in view_urls(view)
+    assert AdministrationCommands.UPDATE_DOCS_URL not in view_urls(view)
 
 
 def test_unknown_announce_topic_explains_itself():

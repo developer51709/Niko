@@ -50,8 +50,7 @@ COG_MODULES = [
     "cogs.help.views",
     "cogs.onboarding.views",
     "cogs.social.pfps",
-    "cogs.staff.development",
-    "cogs.staff.owner",
+    "cogs.staff.commands.moderation",
     "cogs.system.introduction",
 ]
 

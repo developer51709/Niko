@@ -598,7 +598,7 @@ async def _apply_team_role(user_id, role_key):
 
 
 async def _persist_staff_assignment(user_id, role_key, assigned_by):
-    from cogs.staff.staff import persist_staff_role
+    from cogs.staff.records import persist_staff_role
 
     pool = _pool()
     if role_key not in _server.STAFF_ROLES:

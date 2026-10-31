@@ -90,7 +90,7 @@ async def niko_badge_keys(bot, user_id: int) -> list[str]:
     # Imported here so the web app and the tests can import this module without
     # pulling in the whole cog tree.
     try:
-        from cogs.staff.staff import get_staff_role
+        from cogs.staff.records import get_staff_role
         from cogs.staff.support_server import get_support_ids
         from utils.donations import is_supporter
     except Exception:

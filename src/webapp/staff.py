@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import json
 import sqlite3
 import time
-from cogs.staff.staff import STAFF_ROLES
+from cogs.staff.records import STAFF_ROLES
 from config.ids import OWNER_IDS
 from flask import session
 from . import database, runtime

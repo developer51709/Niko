@@ -245,12 +245,16 @@ class VoteColumnPersistenceTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         sql, values = calls[0]
         columns = [column.strip() for column in sql.split("(", 1)[1].split(")", 1)[0].split(",")]
-        self.assertEqual(columns[-4:], list(VOTE_FIELDS))
+        self.assertEqual(columns[-5:-1], list(VOTE_FIELDS))
+        # The referral counter the referral badges read is written by the same
+        # statement, so a referral survives the next economy command.
+        self.assertEqual(columns[-1], "referral_count")
         # INSERT OR REPLACE rewrites the whole row, so a column added without a
         # bound value silently drops or resets data.
         self.assertEqual(sql.count("?"), len(columns))
         self.assertEqual(len(values), len(columns))
-        self.assertEqual(values[-4:], (7, 4, 8, 1_700_000_000))
+        self.assertEqual(values[-5:-1], (7, 4, 8, 1_700_000_000))
+        self.assertEqual(values[-1], data["referral_count"])
 
 
 class DashboardPayloadTests(unittest.TestCase):

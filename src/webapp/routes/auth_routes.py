@@ -25,7 +25,10 @@ def auth_login():
         "client_id": DISCORD_CLIENT_ID,
         "redirect_uri": redirect_uri(),
         "response_type": "code",
-        "scope": "identify guilds",
+        # ``guilds.join`` is what lets the site add a member to the support
+        # server for a referral link (`/discord?ref=`), so the join is bound to
+        # the account that authorized it instead of to an invite code.
+        "scope": "identify guilds guilds.join",
         "state": state,
     })
     return redirect(f"https://discord.com/oauth2/authorize?{params}")
@@ -63,6 +66,7 @@ def auth_callback():
             return redirect("/?error=token_exchange_failed")
         token_data = token_resp.json()
         access_token = token_data["access_token"]
+        granted_scopes = str(token_data.get("scope") or "").split()
     except Exception:
         # A blocked or unreachable Discord API is a failed login, not a server
         # error, so it degrades to a friendly redirect instead of a 500 page.
@@ -78,6 +82,9 @@ def auth_callback():
     session["access_token"] = access_token
     session["refresh_token"] = token_data.get("refresh_token")
     session["token_exp"]    = time.time() + token_data.get("expires_in", 604800)
+    # Which scopes this session actually holds. A referral join needs
+    # ``guilds.join``, and a session that predates it has to re-authorize.
+    session["oauth_scopes"] = granted_scopes
 
     return redirect(session.pop("oauth_next", "/dashboard"))
 

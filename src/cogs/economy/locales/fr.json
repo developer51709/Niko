@@ -312,7 +312,11 @@
     "winter_shopper.name": "Acheteur des fêtes",
     "new_year_level.name": "Ambition de minuit",
     "valentine_wallet.name": "Cœur en or",
-    "summer_streak.name": "Série d'été"
+    "summer_streak.name": "Série d'été",
+    "referral_first.name": "Première invitation",
+    "referral_5.name": "Bonne compagnie",
+    "referral_15.name": "Bâtisseur de communauté",
+    "referral_50.name": "Ambassadeur"
   },
   "commands": {
     "balance.args.member": "De qui consulter le portefeuille (toi par défaut)",

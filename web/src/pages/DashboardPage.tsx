@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, getAuth, getBoosterSettings, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
+import { ApiError, getAuth, getBoosterSettings, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getMyReferrals, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
@@ -14,7 +14,7 @@ import { useBotConfig } from "../hooks/useBotConfig";
 import { useLiveResource } from "../hooks/useLiveResource";
 import type { PublicConfig } from "../types";
 import { dashboardPath, dashboardRoute, dashboardServersPath, dashboardUserPath, navigate, type DashboardView, type DashSection, type UserTab } from "../router";
-import type { AchievementsResponse, AuthStatus, BotStats, BoosterSettings, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, User, UserOverview } from "../types";
+import type { AchievementsResponse, AuthStatus, BotStats, BoosterSettings, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, ReferralSummary, User, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
 
 function AuthCard({ auth }: { auth: AuthStatus }) {
@@ -135,10 +135,13 @@ function UserSection({ tab, user, overview, guilds, guildsUnavailable, csrfToken
 }) {
   const economy = useLiveResource<EconomyStanding>("personal-economy", getMyEconomy, { enabled: tab === "economy", refreshKey: refreshToken });
   const achievements = useLiveResource<AchievementsResponse>("personal-achievements", getMyAchievements, { enabled: tab === "achievements", refreshKey: refreshToken });
+  // The referral card sits on the overview, so its link is fetched there; the
+  // card still renders while the bot mints the invite behind it.
+  const referrals = useLiveResource<ReferralSummary>("personal-referrals", getMyReferrals, { enabled: tab === "overview", refreshKey: refreshToken });
 
   if (tab === "overview") {
     if (!overview) return <SectionSkeleton label="overview" />;
-    return <UserOverviewView user={user} overview={overview} guilds={guilds} onServers={onServers} onManage={onManage} csrfToken={csrfToken} guildsUnavailable={guildsUnavailable} />;
+    return <UserOverviewView user={user} overview={overview} guilds={guilds} referrals={referrals.data} onServers={onServers} onManage={onManage} csrfToken={csrfToken} guildsUnavailable={guildsUnavailable} />;
   }
   if (tab === "economy") {
     if (economy.error) return <SectionError message={economy.error} onRetry={economy.refresh} />;

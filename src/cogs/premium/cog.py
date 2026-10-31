@@ -295,9 +295,10 @@ class PremiumCog(commands.Cog, name="Premium"):
             logging.warning("Premium", f"Could not mark reminder sent for {guild_id}: {error}")
 
     # ── Commands ──────────────────────────────────
-    # A pure application-command group: `cogs.staff.owner` already owns the
-    # `.premium` prefix group for user grants, so a hybrid command here would
-    # replace that prefix handler depending on cog load order.
+    # A pure application-command group: `cogs.staff.commands.moderation`
+    # already owns the `.staff premium` prefix group for user grants, so a
+    # hybrid command here would collide with that prefix handler depending on
+    # cog load order.
 
     premium = app_commands.Group(
         name="premium",

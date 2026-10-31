@@ -312,7 +312,11 @@
     "winter_shopper.name": "Festtags-Shopper",
     "new_year_level.name": "Mitternachts-Ambition",
     "valentine_wallet.name": "Herz aus Gold",
-    "summer_streak.name": "Sommer-Serie"
+    "summer_streak.name": "Sommer-Serie",
+    "referral_first.name": "Erste Einladung",
+    "referral_5.name": "Gute Gesellschaft",
+    "referral_15.name": "Community-Aufbau",
+    "referral_50.name": "Botschafter"
   },
   "commands": {
     "balance.args.member": "Wessen Geldbörse du sehen willst (standardmäßig deine)",

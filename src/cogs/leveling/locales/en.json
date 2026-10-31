@@ -171,5 +171,19 @@
     "leveling.rank.args.member": "Member to show (defaults to you).",
     "leveling.rank.description": "Check your level stats with a beautiful image card",
     "leveling.rank.help": "Check your level stats"
+  },
+  "migration": {
+    "title": "### Thanks for adding Niko to **{guild}**",
+    "settings": "Your server's settings — leveling, rewards, moderation and more — live in the dashboard:\n{url}",
+    "detected": "I can see **{bot}** already tracks levels here. Want me to copy its leaderboard into Niko? Members keep the level they reached, and anyone who is already further along in Niko stays where they are.",
+    "migrate_button": "Import from {bot}",
+    "decline_button": "No thanks",
+    "migrating": "Reading the {bot} leaderboard — a big server can take a minute. I'll update this message when it's done.",
+    "declined": "No problem — nothing was imported. You can still set leveling up any time from the dashboard:\n{url}",
+    "done": "{tick} Imported **{imported}** members from {bot} — {skipped} were already further along in Niko, {total} entries read.",
+    "failed_unavailable": "{cross} I couldn't read the {bot} leaderboard — it may be private, or {bot} may have no data for this server. Once it is readable, run the import again:\n{url}",
+    "failed_key": "{cross} {bot} refused the API key Niko is set up with. A valid key has to be set in `AMARIBOT_API_KEY` before the import can run — then try again:\n{url}",
+    "failed": "{cross} The import stopped early: {error}",
+    "already_running": "An import for this server is already running — give it a moment."
   }
 }

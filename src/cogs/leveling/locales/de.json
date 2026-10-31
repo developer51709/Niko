@@ -171,5 +171,19 @@
     "leveling.rank.args.member": "Mitglied, das gezeigt wird (standardmäßig du).",
     "leveling.rank.description": "Prüfe deine Level-Statistik mit einer schönen Bildkarte",
     "leveling.rank.help": "Zeigt deine Level-Statistiken."
+  },
+  "migration": {
+    "title": "### Danke, dass du Niko zu **{guild}** hinzugefügt hast",
+    "settings": "Die Einstellungen deines Servers – Level, Rollen, Moderation und mehr – findest du im Dashboard:\n{url}",
+    "detected": "**{bot}** sammelt hier bereits Level. Soll ich die Rangliste in Niko übernehmen? Alle behalten ihr erreichtes Level, und wer bei Niko schon weiter ist, bleibt wo er ist.",
+    "migrate_button": "Von {bot} importieren",
+    "decline_button": "Nein, danke",
+    "migrating": "Ich lese die {bot}-Rangliste – bei großen Servern dauert das einen Moment. Ich aktualisiere diese Nachricht, sobald ich fertig bin.",
+    "declined": "Kein Problem – es wurde nichts importiert. Du kannst das Levelsystem jederzeit im Dashboard einrichten:\n{url}",
+    "done": "{tick} **{imported}** Mitglieder von {bot} importiert – {skipped} waren bei Niko schon weiter, {total} Einträge gelesen.",
+    "failed_unavailable": "{cross} Ich konnte die {bot}-Rangliste nicht lesen – sie ist vielleicht privat, oder {bot} hat für diesen Server keine Daten. Sobald sie lesbar ist, kannst du den Import erneut starten:\n{url}",
+    "failed_key": "{cross} {bot} hat den API-Schlüssel abgelehnt, mit dem Niko eingerichtet ist. In `AMARIBOT_API_KEY` muss ein gültiger Schlüssel hinterlegt sein, bevor der Import laufen kann – danach bitte erneut versuchen:\n{url}",
+    "failed": "{cross} Der Import wurde vorzeitig beendet: {error}",
+    "already_running": "Für diesen Server läuft bereits ein Import – einen Moment bitte."
   }
 }

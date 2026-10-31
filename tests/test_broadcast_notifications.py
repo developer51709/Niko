@@ -47,11 +47,14 @@ def test_broadcast_schema_keeps_media_targets_and_progress():
 
 
 def test_old_channel_command_is_replaced_by_the_staff_tab():
-    owner = (ROOT / "src/cogs/staff/owner.py").read_text(encoding="utf-8")
-    staff = (ROOT / "src/cogs/staff/staff.py").read_text(encoding="utf-8")
+    owner = "".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src/cogs/staff/commands").glob("*.py"))
+    )
+    staff = (ROOT / "src/cogs/staff/permissions.py").read_text(encoding="utf-8")
     init = (ROOT / "src/webapp/__init__.py").read_text(encoding="utf-8")
 
-    assert '@commands.command(name="broadcast"' not in owner
+    assert 'command(name="broadcast"' not in owner
     assert "BroadcastBuilder" not in owner
     assert '"broadcast"' not in staff.split("OWNER_ONLY_COMMANDS = {", 1)[1].split("}", 1)[0]
     assert "staff_broadcast_routes" in init

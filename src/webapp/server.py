@@ -48,7 +48,7 @@ import sqlite3
 import uuid
 import requests as req
 from cogs.donations.oxapay import OxaPayClient
-from cogs.staff.staff import STAFF_ROLES
+from cogs.staff.records import STAFF_ROLES
 from utils.ai.config import cached_config as cached_ai_config
 from utils.ai.config import save_config as save_ai_config
 from utils.donations import get_invoice, save_invoice, update_invoice_status, verify_donation_token

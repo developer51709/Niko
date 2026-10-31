@@ -9,15 +9,14 @@ from discord.ext import commands
 sys.path.insert(0, "src")
 
 from config import ids as config_ids  # noqa: E402
-from cogs.staff.staff import (  # noqa: E402
+from cogs.staff.help import build_staff_help  # noqa: E402
+from cogs.staff.permissions import (  # noqa: E402
     HEAD_ADMIN_COMMANDS,
     OWNER_ONLY_COMMANDS,
-    STAFF_ROLES,
-    StaffCog,
-    build_staff_help,
     command_allowed_for_role,
-    get_staff_role,
 )
+from cogs.staff.records import STAFF_ROLES, get_staff_role  # noqa: E402
+from cogs.staff.staff import StaffCog  # noqa: E402
 
 
 NON_ADMIN_ROLES = (

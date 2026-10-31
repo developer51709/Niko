@@ -435,6 +435,32 @@ export type AchievementsResponse = {
   coins_available: number;
 };
 
+// ── Support-server referrals ────────────────────────────────────────────────
+
+/** One member an account's referral link brought into the support server. */
+export type ReferralJoin = {
+  member_id: string;
+  /** The member's display name, when the bot still shares a guild with them. */
+  name: string | null;
+  avatar_url: string | null;
+  joined_at: number;
+  reward: number;
+};
+
+/**
+ * The referral card: the link to share and what it has brought in. The invite
+ * behind the link is minted the first time somebody opens it, so nothing here
+ * waits on the bot.
+ */
+export type ReferralSummary = {
+  link: string;
+  invited: number;
+  coins: number;
+  /** Coins paid per credited join. */
+  reward: number;
+  recent: ReferralJoin[];
+};
+
 export type LevelRow = {
   user_id: string;
   display_name?: string | null;
@@ -591,7 +617,6 @@ export type ServerConfig = {
   logging_categories?: { key: string; label: string; description?: string }[];
   tickets: TicketConfig;
   profile: GuildProfile;
-  privacy?: { private: boolean };
   global_profile?: GlobalProfile;
 };
 

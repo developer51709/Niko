@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+import time
 
 from .. import server as _server
 from flask import jsonify, request
@@ -123,14 +124,57 @@ def _asset_url(asset):
     return str(asset.url) if asset is not None else None
 
 
-async def _guild_privacy(guild_id):
-    """Read a guild's server-tag privacy, defaulting to public."""
-    from utils.guild_privacy import get_guild_privacy
+# Discord's Server Profile is private unless the server is published outside
+# it: Server Discovery, an announcement channel, or the server widget. Those
+# features are the public listing a guild opts into in Discord itself, so the
+# tag popup follows them instead of keeping a second privacy toggle of its own.
+_PUBLIC_PROFILE_FEATURES = ("DISCOVERABLE", "NEWS")
 
+
+def _guild_is_publicly_listed(guild) -> bool:
+    """Whether Discord shows this server's profile to people who are not in it."""
     try:
-        return await get_guild_privacy(int(guild_id), getattr(_discord_bot, "cxn", None))
+        features = list(getattr(guild, "features", None) or [])
     except Exception:
-        return {"private": False}
+        features = []
+    if any(feature in _PUBLIC_PROFILE_FEATURES for feature in features):
+        return True
+    return bool(getattr(guild, "widget_enabled", False))
+
+
+# An open popup re-reads its profile every few seconds and the widget is an
+# unauthenticated endpoint, so its answer (including "the widget is off") is
+# reused for a minute instead of being fetched on every poll.
+_WIDGET_CACHE_SECONDS = 60.0
+_widget_cache: dict = {}
+
+
+async def _fetch_guild_widget(guild_id):
+    """Discord's public widget JSON for a guild, or ``None`` when it is off.
+
+    The widget endpoint needs no token, so it is the one server profile Niko
+    can still read for a guild it is not in.
+    """
+    key = str(guild_id)
+    now = time.monotonic()
+    cached = _widget_cache.get(key)
+    if cached is not None and now - cached[0] < _WIDGET_CACHE_SECONDS:
+        return cached[1]
+    data = None
+    try:
+        response = await asyncio.to_thread(
+            _server.req.get,
+            f"{_server.DISCORD_API}/guilds/{guild_id}/widget.json",
+            timeout=5,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict):
+            data = payload
+    except Exception:
+        data = None
+    _widget_cache[key] = (now, data)
+    return data
 
 
 async def _viewer_is_guild_member(guild, viewer_id) -> bool:
@@ -175,11 +219,12 @@ async def _guild_tag_server(primary_guild, viewer_id=None):
     """Resolve the guild behind a member's primary server tag.
 
     The payload always carries the states Discord's own popup can show: public
-    (the server's details), private (a server that opted out of the popup), and
-    unknown (a server Niko is not in, so nothing can be read). It also records
-    whether the signed-in viewer is already a member, which decides whether the
-    popup offers "Go to Server" or "Join". Join is only offered when the guild
-    exposes a vanity invite, matching Discord's own popup.
+    (the server's details), private (Discord's Server Profile is not listed
+    publicly and the viewer has not joined), and unknown (a server Niko is not
+    in and whose widget is off, so nothing can be read). It also records whether
+    the signed-in viewer is already a member, which decides whether the popup
+    offers "Go to Server" or "Join". Join is only offered when the guild exposes
+    a vanity invite, matching Discord's own popup.
     """
     if primary_guild is None:
         return None
@@ -210,13 +255,24 @@ async def _guild_tag_server(primary_guild, viewer_id=None):
         except Exception:
             guild = None
     if guild is None:
+        # A guild Niko is not in can still publish its profile through the
+        # widget; membership cannot be checked without being in the guild, so
+        # the popup only offers the widget's invite.
+        widget = await _fetch_guild_widget(guild_id)
+        if widget:
+            payload.update({
+                "available": True,
+                "name": widget.get("name"),
+                "online_count": widget.get("presence_count"),
+                "invite_url": widget.get("instant_invite") or None,
+            })
         return payload
 
     payload["available"] = True
     payload["viewer_is_member"] = await _viewer_is_guild_member(guild, viewer_id)
-    privacy = await _guild_privacy(guild_id)
-    if privacy.get("private"):
-        # A private server keeps its tag, but Discord hides the profile itself.
+    if not payload["viewer_is_member"] and not _guild_is_publicly_listed(guild):
+        # A private profile is visible only to people who already joined, which
+        # is the limited state Discord draws for everyone else.
         payload["private"] = True
         return payload
 

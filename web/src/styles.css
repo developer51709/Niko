@@ -5,6 +5,8 @@
 @import "./styles/bot-analytics.css";
 @import "./styles/proxy-workers.css";
 @import "./styles/glass-landing.css";
+@import "./styles/partnership.css";
+@import "./styles/referrals.css";
 
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;

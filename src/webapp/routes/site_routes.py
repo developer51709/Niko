@@ -1,5 +1,7 @@
 """Flask routes for site."""
 
+from utils import logging
+
 from .. import server as _server
 
 globals().update({
@@ -30,13 +32,83 @@ def docs_markdown(slug):
 def changelog_markdown(slug):
     return send_from_directory(WEB_DIST_DIR, f"changelog/{slug}.md", mimetype="text/markdown")
 
+def _support_invite(bot) -> str | None:
+    """The one public support-server invite, shared by everybody."""
+    from cogs.staff.support_server import get_support_invite
+
+    try:
+        return run_on_bot_loop(get_support_invite(bot))
+    except Exception as exc:
+        logging.warning("PublicConfig", f"Could not load the support invite: {exc}")
+        return None
+
+
+def _referral_login():
+    """Send the visitor through Discord, remembering where they were going."""
+    # ``full_path`` keeps ``?ref=`` (which is the whole point) and appends a bare
+    # "?" when there is no query, hence the strip.
+    next_path = (request.full_path if request.query_string else request.path).rstrip("?")
+    return redirect(f"/auth/login?next={quote(next_path, safe='')}")
+
+
+def _referral_join(bot, referrer_id: int):
+    """Join the support server through the visitor's own Discord account.
+
+    This is what makes a referral checkable: Discord adds the account that
+    authorized Niko, so the join is bound to a real identity instead of an
+    invite-use counter. No invite is created for the visitor. A signed-in member
+    is added and sent straight on; an anonymous visitor is asked to authorize
+    first, because an invite carries no identity to attribute.
+    """
+    member_id = str(session.get("user", {}).get("id") or "")
+    if not member_id.isdigit() or not ensure_access_token():
+        return _referral_login()
+    # A session authorized before referrals existed cannot add anybody until the
+    # ``guilds.join`` scope is granted, so it goes back through Discord once.
+    if "guilds.join" not in (session.get("oauth_scopes") or []):
+        return _referral_login()
+
+    from cogs.staff.support_referrals import join_with_referral
+
+    try:
+        result = run_on_bot_loop(
+            join_with_referral(bot, int(member_id), referrer_id, session.get("access_token", ""))
+        )
+    except Exception as exc:
+        logging.warning("Referrals", f"Could not complete the referral join for {member_id}: {exc}")
+        result = {"status": "unavailable"}
+
+    # Whatever happened, the visitor wanted the support server: hand them the
+    # public invite. A refusal (Niko missing Create Invite, a revoked token) means
+    # no credit, never a loop back through Discord.
+    return redirect(_support_invite(bot) or "/discord")
+
+
+@app.route("/discord")
+def discord_invite_redirect():
+    """The support server, with a referral join when the link carries one.
+
+    ``/discord?ref=<user id>`` is the link a member shares. A request without
+    ``ref`` — including Discord's own link-preview crawler — gets the page
+    itself, so the preview keeps working.
+    """
+    ref = (request.args.get("ref") or "").strip()
+    bot = _discord_bot
+    if ref.isdigit() and bot is not None and getattr(bot, "cxn", None) is not None:
+        return _referral_join(bot, int(ref))
+    return serve_spa_shell()
+
+@app.route("/discord/partnership")
+def partnership_page():
+    """The partnership ad: the page a partner pastes into their own server."""
+    return serve_spa_shell()
+
 @app.route("/commands")
 @app.route("/leaderboard")
 @app.route("/levels")
 @app.route("/docs")
 @app.route("/team")
 @app.route("/support")
-@app.route("/discord")
 @app.route("/changelog")
 @app.route("/community")
 @app.route("/privacy")
