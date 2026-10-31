@@ -66,10 +66,43 @@ _LEAD_PERMISSIONS = discord.Permissions(
     manage_threads=True,
 )
 
+# Discord only lets a role moderate the members below it, so a Moderator needs
+# these on the role itself: channel overwrites grant access to a channel, not the
+# ability to delete a message, time a spammer out, or see who did what.
+_MODERATION_PERMISSIONS = dict(
+    view_audit_log=True,
+    kick_members=True,
+    moderate_members=True,
+    manage_messages=True,
+    manage_threads=True,
+    mute_members=True,
+    deafen_members=True,
+    move_members=True,
+)
+
+_MODERATOR_PERMISSIONS = discord.Permissions(**_MODERATION_PERMISSIONS)
+
+# A Head Admin runs the support server while the owner is away, so on top of the
+# moderator set they get bans, the role and channel layout, server settings and
+# the audit log. Deliberately not ADMINISTRATOR: that would silently bypass the
+# read-only policy the channel overwrites enforce.
+_HEAD_ADMIN_PERMISSIONS = discord.Permissions(
+    **_MODERATION_PERMISSIONS,
+    ban_members=True,
+    manage_nicknames=True,
+    manage_roles=True,
+    manage_channels=True,
+    manage_webhooks=True,
+    manage_events=True,
+    manage_guild=True,
+)
+
 # Only the roles above get reconciled permissions. Everything else keeps
 # whatever the owner configured by hand.
 ROLE_PERMISSIONS = {
     "staff": discord.Permissions.none(),
+    "moderator": _MODERATOR_PERMISSIONS,
+    "head_admin": _HEAD_ADMIN_PERMISSIONS,
     "head_support": _LEAD_PERMISSIONS,
     "partnerships_promotions_lead": _LEAD_PERMISSIONS,
 }
