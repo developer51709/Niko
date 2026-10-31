@@ -27,7 +27,6 @@
     "loop_off": "Loop desactivado.",
     "spotify_disabled": "El soporte para Spotify no está configurado.",
     "spotify_resolving": "Resolviendo el enlace de Spotify…",
-    "spotify_progress": "Resolviendo el enlace de Spotify… {done}/{total} pistas listas",
     "spotify_fail": "No pude resolver ese enlace de Spotify.",
     "like_on": "**{title}** añadida a tus favoritos ♥",
     "like_off": "**{title}** eliminada de tus favoritos.",

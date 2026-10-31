@@ -76,41 +76,6 @@ async def _search_tracks(query: str, node=None):
     return await wavelink.Playable.search(query, node=node)
 
 
-def _next_search_delay(delay: float, exc: BaseException | None = None) -> float:
-    """Gap before the next Lavalink search while a playlist is expanded.
-
-    A ``429`` doubles the gap, capped at ``_PLAY_RESOLVE_DELAY_MAX``; any other
-    outcome eases it back towards ``_PLAY_RESOLVE_DELAY`` so a node that has
-    recovered is not left permanently slow.
-    """
-    if exc is not None and "429" in str(exc):
-        return min(delay * 2, _PLAY_RESOLVE_DELAY_MAX)
-    return max(_PLAY_RESOLVE_DELAY, delay / 2)
-
-
-def _status_view(text: str) -> discord.ui.LayoutView:
-    """Single-card message used for every /play status stage.
-
-    Everything a playlist lookup has to say is said by editing this one
-    message, so the channel never shows a resolving card, an empty gap and
-    then a separate confirmation.
-    """
-    view = discord.ui.LayoutView()
-    view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content=text),
-        accent_colour=SOURCE_COLOURS["spotify"],
-    ))
-    return view
-
-
-def _added_card_text(ctx, track, count: int) -> str:
-    """The "added N track(s)" confirmation shared by playlist/album plays."""
-    return (
-        f"{msg(ctx, 'queue_added_multi_title', count=count)}\n"
-        f"{msg(ctx, 'queue_added_multi_body', title=track.title, count=count)}"
-    )
-
-
 def _title_key(author: str, title: str) -> str:
     """Normalised title used to spot a re-upload of the same song.
 
@@ -133,22 +98,50 @@ _NODE_RETRY_MAX       = 300.0
 # every one of them costs a Lavalink search, so both the count and the total
 # time spent resolving are capped.
 _MAX_TRACKS_PER_PLAY  = 50
-# Spacing a playlist keeps expanding at: 50 paced searches plus node latency
-# needs more than the old 45 s.
-_PLAY_RESOLVE_BUDGET  = 90.0
+# Pacing 50 searches needs more than the old 45 s.
+_PLAY_RESOLVE_BUDGET  = 60.0
 
 # Lavalink rate-limits ``/loadtracks`` per node. Expanding a playlist used to
 # fire one search per track back to back, which the public nodes answer with
-# ``429 Too Many Requests`` — nothing gets resolved and the wavelink logger
+# ``429 Too Many Requests``: nothing gets resolved and the wavelink logger
 # floods. A short gap between searches, widened further after a 429, keeps
 # resolution going while the first track is already playing.
 _PLAY_RESOLVE_DELAY     = 0.35
 _PLAY_RESOLVE_DELAY_MAX = 3.0
 
-# Discord rate-limits edits per message, so progress updates are coalesced.
-_STATUS_EDIT_INTERVAL = 1.5
-# How long the "added" confirmation stays before it becomes the panel.
-_ADDED_CARD_HOLD      = 5.0
+# Attempts per playlist entry when the node rate-limits the search.
+_PLAY_SEARCH_ATTEMPTS = 3
+
+
+def _is_rate_limited(exc: BaseException) -> bool:
+    """True when Lavalink answered ``429`` to a loadtracks request.
+
+    The status attribute is the only reliable signal. A node that answers with
+    a plain-text body — serenetia replies ``Too many loadtrack requests`` —
+    makes wavelink raise ``NodeException(status=429)`` with no message, so
+    ``str(exc)`` is the literal ``"None"`` and matching on the text alone never
+    fires. ``LavalinkException`` also carries ``status`` when the body is JSON.
+    """
+    if getattr(exc, "status", None) == 429:
+        return True
+    message = str(exc).lower()
+    return (
+        "429" in message
+        or "too many loadtrack requests" in message
+        or "too many requests" in message
+    )
+
+
+def _next_search_delay(delay: float, exc: BaseException | None = None) -> float:
+    """Gap before the next Lavalink search while a playlist is expanded.
+
+    A ``429`` doubles the gap, capped at ``_PLAY_RESOLVE_DELAY_MAX``; any other
+    outcome eases it back towards ``_PLAY_RESOLVE_DELAY`` so a node that has
+    recovered is not left permanently slow.
+    """
+    if exc is not None and _is_rate_limited(exc):
+        return min(delay * 2, _PLAY_RESOLVE_DELAY_MAX)
+    return max(_PLAY_RESOLVE_DELAY, delay / 2)
 
 
 def _is_lavalink_500(exc: BaseException) -> bool:
@@ -676,38 +669,19 @@ class MusicSystem(commands.Cog):
             # panel; only a genuinely broken view is worth a warning.
             log.debug("Music", f"Now-playing panel update failed: {exc}")
 
-    async def _send_np(
-        self,
-        ctx: commands.Context,
-        player: wavelink.Player,
-        edit: discord.Message | None = None,
-    ):
-        """Send (or update) the now-playing control panel.
-
-        ``edit`` turns an already-sent message — /play's status card — into the
-        panel instead of posting another one, so one command leaves one
-        message behind.
-        """
+    async def _send_np(self, ctx: commands.Context, player: wavelink.Player):
+        """Send (or update) the now-playing control panel."""
         state  = self._state(ctx.guild.id)
         state["current_track"] = player.current or state.get("current_track")
         old_msg: discord.Message | None = state.get("np_message")
 
         view = _build_np_view(
             player, ctx.guild, self, prefix=await resolve_prefix(self.bot, ctx))
-        new_msg = None
-        if edit is not None:
-            try:
-                new_msg = await edit.edit(view=view)
-            except Exception as exc:
-                # Deleted or no longer editable — fall through to a fresh panel
-                # rather than leaving the guild without controls.
-                log.debug("Music", f"Could not reuse the status message: {exc}")
-        if new_msg is None:
-            new_msg = await ctx.send(view=view)
+        new_msg = await ctx.send(view=view)
         state["np_message"] = new_msg
 
         # Clean up the previous control panel quietly
-        if old_msg and getattr(old_msg, "id", None) != getattr(new_msg, "id", None):
+        if old_msg:
             try:
                 await old_msg.delete()
             except Exception:
@@ -1392,6 +1366,57 @@ class MusicSystem(commands.Cog):
             }
         return choices
 
+    async def _search_for_play(self, query: str, node, delay: float):
+        """Search one playlist entry, hopping nodes when a node is rate-limited.
+
+        A 429 is per node (and per IP) and Lavalink's encoded tracks are
+        portable between nodes, so a throttled node is swapped for another one
+        instead of the track being dropped. Dropping is what turned a 22-track
+        playlist into seven songs: the pool's first node blocks after a handful
+        of ``loadtracks`` calls and answers 429 for the rest of the burst.
+
+        Returns ``(results, delay, node)`` where ``delay`` is the gap to leave
+        before the next search and ``node`` the node to search on next.
+        """
+        # Search on the player's own node first: the encoded track is then
+        # guaranteed to be decodable by the node that must stream it.
+        for attempt in range(_PLAY_SEARCH_ATTEMPTS):
+            try:
+                results = await asyncio.wait_for(
+                    _search_tracks(query, node=node), timeout=15
+                )
+            except asyncio.TimeoutError:
+                # A hung node is the same class of failure as a throttled one:
+                # the track must not be lost over it.
+                log.warning("Music", "Lavalink search timed out.")
+                alt = self._get_alt_node(exclude=node)
+                if alt is None or attempt + 1 >= _PLAY_SEARCH_ATTEMPTS:
+                    return None, delay, node
+                node = alt
+            except Exception as exc:
+                if not _is_rate_limited(exc):
+                    log.warning("Music", f"Lavalink search failed: {exc!r}")
+                    return None, delay, node
+                delay = _next_search_delay(delay, exc)
+                alt = self._get_alt_node(exclude=node)
+                log.warning(
+                    "Music",
+                    "Lavalink rate-limited the search — spacing tracks "
+                    f"{delay:.1f}s apart"
+                    + (f", searching on {alt.identifier} instead" if alt else "")
+                    + ".",
+                )
+                if alt is not None:
+                    # Retry immediately on a node that is not throttled.
+                    node = alt
+                elif attempt + 1 < _PLAY_SEARCH_ATTEMPTS:
+                    await asyncio.sleep(delay)
+            else:
+                # The node answered, so it is not rate-limiting: ease the gap
+                # back towards the base value.
+                return results, _next_search_delay(delay), node
+        return None, delay, node
+
     @commands.hybrid_command(
         name="play", aliases=["p"],
         description=CMDS.text("play.description"),
@@ -1405,49 +1430,30 @@ class MusicSystem(commands.Cog):
         if not player:
             return
 
-        # Handle Spotify URL feedback before long resolution.
-        #
-        # A playlist expands into dozens of searches, so every stage is reported
-        # by editing one message: resolving → progress → "added N" → the
-        # now-playing panel. Sending (and deleting) a separate message per stage
-        # made a single /play look like three unrelated events.
+        # Handle Spotify URL feedback before long resolution
         is_spotify = "open.spotify.com" in search or search.startswith("spotify:")
 
-        status_msg: discord.Message | None = None
-        status_text = ""
-        last_status_edit = 0.0
-
-        async def show_status(text: str, *, force: bool = False) -> None:
-            nonlocal status_text, last_status_edit
-            if status_msg is None or text == status_text:
-                return
-            now = _time.monotonic()
-            if not force and now - last_status_edit < _STATUS_EDIT_INTERVAL:
-                return
-            status_text, last_status_edit = text, now
-            try:
-                await status_msg.edit(view=_status_view(text))
-            except Exception as exc:
-                log.debug("Music", f"Status message edit failed: {exc}")
-
-        async def fail_status(key: str) -> None:
-            """Report a dead end in the status message, or as a new message."""
-            if status_msg is not None:
-                await show_status(f"### {msg(ctx, key)}", force=True)
-                return
-            await ctx.send(msg(ctx, key))
-
         if is_spotify:
-            status_text = f"### {msg(ctx, 'spotify_resolving')}"
-            status_msg = await ctx.send(view=_status_view(status_text))
-            last_status_edit = _time.monotonic()
+            resolving = discord.ui.LayoutView()
+            resolving.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(content=f"### {msg(ctx, 'spotify_resolving')}"),
+                accent_colour=SOURCE_COLOURS["spotify"],
+            ))
+            status_msg = await ctx.send(view=resolving)
+        else:
+            status_msg = None
 
         # Resolve to wavelink search strings
         searches = await self._resolve_query(search)
 
+        if status_msg:
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+
         if not searches:
-            await fail_status("play_not_found" if not is_spotify else "spotify_fail")
-            return
+            return await ctx.send(msg(ctx, "play_not_found" if not is_spotify else "spotify_fail"))
 
         queued_count = 0
         added        = 0          # first track + everything queued
@@ -1455,8 +1461,9 @@ class MusicSystem(commands.Cog):
         cap_reached  = False
         start_event: asyncio.Event | None = None
         deadline = _time.monotonic() + _PLAY_RESOLVE_BUDGET
-        total    = len(searches)
-        delay    = _PLAY_RESOLVE_DELAY
+        delay = _PLAY_RESOLVE_DELAY
+        # Hopping off a throttled node is sticky for the rest of the playlist.
+        node = player.node
 
         for index, query in enumerate(searches):
             # A playlist can resolve to hundreds of searches; stop before the
@@ -1467,36 +1474,12 @@ class MusicSystem(commands.Cog):
                     "Playlist resolution hit its time budget — stopping early.",
                 )
                 break
-            # Space the searches out. Firing one per track back to back trips
-            # the node's loadtracks rate limit (429), and the first track is
-            # already playing by now, so nobody is waiting on this gap.
             if index:
+                # The first search is never delayed: it is the one that starts
+                # playback. The gap only paces the rest of the playlist so the
+                # node's per-route limit is not tripped.
                 await asyncio.sleep(delay)
-            try:
-                # Search on the player's own node: the encoded track is then
-                # guaranteed to be decodable by the node that must stream it.
-                results = await asyncio.wait_for(
-                    _search_tracks(query, node=player.node), timeout=15
-                )
-            except asyncio.TimeoutError:
-                log.warning("Music", "Lavalink search timed out.")
-                continue
-            except Exception as exc:
-                delay = _next_search_delay(delay, exc)
-                # 429 from the node: the wider gap above gives the rest of the
-                # playlist a chance instead of hammering the rate limit.
-                if "429" in str(exc):
-                    log.warning(
-                        "Music",
-                        "Lavalink rate-limited the search — spacing tracks "
-                        f"{delay:.1f}s apart.",
-                    )
-                else:
-                    log.warning("Music", f"Lavalink search failed: {exc}")
-                continue
-            # A successful search means the node has recovered; ease the gap
-            # back towards the base value.
-            delay = _next_search_delay(delay)
+            results, delay, node = await self._search_for_play(query, node, delay)
             if not results:
                 continue
 
@@ -1533,27 +1516,15 @@ class MusicSystem(commands.Cog):
                     player.queue.put(track)
                     queued_count += 1
                     added += 1
-            # Coalesced by show_status — a 50-track playlist would otherwise
-            # edit the message once per track and be rate-limited.
-            await show_status(
-                f"### {msg(ctx, 'spotify_progress', done=added, total=total)}"
-            )
             if cap_reached:
                 break
 
         if added == 0:
             self._track_start_events.pop(ctx.guild.id, None)
-            await fail_status("play_not_found")
-            return
+            return await ctx.send(msg(ctx, "play_not_found"))
 
-        # The status card folds this note into its final text instead of adding
-        # a second message.
-        cap_note = (
-            msg(ctx, "music_playlist_capped", count=_MAX_TRACKS_PER_PLAY)
-            if cap_reached else ""
-        )
-        if cap_note and status_msg is None:
-            await ctx.send(cap_note)
+        if cap_reached:
+            await ctx.send(msg(ctx, "music_playlist_capped", count=_MAX_TRACKS_PER_PLAY))
 
         # The node accepting the track does not mean audio is streaming.
         # Wait for the TrackStart event; if it never comes, fail over to a
@@ -1576,8 +1547,7 @@ class MusicSystem(commands.Cog):
                 )
             if not started:
                 self._track_start_events.pop(ctx.guild.id, None)
-                await fail_status("music_start_failed")
-                return
+                return await ctx.send(msg(ctx, "music_start_failed"))
         if start_event is not None:
             # Also covers the fast path where TrackStart already fired.
             self._track_start_events.pop(ctx.guild.id, None)
@@ -1587,30 +1557,21 @@ class MusicSystem(commands.Cog):
         # manual queue itself).
         self._schedule_ghost_refill(ctx.guild.id)
 
-        now_playing = first_track or player.current
-
-        if status_msg is not None:
-            # The same message carries the confirmation for a moment, then
-            # turns into the panel — no third message, no dangling card.
-            if queued_count and now_playing is not None:
-                text = _added_card_text(ctx, now_playing, queued_count)
-                if cap_note:
-                    text += f"\n-# {cap_note}"
-                await show_status(text, force=True)
-                await asyncio.sleep(_ADDED_CARD_HOLD)
-            await self._send_np(ctx, player, edit=status_msg)
-            return
-
-        if queued_count and now_playing is not None:
-            # Multiple tracks added (album / playlist)
-            multi = discord.ui.LayoutView()
-            multi.add_item(discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content=_added_card_text(ctx, now_playing, queued_count)
-                ),
-                accent_colour=_source_colour(now_playing),
-            ))
-            await ctx.send(view=multi)
+        if queued_count:
+            now_playing = first_track or player.current
+            if now_playing is not None:
+                # Multiple tracks added (album / playlist)
+                multi = discord.ui.LayoutView()
+                multi.add_item(discord.ui.Container(
+                    discord.ui.TextDisplay(
+                        content=(
+                            f"{msg(ctx, 'queue_added_multi_title', count=queued_count)}\n"
+                            f"{msg(ctx, 'queue_added_multi_body', title=now_playing.title, count=queued_count)}"
+                        )
+                    ),
+                    accent_colour=_source_colour(now_playing),
+                ))
+                await ctx.send(view=multi)
 
         # Send / replace now-playing control panel
         if first_track and not queued_count:

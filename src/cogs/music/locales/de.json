@@ -27,7 +27,6 @@
     "loop_off": "Loop deaktiviert.",
     "spotify_disabled": "Spotify-Unterstützung ist nicht konfiguriert.",
     "spotify_resolving": "Spotify-Link wird aufgelöst…",
-    "spotify_progress": "Spotify-Link wird aufgelöst… {done}/{total} Titel bereit",
     "spotify_fail": "Der Spotify-Link konnte nicht aufgelöst werden.",
     "like_on": "**{title}** geliked ♥",
     "like_off": "**{title}** aus deinen Likes entfernt.",

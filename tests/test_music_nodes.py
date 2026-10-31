@@ -33,6 +33,119 @@ class HardcodedCatalogTests(unittest.TestCase):
         assert '"password":' in source
 
 
+class _FakeResponse:
+    def __init__(self, status, payload=None):
+        self.status = status
+        self._payload = payload
+
+    async def json(self, content_type=None):
+        if isinstance(self._payload, BaseException):
+            raise self._payload
+        return self._payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    """Answers like a Lavalink node that only serves /v4/info with a password."""
+
+    def __init__(self, status, payload=None, *, password=None):
+        self.status = status
+        self.payload = payload
+        self.password = password
+        self.calls = []
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append((url, dict(headers or {})))
+        authorized = self.password is not None and (headers or {}).get(
+            "Authorization"
+        ) == self.password
+        if self.password is not None and not authorized:
+            return _FakeResponse(401, {"error": "Unauthorized"})
+        return _FakeResponse(self.status, self.payload)
+
+
+class NodeProbeTests(unittest.TestCase):
+    """The probe decides which hardcoded nodes the pool is allowed to use.
+
+    It used to call an unauthenticated ``/version`` and require a 200, which
+    only the two serenetia twins answer: everything else — including nodes that
+    serve the API fine with their password — was discarded as "failed" with no
+    reason logged, leaving the pool on the one host with the tightest
+    loadtracks rate limit.
+    """
+
+    def setUp(self):
+        from utils.music import nodes as nodes_mod
+
+        self.nodes = nodes_mod
+        self.node = {
+            "host": "lava2.kasawa.pro",
+            "port": 2334,
+            "password": "youshallnotpass",
+            "secure": False,
+            "version": "v4",
+        }
+
+    def _probe(self, session):
+        return asyncio.run(
+            self.nodes._probe_node(session, self.node, asyncio.Semaphore(1))
+        )
+
+    def test_probe_authenticates_against_the_v4_api(self):
+        session = _FakeSession(200, {"version": {"semver": "4.2.2"}})
+
+        result = self._probe(session)
+
+        self.assertIsNotNone(result)
+        url, headers = session.calls[0]
+        self.assertTrue(url.endswith("/v4/info"), url)
+        self.assertEqual(headers["Authorization"], "youshallnotpass")
+        self.assertFalse(
+            [u for u, _ in session.calls if "/version" in u],
+            "the unauthenticated /version route must not decide the pool",
+        )
+
+    def test_a_node_that_401s_without_a_password_is_usable(self):
+        # millohost and kasawa answer "Who are you??" to unauthenticated calls.
+        session = _FakeSession(
+            200, {"version": {"semver": "4.2.2"}}, password="youshallnotpass"
+        )
+
+        self.assertIsNotNone(self._probe(session))
+
+    def test_a_wrong_password_is_rejected(self):
+        session = _FakeSession(200, {"version": {}}, password="something-else")
+
+        with mock.patch.object(self.nodes.log, "info") as log_info:
+            self.assertIsNone(self._probe(session))
+
+        logged = " ".join(str(c) for c in log_info.call_args_list)
+        self.assertIn("Probe rejected lava2.kasawa.pro:2334", logged)
+        self.assertIn("401", logged)
+
+    def test_a_200_that_is_not_lavalink_is_rejected(self):
+        session = _FakeSession(200, ValueError("not json"))
+
+        self.assertIsNone(self._probe(session))
+
+        session = _FakeSession(200, {"hello": "cloudflare"})
+        with mock.patch.object(self.nodes.log, "info"):
+            self.assertIsNone(self._probe(session))
+
+    def test_every_rejection_is_logged_with_its_reason(self):
+        with mock.patch.object(self.nodes.log, "info") as log_info:
+            self.assertIsNone(self._probe(_FakeSession(530, {})))
+
+        logged = " ".join(str(c) for c in log_info.call_args_list)
+        self.assertIn("Probe rejected lava2.kasawa.pro:2334", logged)
+        self.assertIn("530", logged)
+
+
 class RescanBackoffTests(unittest.TestCase):
     """An empty pool must not wait an hour before trying again."""
 

@@ -159,17 +159,37 @@ async def _probe_node(
     host   = node["host"]
     port   = node["port"]
     scheme = "https" if node.get("secure") else "http"
-    url    = f"{scheme}://{host}:{port}/version"
+    # Probe exactly what wavelink will use: the v4 REST API, authenticated with
+    # the node's password. The old probe hit an unauthenticated ``/version`` and
+    # required a 200, which discarded working nodes: some builds do not route
+    # ``/version`` at all (404) and others answer 401 without the password
+    # ("Who are you?? Why you here!"). Only the two serenetia twins happened to
+    # answer it, so the pool collapsed onto the one host with the tightest
+    # loadtracks rate limit while everything else was "failed" silently.
+    url     = f"{scheme}://{host}:{port}/v4/info"
+    headers = {"Authorization": str(node.get("password") or "")}
     async with sem:
         try:
             t0 = _time.monotonic()
             # Verify TLS like wavelink will: probing with ssl=False accepted
             # nodes whose certificate wavelink then refused, wasting a slot.
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=_PROBE_TIMEOUT)) as r:
-                if r.status == 200:
-                    return (node, (_time.monotonic() - t0) * 1000)
-        except Exception:
-            pass
+            async with session.get(
+                url, headers=headers, timeout=aiohttp.ClientTimeout(total=_PROBE_TIMEOUT)
+            ) as r:
+                if r.status != 200:
+                    log.info("Lavalink", f"Probe rejected {host}:{port} — HTTP {r.status}.")
+                    return None
+                # A 200 from something that is not Lavalink (a proxy page, a
+                # Cloudflare interstitial) must not take a pool slot.
+                info = await r.json(content_type=None)
+                if not isinstance(info, dict) or "version" not in info:
+                    log.info(
+                        "Lavalink", f"Probe rejected {host}:{port} — /v4/info is not Lavalink."
+                    )
+                    return None
+                return (node, (_time.monotonic() - t0) * 1000)
+        except Exception as exc:
+            log.info("Lavalink", f"Probe rejected {host}:{port} — {type(exc).__name__}: {exc}")
     return None
 
 
