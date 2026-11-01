@@ -16,7 +16,11 @@ from utils.command_locales import command_texts
 
 CMDS = command_texts(__package__)
 
-EFFECTIVE_DATE = "<t:1793318400:F>"  # 30 October 2026
+EFFECTIVE_DATE = "<t:1793491200:F>"  # 1 November 2026 00:00 UTC
+
+#: The owner's Discord account, credited on every legal page. Sends suppress
+#: mentions, so opening /legal never pings them.
+OWNER_MENTION = "<@1052690741874401360>"
 
 MESSAGES = load_locales("cogs.legal", "cog")
 
@@ -31,6 +35,7 @@ _LEGAL_VALUES = {
     "website": WEBSITE,
     "data_removal": DATA_REMOVAL,
     "owner_contact": OWNER_CONTACT,
+    "owner_mention": OWNER_MENTION,
     "support_server": SUPPORT_SERVER,
     "important": get_emoji("important"),
     "user": get_emoji("user"),
@@ -39,18 +44,46 @@ _LEGAL_VALUES = {
 msg = make_flat_msg(MESSAGES, _LEGAL_VALUES)
 
 
+#: Discord caps a single TextDisplay at 4,000 characters, and the detailed
+#: legal pages are longer than that, so a page is packed into several displays.
+_TEXT_DISPLAY_LIMIT = 3800
+
+
+def _chunks(text: str, limit: int = _TEXT_DISPLAY_LIMIT) -> list[str]:
+    """Split markdown into paragraph-sized chunks that each fit a TextDisplay."""
+    chunks: list[str] = []
+    current = ""
+    for block in text.split("\n\n"):
+        candidate = f"{current}\n\n{block}" if current else block
+        if len(candidate) <= limit:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+        # A lone paragraph over the limit is cut at a bullet, then at a word.
+        while len(block) > limit:
+            window = block[:limit]
+            cut = max(window.rfind("\n"), window.rfind(" "))
+            cut = cut if cut > 0 else limit
+            chunks.append(block[:cut].rstrip())
+            block = block[cut:].lstrip()
+        current = block
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def _send_legal(ctx: commands.Context, title_key: str, body_key: str):
     """Build a cv2 LayoutView for a legal document page."""
     title = msg(ctx, title_key)
     body  = msg(ctx, body_key)
 
-    text = f"### {title}\n\n{body}"
+    text = f"### {title}\n\n{body}\n\n-# {msg(ctx, 'updated_by')}"
 
-    view      = discord.ui.LayoutView()
-    container = discord.ui.Container(
-        discord.ui.TextDisplay(content=text)
-    )
-    view.add_item(container)
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        *(discord.ui.TextDisplay(content=chunk) for chunk in _chunks(text))
+    ))
     return view
 
 
@@ -75,7 +108,7 @@ class LegalCog(commands.Cog, name="Legal"):
                 )
             )
         ))
-        await ctx.send(view=view, ephemeral=True)
+        await ctx.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @legal.command(
         name="privacy",
@@ -86,7 +119,7 @@ class LegalCog(commands.Cog, name="Legal"):
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer(ephemeral=True)
         view = _send_legal(ctx, "privacy_title", "privacy_body")
-        await ctx.send(view=view, ephemeral=True)
+        await ctx.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @legal.command(
         name="terms",
@@ -97,7 +130,7 @@ class LegalCog(commands.Cog, name="Legal"):
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer(ephemeral=True)
         view = _send_legal(ctx, "terms_title", "terms_body")
-        await ctx.send(view=view, ephemeral=True)
+        await ctx.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @legal.command(
         name="community",
@@ -108,7 +141,7 @@ class LegalCog(commands.Cog, name="Legal"):
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer(ephemeral=True)
         view = _send_legal(ctx, "community_title", "community_body")
-        await ctx.send(view=view, ephemeral=True)
+        await ctx.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 async def setup(bot: commands.Bot):

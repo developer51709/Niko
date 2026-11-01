@@ -61,7 +61,7 @@ fraud prevention, refunds, or billing support are retained.
 
 If a law requires deletion or release of a preserved moderation or safety
 record, do not use the public form. Send a formal request directly to the bot
-owner through https://sorenthedev.indevs.in. It must include:
+owner by email at owner@niko.sryze.cc. It must include:
 
 - a court record or a signed legal document;
 - the contact details of an official legal representative who can verify the
