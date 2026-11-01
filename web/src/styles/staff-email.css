@@ -87,8 +87,54 @@
 }
 .dashboard-layout .staff-email-receipt-state {
   padding: 1px 7px; color: var(--accent-dark); background: var(--filter-active);
-  border: 1px solid var(--filter-border); border-radius: 999px;
-  font-size: 8.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  border: 1px solid var(--filter-border); border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 8.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; transition: color .16s ease, border-color .16s ease;
+}
+.dashboard-layout .staff-email-receipt-state:hover { color: var(--ink); border-color: var(--accent); }
+.dashboard-layout .staff-email-receipt-state:focus-visible { outline: 2px solid var(--filter-border); outline-offset: 2px; }
+
+/* The full delivery story behind a status pill. */
+.dashboard-layout .staff-email-status-modal {
+  width: min(640px, 100%); max-height: min(84vh, 760px); overflow-y: auto;
+}
+.dashboard-layout .staff-email-status-modal .panel-heading h3 { overflow-wrap: anywhere; }
+.dashboard-layout .staff-email-status-modal .panel-heading p { margin-top: 6px; overflow-wrap: anywhere; }
+.dashboard-layout .staff-email-status-facts {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 11px 20px; margin: 0 0 14px;
+  padding: 14px 16px; background: var(--surface-muted);
+  border: 1px solid var(--line-soft); border-radius: 10px;
+}
+.dashboard-layout .staff-email-status-facts > div { display: grid; gap: 3px; min-width: 0; }
+.dashboard-layout .staff-email-status-facts .is-wide { grid-column: 1 / -1; }
+.dashboard-layout .staff-email-status-facts dt {
+  color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .06em; text-transform: uppercase;
+}
+.dashboard-layout .staff-email-status-facts dd { margin: 0; color: var(--ink); font-size: 11.5px; overflow-wrap: anywhere; }
+.dashboard-layout .staff-email-status-events h4 {
+  margin: 18px 0 12px; color: var(--muted); font-size: 10px;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.dashboard-layout .staff-email-status-events > p { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.7; }
+.dashboard-layout .staff-email-status-events ol {
+  display: grid; gap: 12px; margin: 0; padding: 0 0 0 16px;
+  border-left: 1px solid var(--line); list-style: none;
+}
+.dashboard-layout .staff-email-status-events li { position: relative; padding-left: 14px; }
+.dashboard-layout .staff-email-status-events li:before {
+  content: ""; position: absolute; left: -20px; top: 4px; width: 7px; height: 7px;
+  background: var(--surface-raised); border: 1px solid var(--filter-border); border-radius: 50%;
+}
+.dashboard-layout .staff-email-status-event-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dashboard-layout .staff-email-status-event-head strong { color: var(--ink); font-size: 11.5px; }
+.dashboard-layout .staff-email-status-event-head time { flex: 0 0 auto; color: var(--dim); font: 9px "Space Mono", monospace; }
+.dashboard-layout .staff-email-status-modal .staff-email-status-code {
+  margin: 5px 0 0; color: var(--dim); font: 9.5px "Space Mono", monospace;
+}
+.dashboard-layout .staff-email-status-modal .staff-email-status-detail {
+  margin: 7px 0 0; padding: 9px 11px; color: var(--muted); background: var(--callout);
+  border: 1px solid var(--line-soft); border-radius: 8px;
+  font-size: 11px; line-height: 1.65; overflow-wrap: anywhere;
 }
 .dashboard-layout .staff-email-body {
   margin: 20px 0 0; padding: 18px 20px; max-height: 62vh; overflow: auto;

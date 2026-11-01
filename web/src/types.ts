@@ -705,6 +705,8 @@ export type StaffEmailEvent = {
   recipient: string;
   reason: string;
   severity: string;
+  /** The provider's own sentence about the event (a bounce message, say). */
+  detail?: string;
   occurred_at: number;
 };
 

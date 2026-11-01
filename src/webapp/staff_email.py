@@ -433,6 +433,25 @@ def _staff_roles() -> dict:
     return STAFF_ROLES
 
 
+def _owner_ids() -> list[int]:
+    """The accounts that hold owner outside the staff roster.
+
+    Ownership is a list rather than one account, and an owner has no staff
+    record, so their private address is minted from here instead.
+    """
+    try:
+        from config.ids import OWNER_IDS
+    except Exception:  # pragma: no cover - only a broken install
+        return []
+    owners: list[int] = []
+    for value in OWNER_IDS or ():
+        try:
+            owners.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return owners
+
+
 def _staff_identity(user_id: int | str) -> dict:
     """The Discord username and display name behind a staff record."""
     try:
@@ -492,7 +511,14 @@ def live_staff_state(user_id: int | str) -> str | None:
     start auto-replying to the whole world.
     """
     try:
-        row = _run(_read_live_staff_state(int(user_id)))
+        numeric_user_id = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    if numeric_user_id in _owner_ids():
+        # An owner holds no staff record, so the roster would read them as gone.
+        return "active"
+    try:
+        row = _run(_read_live_staff_state(numeric_user_id))
     except (StaffEmailError, TypeError, ValueError):
         return None
     if not row:
@@ -539,7 +565,21 @@ def sync_addresses(force: bool = False) -> None:
         # No staff records at all: nothing to mint, but existing addresses of
         # deleted records still have to be retired below.
         pass
-    roles = _staff_roles()
+    roles = {**_staff_roles(), "owner": "Owner"}
+    # An owner has no staff record, but still needs a private inbox of their
+    # own: several owners share ``owner@``, and none of them should have to read
+    # the others' mail. They are folded into the roster the sync walks.
+    known = set()
+    for record in records:
+        try:
+            known.add(int(record.get("user_id")))
+        except (TypeError, ValueError):
+            continue
+    records = list(records) + [
+        {"user_id": owner, "role": "owner", "staff_status": "active"}
+        for owner in _owner_ids()
+        if owner not in known
+    ]
     rows = list(_run(_read_addresses()) or [])
     by_local = {str(row.get("local") or ""): row for row in rows}
     by_user: dict[int, dict] = {}
@@ -867,33 +907,56 @@ def _signature_details(role: str | None, local: str, staff_user_id: int | None, 
     )
     if not name:
         return None
+    # The avatar is a public HTTPS URL on Discord's CDN; anything else would be
+    # a broken image in somebody's mail client, so it is dropped instead.
+    avatar = str(identity.get("avatar_url") or "").strip()
+    if not avatar.lower().startswith("https://"):
+        avatar = ""
     return {
         "name": name,
         "username": username,
         "address": personal or f"{local}@{domain}",
         "team": f"Niko {_SHARED_BY_LOCAL[local]['label']}",
+        "avatar": avatar,
+        "initials": "".join(part[0] for part in name.split()[:2]).upper(),
     }
 
 
 def _signature_html(details: dict) -> str:
-    """A small, inline-styled card: who wrote it and how to reach them.
+    """A compact profile card: the sender's picture, name, and how to reach them.
 
-    Mail clients ignore stylesheets and many strip <style> blocks, so the
-    signature is a table with its styling inline.
+    Mail clients ignore stylesheets and many strip <style> blocks, so the card
+    is a table with its styling inline. Without a picture the card shows their
+    initials rather than a broken image, so it reads as one card either way.
     """
     name = html.escape(details["name"])
     team = html.escape(details["team"])
     address = details["address"]
     handle = f"@{html.escape(details['username'])} · {team}" if details.get("username") else team
+    avatar = details.get("avatar") or ""
+    if avatar:
+        portrait = (
+            f'<img src="{html.escape(avatar, quote=True)}" width="46" height="46" alt="{name}" '
+            'style="display:block;width:46px;height:46px;border-radius:50%;border:0;'
+            'outline:none;text-decoration:none;">'
+        )
+    else:
+        portrait = (
+            '<div style="width:46px;height:46px;border-radius:50%;background:#8bd5b1;'
+            'color:#16241d;font-size:16px;font-weight:700;line-height:46px;text-align:center;">'
+            f'{html.escape(details.get("initials") or "")}</div>'
+        )
     return (
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
-        'style="margin:26px 0 0;border-collapse:collapse;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">'
+        'style="margin:26px 0 0;border-collapse:separate;border:1px solid #e2ece6;'
+        'border-radius:14px;background:#f7fbf9;'
+        'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">'
         "<tr>"
-        '<td style="padding:0 14px 0 0;border-right:3px solid #8bd5b1;"></td>'
-        '<td style="padding:2px 0 2px 14px;">'
-        f'<div style="font-size:15px;font-weight:700;color:#16241d;letter-spacing:-0.2px;">{name}</div>'
-        f'<div style="margin:2px 0 0;font-size:12px;color:#5f7268;">{handle}</div>'
-        '<div style="margin:6px 0 0;font-size:12px;">'
+        f'<td width="46" style="padding:13px 0 13px 14px;vertical-align:middle;">{portrait}</td>'
+        '<td style="padding:11px 17px 12px 12px;vertical-align:middle;">'
+        f'<div style="font-size:14px;font-weight:700;color:#16241d;letter-spacing:-0.2px;">{name}</div>'
+        f'<div style="margin:3px 0 0;font-size:11.5px;line-height:1.4;color:#5f7268;">{handle}</div>'
+        '<div style="margin:6px 0 0;font-size:12px;line-height:1.4;">'
         f'<a href="mailto:{html.escape(address, quote=True)}" style="color:#2f7d5c;text-decoration:none;">{html.escape(address)}</a>'
         "</div></td></tr></table>"
     )
@@ -1543,8 +1606,13 @@ def _event_recipient(raw: dict) -> str:
     return (bare or recipient).strip()[:320]
 
 
-def _event_failure(raw: dict) -> tuple[str, str]:
-    """Why a delivery failed, from the flat fields or ``delivery-status``."""
+def _event_failure(raw: dict) -> tuple[str, str, str]:
+    """Why a delivery failed, from the flat fields or ``delivery-status``.
+
+    ``reason`` and ``severity`` are the provider's machine codes (``espblock``,
+    ``permanent``); ``detail`` is the sentence it wrote for a human, which is
+    what a failed mail needs to explain itself in the reader.
+    """
     reason = _field(raw, "reason")
     severity = _field(raw, "severity")
     status = raw.get("delivery-status")
@@ -1559,7 +1627,10 @@ def _event_failure(raw: dict) -> tuple[str, str]:
         reason = str(status.get("description") or status.get("message") or "")
     if not severity and status.get("code"):
         severity = str(status.get("code"))
-    return reason.strip()[:300], severity.strip()[:40]
+    detail = str(status.get("message") or status.get("description") or "")
+    if not detail and _field(raw, "message"):
+        detail = _field(raw, "message")
+    return reason.strip()[:300], severity.strip()[:40], " ".join(detail.split())[:600]
 
 
 def _event_id(raw: dict, event: str, message_id: str, occurred_at: float) -> str:
@@ -1579,7 +1650,7 @@ def _parse_event(raw: dict) -> dict | None:
         return None
     message_id = _event_message_id(raw)
     occurred_at = _epoch(raw.get("timestamp"))
-    reason, severity = _event_failure(raw)
+    reason, severity, detail = _event_failure(raw)
     return {
         "event": event[:60],
         "event_id": _event_id(raw, event, message_id, occurred_at),
@@ -1587,13 +1658,14 @@ def _parse_event(raw: dict) -> dict | None:
         "recipient": _event_recipient(raw),
         "reason": reason,
         "severity": severity,
+        "detail": detail,
         "occurred_at": occurred_at,
     }
 
 
 async def _read_events(message_id: str) -> list[dict]:
     rows = await _pool().fetch(
-        "SELECT event, recipient, reason, severity, occurred_at FROM staff_email_events "
+        "SELECT event, recipient, reason, severity, detail, occurred_at FROM staff_email_events "
         f"WHERE message_id = $1 ORDER BY occurred_at DESC LIMIT ${2}",
         message_id,
         MAX_EVENTS_SHOWN,
@@ -1604,6 +1676,7 @@ async def _read_events(message_id: str) -> list[dict]:
             "recipient": str(row.get("recipient") or ""),
             "reason": str(row.get("reason") or ""),
             "severity": str(row.get("severity") or ""),
+            "detail": str(row.get("detail") or ""),
             "occurred_at": float(row.get("occurred_at") or 0),
         }
         for row in (rows or [])
@@ -1640,7 +1713,7 @@ async def _apply_event(event: dict) -> str:
 
     await pool.execute(
         "INSERT INTO staff_email_events (event_id, message_id, mailbox, event, recipient, "
-        "reason, severity, occurred_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "reason, severity, detail, occurred_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
         event["event_id"],
         (message or {}).get("message_id"),
         mailbox or None,
@@ -1648,6 +1721,7 @@ async def _apply_event(event: dict) -> str:
         event["recipient"],
         event["reason"],
         event["severity"],
+        event.get("detail") or None,
         event["occurred_at"],
     )
 

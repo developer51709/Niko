@@ -88,15 +88,114 @@ function failureReason(message: StaffEmailMessage) {
   return failure?.reason || "";
 }
 
-function Receipt({ message }: { message: StaffEmailMessage }) {
+/** What the provider's machine reasons mean, when it sent no sentence of its own. */
+const FAILURE_HINTS: Record<string, string> = {
+  espblock: "The receiving provider blocked it as spam. This is usually the sending domain's reputation, not this recipient's address.",
+  spam: "The receiving provider filed it as spam.",
+  "suppress-bounce": "An earlier mail to this address bounced, so the provider will not try it again.",
+  "suppress-unsubscribe": "The recipient unsubscribed, so the provider will not send to them.",
+  "suppress-complaint": "The recipient marked earlier mail as spam, so the provider suppresses mail to them.",
+  mailboxfull: "The recipient's mailbox is full.",
+  notfound: "The recipient's server says that address does not exist.",
+  timeout: "The recipient's server did not answer in time; the provider will retry.",
+};
+
+/** The provider's words, in the order they happened. */
+const EVENT_LABELS: Record<string, string> = {
+  accepted: "Accepted",
+  stored: "Stored",
+  delivered: "Delivered",
+  opened: "Opened",
+  clicked: "Link clicked",
+  failed: "Delivery failed",
+  rejected: "Rejected",
+  dropped: "Dropped",
+  temporary_fail: "Retrying",
+  permanent_fail: "Delivery failed",
+  complained: "Marked as spam",
+  unsubscribed: "Unsubscribed",
+};
+
+function formatStamp(epoch?: number | null) {
+  if (!epoch) return "—";
+  return new Date(epoch * 1000).toLocaleString();
+}
+
+function Receipt({ message, onOpen }: { message: StaffEmailMessage; onOpen: (message: StaffEmailMessage) => void }) {
   return (
     <p className="staff-email-receipt">
-      <span className="staff-email-receipt-state">{statusLabel(message)}</span>
+      <button type="button" className="staff-email-receipt-state" onClick={() => onOpen(message)} title="Show the full delivery status">
+        {statusLabel(message)}
+      </button>
       {message.delivered_at ? <span>Delivered {new Date(message.delivered_at * 1000).toLocaleString()}</span> : null}
       {message.opened_at ? <span>First opened {new Date(message.opened_at * 1000).toLocaleString()}</span> : null}
       {failureReason(message) ? <span>{failureReason(message)}</span> : null}
     </p>
   );
+}
+
+/** Everything the provider has said about one sent mail, in one panel. */
+function StatusDialog({ message, domain, onClose }: { message: StaffEmailMessage; domain: string; onClose: () => void }) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const events = message.events || [];
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <section
+      className="modal-card staff-email-status-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="staff-email-status-title"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="panel-heading">
+        <div>
+          <span className="panel-kicker">Delivery status</span>
+          <h3 id="staff-email-status-title">{message.subject || "(no subject)"}</h3>
+          <p>{statusLabel(message)} · {message.to_address}</p>
+        </div>
+        <button type="button" className="button button-muted" onClick={onClose}>Close</button>
+      </div>
+
+      <dl className="staff-email-status-facts">
+        <div><dt>Status</dt><dd>{statusLabel(message)}</dd></div>
+        <div><dt>Sent</dt><dd>{formatStamp(message.created_at)}</dd></div>
+        <div><dt>Delivered</dt><dd>{formatStamp(message.delivered_at)}</dd></div>
+        <div><dt>First opened</dt><dd>{formatStamp(message.opened_at)}</dd></div>
+        <div><dt>Opens</dt><dd>{message.opened_count || 0}</dd></div>
+        <div><dt>Address</dt><dd>{message.mailbox}@{domain}</dd></div>
+        <div className="is-wide"><dt>From</dt><dd>{message.from_address}</dd></div>
+        <div className="is-wide"><dt>To</dt><dd>{message.to_address}</dd></div>
+      </dl>
+
+      <AttachmentList files={message.attachments} />
+
+      <div className="staff-email-status-events">
+        <h4>Provider events</h4>
+        {events.length === 0
+          ? <p>No delivery events are recorded for this message. The provider reports them a moment after a mail leaves, so a fresh send often has none.</p>
+          : <ol>
+            {events.map((entry) => <li key={`${entry.event}-${entry.occurred_at}-${entry.recipient}`}>
+              <div className="staff-email-status-event-head">
+                <strong>{EVENT_LABELS[entry.event] || entry.event}</strong>
+                <time dateTime={new Date(entry.occurred_at * 1000).toISOString()}>{formatStamp(entry.occurred_at)}</time>
+              </div>
+              {entry.reason ? <p className="staff-email-status-code">
+                {entry.reason}{entry.severity ? ` · ${entry.severity}` : ""}
+              </p> : null}
+              {entry.detail
+                ? <p className="staff-email-status-detail">{entry.detail}</p>
+                : FAILURE_HINTS[entry.reason] ? <p className="staff-email-status-detail">{FAILURE_HINTS[entry.reason]}</p> : null}
+            </li>)}
+          </ol>}
+      </div>
+    </section>
+  </div>;
 }
 
 export function StaffEmailPage() {
@@ -114,6 +213,7 @@ export function StaffEmailPage() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [compose, setCompose] = useState<Compose | null>(null);
   const [sending, setSending] = useState(false);
+  const [statusFor, setStatusFor] = useState<StaffEmailMessage | null>(null);
   const attachInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -205,6 +305,19 @@ export function StaffEmailPage() {
       attachments: [],
       thread_id: threadKey(message),
     });
+  }
+
+  /** The pill opens the full status; a message the page has not loaded in
+   * detail yet (a reply inside a conversation) is fetched so its events show. */
+  async function openStatus(message: StaffEmailMessage) {
+    setStatusFor(message);
+    if (message.events) return;
+    try {
+      const result = await getStaffEmailMessage(message.message_id);
+      setStatusFor((current) => current && current.message_id === message.message_id ? result.message : current);
+    } catch {
+      // The panel still shows what the list knew; a failed refresh is silent.
+    }
   }
 
   function addAttachments(files: FileList | null) {
@@ -436,7 +549,7 @@ export function StaffEmailPage() {
                   <strong>{selected.from_name ? `${selected.from_name} · ` : ""}{selected.from_address}</strong>
                   <span>{new Date(selected.created_at * 1000).toLocaleString()}</span>
                 </p>
-                {selected.direction === "outbound" && <Receipt message={selected} />}
+                {selected.direction === "outbound" && <Receipt message={selected} onOpen={(message) => void openStatus(message)} />}
                 <AttachmentList files={selected.attachments} />
               </div>
               <button type="button" className="button button-primary button-small" onClick={() => startCompose(selected)}><Icon name="arrow" /> Reply</button>
@@ -448,7 +561,7 @@ export function StaffEmailPage() {
                   <strong>{entry.direction === "outbound" ? `Niko · ${entry.from_address}` : entry.from_name || entry.from_address}</strong>
                   <time dateTime={new Date(entry.created_at * 1000).toISOString()}>{new Date(entry.created_at * 1000).toLocaleString()}</time>
                 </header>
-                {entry.direction === "outbound" && <Receipt message={entry} />}
+                {entry.direction === "outbound" && <Receipt message={entry} onOpen={(message) => void openStatus(message)} />}
                 <AttachmentList files={entry.attachments} />
                 <pre className="staff-email-body">{entry.body || "This message arrived without a text body."}</pre>
               </article>)}
@@ -463,6 +576,7 @@ export function StaffEmailPage() {
           </div>}
       </section>
     </div>}
+    {statusFor && inbox && <StatusDialog message={statusFor} domain={inbox.domain} onClose={() => setStatusFor(null)} />}
   </div>;
 
   return <DashboardShell

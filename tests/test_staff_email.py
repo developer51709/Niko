@@ -142,7 +142,8 @@ class FakePool:
                 "recipient": args[4],
                 "reason": args[5],
                 "severity": args[6],
-                "occurred_at": args[7],
+                "detail": args[7],
+                "occurred_at": args[8],
             }
         elif q.startswith("UPDATE STAFF_EMAILS SET STATUS"):
             self.stored[args[5]].update(
@@ -161,6 +162,9 @@ class FakePool:
 @pytest.fixture(autouse=True)
 def fixed_domain(monkeypatch):
     monkeypatch.setenv(staff_email.DOMAIN_ENV, "niko.sryze.cc")
+    # Ownership comes from the deployment's config; a test that wants an owner
+    # sets its own ids rather than inheriting whoever runs the suite.
+    monkeypatch.setattr(staff_email, "_owner_ids", lambda: [])
     monkeypatch.delenv(staff_email.API_KEY_ENV, raising=False)
     monkeypatch.delenv(staff_email.WEBHOOK_KEY_ENV, raising=False)
     monkeypatch.delenv(staff_email.REGION_ENV, raising=False)
@@ -500,6 +504,35 @@ def test_a_bounce_keeps_the_reason(monkeypatch, pool):
     assert opened["events"][0]["severity"] == "550"
 
 
+def test_a_blocked_delivery_keeps_the_providers_full_message(monkeypatch, pool):
+    monkeypatch.setenv(staff_email.WEBHOOK_KEY_ENV, "signing-key")
+    message = sent_message(monkeypatch, pool)
+    failure = event(
+        "failed",
+        reason="espblock",
+        severity="permanent",
+        **{
+            "delivery-status": {
+                "code": 550,
+                "message": (
+                    "5.7.1 [.63 19] Gmail has detected that this message is likely "
+                    "suspicious due to the very low reputation of the sending domain."
+                ),
+                "description": "",
+            }
+        },
+    )
+    staff_email.record_events(failure)
+
+    opened = staff_email.open_message("owner", message["message_id"])
+    assert opened["status"] == "failed"
+    event_row = opened["events"][0]
+    assert event_row["reason"] == "espblock"
+    assert event_row["severity"] == "permanent"
+    # The status panel shows this sentence, not just the machine code.
+    assert "very low reputation" in event_row["detail"]
+
+
 def test_a_retried_event_is_not_a_second_open(monkeypatch, pool):
     monkeypatch.setenv(staff_email.WEBHOOK_KEY_ENV, "signing-key")
     sent_message(monkeypatch, pool)
@@ -576,10 +609,11 @@ def staff_record(pool, user_id=42, role="support", status="active"):
     return pool.staff[-1]
 
 
-def discord_identity(monkeypatch, username, name):
-    monkeypatch.setattr(
-        staff_email, "_staff_identity", lambda user_id: {"username": username, "name": name}
-    )
+def discord_identity(monkeypatch, username, name, avatar=None):
+    identity = {"username": username, "name": name}
+    if avatar:
+        identity["avatar_url"] = avatar
+    monkeypatch.setattr(staff_email, "_staff_identity", lambda user_id: identity)
 
 
 def stub_provider(monkeypatch):
@@ -617,6 +651,38 @@ def test_a_staff_member_gets_a_private_address_from_their_username(monkeypatch, 
     assert boxes[1]["sender_name"] == "Ava"
     # And it belongs to one member only.
     assert staff_email.mailbox_locals("support", "99") == ("support",)
+
+
+def test_an_owner_gets_a_private_address_beside_the_shared_owner_one(monkeypatch, pool):
+    # Ownership is a list, and owners hold no staff record: each still needs an
+    # inbox of their own rather than only the shared owner@ one.
+    discord_identity(monkeypatch, "sora", "Sora Vale")
+    monkeypatch.setattr(staff_email, "_owner_ids", lambda: [7])
+    staff_email.sync_addresses(force=True)
+
+    row = pool.addresses["sora"]
+    assert row["user_id"] == 7
+    assert row["status"] == "active"
+    assert staff_email.live_staff_state(7) == "active"
+
+    boxes = staff_email.mailboxes_for("owner", "7")
+    assert [box["local"] for box in boxes] == ["owner", "admin", "support", "support-lead", "sora"]
+    assert boxes[-1]["kind"] == "personal"
+    assert boxes[-1]["address"] == "sora@niko.sryze.cc"
+    # Another owner shares owner@, but not this one.
+    assert "sora" not in staff_email.mailbox_locals("owner", "8")
+
+
+def test_an_owner_who_loses_ownership_stops_receiving_privately(monkeypatch, pool):
+    discord_identity(monkeypatch, "sora", "Sora Vale")
+    monkeypatch.setattr(staff_email, "_owner_ids", lambda: [7])
+    staff_email.sync_addresses(force=True)
+    assert pool.addresses["sora"]["status"] == "active"
+
+    monkeypatch.setattr(staff_email, "_owner_ids", lambda: [])
+    staff_email.sync_addresses(force=True)
+    assert pool.addresses["sora"]["status"] == "former"
+    assert staff_email.live_staff_state(7) == "former"
 
 
 def test_a_private_address_is_readable_only_by_its_owner(monkeypatch, pool):
@@ -874,9 +940,12 @@ def stub_provider_calls(monkeypatch):
     return calls
 
 
+AVATAR = "https://cdn.discordapp.com/avatars/42/abc123.png?size=128"
+
+
 def test_a_shared_address_carries_the_senders_own_signature(monkeypatch, pool):
     staff_record(pool)
-    discord_identity(monkeypatch, "ava.support", "Ava Bell")
+    discord_identity(monkeypatch, "ava.support", "Ava Bell", avatar=AVATAR)
     staff_email.sync_addresses(force=True)
     calls = stub_provider_calls(monkeypatch)
 
@@ -897,12 +966,37 @@ def test_a_shared_address_carries_the_senders_own_signature(monkeypatch, pool):
     assert "@ava.support" in data["html"]
     assert ">ava.support@niko.sryze.cc<" in data["html"]
     assert "mailto:ava.support@niko.sryze.cc" in data["html"]
-    # It is a table with inline styling, because mail clients drop stylesheets.
+    # It is a profile card: inline styling and the sender's own picture,
+    # because mail clients drop stylesheets and remote images they cannot load.
     assert '<table role="presentation"' in data["html"]
-    assert "border-right:3px solid" in data["html"]
+    assert "border-radius:14px" in data["html"]
+    assert f'<img src="{AVATAR}"' in data["html"]
+    assert "border-radius:50%" in data["html"]
     # The plain-text alternative carries the same details.
     assert "Ava Bell (@ava.support)" in data["text"]
     assert "ava.support@niko.sryze.cc" in data["text"]
+
+
+def test_the_signature_card_falls_back_to_initials_without_a_picture(monkeypatch, pool):
+    staff_record(pool)
+    discord_identity(monkeypatch, "ava.support", "Ava Bell")
+    staff_email.sync_addresses(force=True)
+    calls = stub_provider_calls(monkeypatch)
+
+    staff_email.send_message(
+        role="support",
+        mailbox="support",
+        recipient="person@example.com",
+        subject="Hello",
+        body="Hi there",
+        html_body="<p>Hi there</p>",
+        staff_user_id=42,
+    )
+
+    data = calls[0]["data"]
+    # Never a broken image box: the card shows initials instead.
+    assert "<img" not in data["html"]
+    assert ">AB<" in data["html"]
 
 
 def test_a_private_address_does_not_repeat_the_signature(monkeypatch, pool):
@@ -922,7 +1016,7 @@ def test_a_private_address_does_not_repeat_the_signature(monkeypatch, pool):
     )
 
     # Writing from their own address already identifies them.
-    assert "border-right:3px solid" not in calls[0]["data"]["html"]
+    assert "border-radius:14px" not in calls[0]["data"]["html"]
     assert calls[0]["data"]["text"] == "Hi there"
 
 

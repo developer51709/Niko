@@ -722,6 +722,12 @@ async def _create_tables(bot):
         "CREATE INDEX IF NOT EXISTS idx_staff_email_events_message "
         "ON staff_email_events (message_id, occurred_at)"
     )
+    # The provider's own words for why a delivery failed (a bounce message from
+    # the receiving server), shown in full in the reader's status panel.
+    try:
+        await bot.cxn.execute("ALTER TABLE staff_email_events ADD COLUMN detail TEXT")
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
 
     # The address book: the shared mailboxes live in code, but every staff
     # member's private address is a row here because it outlives their role. A
