@@ -136,11 +136,54 @@
   border: 1px solid var(--line-soft); border-radius: 8px;
   font-size: 11px; line-height: 1.65; overflow-wrap: anywhere;
 }
-.dashboard-layout .staff-email-body {
+/* The body is the sender's own markup, so the page supplies only the frame:
+   a paper-like panel, readable defaults, and a hard cap on anything that could
+   spill out of the reader. Inline styling from the mail wins where it exists. */
+.dashboard-layout .staff-email-html {
   margin: 20px 0 0; padding: 18px 20px; max-height: 62vh; overflow: auto;
   color: var(--muted); background: var(--callout); border: 1px solid var(--line-soft);
-  border-radius: 12px; font: 12.5px/1.85 "Plus Jakarta Sans", sans-serif;
-  white-space: pre-wrap; overflow-wrap: anywhere;
+  border-radius: 12px; font: 12.5px/1.8 "Plus Jakarta Sans", sans-serif;
+  overflow-wrap: anywhere;
+}
+.dashboard-layout .staff-email-html > :first-child { margin-top: 0; }
+.dashboard-layout .staff-email-html > :last-child { margin-bottom: 0; }
+.dashboard-layout .staff-email-html p { margin: 0 0 10px; }
+.dashboard-layout .staff-email-html h1,
+.dashboard-layout .staff-email-html h2,
+.dashboard-layout .staff-email-html h3,
+.dashboard-layout .staff-email-html h4 {
+  margin: 16px 0 8px; color: var(--ink); font-size: 13.5px; line-height: 1.4; letter-spacing: -.01em;
+}
+.dashboard-layout .staff-email-html ul,
+.dashboard-layout .staff-email-html ol { margin: 8px 0; padding-left: 22px; }
+.dashboard-layout .staff-email-html blockquote {
+  margin: 10px 0; padding-left: 12px; color: var(--dim); border-left: 2px solid var(--line);
+}
+.dashboard-layout .staff-email-html a { color: var(--accent-dark); text-decoration: underline; text-underline-offset: 2px; }
+.dashboard-layout .staff-email-html img { max-width: 100%; height: auto; }
+.dashboard-layout .staff-email-html table { max-width: 100%; border-collapse: collapse; }
+.dashboard-layout .staff-email-html td,
+.dashboard-layout .staff-email-html th { word-break: break-word; }
+.dashboard-layout .staff-email-html pre { font: 11.5px/1.7 "Space Mono", monospace; white-space: pre-wrap; }
+.dashboard-layout .staff-email-html hr { margin: 14px 0; border: 0; border-top: 1px solid var(--line-soft); }
+.dashboard-layout .staff-email-blank { margin: 18px 0 0; color: var(--dim); font-size: 11.5px; }
+
+/* The history a reply quotes back: kept, but folded away until asked for. */
+.dashboard-layout .staff-email-quote { margin: 12px 0 0; }
+.dashboard-layout .staff-email-quote > summary {
+  display: inline-flex; align-items: center; gap: 7px; padding: 2px 9px;
+  color: var(--dim); background: var(--surface-muted); border: 1px solid var(--line-soft);
+  border-radius: 999px; cursor: pointer; font: 9.5px "Space Mono", monospace;
+  letter-spacing: .05em; text-transform: uppercase; list-style: none;
+}
+.dashboard-layout .staff-email-quote > summary::-webkit-details-marker { display: none; }
+.dashboard-layout .staff-email-quote > summary::before { content: "···"; letter-spacing: 1px; }
+.dashboard-layout .staff-email-quote > summary:hover { color: var(--ink); border-color: var(--line); }
+.dashboard-layout .staff-email-quote > summary:focus-visible { outline: 2px solid var(--filter-border); outline-offset: 2px; }
+.dashboard-layout .staff-email-quote[open] > summary::before { content: "−"; }
+.dashboard-layout .staff-email-html.is-quoted {
+  margin: 10px 0 0; padding: 12px 14px; max-height: 40vh;
+  color: var(--dim); background: var(--surface-muted); font-size: 11.5px;
 }
 
 /* One conversation row in the list, and the thread inside the reader. */
@@ -166,7 +209,13 @@
 .dashboard-layout .staff-email-turn header strong { overflow: hidden; color: var(--ink); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-layout .staff-email-turn header time { flex: 0 0 auto; color: var(--dim); font: 9px "Space Mono", monospace; }
 .dashboard-layout .staff-email-turn .staff-email-receipt { margin: 0; }
-.dashboard-layout .staff-email-turn .staff-email-body { margin: 2px 0 0; padding: 0; max-height: 46vh; background: transparent; border: 0; }
+.dashboard-layout .staff-email-turn .staff-email-html { margin: 2px 0 0; padding: 0; max-height: 46vh; background: transparent; border: 0; }
+.dashboard-layout .staff-email-turn .staff-email-quote { margin-top: 8px; }
+/* Inside a turn the body needs no frame, but the folded history still does. */
+.dashboard-layout .staff-email-turn .staff-email-html.is-quoted {
+  margin: 10px 0 0; padding: 12px 14px;
+  background: var(--surface-muted); border: 1px solid var(--line-soft);
+}
 
 .dashboard-layout .staff-email-compose { display: grid; gap: 18px; }
 .dashboard-layout .staff-email-compose .staff-fields { gap: 14px; }
@@ -235,6 +284,26 @@
 .dashboard-layout .staff-email-attach-list button:hover { color: var(--ink); background: var(--surface-raised); }
 .dashboard-layout .staff-email-attach-list button .icon { width: 10px; height: 10px; color: inherit; }
 
+.dashboard-layout .staff-email-head-side { display: grid; justify-items: end; gap: 10px; }
+
+/* The report queue: one reported message, the reason, and the answer to it. */
+.dashboard-layout .staff-email-report-address {
+  margin: 0; color: var(--dim); font: 9.5px "Space Mono", monospace; overflow-wrap: anywhere;
+}
+.dashboard-layout .staff-email-report-answer {
+  display: grid; gap: 14px; margin: 20px 0 0; padding: 16px 17px;
+  background: rgba(139, 213, 177, .05); border: 1px solid rgba(139, 213, 177, .22); border-radius: 12px;
+}
+.dashboard-layout .staff-email-report-answer .staff-panel-footer {
+  padding-top: 14px; border-top: 1px solid var(--line-soft);
+}
+.dashboard-layout .staff-email-report-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.dashboard-layout .staff-email-report-note {
+  margin: 20px 0 0; padding: 14px 16px; color: var(--muted); background: var(--callout);
+  border: 1px solid var(--line-soft); border-radius: 12px; font-size: 11.5px; line-height: 1.7;
+}
+.dashboard-layout .staff-email-report-note strong { color: var(--ink); }
+.dashboard-layout .staff-email-report-note p { margin: 8px 0 0; white-space: pre-wrap; }
 .dashboard-layout .staff-email-reader-empty { display: grid; justify-items: center; gap: 10px; padding: 70px 24px; text-align: center; }
 .dashboard-layout .staff-email-reader-icon {
   display: grid; place-items: center; width: 54px; height: 54px; margin-bottom: 4px;
@@ -247,6 +316,7 @@
 
 @media (max-width: 1024px) {
   .dashboard-layout .staff-email-layout { grid-template-columns: 1fr; }
+  .dashboard-layout .staff-email-head-side { justify-items: start; }
   .dashboard-layout .staff-email-list { max-height: 340px; }
   .dashboard-layout .staff-email-reader { min-height: 0; }
 }

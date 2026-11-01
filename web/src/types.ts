@@ -729,9 +729,49 @@ export type StaffEmailMessage = {
   events?: StaffEmailEvent[];
   preview?: string;
   body?: string;
+  /** The body as markup — the same rendering the recipient's client shows.
+   * The server sanitizes it before storing it, so it is safe to mount. */
+  html?: string;
+  /** The quoted history the message carried, folded out of the body. */
+  quoted_html?: string;
   /** Names and sizes of the files sent with a mail (never the file bytes). */
   attachments?: StaffEmailAttachment[];
   /** Every message of the conversation, oldest first (detail endpoint only). */
+  thread?: StaffEmailMessage[];
+};
+
+/** One of the reasons the report form offers, with the words it shows. */
+export type StaffEmailReportReason = { value: string; label: string };
+
+/** Which mail a report link belongs to, and what the form may ask about it. */
+export type StaffEmailReportTarget = {
+  subject: string;
+  from_name?: string | null;
+  from_address: string;
+  to_address: string;
+  sent_at: number;
+  conversation_count: number;
+  reasons: StaffEmailReportReason[];
+  max_details: number;
+};
+
+/** A recipient's complaint, and the owner's handling of it. */
+export type StaffEmailReport = {
+  report_id: string;
+  message_id: string;
+  mailbox: string;
+  reason: string;
+  reason_label: string;
+  details: string;
+  include_thread: boolean;
+  reporter_address: string;
+  created_at: number;
+  status: "open" | "replied" | "resolved";
+  response?: string | null;
+  responded_at?: number | null;
+  responded_by?: string | null;
+  message?: StaffEmailMessage | null;
+  /** The conversation, only when the reporter agreed to share it. */
   thread?: StaffEmailMessage[];
 };
 

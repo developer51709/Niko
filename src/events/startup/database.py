@@ -669,7 +669,9 @@ async def _create_tables(bot):
             provider_id       TEXT,
             staff_user_id     INTEGER,
             read_at           REAL,
-            created_at        REAL NOT NULL
+            created_at        REAL NOT NULL,
+            html              TEXT,
+            quoted            TEXT
         )
     """)
     await bot.cxn.execute(
@@ -692,6 +694,14 @@ async def _create_tables(bot):
         # Names and sizes of files sent with a mail; the bytes themselves are
         # handed to the provider and never stored here.
         ("attachments", "TEXT"),
+        # The body as markup, so the mailbox shows what the recipient's client
+        # shows — formatting, tables, images, and the sender's signature — and
+        # the quoted history a reply carries, kept but folded out of the way.
+        ("html", "TEXT"),
+        ("quoted", "TEXT"),
+        # The unguessable id behind the "report this message" link in the footer
+        # of a sent mail. Null for a delivery: only mail we sent can be reported.
+        ("report_token", "TEXT"),
     ]:
         try:
             await bot.cxn.execute(f"ALTER TABLE staff_emails ADD COLUMN {col_name} {col_def}")
@@ -699,6 +709,36 @@ async def _create_tables(bot):
             pass  # column already exists; MongoDB is schema-less
     await bot.cxn.execute(
         "CREATE INDEX IF NOT EXISTS idx_staff_emails_thread ON staff_emails (thread_id, created_at)"
+    )
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_emails_report ON staff_emails (report_token)"
+    )
+
+    # A recipient's complaint about one mail, filed from the link in its footer.
+    # `include_thread` records their own choice: the message alone, or the whole
+    # conversation it belongs to, because that is the context they agreed to
+    # share. The owner answers from the review queue and the answer is sent to
+    # the address the mail itself went to.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_email_reports (
+            report_id        TEXT PRIMARY KEY,
+            token            TEXT NOT NULL DEFAULT '',
+            message_id       TEXT NOT NULL,
+            mailbox          TEXT NOT NULL DEFAULT '',
+            reason           TEXT NOT NULL DEFAULT '',
+            details          TEXT NOT NULL DEFAULT '',
+            include_thread   INTEGER NOT NULL DEFAULT 0,
+            reporter_address TEXT NOT NULL DEFAULT '',
+            created_at       REAL NOT NULL,
+            status           TEXT NOT NULL DEFAULT 'open',
+            response         TEXT,
+            responded_at     REAL,
+            responded_by     TEXT
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_email_reports_message "
+        "ON staff_email_reports (message_id, created_at)"
     )
 
     # One row per webhook event. The provider's event id is the key because it

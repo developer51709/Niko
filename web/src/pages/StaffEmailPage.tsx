@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, getAuth, getGuilds, getStaffEmail, getStaffEmailMessage, getStaffMe, getStats, sendStaffEmail } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
+import { EmailMessageBody } from "../components/EmailMessageBody";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { RichTextEditor } from "../components/RichTextEditor";
-import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
+import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
 import { notifyError, notifyLoading, notifySuccess } from "../utils/toast";
 import type { AuthStatus, BotStats, Guild, StaffEmailAttachment, StaffEmailInbox, StaffEmailMessage } from "../types";
 
@@ -426,7 +427,12 @@ export function StaffEmailPage() {
         <h1>Staff mailbox.</h1>
         <p>Niko's own-domain inbox. Partners, applicants, and members write to the team addresses and to each staff member's private address, and replies stay in one conversation per exchange. Nothing here is linked from the public site.</p>
       </div>
-      <div className="staff-role-card"><span className="staff-role-mark staff-email-mark"><Icon name="mail" /></span><span><small>{mailboxes.length > 1 ? "All addresses" : "Your address"}</small><strong>{activeMailboxLabel}</strong></span></div>
+      <div className="staff-email-head-side">
+        {staffRole === "owner" && <button type="button" className="button button-muted button-small" onClick={() => navigate(staffEmailReportsPath())}>
+          <Icon name="alert" /> Report queue
+        </button>}
+        <div className="staff-role-card"><span className="staff-role-mark staff-email-mark"><Icon name="mail" /></span><span><small>{mailboxes.length > 1 ? "All addresses" : "Your address"}</small><strong>{activeMailboxLabel}</strong></span></div>
+      </div>
     </header>
 
     {!inbox && inboxLoading && <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading the mailbox…</p></div>}
@@ -563,10 +569,10 @@ export function StaffEmailPage() {
                 </header>
                 {entry.direction === "outbound" && <Receipt message={entry} onOpen={(message) => void openStatus(message)} />}
                 <AttachmentList files={entry.attachments} />
-                <pre className="staff-email-body">{entry.body || "This message arrived without a text body."}</pre>
+                <EmailMessageBody message={entry} />
               </article>)}
             </div>
-              : <pre className="staff-email-body">{selected.body || "This message arrived without a text body."}</pre>}
+              : <EmailMessageBody message={selected} />}
           </article>
           : <div className="staff-email-reader-empty">
             <span className="staff-email-reader-icon"><Icon name="mail" /></span>

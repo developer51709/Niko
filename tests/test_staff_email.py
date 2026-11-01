@@ -30,6 +30,7 @@ class FakePool:
     def __init__(self):
         self.stored = {}  # message_id -> message row
         self.events = {}  # event_id -> event row
+        self.reports = {}  # report_id -> report row
         self.addresses = {}  # local -> address book row
         self.staff = []  # staff_members rows
         self.statements = []
@@ -58,14 +59,21 @@ class FakePool:
                 row for row in self.stored.values()
                 if row["mailbox"] == args[0]
                 and args[1] in (row["sender_address"], row["recipient_address"])
-                and row["created_at"] >= args[2]
+                and args[2] in (row["sender_address"], row["recipient_address"])
+                and row["created_at"] >= args[3]
             ]
             rows.sort(key=lambda row: row["created_at"], reverse=True)
-            return rows[: int(args[3])]
+            return rows[: int(args[4])]
         if "FROM STAFF_EMAIL_ADDRESSES" in upper:
             if "WHERE USER_ID" in upper:
                 return [row for row in self.addresses.values() if int(row["user_id"]) == int(args[0])]
             return list(self.addresses.values())
+        if "FROM STAFF_EMAIL_REPORTS" in upper:
+            rows = list(self.reports.values())
+            if "WHERE TOKEN" in upper:
+                rows = [row for row in rows if row["token"] == args[0]]
+            rows.sort(key=lambda row: row["created_at"], reverse=True)
+            return rows[: int(args[-1])]
         if "FROM STAFF_MEMBERS" in upper:
             return list(self.staff)
         return []
@@ -84,6 +92,10 @@ class FakePool:
             return self.stored.get(args[0])
         if "FROM STAFF_EMAILS WHERE PROVIDER_ID" in upper:
             return next((row for row in self.stored.values() if row.get("provider_id") == args[0]), None)
+        if "FROM STAFF_EMAILS WHERE REPORT_TOKEN" in upper:
+            return next((row for row in self.stored.values() if row.get("report_token") == args[0]), None)
+        if "FROM STAFF_EMAIL_REPORTS WHERE REPORT_ID" in upper:
+            return self.reports.get(args[0])
         if "FROM STAFF_EMAIL_ADDRESSES WHERE LOCAL" in upper:
             return self.addresses.get(args[0])
         if "FROM STAFF_MEMBERS WHERE USER_ID" in upper:
@@ -108,7 +120,30 @@ class FakePool:
                 "read_at": args[10],
                 "created_at": args[11],
                 "attachments": args[13],
+                "html": args[14],
+                "quoted": args[15],
+                "report_token": args[16],
             }
+        elif q.startswith("INSERT INTO STAFF_EMAIL_REPORTS"):
+            self.reports[args[0]] = {
+                "report_id": args[0],
+                "token": args[1],
+                "message_id": args[2],
+                "mailbox": args[3],
+                "reason": args[4],
+                "details": args[5],
+                "include_thread": args[6],
+                "reporter_address": args[7],
+                "created_at": args[8],
+                "status": args[9],
+                "response": None,
+                "responded_at": None,
+                "responded_by": None,
+            }
+        elif q.startswith("UPDATE STAFF_EMAIL_REPORTS"):
+            row = self.reports.get(args[4])
+            if row is not None:
+                row.update(status=args[0], response=args[1], responded_at=args[2], responded_by=args[3])
         elif q.startswith("INSERT INTO STAFF_EMAIL_ADDRESSES"):
             self.addresses[args[0]] = {
                 "local": args[0],
@@ -314,7 +349,9 @@ def test_sending_posts_a_signed_form_to_the_domain(monkeypatch, pool):
     assert kwargs["data"]["from"] == "Niko Admin <admin@niko.sryze.cc>"
     assert kwargs["data"]["to"] == "partner@example.com"
     assert kwargs["data"]["subject"] == "Re: hi"
-    assert kwargs["data"]["text"] == "Hello there"
+    # The body, then the report footer every sent mail carries.
+    assert kwargs["data"]["text"].startswith("Hello there")
+    assert "https://niko.sryze.cc/report/" in kwargs["data"]["text"]
     # A plain draft still goes out as a formatted letter.
     assert "Hello there" in kwargs["data"]["html"]
     assert kwargs["files"] is None
@@ -407,6 +444,143 @@ def test_an_html_only_delivery_still_gets_readable_text(monkeypatch, pool):
     result = staff_email.receive_webhook(payload)
     body = pool.stored[result["stored"]]["body"]
     assert "Hello" in body and "there" in body and "<" not in body
+
+
+# ── The body as the recipient's own client shows it ──────────────────────────
+
+
+def test_a_received_reply_keeps_its_markup_and_folds_the_history(monkeypatch, pool):
+    monkeypatch.setenv(staff_email.WEBHOOK_KEY_ENV, "signing-key")
+    payload = delivery(**{
+        "body-plain": "Sounds good.",
+        "body-html": (
+            '<div dir="ltr"><p>Sounds <b>good</b>.</p></div>'
+            '<div class="gmail_quote">'
+            '<div class="gmail_attr">On Sunday, November 1st, 2026 at 12:51 PM, Niko Owner '
+            '&lt;owner@niko.sryze.cc&gt; wrote:<br></div>'
+            '<blockquote class="gmail_quote" style="margin:0 0 0 .8ex;border-left:1px solid #ccc">'
+            'This is a mailing system test!</blockquote></div>'
+        ),
+    })
+    result = staff_email.receive_webhook(payload)
+
+    opened = staff_email.open_message("owner", result["stored"])
+    assert "<b>good</b>" in opened["html"]
+    assert "mailing system test" not in opened["html"]
+    assert "gmail_quote" not in opened["html"]
+    assert "mailing system test" in opened["quoted_html"]
+    assert "wrote:" in opened["quoted_html"]
+    # The list shows the reply, not the mail it answers.
+    listed = next(
+        message for message in staff_email.list_messages("owner")
+        if message["message_id"] == result["stored"]
+    )
+    assert "Sounds good." in listed["preview"]
+    assert "mailing system test" not in listed["preview"]
+
+
+def test_a_plain_text_reply_hides_the_history_it_quotes(monkeypatch, pool):
+    monkeypatch.setenv(staff_email.WEBHOOK_KEY_ENV, "signing-key")
+    payload = delivery(**{
+        "body-plain": (
+            "This works for me!\n\n"
+            "On Sunday, November 1st, 2026 at 12:51 PM, Niko Owner <owner@niko.sryze.cc> wrote:\n\n"
+            "> This is a mailing system test!\n"
+            "> ! Soren\n"
+            "> @soren.xd · Niko Owner\n"
+            "> owner@niko.sryze.cc"
+        ),
+        "body-html": "",
+        "stripped-text": "",
+    })
+    result = staff_email.receive_webhook(payload)
+
+    opened = staff_email.open_message("owner", result["stored"])
+    assert "This works for me!" in opened["html"]
+    assert "mailing system test" not in opened["html"]
+    assert "@soren.xd" not in opened["html"]
+    assert "mailing system test" in opened["quoted_html"]
+    assert "@soren.xd" in opened["quoted_html"]
+    listed = next(
+        message for message in staff_email.list_messages("owner")
+        if message["message_id"] == result["stored"]
+    )
+    assert listed["preview"].startswith("This works for me!")
+
+
+def test_a_delivery_that_is_only_quoted_history_keeps_it_behind_the_toggle(monkeypatch, pool):
+    monkeypatch.setenv(staff_email.WEBHOOK_KEY_ENV, "signing-key")
+    payload = delivery(**{
+        "body-plain": "> forwarded line one\n> forwarded line two",
+        "body-html": "",
+        "stripped-text": "",
+    })
+    opened = staff_email.open_message("owner", staff_email.receive_webhook(payload)["stored"])
+
+    assert "forwarded line one" not in opened["html"]
+    assert "forwarded line two" in opened["quoted_html"]
+    listed = next(
+        message for message in staff_email.list_messages("owner")
+        if message["message_id"] == opened["message_id"]
+    )
+    assert "forwarded line one" in listed["preview"]
+
+
+def test_received_markup_is_reduced_to_what_a_letter_needs(monkeypatch, pool):
+    monkeypatch.setenv(staff_email.WEBHOOK_KEY_ENV, "signing-key")
+    payload = delivery(**{
+        "body-plain": "Layout",
+        "stripped-text": "",
+        "body-html": (
+            '<table width="600" style="border-collapse:collapse;position:fixed"><tr>'
+            '<td colspan="2" style="padding:12px;color:#333">Layout</td></tr></table>'
+            '<img src="https://cdn.example.com/header.png" width="600" alt="Header">'
+            '<img src="cid:inline-1"><img src="javascript:alert(1)" onerror="alert(1)">'
+            '<script>alert(1)</script><style>body{display:none}</style>'
+            '<a href="javascript:alert(1)">trap</a><a href="https://example.com">fine</a>'
+        ),
+    })
+    opened = staff_email.open_message("owner", staff_email.receive_webhook(payload)["stored"])
+    html = opened["html"]
+
+    # Email layout survives: the table, its spans, and its inline styling.
+    assert "<table" in html and 'width="600"' in html
+    assert 'colspan="2"' in html and "padding:12px" in html and "color:#333" in html
+    assert 'src="https://cdn.example.com/header.png"' in html
+    assert 'href="https://example.com"' in html
+    # Nothing that could run, restyle the page, or load something unvetted.
+    assert "<script" not in html and "<style" not in html
+    assert "javascript:" not in html and "onerror" not in html
+    assert "position" not in html
+    assert "cid:" not in html
+
+
+def test_the_sent_copy_shows_what_the_recipient_sees(monkeypatch, pool):
+    staff_record(pool)
+    discord_identity(monkeypatch, "ava.support", "Ava Bell", avatar=AVATAR)
+    staff_email.sync_addresses(force=True)
+    calls = stub_provider_calls(monkeypatch)
+
+    message = staff_email.send_message(
+        role="support",
+        mailbox="support",
+        recipient="person@example.com",
+        subject="Hello",
+        body="Hi there",
+        html_body="<p>Hi <b>there</b></p>",
+        staff_user_id=42,
+    )
+    opened = staff_email.open_message("support", message["message_id"])
+
+    assert "<p>Hi <b>there</b></p>" in opened["html"]
+    assert "Ava Bell" in opened["html"]
+    assert f'<img src="{AVATAR}"' in opened["html"]
+    # The provider received the same letter, only wrapped in the styling a mail
+    # body needs, so the copy here cannot drift from the delivered mail.
+    sent = calls[0]["data"]["html"]
+    assert staff_email._BODY_STYLE in sent
+    assert '<p>Hi <b>there</b></p>' in sent
+    assert f'<img src="{AVATAR}"' in sent
 
 
 # ── Delivery events and read receipts ────────────────────────────────────────
@@ -1017,7 +1191,8 @@ def test_a_private_address_does_not_repeat_the_signature(monkeypatch, pool):
 
     # Writing from their own address already identifies them.
     assert "border-radius:14px" not in calls[0]["data"]["html"]
-    assert calls[0]["data"]["text"] == "Hi there"
+    assert calls[0]["data"]["text"].startswith("Hi there")
+    assert "Report this message" not in calls[0]["data"]["text"]
 
 
 def test_composed_html_is_reduced_to_safe_formatting(monkeypatch, pool):
@@ -1150,3 +1325,189 @@ def test_a_reply_cannot_be_sent_into_another_address_conversation(monkeypatch, p
             staff_user_id=42,
             thread_id=message["thread_id"],
         )
+
+
+# ── Reporting a sent message ────────────────────────────────────────────────
+
+
+def reported_token(pool, message_id: str) -> str:
+    """The token the footer of one sent mail carried."""
+    return pool.stored[message_id]["report_token"]
+
+
+def send_reportable(monkeypatch, pool, body="First", **overrides):
+    stub_provider_calls(monkeypatch)
+    return staff_email.send_message(
+        role="owner",
+        mailbox="support",
+        recipient="partner@example.com",
+        subject="Renewal",
+        body=body,
+        **overrides,
+    )
+
+
+def test_a_sent_mail_carries_a_report_link_to_that_message(monkeypatch, pool):
+    calls = stub_provider_calls(monkeypatch)
+    message = staff_email.send_message(
+        role="owner",
+        mailbox="support",
+        recipient="partner@example.com",
+        subject="Renewal",
+        body="Here is the renewal.",
+        html_body="<p>Here is the renewal.</p>",
+    )
+    token = reported_token(pool, message["message_id"])
+    link = f"https://niko.sryze.cc/report/{token}"
+
+    # The footer goes out in both parts, and the copy in the mailbox is the same
+    # letter, so it shows the recipient's own way back to us.
+    assert link in calls[0]["data"]["html"] and "Report this message" in calls[0]["data"]["html"]
+    assert link in calls[0]["data"]["text"]
+    assert link in message["html"]
+
+    target = staff_email.report_target(token)
+    assert target["subject"] == "Renewal"
+    assert target["to_address"] == "partner@example.com"
+    assert target["from_address"] == "support@niko.sryze.cc"
+    assert target["conversation_count"] == 1
+    assert {"value": "phishing", "label": "Phishing or a suspicious link"} in target["reasons"]
+    # Another message gets its own token; one link never names two mails.
+    second = send_reportable(monkeypatch, pool, body="Second")
+    assert reported_token(pool, second["message_id"]) != token
+
+
+def test_the_report_form_files_the_reason_and_the_shared_conversation(monkeypatch, pool):
+    message = send_reportable(monkeypatch, pool)
+    staff_email.send_message(
+        role="owner",
+        mailbox="support",
+        recipient="partner@example.com",
+        subject="Re: Renewal",
+        body="Second",
+        thread_id=message["thread_id"],
+    )
+    token = reported_token(pool, message["message_id"])
+
+    report = staff_email.submit_report(token, "harassment", "This got personal.", include_thread=True)
+    assert report["reason_label"] == "Harassment or abuse"
+    assert report["include_thread"] is True
+    assert report["reporter_address"] == "partner@example.com"
+    assert report["status"] == "open"
+
+    queued = staff_email.list_reports()[0]
+    assert queued["report_id"] == report["report_id"]
+    assert queued["details"] == "This got personal."
+    assert queued["message"]["subject"] == "Renewal"
+    assert [entry["body"] for entry in queued["thread"]] == ["First", "Second"]
+
+
+def test_a_report_without_the_conversation_keeps_it_out(monkeypatch, pool):
+    message = send_reportable(monkeypatch, pool)
+    staff_email.send_message(
+        role="owner",
+        mailbox="support",
+        recipient="partner@example.com",
+        subject="Re: Renewal",
+        body="Second",
+        thread_id=message["thread_id"],
+    )
+    token = reported_token(pool, message["message_id"])
+
+    staff_email.submit_report(token, "spam", "", include_thread=False)
+    queued = staff_email.list_reports()[0]
+    # They chose the message alone, so nothing else from the exchange is shown.
+    assert queued["include_thread"] is False
+    assert queued["thread"] == []
+    assert queued["message"]["body"] == "First"
+
+
+def test_a_report_link_that_is_not_a_message_is_refused(pool):
+    assert staff_email.report_target("not-a-real-token") is None
+    with pytest.raises(staff_email.StaffEmailError):
+        staff_email.submit_report("not-a-real-token", "spam", "", False)
+
+
+def test_a_report_needs_a_reason_from_the_list(monkeypatch, pool):
+    message = send_reportable(monkeypatch, pool)
+    token = reported_token(pool, message["message_id"])
+    with pytest.raises(staff_email.StaffEmailError):
+        staff_email.submit_report(token, "because I said so", "", False)
+    assert pool.reports == {}
+
+
+def test_a_message_can_only_be_reported_so_often(monkeypatch, pool):
+    message = send_reportable(monkeypatch, pool)
+    token = reported_token(pool, message["message_id"])
+    for _ in range(staff_email.MAX_REPORTS_PER_MESSAGE):
+        staff_email.submit_report(token, "spam", "", False)
+    with pytest.raises(staff_email.StaffEmailError):
+        staff_email.submit_report(token, "spam", "", False)
+
+
+def test_the_owner_answers_a_report_and_the_reporter_receives_it(monkeypatch, pool):
+    calls = stub_provider_calls(monkeypatch)
+    message = staff_email.send_message(
+        role="owner",
+        mailbox="support",
+        recipient="partner@example.com",
+        subject="Renewal",
+        body="First",
+    )
+    token = reported_token(pool, message["message_id"])
+    report = staff_email.submit_report(token, "mistake", "Sent to me by mistake.", True)
+
+    result = staff_email.respond_to_report(report["report_id"], "Sorry — you are off the list.", 7)
+
+    assert result["report"]["status"] == "replied"
+    assert "off the list" in result["report"]["response"]
+    assert "<support@niko.sryze.cc>" in calls[-1]["data"]["from"]
+    assert calls[-1]["data"]["to"] == "partner@example.com"
+    assert calls[-1]["data"]["subject"] == "Re: Renewal"
+    assert "off the list" in calls[-1]["data"]["text"]
+    # The answer is a real mail in the mailbox, filed in the conversation.
+    assert result["message"]["direction"] == "outbound"
+    assert result["message"]["thread_id"] == message["thread_id"]
+
+
+def test_a_report_on_a_private_address_is_answered_from_support(monkeypatch, pool):
+    staff_record(pool)
+    discord_identity(monkeypatch, "ava", "Ava Bell")
+    staff_email.sync_addresses(force=True)
+    calls = stub_provider_calls(monkeypatch)
+    message = staff_email.send_message(
+        role="support",
+        mailbox="ava",
+        recipient="person@example.com",
+        subject="Hello",
+        body="Hi there",
+        staff_user_id=42,
+    )
+    token = reported_token(pool, message["message_id"])
+    report = staff_email.submit_report(token, "inappropriate", "", False)
+
+    staff_email.respond_to_report(report["report_id"], "Thanks for telling us.", 999)
+
+    # The owner cannot write from somebody else's private box.
+    assert "<support@niko.sryze.cc>" in calls[-1]["data"]["from"]
+
+
+def test_closing_a_report_keeps_it_without_writing_back(monkeypatch, pool):
+    calls = stub_provider_calls(monkeypatch)
+    message = staff_email.send_message(
+        role="owner",
+        mailbox="support",
+        recipient="partner@example.com",
+        subject="Renewal",
+        body="First",
+    )
+    token = reported_token(pool, message["message_id"])
+    report = staff_email.submit_report(token, "other", "", False)
+
+    closed = staff_email.close_report(report["report_id"], 7)
+
+    assert closed["status"] == "resolved"
+    assert closed["response"] is None
+    assert len(calls) == 1  # only the original send
+    with pytest.raises(staff_email.StaffEmailError):
+        staff_email.respond_to_report(report["report_id"], "Too late.", 7)

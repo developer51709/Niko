@@ -12,12 +12,27 @@ Two directions, one provider (Mailgun):
   formatted HTML part and any attached files beside its plain text, and mail
   sent from a shared address carries the sender's own signature;
 * inbound arrives as a Route ``forward()`` post, which already carries the
-  parsed plain text, so there is nothing to fetch back. A domain without MX
-  records and a route yet simply never delivers, and the page says so.
+  mail's parsed text and its own markup, so there is nothing to fetch back. A
+  domain without MX records and a route yet simply never delivers, and the page
+  says so.
 * what happened to a sent mail comes back through the events webhook: Mailgun
   posts one request per delivery, open, click, bounce or complaint, and that is
   the only place a read receipt can come from. Those events are stored beside
   the message they belong to and roll its state forward.
+
+Both directions keep the markup they were written in, so the page shows a mail
+the way the recipient's client does — formatting, tables, pictures, and the
+sender's signature — rather than a plainer second rendering of it. A reply's
+quoted history is kept but folded behind a control, the way an inbox hides it,
+so an answer reads as the answer. That markup is sanitized before it is stored,
+because this page renders it.
+
+Every sent mail also carries a footer linking to a public report form, with a
+token minted for that one message. What comes back is a report filed against
+the message — the reason, an optional note, and whether the recipient agreed to
+share the whole conversation — which the bot owner reads and answers from the
+queue. The answer is an ordinary mail from the address the message came from,
+so it reaches the person who reported it and stays in the mailbox with it.
 
 Mailgun signs both machine endpoints with the account's webhook signing key,
 and each checks that signature before storing anything.
@@ -50,6 +65,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 import uuid
 from datetime import datetime, timezone
@@ -697,10 +713,17 @@ def _serialize(row: dict, preview: bool = False) -> dict:
         "attachments": _attachment_list(row.get("attachments")),
     }
     if preview:
-        flat = " ".join(body.split())
+        flat = _preview_text(body)
         message["preview"] = flat[:PREVIEW_CHARS] + ("…" if len(flat) > PREVIEW_CHARS else "")
     else:
         message["body"] = body
+        # What the message looks like in the recipient's own client: the same
+        # markup that was sent or received, with any quoted history folded out
+        # so a reply reads as the reply rather than as the mail underneath it.
+        visible, quoted = _display_body(row)
+        message["html"] = visible
+        if quoted:
+            message["quoted_html"] = quoted
     return message
 
 
@@ -728,7 +751,7 @@ def _message_columns() -> str:
     return (
         "message_id, mailbox, direction, sender_address, sender_name, "
         "recipient_address, subject, body, read_at, created_at, status, "
-        "delivered_at, opened_at, opened_count, thread_id, attachments"
+        "delivered_at, opened_at, opened_count, thread_id, attachments, html, quoted"
     )
 
 
@@ -793,8 +816,8 @@ async def _insert(row: dict) -> dict:
     await _pool().execute(
         "INSERT INTO staff_emails (message_id, mailbox, direction, sender_address, "
         "sender_name, recipient_address, subject, body, provider_id, staff_user_id, "
-        "read_at, created_at, thread_id, attachments) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+        "read_at, created_at, thread_id, attachments, html, quoted, report_token) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
         row["message_id"],
         row["mailbox"],
         row["direction"],
@@ -809,6 +832,9 @@ async def _insert(row: dict) -> dict:
         row["created_at"],
         row.get("thread_id") or row["message_id"],
         row.get("attachments"),
+        row.get("html"),
+        row.get("quoted"),
+        row.get("report_token"),
     )
     return row
 
@@ -843,26 +869,79 @@ def normalize_recipient(value: str) -> str:
 MAX_ATTACHMENTS = 5
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
-# The editor sends HTML so the recipient gets real formatting. Only shapes a
-# mail body needs are kept: anything that could run, frame, or load something is
-# dropped before the markup ever leaves the server.
+# The editor sends HTML so the recipient gets real formatting, and received mail
+# arrives as HTML already. Only shapes a letter actually needs are kept: anything
+# that could run, frame, or restyle the page around it is dropped before the
+# markup is stored or sent, because both ends render it.
 ALLOWED_HTML_TAGS = frozenset({
     "p", "div", "br", "b", "strong", "i", "em", "u", "s", "strike", "ul", "ol", "li",
-    "blockquote", "h1", "h2", "h3", "hr", "pre", "code", "a",
+    "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "pre", "code", "a",
+    "span", "small", "sup", "sub", "dl", "dt", "dd", "img",
+    "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption", "colgroup", "col",
 })
 DROPPED_HTML_TAGS = (
     "script", "style", "iframe", "object", "embed", "form", "input", "button",
     "textarea", "select", "meta", "link", "svg", "math", "head", "title", "base",
 )
 _SAFE_LINK_PREFIXES = ("http://", "https://", "mailto:")
+_TABLE_ATTRIBUTES = ("colspan", "rowspan", "width", "height", "align", "valign", "border", "cellpadding", "cellspacing")
+
+# A letter's own styling is inline, and most of it is presentational. What is
+# left out is what could take the page over (positioning, overlays) or fetch
+# something the sanitizer did not vet (``url(...)``).
+_SAFE_STYLE_PROPERTIES = frozenset({
+    "color", "background", "background-color", "font", "font-family", "font-size",
+    "font-style", "font-weight", "letter-spacing", "line-height", "text-align",
+    "text-decoration", "text-indent", "text-transform", "white-space", "word-break",
+    "overflow-wrap", "word-wrap", "vertical-align", "display", "float",
+    "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+    "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "border", "border-top", "border-right", "border-bottom", "border-left",
+    "border-color", "border-radius", "border-style", "border-width", "border-collapse",
+    "width", "height", "max-width", "min-width", "max-height", "min-height",
+    "list-style", "list-style-type",
+})
+_UNSAFE_STYLE_MARKERS = ("url(", "expression", "javascript:", "@import", "behavior", "\\", "<", "position")
 
 # The composed body is wrapped in this so a plain-text draft still looks like a
 # letter rather than an unformatted stream of text.
 _BODY_STYLE = "font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#25332c;"
 
 
+def _safe_style(value) -> str:
+    """The declarations of an inline style that cannot escape the letter."""
+    declarations: list[str] = []
+    for declaration in str(value or "").replace("\n", " ").split(";"):
+        name, _, raw = declaration.partition(":")
+        name = name.strip().lower()
+        raw = " ".join(raw.split())
+        if not name or not raw or name not in _SAFE_STYLE_PROPERTIES or len(raw) > 200:
+            continue
+        lowered = raw.lower()
+        if any(marker in lowered for marker in _UNSAFE_STYLE_MARKERS):
+            continue
+        declarations.append(f"{name}:{raw}")
+    return ";".join(declarations)
+
+
+def _safe_image_source(value) -> str:
+    """A picture the reader can load, and only a picture.
+
+    ``cid:`` references point at the mail's own MIME parts, which are not kept
+    here, and an inline SVG can carry markup, so both are dropped rather than
+    left as a broken box in the body.
+    """
+    url = str(value or "").strip()
+    lowered = url.lower()
+    if lowered.startswith("https://"):
+        return url
+    if lowered.startswith("data:image/") and not lowered.startswith("data:image/svg"):
+        return url
+    return ""
+
+
 def _sanitize_html(markup: str) -> str:
-    """Reduce user HTML to the tags and attributes a mail body actually needs."""
+    """Reduce mail HTML to the tags, attributes, and styling a letter needs."""
     if not markup:
         return ""
     soup = BeautifulSoup(markup, "html.parser")
@@ -872,19 +951,195 @@ def _sanitize_html(markup: str) -> str:
         if tag.name not in ALLOWED_HTML_TAGS:
             tag.unwrap()
             continue
-        attributes = {}
+        attributes: dict[str, str] = {}
+        style = _safe_style(tag.get("style"))
+        if style:
+            attributes["style"] = style
         if tag.name == "a":
             href = str(tag.get("href") or "").strip()
             if href.lower().startswith(_SAFE_LINK_PREFIXES):
-                attributes = {"href": href, "target": "_blank", "rel": "noopener noreferrer"}
+                attributes.update(href=href, target="_blank", rel="noopener noreferrer")
+        elif tag.name == "img":
+            source = _safe_image_source(tag.get("src"))
+            if not source:
+                tag.extract()
+                continue
+            attributes["src"] = source
+            # A picture in a letter should not tell the sender which page opened
+            # it, and one far down a long mail should not load until seen.
+            attributes.update(loading="lazy", referrerpolicy="no-referrer")
+            for name in ("alt", "width", "height"):
+                value = str(tag.get(name) or "").strip()[:200]
+                if value:
+                    attributes[name] = value
+        elif tag.name in ("table", "thead", "tbody", "tfoot", "tr", "td", "th"):
+            for name in _TABLE_ATTRIBUTES:
+                value = str(tag.get(name) or "").strip()[:40]
+                if value:
+                    attributes[name] = value
+        elif tag.name == "ol":
+            start = str(tag.get("start") or "").strip()
+            if start.isdigit():
+                attributes["start"] = start
+        elif tag.name == "li":
+            value = str(tag.get("value") or "").strip()
+            if value.isdigit():
+                attributes["value"] = value
         tag.attrs = attributes
     return str(soup).strip()
 
 
-def _text_to_html(text: str) -> str:
-    """A plain-text draft as HTML, preserving the line breaks it was written with."""
+def _text_body_html(text: str) -> str:
+    """Plain text as display markup, keeping the line breaks it was written with."""
     escaped = html.escape(str(text or "")).replace("\n", "<br>")
-    return f'<div style="{_BODY_STYLE}white-space:pre-wrap;">{escaped}</div>'
+    return f'<div style="white-space:pre-wrap;">{escaped}</div>'
+
+
+# ── What a reader shows: the new text, with the history folded away ──────────
+
+# Every mail client introduces the history it carries with the same sentence,
+# and most also wrap it in a marker. A reply is read for what was just written,
+# so that tail is kept — a reader can open it again — but folded out of the way.
+_QUOTE_MARKER_RE = re.compile(
+    r"gmail_quote|divRplyFwdMsg|appendonsend|moz-cite-prefix|yahoo_quoted", re.IGNORECASE
+)
+_ATTRIBUTION_RE = re.compile(r"^On\b.{2,400}?\bwrote:\s*$", re.IGNORECASE | re.DOTALL)
+_ORIGINAL_RE = re.compile(r"^-{2,}\s*(?:Original Message|Forwarded message)\s*-{2,}$", re.IGNORECASE)
+_REPLY_HEADER_RE = re.compile(r"^From:\s*\S.{0,300}?\bSent:\s*\S", re.IGNORECASE | re.DOTALL)
+_QUOTE_TAGS = ("div", "p", "span", "section", "td")
+
+
+def _collapse(value) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _quote_anchor(soup):
+    """The element a quoted history starts at, if the markup carries one."""
+    for tag in soup.find_all(True):
+        if _QUOTE_MARKER_RE.search(f"{tag.get('class') or ''} {tag.get('id') or ''}"):
+            return tag
+    for quoted in soup.find_all("blockquote"):
+        return quoted
+    for tag in soup.find_all(list(_QUOTE_TAGS)):
+        text = _collapse(tag.get_text(" "))
+        if len(text) > 500:
+            continue
+        if _ATTRIBUTION_RE.match(text) or _ORIGINAL_RE.match(text) or _REPLY_HEADER_RE.match(text):
+            return tag
+    return None
+
+
+def _quote_start(anchor):
+    """Walk back over the blank nodes and the attribution line that introduce it."""
+    start = anchor
+    sibling = anchor.previous_sibling
+    while sibling is not None:
+        if getattr(sibling, "name", None) is None:
+            if str(sibling).strip():
+                break
+            start = sibling
+        else:
+            text = _collapse(sibling.get_text(" "))
+            if not text:
+                start = sibling
+            elif len(text) <= 500 and (
+                _ATTRIBUTION_RE.match(text) or _ORIGINAL_RE.match(text) or _REPLY_HEADER_RE.match(text)
+            ):
+                start = sibling
+            else:
+                break
+        sibling = sibling.previous_sibling
+    return start
+
+
+def _drop_empty_wrapper(tag) -> None:
+    """Remove the container a client put around its quote, once it is empty.
+
+    Leaving it behind would give the reader an empty box where the history used
+    to be. Only wrappers that hold nothing else are removed, so a message that
+    was itself empty stays as it was.
+    """
+    while tag is not None and getattr(tag, "name", None) in ("div", "span", "section", "td"):
+        if tag.get_text(strip=True) or tag.find("img"):
+            return
+        parent = tag.parent
+        tag.extract()
+        tag = parent
+
+
+def _split_quoted_html(markup: str) -> tuple[str, str]:
+    """One body split into what was written and the history it quotes."""
+    try:
+        soup = BeautifulSoup(markup, "html.parser")
+    except Exception:  # pragma: no cover - the parser does not fail on text
+        return markup, ""
+    anchor = _quote_anchor(soup)
+    if anchor is None:
+        return markup, ""
+    start = _quote_start(anchor)
+    nodes = [start, *list(start.next_siblings)]
+    container = start.parent
+    quoted = "".join(str(node) for node in nodes).strip()
+    for node in nodes:
+        node.extract()
+    _drop_empty_wrapper(container)
+    return str(soup).strip(), quoted
+
+
+def _quote_line(lines: list[str]) -> int | None:
+    """The first line of the quoted history in a plain-text body."""
+    for index, line in enumerate(lines):
+        if _ORIGINAL_RE.match(line.strip()):
+            return index
+        # A client wraps its attribution over two or three lines before the quote.
+        for width in (1, 2, 3):
+            window = _collapse(" ".join(lines[index:index + width]))
+            if len(window) > 500:
+                continue
+            if _ATTRIBUTION_RE.match(window) or _REPLY_HEADER_RE.match(window):
+                return index
+    # Nothing announced the quote: a trailing run of ">" lines is still one.
+    tail = None
+    for index in range(len(lines) - 1, -1, -1):
+        stripped = lines[index].strip()
+        if not stripped:
+            continue
+        if not stripped.startswith(">"):
+            break
+        tail = index
+    return tail
+
+
+def _split_quoted_text(text: str) -> tuple[str, str]:
+    """The same split for a body that arrived as plain text only."""
+    lines = str(text or "").splitlines()
+    start = _quote_line(lines)
+    if start is None:
+        return str(text or "").strip(), ""
+    return "\n".join(lines[:start]).strip(), "\n".join(lines[start:]).strip()
+
+
+def _display_body(row: dict) -> tuple[str, str]:
+    """A message as the recipient's inbox shows it, and the history it quotes.
+
+    Both halves were split and sanitized on the way in, so what is stored is
+    exactly what a browser may render. A message from before markup was kept
+    falls back to its text, escaped here — a body is never handed to a browser
+    as it arrived, and never twice-rendered once it was.
+    """
+    markup = str(row.get("html") or "").strip()
+    quoted = str(row.get("quoted") or "").strip()
+    if markup or quoted:
+        return markup, quoted
+    visible, history = _split_quoted_text(str(row.get("body") or ""))
+    return _text_body_html(visible), (_text_body_html(history) if history else "")
+
+
+def _preview_text(body: str) -> str:
+    """The one-line gist of a message, without the history it quotes."""
+    visible, quoted = _split_quoted_text(str(body or ""))
+    source = visible if visible.strip() else quoted
+    return " ".join(line.lstrip("> ").strip() for line in source.splitlines() if line.strip())
 
 
 def _signature_details(role: str | None, local: str, staff_user_id: int | None, domain: str) -> dict | None:
@@ -965,6 +1220,67 @@ def _signature_html(details: dict) -> str:
 def _signature_text(details: dict) -> str:
     handle = f" (@{details['username']})" if details.get("username") else ""
     return f"—\n{details['name']}{handle} · {details['team']}\n{details['address']}"
+
+
+# ── Reporting a sent message ────────────────────────────────────────────────
+#
+# Every mail leaves with a link back to a form, and that link is the only way
+# in: the token is random, minted with that one mail, and reaches nothing else
+# in the mailbox. A report is filed against the message, never against an
+# address, so the owner sees exactly what was sent and who received it.
+
+REPORT_PATH = "/report"
+REPORT_TOKEN_BYTES = 24
+REPORT_REASONS = (
+    ("spam", "Spam or unsolicited mail"),
+    ("phishing", "Phishing or a suspicious link"),
+    ("harassment", "Harassment or abuse"),
+    ("inappropriate", "Inappropriate content"),
+    ("mistake", "I should not have received this"),
+    ("other", "Something else"),
+)
+REPORT_REASON_LABELS = dict(REPORT_REASONS)
+MAX_REPORT_DETAILS = 1200
+MAX_REPORTS_PER_MESSAGE = 5
+
+
+def _report_origin() -> str:
+    """The public origin a recipient's report link points at.
+
+    A send normally happens inside a request, which knows its own host. A script
+    or a test has no request to ask, and the mail domain is the one origin this
+    mailbox is certain of.
+    """
+    try:
+        origin = str(runtime.public_base_url() or "").rstrip("/")
+    except Exception:
+        origin = ""
+    return origin or f"https://{email_domain()}"
+
+
+def report_url(token: str) -> str:
+    """The link a recipient clicks to report the mail that carried it."""
+    return f"{_report_origin()}{REPORT_PATH}/{token}"
+
+
+def _report_footer_html(url: str) -> str:
+    """The quiet line under every sent mail that offers a way to complain."""
+    return (
+        '<div style="margin:26px 0 0;padding:13px 0 0;border-top:1px solid #e2ece6;'
+        f'{_BODY_STYLE}font-size:11px;line-height:1.6;color:#7c8b83;">'
+        "Something wrong with this email? "
+        f'<a href="{html.escape(url, quote=True)}" target="_blank" rel="noopener noreferrer" '
+        'style="color:#2f7d5c;text-decoration:underline;">'
+        "Report this message</a> and the Niko team will look into it."
+        "</div>"
+    )
+
+
+def _report_footer_text(url: str) -> str:
+    return (
+        "Something wrong with this email? Report it and the Niko team will look into it:\n"
+        f"{url}"
+    )
 
 
 def _safe_attachment_name(name: str) -> str:
@@ -1067,9 +1383,19 @@ def send_message(
     domain = email_domain()
     sender = f"{mailbox_sender_name(role, local, staff_user_id)} <{local}@{domain}>"
     signature = _signature_details(role, local, staff_user_id, domain)
+    # The link a recipient can complain through is minted here, with the mail,
+    # and kept beside it so the report is about this message and no other.
+    report_token = secrets.token_urlsafe(REPORT_TOKEN_BYTES)
+    report_link = report_url(report_token)
+    footer_markup = _report_footer_html(report_link)
     plain = body + (("\n\n" + _signature_text(signature)) if signature else "")
-    markup = _sanitize_html(html_body) if html_body else _text_to_html(body)
-    markup = f'<div style="{_BODY_STYLE}">{markup}</div>' + (_signature_html(signature) if signature else "")
+    plain = f"{plain}\n\n{_report_footer_text(report_link)}"
+    # One piece of markup serves both ends: the recipient's client renders it,
+    # and the copy kept in this mailbox shows the very same thing, signature and
+    # footer all, instead of a plainer second rendering of the same mail.
+    letter = _sanitize_html(html_body) if html_body else _text_body_html(body)
+    signature_markup = _signature_html(signature) if signature else ""
+    markup = f'<div style="{_BODY_STYLE}">{letter}</div>{signature_markup}{footer_markup}'
     data = {"from": sender, "to": to_address, "subject": subject, "text": plain, "html": markup}
     if parent:
         data["h:In-Reply-To"] = f"<{parent}>"
@@ -1113,6 +1439,9 @@ def send_message(
         "recipient_address": to_address,
         "subject": subject,
         "body": body,
+        "html": letter + signature_markup + footer_markup,
+        "quoted": None,
+        "report_token": report_token,
         "provider_id": provider_id,
         "staff_user_id": staff_user_id,
         "read_at": time.time(),
@@ -1257,6 +1586,22 @@ def _message_body(payload) -> str:
     return _html_to_text("\n".join(str(part) for part in parts or []))
 
 
+def _message_html(payload) -> str:
+    """The delivery's own markup, when the sender's client wrote one.
+
+    ``body-html`` is the full body as it arrived; ``stripped-html`` is Mailgun's
+    own quote-stripped copy, kept as a fallback for a delivery that carries no
+    full HTML. Either way it is sanitized before it is stored.
+    """
+    getter = getattr(payload, "getlist", None)
+    parts = list(getter("body-html") or []) if getter else []
+    if not parts:
+        parts = [
+            value for value in (_field(payload, "body-html"), _field(payload, "stripped-html")) if value
+        ]
+    return "\n".join(str(part) for part in parts)
+
+
 def _delivery_key(payload, sender: str, subject: str, body: str) -> str:
     """A stable id for one delivered mail.
 
@@ -1336,10 +1681,13 @@ async def _thread_for(pool, headers: dict, mailbox: str, sender: str, subject: s
     if not wanted or not sender:
         return None
     rows = await pool.fetch(
+        # The counterpart appears twice; it is passed twice because a numbered
+        # placeholder that is reused is not portable across both backends here.
         "SELECT thread_id, subject FROM staff_emails WHERE mailbox = $1 "
-        "AND (sender_address = $2 OR recipient_address = $2) AND created_at >= $3 "
-        "ORDER BY created_at DESC LIMIT $4",
+        "AND (sender_address = $2 OR recipient_address = $3) AND created_at >= $4 "
+        "ORDER BY created_at DESC LIMIT $5",
         mailbox,
+        sender,
         sender,
         time.time() - THREAD_SUBJECT_WINDOW,
         50,
@@ -1501,6 +1849,10 @@ def receive_webhook(payload, domain: str | None = None) -> dict:
     body = _message_body(payload)[:MAX_BODY_CHARS]
     key = _delivery_key(payload, sender_address, subject, body)
     headers = _headers(payload)
+    # The markup the sender's own client produced, minus everything that could
+    # run or restyle the page, and minus the history they quoted back at us.
+    markup = _sanitize_html(_message_html(payload)[: MAX_BODY_CHARS * 4])
+    visible_html, quoted_html = _split_quoted_html(markup) if markup else ("", "")
 
     row = {
         "message_id": f"in-{key}",
@@ -1512,6 +1864,8 @@ def receive_webhook(payload, domain: str | None = None) -> dict:
         "recipient_address": address_for(addressed_local, domain),
         "subject": subject,
         "body": body,
+        "html": visible_html,
+        "quoted": quoted_html,
         "provider_id": key,
         "staff_user_id": None,
         "read_at": None,
@@ -1767,3 +2121,274 @@ def record_events(payload) -> dict:
         elif outcome in ("duplicate", "ignored"):
             counts[outcome] += 1
     return counts
+
+
+# ── The report queue ─────────────────────────────────────────────────────────
+
+
+REPORT_COLUMNS = (
+    "report_id, token, message_id, mailbox, reason, details, include_thread, "
+    "reporter_address, created_at, status, response, responded_at, responded_by"
+)
+
+
+def _report_message(token: str) -> dict | None:
+    """The one sent message a report link belongs to."""
+    async def read():
+        return await _pool().fetchrow(
+            "SELECT message_id, thread_id, mailbox, direction, subject, sender_address, "
+            "sender_name, recipient_address, created_at FROM staff_emails "
+            "WHERE report_token = $1 LIMIT 1",
+            token,
+        )
+
+    row = _run(read())
+    if not row or str(row.get("direction") or "") != "outbound":
+        return None
+    return row
+
+
+def _thread_ids(thread_id: str) -> list[str]:
+    async def read():
+        rows = await _pool().fetch(
+            "SELECT message_id FROM staff_emails WHERE thread_id = $1 "
+            "ORDER BY created_at ASC LIMIT $2",
+            thread_id,
+            THREAD_MAX_MESSAGES,
+        )
+        return [str(row.get("message_id") or "") for row in rows or []]
+
+    return _run(read())
+
+
+def _message_row(message_id: str) -> dict | None:
+    async def read():
+        return await _pool().fetchrow(
+            f"SELECT {_message_columns()} FROM staff_emails WHERE message_id = $1",
+            message_id,
+        )
+
+    return _run(read())
+
+
+def _thread_rows(thread_id: str) -> list[dict]:
+    async def read():
+        return await _pool().fetch(
+            f"SELECT {_message_columns()} FROM staff_emails WHERE thread_id = $1 "
+            "ORDER BY created_at ASC LIMIT $2",
+            thread_id,
+            THREAD_MAX_MESSAGES,
+        )
+
+    return _run(read()) or []
+
+
+def report_target(token: str) -> dict | None:
+    """What the report form shows: which mail this link belongs to.
+
+    Deliberately little: the token was only ever handed to the recipient, so the
+    mail itself is not echoed back over the web on the strength of it.
+    """
+    row = _report_message(token)
+    if row is None:
+        return None
+    thread_id = str(row.get("thread_id") or row.get("message_id") or "")
+    return {
+        "subject": str(row.get("subject") or ""),
+        "from_name": row.get("sender_name") or None,
+        "from_address": str(row.get("sender_address") or ""),
+        "to_address": str(row.get("recipient_address") or ""),
+        "sent_at": float(row.get("created_at") or 0),
+        "conversation_count": len(_thread_ids(thread_id)),
+        "reasons": [{"value": value, "label": label} for value, label in REPORT_REASONS],
+        "max_details": MAX_REPORT_DETAILS,
+    }
+
+
+def submit_report(token: str, reason: str, details: str, include_thread: bool) -> dict:
+    """File one recipient's report against the message the link points at."""
+    row = _report_message(token)
+    if row is None:
+        raise StaffEmailError("That report link is no longer valid.")
+    reason = str(reason or "").strip().lower()
+    if reason not in REPORT_REASON_LABELS:
+        raise StaffEmailError("Choose a reason for the report.")
+    details = str(details or "").strip()[:MAX_REPORT_DETAILS]
+
+    async def existing():
+        return await _pool().fetch(
+            "SELECT report_id FROM staff_email_reports WHERE token = $1 LIMIT $2",
+            token,
+            MAX_REPORTS_PER_MESSAGE + 1,
+        )
+
+    if len(_run(existing()) or []) >= MAX_REPORTS_PER_MESSAGE:
+        raise StaffEmailError(
+            "This message has already been reported several times. The team has it."
+        )
+
+    report_id = f"rpt-{uuid.uuid4().hex}"
+    mail = {
+        "report_id": report_id,
+        "token": token,
+        "message_id": str(row.get("message_id") or ""),
+        "mailbox": str(row.get("mailbox") or ""),
+        "reason": reason,
+        "details": details,
+        "include_thread": 1 if include_thread else 0,
+        "reporter_address": str(row.get("recipient_address") or ""),
+        "created_at": time.time(),
+        "status": "open",
+    }
+
+    async def store():
+        await _pool().execute(
+            "INSERT INTO staff_email_reports (report_id, token, message_id, mailbox, reason, "
+            "details, include_thread, reporter_address, created_at, status) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            mail["report_id"],
+            mail["token"],
+            mail["message_id"],
+            mail["mailbox"],
+            mail["reason"],
+            mail["details"],
+            mail["include_thread"],
+            mail["reporter_address"],
+            mail["created_at"],
+            mail["status"],
+        )
+
+    _run(store())
+    return _report_payload(mail)
+
+
+def _report_payload(row: dict) -> dict:
+    reason = str(row.get("reason") or "")
+    return {
+        "report_id": str(row.get("report_id") or ""),
+        "message_id": str(row.get("message_id") or ""),
+        "mailbox": str(row.get("mailbox") or ""),
+        "reason": reason,
+        "reason_label": REPORT_REASON_LABELS.get(reason, reason),
+        "details": str(row.get("details") or ""),
+        "include_thread": bool(int(row.get("include_thread") or 0)),
+        "reporter_address": str(row.get("reporter_address") or ""),
+        "created_at": float(row.get("created_at") or 0),
+        "status": str(row.get("status") or "open"),
+        "response": row.get("response"),
+        "responded_at": row.get("responded_at"),
+        "responded_by": str(row.get("responded_by") or "") or None,
+    }
+
+
+def list_reports(limit: int = 100) -> list[dict]:
+    """The owner's queue: every report, with the message it is about.
+
+    The conversation is attached only when the reporter chose to share it, which
+    is the whole point of asking: what they did not agree to share stays out of
+    the report.
+    """
+    async def read():
+        return await _pool().fetch(
+            f"SELECT {REPORT_COLUMNS} FROM staff_email_reports ORDER BY created_at DESC LIMIT $1",
+            max(1, min(int(limit), 200)),
+        )
+
+    reports: list[dict] = []
+    for row in _run(read()) or []:
+        report = _report_payload(row)
+        message = _message_row(report["message_id"])
+        report["message"] = _serialize(message) if message else None
+        if report["include_thread"] and message:
+            thread_id = str(message.get("thread_id") or message.get("message_id") or "")
+            # Only what had happened when they reported: they agreed to share the
+            # conversation they had seen, not whatever was written after it.
+            report["thread"] = [
+                _serialize(entry) for entry in _thread_rows(thread_id)
+                if float(entry.get("created_at") or 0) <= report["created_at"]
+            ]
+        else:
+            report["thread"] = []
+        reports.append(report)
+    return reports
+
+
+def _report_row(report_id: str) -> dict | None:
+    async def read():
+        return await _pool().fetchrow(
+            f"SELECT {REPORT_COLUMNS} FROM staff_email_reports WHERE report_id = $1",
+            report_id,
+        )
+
+    return _run(read())
+
+
+def _close_report(report_id: str, owner_id: int | None, reply: str | None) -> dict:
+    now = time.time()
+
+    async def store():
+        await _pool().execute(
+            "UPDATE staff_email_reports SET status = $1, response = $2, responded_at = $3, "
+            "responded_by = $4 WHERE report_id = $5",
+            "replied" if reply else "resolved",
+            reply,
+            now,
+            str(owner_id or ""),
+            report_id,
+        )
+
+    _run(store())
+    row = _report_row(report_id)
+    return _report_payload(row) if row else {"report_id": report_id, "status": "resolved"}
+
+
+def respond_to_report(report_id: str, message: str, owner_id: int | None) -> dict:
+    """Answer a report by email, to the address the mail was sent to.
+
+    The answer comes from the mailbox the reported mail came from, so it lands in
+    the same conversation. A report about somebody's private address is answered
+    from support instead: the owner cannot write from another person's box.
+    """
+    report = _report_row(report_id)
+    if report is None:
+        raise StaffEmailError("That report is no longer in the queue.")
+    if str(report.get("status") or "") == "resolved":
+        raise StaffEmailError("That report is already closed.")
+    text = str(message or "").strip()[:MAX_BODY_CHARS]
+    if not text:
+        raise StaffEmailError("Write a response before sending it.")
+    source = _message_row(str(report.get("message_id") or ""))
+    if source is None:
+        raise StaffEmailError("The reported message is no longer in the mailbox.")
+    recipient = str(report.get("reporter_address") or source.get("recipient_address") or "").strip()
+    if not recipient:
+        raise StaffEmailError("There is no address to answer on this report.")
+
+    subject = str(source.get("subject") or "").strip() or "(no subject)"
+    reply_subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+    mailbox = str(report.get("mailbox") or source.get("mailbox") or "").strip().lower()
+    thread_id = str(source.get("thread_id") or "").strip() or None
+    if not mailbox or not mailbox_allowed("owner", mailbox, owner_id):
+        mailbox = "support"
+        thread_id = None
+
+    sent = send_message(
+        role="owner",
+        mailbox=mailbox,
+        recipient=recipient,
+        subject=reply_subject,
+        body=text,
+        staff_user_id=owner_id,
+        thread_id=thread_id,
+    )
+    return {"report": _close_report(report_id, owner_id, text), "message": sent}
+
+
+def close_report(report_id: str, owner_id: int | None) -> dict:
+    """Close a report without writing back (nothing to add, or already handled)."""
+    report = _report_row(report_id)
+    if report is None:
+        raise StaffEmailError("That report is no longer in the queue.")
+    if str(report.get("status") or "") == "resolved":
+        raise StaffEmailError("That report is already closed.")
+    return _close_report(report_id, owner_id, None)

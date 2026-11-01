@@ -7,10 +7,14 @@ team ``support@``, and every staff member also holds a private address minted
 from their Discord username that nobody else can read. Sending is CSRF-protected.
 The inbound delivery and delivery-event webhooks are the two routes here that
 answer a machine instead of a signed-in staff member, and both authenticate by
-Mailgun's signature alone.
+Mailgun's signature alone. The report routes are the other way round: the form
+behind a sent mail is public, because the person reporting a message is not a
+staff member here, and the token in its URL is the whole credential. Reading
+the reports, and answering them, belongs to the bot owner alone.
 """
 
 import logging
+from functools import wraps
 
 from flask import jsonify, request, session
 
@@ -194,6 +198,103 @@ def api_staff_email_events():
     except staff_email.StaffEmailUnavailable as exc:
         # A 5xx asks the provider to try again later; the event is not lost.
         log.warning("StaffEmail: delivery event could not be stored: %s", exc)
+        return jsonify({"error": str(exc)}), 503
+    except staff_email.StaffEmailError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"ok": True, **result})
+
+
+# ── Reporting a received message ─────────────────────────────────────────────
+#
+# The two public routes are reached from the footer of a sent mail, by whoever
+# received it. The token in the URL is the whole credential: it names one
+# message, and it cannot be guessed from the mailbox. Everything about reports
+# after that is the bot owner's, and reads the queue rather than an address.
+
+
+def _owner_id() -> int | None:
+    raw = str(session.get("user", {}).get("id", "")).strip()
+    return int(raw) if raw.isdigit() else None
+
+
+def _require_owner(f):
+    @wraps(f)
+    def _inner(*args, **kwargs):
+        if _current_staff_role() != "owner":
+            return jsonify({"error": "The report queue is restricted to the bot owner."}), 403
+        return f(*args, **kwargs)
+    return _inner
+
+
+@app.route("/api/staff/email/report/<token>")
+def api_staff_email_report_target(token):
+    """What the report form shows about the mail behind a link."""
+    try:
+        target = staff_email.report_target(token)
+    except staff_email.StaffEmailUnavailable as exc:
+        return jsonify({"error": str(exc)}), 503
+    except staff_email.StaffEmailError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if target is None:
+        return jsonify({"error": "That report link is not valid."}), 404
+    return jsonify({"target": target})
+
+
+@app.route("/api/staff/email/report/<token>", methods=["POST"])
+def api_staff_email_report_submit(token):
+    """File the complaint a recipient filled in, against that one message."""
+    data = request.get_json(silent=True) or {}
+    include = data.get("include_thread")
+    include_thread = include if isinstance(include, bool) else str(include or "").lower() in ("1", "true", "yes")
+    try:
+        report = staff_email.submit_report(
+            token,
+            str(data.get("reason") or ""),
+            str(data.get("details") or ""),
+            include_thread,
+        )
+    except staff_email.StaffEmailUnavailable as exc:
+        return jsonify({"error": str(exc)}), 503
+    except staff_email.StaffEmailError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"ok": True, "report": report})
+
+
+@app.route("/api/staff/email/reports")
+@require_auth
+@_require_owner
+def api_staff_email_reports():
+    """The owner's queue: what was reported, and the context they chose to share."""
+    try:
+        reports = staff_email.list_reports()
+    except staff_email.StaffEmailUnavailable as exc:
+        return jsonify({"error": str(exc)}), 503
+    except staff_email.StaffEmailError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({
+        "reports": reports,
+        "open": sum(1 for report in reports if report["status"] == "open"),
+        "domain": staff_email.email_domain(),
+    })
+
+
+@app.route("/api/staff/email/reports/<report_id>", methods=["POST"])
+@require_auth
+@_require_owner
+@require_csrf
+def api_staff_email_report_action(report_id):
+    """Answer a report by email, or close it without writing back."""
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action") or "").strip().lower()
+    owner_id = _owner_id()
+    try:
+        if action == "reply":
+            result = staff_email.respond_to_report(report_id, str(data.get("message") or ""), owner_id)
+        elif action == "close":
+            result = {"report": staff_email.close_report(report_id, owner_id), "message": None}
+        else:
+            return jsonify({"error": "Choose whether to reply or close the report."}), 400
+    except staff_email.StaffEmailUnavailable as exc:
         return jsonify({"error": str(exc)}), 503
     except staff_email.StaffEmailError as exc:
         return jsonify({"error": str(exc)}), 400

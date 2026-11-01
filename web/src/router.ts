@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "staff-email" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "staff-email" | "staff-email-reports" | "email-report" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
@@ -25,7 +25,11 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === "/dashboard/staff") return "staff";
   // The hidden staff mailbox sits beside the workspace, never under its hash
   // tabs, so it is its own page.
+  if (path === "/dashboard/staff/email/reports") return "staff-email-reports";
   if (path === "/dashboard/staff/email") return "staff-email";
+  // The public form behind the "report this message" link in a sent mail. It is
+  // reached from an inbox, never from this site, so nothing links here.
+  if (path.startsWith("/report/") && path.split("/").filter(Boolean).length >= 2) return "email-report";
   if (path === "/team/apply" || path.startsWith("/team/apply/")) return "team-application";
   if (path.startsWith("/apply/")) return "application";
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
@@ -58,6 +62,11 @@ export function dashboardUserPath(tab: UserTab = "overview") {
 
 export function dashboardServersPath() {
   return "/dashboard/servers";
+}
+
+/** The bot owner's queue for reports filed from the footer of a sent mail. */
+export function staffEmailReportsPath() {
+  return "/dashboard/staff/email/reports";
 }
 
 export function dashboardRoute(): { view: DashboardView; guildId: string | null; section: DashSection; tab: UserTab } {

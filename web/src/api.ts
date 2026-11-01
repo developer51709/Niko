@@ -28,6 +28,8 @@ import type {
   StaffBroadcast,
   StaffEmailInbox,
   StaffEmailMessage,
+  StaffEmailReport,
+  StaffEmailReportTarget,
   LockdownStepResult,
   SocialProfileCardData,
   BlacklistAppeal,
@@ -125,6 +127,12 @@ export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist
 export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");
 export const getStaffBilling = () => api<StaffBillingResponse>("/api/staff/billing");
 export const getStaffEmail = () => api<StaffEmailInbox>("/api/staff/email");
+// The report form is reached from an email, by whoever received it: the token
+// in the link is the whole credential and it names one message.
+export const getEmailReport = (token: string) => api<{ target: StaffEmailReportTarget }>(`/api/staff/email/report/${encodeURIComponent(token)}`);
+export const submitEmailReport = (token: string, body: { reason: string; details: string; include_thread: boolean }) => api<{ ok: boolean; report: StaffEmailReport }>(`/api/staff/email/report/${encodeURIComponent(token)}`, { method: "POST", body: JSON.stringify(body) });
+export const getEmailReports = () => api<{ reports: StaffEmailReport[]; open: number; domain: string }>("/api/staff/email/reports");
+export const actOnEmailReport = (reportId: string, body: { action: "reply" | "close"; message?: string }, csrfToken?: string) => api<{ ok: boolean; report: StaffEmailReport; message: StaffEmailMessage | null }>(`/api/staff/email/reports/${encodeURIComponent(reportId)}`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 export const getStaffEmailMessage = (messageId: string) => api<{ message: StaffEmailMessage }>(`/api/staff/email/${encodeURIComponent(messageId)}`);
 // The mail composer sends multipart, because a formatted body and file
 // attachments cannot travel in a JSON request.
