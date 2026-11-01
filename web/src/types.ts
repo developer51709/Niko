@@ -666,6 +666,34 @@ export type StaffBillingResponse = {
   gateway: { configured: boolean; model: string };
 };
 
+/** One staff address on Niko's own domain (`admin@…`, `owner@…`). */
+export type StaffMailbox = { local: string; label: string; address: string };
+
+/** A mail in the staff inbox; `body` is only sent by the detail endpoint. */
+export type StaffEmailMessage = {
+  message_id: string;
+  mailbox: string;
+  direction: "inbound" | "outbound";
+  from_address: string;
+  from_name?: string | null;
+  to_address: string;
+  subject: string;
+  created_at: number;
+  read: boolean;
+  preview?: string;
+  body?: string;
+};
+
+export type StaffEmailInbox = {
+  role: string;
+  domain: string;
+  mailboxes: StaffMailbox[];
+  messages: StaffEmailMessage[];
+  configured: boolean;
+  missing: string[];
+  unread: number;
+};
+
 /**
  * One blocked-word preset filter.
  *

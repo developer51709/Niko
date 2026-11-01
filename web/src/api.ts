@@ -26,6 +26,8 @@ import type {
   StaffBlacklist,
   StaffBillingResponse,
   StaffBroadcast,
+  StaffEmailInbox,
+  StaffEmailMessage,
   LockdownStepResult,
   SocialProfileCardData,
   BlacklistAppeal,
@@ -122,6 +124,9 @@ export const sendStaffGuildNotice = (guildId: string, message: string, csrfToken
 export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist");
 export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");
 export const getStaffBilling = () => api<StaffBillingResponse>("/api/staff/billing");
+export const getStaffEmail = () => api<StaffEmailInbox>("/api/staff/email");
+export const getStaffEmailMessage = (messageId: string) => api<{ message: StaffEmailMessage }>(`/api/staff/email/${encodeURIComponent(messageId)}`);
+export const sendStaffEmail = (body: { mailbox: string; to: string; subject: string; body: string }, csrfToken?: string) => api<{ ok: boolean; message: StaffEmailMessage }>("/api/staff/email/send", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
 // `status: null` saves the note without changing the decision, `"clear"`
 // undoes it. The note is always written, so text is never lost by not pressing
 // a decision button.

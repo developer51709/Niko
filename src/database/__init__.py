@@ -200,6 +200,7 @@ PRIMARY_KEYS: dict = {
     "staff_application_submissions": ("application_id", "user_id"),
     "staff_team_openings": "id",
     "staff_team_submissions": ("opening_id", "user_id"),
+    "staff_emails": "message_id",
     "staff_broadcasts": "broadcast_id",
     "staff_broadcast_media": "media_id",
     "staff_broadcast_targets": ("broadcast_id", "guild_id"),

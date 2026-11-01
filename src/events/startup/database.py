@@ -651,6 +651,32 @@ async def _create_tables(bot):
         "ON data_removal_requests (status, created_at)"
     )
 
+    # ── Staff mailbox ──────────────────────────────────────────────────────
+    # Both directions of Niko's own-domain staff email live in one table: a
+    # delivery is written by the provider webhook, a reply by the staff page.
+    # Access is by mailbox (``owner``/``admin``), never by staff member, so the
+    # owner and Head Admins read the addresses their roles allow.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_emails (
+            message_id        TEXT PRIMARY KEY,
+            mailbox           TEXT NOT NULL,
+            direction         TEXT NOT NULL,
+            sender_address    TEXT NOT NULL,
+            sender_name       TEXT,
+            recipient_address TEXT NOT NULL,
+            subject           TEXT NOT NULL DEFAULT '',
+            body              TEXT NOT NULL DEFAULT '',
+            provider_id       TEXT,
+            staff_user_id     INTEGER,
+            read_at           REAL,
+            created_at        REAL NOT NULL
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_emails_mailbox "
+        "ON staff_emails (mailbox, created_at)"
+    )
+
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS guild_profiles (
             guild_id       INTEGER PRIMARY KEY,

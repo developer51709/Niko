@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "staff-email" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
@@ -22,7 +22,10 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path.startsWith("/levels/")) return "guild-leaderboard";
   if (path === "/docs") return "docs";
   if (path.startsWith("/docs/")) return "docs-detail";
-  if (path === "/dashboard/staff" || path === "/dashboard/staff/") return "staff";
+  if (path === "/dashboard/staff") return "staff";
+  // The hidden staff mailbox sits beside the workspace, never under its hash
+  // tabs, so it is its own page.
+  if (path === "/dashboard/staff/email") return "staff-email";
   if (path === "/team/apply" || path.startsWith("/team/apply/")) return "team-application";
   if (path.startsWith("/apply/")) return "application";
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";

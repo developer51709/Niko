@@ -18,6 +18,7 @@ import { ChangelogSlugPage } from "./pages/ChangelogSlugPage";
 import { TeamPage, TeamMemberPage } from "./pages/TeamPage";
 import { RenderLabPage } from "./pages/RenderLabPage";
 import { StaffDashboardPage } from "./pages/StaffDashboardPage";
+import { StaffEmailPage } from "./pages/StaffEmailPage";
 import { BlacklistAppealPage } from "./pages/BlacklistAppealPage";
 import { StaffApplicationPage } from "./pages/StaffApplicationPage";
 import { TeamStaffApplicationPage } from "./pages/TeamStaffApplicationPage";
@@ -46,6 +47,7 @@ export function App() {
     pageContent = <DocsSlugPage slug={pathParts[pathParts.length - 1] || ""} />;
   } else if (page === "docs") pageContent = <DocsPage />;
   else if (page === "staff") pageContent = <StaffDashboardPage />;
+  else if (page === "staff-email") pageContent = <StaffEmailPage />;
   else if (page === "appeal") pageContent = <BlacklistAppealPage />;
   else if (page === "application") pageContent = <StaffApplicationPage />;
   else if (page === "team-application") pageContent = <TeamStaffApplicationPage />;
