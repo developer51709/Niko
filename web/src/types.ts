@@ -666,12 +666,52 @@ export type StaffBillingResponse = {
   gateway: { configured: boolean; model: string };
 };
 
-/** One staff address on Niko's own domain (`admin@…`, `owner@…`). */
-export type StaffMailbox = { local: string; label: string; address: string };
+/**
+ * One staff address on Niko's own domain: a shared team mailbox (`owner@…`,
+ * `support@…`) or a staff member's private address minted from their Discord
+ * username and shown under their display name.
+ */
+export type StaffMailbox = {
+  local: string;
+  label: string;
+  address: string;
+  kind?: "shared" | "personal";
+  sender_name?: string;
+};
 
 /** A mail in the staff inbox; `body` is only sent by the detail endpoint. */
+/** What the mail provider last said about a sent message. */
+export type StaffEmailStatus =
+  | "sent"
+  | "accepted"
+  | "retrying"
+  | "delivered"
+  | "opened"
+  | "failed"
+  | "complained"
+  | "unsubscribed"
+  | "received";
+
+/** A file sent with a mail, described but not stored. */
+export type StaffEmailAttachment = {
+  name: string;
+  size: number;
+  type?: string;
+};
+
+/** One webhook event; `opened` is the read receipt. */
+export type StaffEmailEvent = {
+  event: string;
+  recipient: string;
+  reason: string;
+  severity: string;
+  occurred_at: number;
+};
+
 export type StaffEmailMessage = {
   message_id: string;
+  /** The conversation this message belongs to; replies share it. */
+  thread_id?: string;
   mailbox: string;
   direction: "inbound" | "outbound";
   from_address: string;
@@ -680,8 +720,17 @@ export type StaffEmailMessage = {
   subject: string;
   created_at: number;
   read: boolean;
+  status?: StaffEmailStatus;
+  delivered_at?: number | null;
+  opened_at?: number | null;
+  opened_count?: number;
+  events?: StaffEmailEvent[];
   preview?: string;
   body?: string;
+  /** Names and sizes of the files sent with a mail (never the file bytes). */
+  attachments?: StaffEmailAttachment[];
+  /** Every message of the conversation, oldest first (detail endpoint only). */
+  thread?: StaffEmailMessage[];
 };
 
 export type StaffEmailInbox = {
@@ -692,6 +741,8 @@ export type StaffEmailInbox = {
   configured: boolean;
   missing: string[];
   unread: number;
+  /** Where lifecycle auto-replies point senders (`support@…`). */
+  support_address?: string;
 };
 
 /**

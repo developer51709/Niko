@@ -7,7 +7,8 @@ import { SupportLink } from "../components/SupportLink";
 import { navigate } from "../router";
 import type { DataRemovalOverview, DataRemovalRequest } from "../types";
 
-const OWNER_CONTACT = "https://sorenthedev.indevs.in";
+/** The owner's own-domain mailbox, which is where legal requests are read. */
+const OWNER_EMAIL = "owner@niko.sryze.cc";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Awaiting review",
@@ -197,8 +198,8 @@ export function DataRemovalPage() {
               <h3>Legal or court-ordered deletion</h3>
               <p>
                 If a law requires deletion of a preserved moderation or safety record, do not use
-                this form. Send a formal legal request directly to the bot owner through{" "}
-                <a href={OWNER_CONTACT} target="_blank" rel="noreferrer">sorenthedev.indevs.in</a>.
+                this form. Send a formal legal request directly to the bot owner by email at{" "}
+                <a href={`mailto:${OWNER_EMAIL}`}>{OWNER_EMAIL}</a>.
                 It must include a court record or a signed legal document and the contact details
                 of an official legal representative so authenticity can be verified. These
                 requests are handled personally and confidentially. Ordinary requests never

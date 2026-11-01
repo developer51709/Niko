@@ -161,8 +161,8 @@ export function DashboardShell({
         <Icon name="users" /><span>My servers</span>
       </button>
       {staffRole && <button onClick={() => { navigate("/dashboard/staff"); setSidebarOpen(false); }}><Icon name="shield" /><span>Staff workspace</span></button>}
-      {/* The mailbox is owner/Head Admin only and never linked publicly. */}
-      {staffRole && ["owner", "head_admin"].includes(staffRole) && <button onClick={() => { navigate("/dashboard/staff/email"); setSidebarOpen(false); }}><Icon name="mail" /><span>Staff email</span></button>}
+      {/* Every staff member holds an address here, and the page is never linked publicly. */}
+      {staffRole && <button onClick={() => { navigate("/dashboard/staff/email"); setSidebarOpen(false); }}><Icon name="mail" /><span>Staff email</span></button>}
     </nav>
   );
 

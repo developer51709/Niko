@@ -201,6 +201,8 @@ PRIMARY_KEYS: dict = {
     "staff_team_openings": "id",
     "staff_team_submissions": ("opening_id", "user_id"),
     "staff_emails": "message_id",
+    "staff_email_events": "event_id",
+    "staff_email_addresses": "local",
     "staff_broadcasts": "broadcast_id",
     "staff_broadcast_media": "media_id",
     "staff_broadcast_targets": ("broadcast_id", "guild_id"),

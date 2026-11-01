@@ -81,6 +81,15 @@
 .dashboard-layout .staff-email-reader-head h2 { margin: 7px 0 0; font-size: 21px; line-height: 1.35; letter-spacing: -.035em; overflow-wrap: anywhere; }
 .dashboard-layout .staff-email-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; color: var(--dim); font-size: 10.5px; }
 .dashboard-layout .staff-email-meta strong { color: var(--muted); font-weight: 600; }
+.dashboard-layout .staff-email-receipt {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 0;
+  color: var(--dim); font-size: 10px; letter-spacing: .01em;
+}
+.dashboard-layout .staff-email-receipt-state {
+  padding: 1px 7px; color: var(--accent-dark); background: var(--filter-active);
+  border: 1px solid var(--filter-border); border-radius: 999px;
+  font-size: 8.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+}
 .dashboard-layout .staff-email-body {
   margin: 20px 0 0; padding: 18px 20px; max-height: 62vh; overflow: auto;
   color: var(--muted); background: var(--callout); border: 1px solid var(--line-soft);
@@ -88,9 +97,97 @@
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 
+/* One conversation row in the list, and the thread inside the reader. */
+.dashboard-layout .staff-email-item-when { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.dashboard-layout .staff-email-thread-count {
+  display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 5px;
+  color: var(--accent-dark); background: var(--filter-active); border: 1px solid var(--filter-border);
+  border-radius: 999px; font: 9px "Space Mono", monospace; font-weight: 700;
+}
+.dashboard-layout .staff-email-thread { display: grid; gap: 14px; margin: 22px 0 0; }
+.dashboard-layout .staff-email-thread-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft);
+  color: var(--dim); font: 10px "Space Mono", monospace; letter-spacing: .04em; text-transform: uppercase;
+}
+.dashboard-layout .staff-email-turn {
+  display: grid; gap: 8px; padding: 14px 16px;
+  background: rgba(255, 255, 255, .022); border: 1px solid var(--line-soft); border-radius: 12px;
+}
+.dashboard-layout .staff-email-turn.is-outbound { background: rgba(139, 213, 177, .05); border-color: rgba(139, 213, 177, .2); }
+.dashboard-layout .staff-email-turn.is-current { border-color: var(--filter-border); }
+.dashboard-layout .staff-email-turn header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dashboard-layout .staff-email-turn header strong { overflow: hidden; color: var(--ink); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-layout .staff-email-turn header time { flex: 0 0 auto; color: var(--dim); font: 9px "Space Mono", monospace; }
+.dashboard-layout .staff-email-turn .staff-email-receipt { margin: 0; }
+.dashboard-layout .staff-email-turn .staff-email-body { margin: 2px 0 0; padding: 0; max-height: 46vh; background: transparent; border: 0; }
+
 .dashboard-layout .staff-email-compose { display: grid; gap: 18px; }
 .dashboard-layout .staff-email-compose .staff-fields { gap: 14px; }
-.dashboard-layout .staff-email-body-input { min-height: 260px; resize: vertical; }
+
+/* The composer: a Gmail-style toolbar over the editable body, plus files. */
+.dashboard-layout .staff-email-signature-note {
+  display: flex; align-items: flex-start; gap: 8px; margin: -4px 0 0; padding: 9px 11px;
+  color: var(--dim); background: rgba(139, 213, 177, .05);
+  border: 1px solid rgba(139, 213, 177, .2); border-radius: 9px;
+  font-size: 10.5px; line-height: 1.6;
+}
+.dashboard-layout .staff-email-signature-note .icon { width: 13px; height: 13px; flex: 0 0 13px; margin-top: 1px; color: var(--accent-dark); }
+
+.dashboard-layout .staff-email-editor { overflow: hidden; background: var(--callout); border: 1px solid var(--line); border-radius: 12px; }
+.dashboard-layout .staff-email-editor:focus-within { border-color: var(--filter-border); }
+.dashboard-layout .staff-email-editor-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 7px 8px;
+  background: var(--surface-muted); border-bottom: 1px solid var(--line-soft);
+}
+.dashboard-layout .staff-email-editor-toolbar button {
+  min-width: 27px; height: 27px; padding: 0 7px; color: var(--muted);
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  font-size: 11.5px; font-weight: 600; line-height: 1;
+  transition: color .16s ease, background .16s ease, border-color .16s ease;
+}
+.dashboard-layout .staff-email-editor-toolbar button:hover { color: var(--ink); background: var(--surface-raised); border-color: var(--line); }
+.dashboard-layout .staff-email-editor-toolbar button:disabled { opacity: .5; }
+.dashboard-layout .staff-email-editor-toolbar button.is-bold { font-weight: 800; }
+.dashboard-layout .staff-email-editor-toolbar button.is-italic { font-style: italic; }
+.dashboard-layout .staff-email-editor-toolbar button.is-underline { text-decoration: underline; }
+.dashboard-layout .staff-email-editor-toolbar button.is-strike { text-decoration: line-through; }
+.dashboard-layout .staff-email-editor-toolbar button.is-link { margin-left: auto; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.dashboard-layout .staff-email-editor-body {
+  min-height: 250px; max-height: 52vh; overflow-y: auto; padding: 16px 18px;
+  color: var(--ink); font: 13px/1.7 "Plus Jakarta Sans", sans-serif; outline: none;
+}
+.dashboard-layout .staff-email-editor-body:empty::before { content: attr(data-placeholder); color: var(--dim); }
+.dashboard-layout .staff-email-editor-body p { margin: 0 0 10px; }
+.dashboard-layout .staff-email-editor-body ul,
+.dashboard-layout .staff-email-editor-body ol { margin: 8px 0; padding-left: 22px; }
+.dashboard-layout .staff-email-editor-body blockquote { margin: 10px 0; padding: 4px 0 4px 12px; border-left: 2px solid var(--filter-border); color: var(--muted); }
+.dashboard-layout .staff-email-editor-body a { color: var(--accent-dark); text-decoration: underline; }
+
+.dashboard-layout .staff-email-attach-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.dashboard-layout .staff-email-file-input { display: none; }
+.dashboard-layout .staff-email-attach-note { color: var(--dim); font-size: 10px; }
+.dashboard-layout .staff-email-attach-list,
+.dashboard-layout .staff-email-attachment-list { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.dashboard-layout .staff-email-attachment-list { margin: 10px 0 0; }
+.dashboard-layout .staff-email-attach-list li,
+.dashboard-layout .staff-email-attachment-list li {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 260px; padding: 5px 9px;
+  color: var(--muted); background: var(--surface-muted); border: 1px solid var(--line);
+  border-radius: 8px; font-size: 10.5px;
+}
+.dashboard-layout .staff-email-attach-list li > span,
+.dashboard-layout .staff-email-attachment-list li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-layout .staff-email-attach-list li small,
+.dashboard-layout .staff-email-attachment-list li small { flex: 0 0 auto; color: var(--dim); font: 9px "Space Mono", monospace; }
+.dashboard-layout .staff-email-attach-list li .icon,
+.dashboard-layout .staff-email-attachment-list li .icon { width: 12px; height: 12px; flex: 0 0 12px; color: var(--accent-dark); }
+.dashboard-layout .staff-email-attach-list button {
+  display: grid; place-items: center; width: 16px; height: 16px; flex: 0 0 16px;
+  color: var(--dim); background: transparent; border: 0; border-radius: 4px;
+}
+.dashboard-layout .staff-email-attach-list button:hover { color: var(--ink); background: var(--surface-raised); }
+.dashboard-layout .staff-email-attach-list button .icon { width: 10px; height: 10px; color: inherit; }
 
 .dashboard-layout .staff-email-reader-empty { display: grid; justify-items: center; gap: 10px; padding: 70px 24px; text-align: center; }
 .dashboard-layout .staff-email-reader-icon {
