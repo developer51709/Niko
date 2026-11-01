@@ -183,6 +183,19 @@ export function DataRemovalPage() {
               </p>
             </article>
 
+            <article>
+              <h3>Which instances this covers</h3>
+              <p>
+                This form covers the official public Niko instances only, where all user data is
+                stored in a private MongoDB database that the Niko team controls. Private, beta,
+                and self-hosted instances are run by other people and are outside our control:
+                they may use the deprecated SQLite storage or another database, and we cannot
+                access, correct, or delete their data. We cannot handle data-removal, access, or
+                support requests about those instances — send them to the operator of that
+                instance. The <a href="/privacy" onClick={(event) => { event.preventDefault(); navigate("/privacy"); }}>privacy policy</a> also publishes the full retention schedule.
+              </p>
+            </article>
+
             <article className="data-removal-preserved">
               <h3>What is always preserved</h3>
               <p>
