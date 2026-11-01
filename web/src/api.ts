@@ -26,6 +26,10 @@ import type {
   StaffBlacklist,
   StaffBillingResponse,
   StaffBroadcast,
+  StaffEmailInbox,
+  StaffEmailMessage,
+  StaffEmailReport,
+  StaffEmailReportTarget,
   LockdownStepResult,
   SocialProfileCardData,
   BlacklistAppeal,
@@ -122,6 +126,52 @@ export const sendStaffGuildNotice = (guildId: string, message: string, csrfToken
 export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist");
 export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");
 export const getStaffBilling = () => api<StaffBillingResponse>("/api/staff/billing");
+export const getStaffEmail = () => api<StaffEmailInbox>("/api/staff/email");
+// The report form is reached from an email, by whoever received it: the token
+// in the link is the whole credential and it names one message.
+export const getEmailReport = (token: string) => api<{ target: StaffEmailReportTarget }>(`/api/staff/email/report/${encodeURIComponent(token)}`);
+export const submitEmailReport = (token: string, body: { reason: string; details: string; include_thread: boolean }) => api<{ ok: boolean; report: StaffEmailReport }>(`/api/staff/email/report/${encodeURIComponent(token)}`, { method: "POST", body: JSON.stringify(body) });
+export const getEmailReports = () => api<{ reports: StaffEmailReport[]; open: number; domain: string }>("/api/staff/email/reports");
+export const actOnEmailReport = (reportId: string, body: { action: "reply" | "close"; message?: string }, csrfToken?: string) => api<{ ok: boolean; report: StaffEmailReport; message: StaffEmailMessage | null }>(`/api/staff/email/reports/${encodeURIComponent(reportId)}`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const getStaffEmailMessage = (messageId: string) => api<{ message: StaffEmailMessage }>(`/api/staff/email/${encodeURIComponent(messageId)}`);
+// The mail composer sends multipart, because a formatted body and file
+// attachments cannot travel in a JSON request.
+export async function sendStaffEmail(
+  draft: {
+    mailbox: string;
+    to: string;
+    subject: string;
+    body: string;
+    html?: string;
+    thread_id?: string;
+    attachments?: File[];
+  },
+  csrfToken?: string,
+) {
+  const form = new FormData();
+  form.append("mailbox", draft.mailbox);
+  form.append("to", draft.to);
+  form.append("subject", draft.subject);
+  form.append("body", draft.body);
+  form.append("html", draft.html || "");
+  if (draft.thread_id) form.append("thread_id", draft.thread_id);
+  for (const file of draft.attachments || []) form.append("attachments", file, file.name);
+  const response = await fetch("/api/staff/email/send", {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+    body: form,
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+      ? payload.error
+      : response.statusText || "The message could not be sent.";
+    throw new ApiError(message, response.status);
+  }
+  return payload as { ok: boolean; message: StaffEmailMessage };
+}
 // `status: null` saves the note without changing the decision, `"clear"`
 // undoes it. The note is always written, so text is never lost by not pressing
 // a decision button.

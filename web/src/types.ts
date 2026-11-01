@@ -667,6 +667,127 @@ export type StaffBillingResponse = {
 };
 
 /**
+ * One staff address on Niko's own domain: a shared team mailbox (`owner@…`,
+ * `support@…`) or a staff member's private address minted from their Discord
+ * username and shown under their display name.
+ */
+export type StaffMailbox = {
+  local: string;
+  label: string;
+  address: string;
+  kind?: "shared" | "personal";
+  sender_name?: string;
+};
+
+/** A mail in the staff inbox; `body` is only sent by the detail endpoint. */
+/** What the mail provider last said about a sent message. */
+export type StaffEmailStatus =
+  | "sent"
+  | "accepted"
+  | "retrying"
+  | "delivered"
+  | "opened"
+  | "failed"
+  | "complained"
+  | "unsubscribed"
+  | "received";
+
+/** A file sent with a mail, described but not stored. */
+export type StaffEmailAttachment = {
+  name: string;
+  size: number;
+  type?: string;
+};
+
+/** One webhook event; `opened` is the read receipt. */
+export type StaffEmailEvent = {
+  event: string;
+  recipient: string;
+  reason: string;
+  severity: string;
+  /** The provider's own sentence about the event (a bounce message, say). */
+  detail?: string;
+  occurred_at: number;
+};
+
+export type StaffEmailMessage = {
+  message_id: string;
+  /** The conversation this message belongs to; replies share it. */
+  thread_id?: string;
+  mailbox: string;
+  direction: "inbound" | "outbound";
+  from_address: string;
+  from_name?: string | null;
+  to_address: string;
+  subject: string;
+  created_at: number;
+  read: boolean;
+  status?: StaffEmailStatus;
+  delivered_at?: number | null;
+  opened_at?: number | null;
+  opened_count?: number;
+  events?: StaffEmailEvent[];
+  preview?: string;
+  body?: string;
+  /** The body as markup — the same rendering the recipient's client shows.
+   * The server sanitizes it before storing it, so it is safe to mount. */
+  html?: string;
+  /** The quoted history the message carried, folded out of the body. */
+  quoted_html?: string;
+  /** Names and sizes of the files sent with a mail (never the file bytes). */
+  attachments?: StaffEmailAttachment[];
+  /** Every message of the conversation, oldest first (detail endpoint only). */
+  thread?: StaffEmailMessage[];
+};
+
+/** One of the reasons the report form offers, with the words it shows. */
+export type StaffEmailReportReason = { value: string; label: string };
+
+/** Which mail a report link belongs to, and what the form may ask about it. */
+export type StaffEmailReportTarget = {
+  subject: string;
+  from_name?: string | null;
+  from_address: string;
+  to_address: string;
+  sent_at: number;
+  conversation_count: number;
+  reasons: StaffEmailReportReason[];
+  max_details: number;
+};
+
+/** A recipient's complaint, and the owner's handling of it. */
+export type StaffEmailReport = {
+  report_id: string;
+  message_id: string;
+  mailbox: string;
+  reason: string;
+  reason_label: string;
+  details: string;
+  include_thread: boolean;
+  reporter_address: string;
+  created_at: number;
+  status: "open" | "replied" | "resolved";
+  response?: string | null;
+  responded_at?: number | null;
+  responded_by?: string | null;
+  message?: StaffEmailMessage | null;
+  /** The conversation, only when the reporter agreed to share it. */
+  thread?: StaffEmailMessage[];
+};
+
+export type StaffEmailInbox = {
+  role: string;
+  domain: string;
+  mailboxes: StaffMailbox[];
+  messages: StaffEmailMessage[];
+  configured: boolean;
+  missing: string[];
+  unread: number;
+  /** Where lifecycle auto-replies point senders (`support@…`). */
+  support_address?: string;
+};
+
+/**
  * One blocked-word preset filter.
  *
  * Served by the bot inside the moderation payload (`preset_filters`) and used

@@ -651,6 +651,147 @@ async def _create_tables(bot):
         "ON data_removal_requests (status, created_at)"
     )
 
+    # ── Staff mailbox ──────────────────────────────────────────────────────
+    # Both directions of Niko's own-domain staff email live in one table: a
+    # delivery is written by the provider webhook, a reply by the staff page.
+    # Access is by mailbox (``owner``/``admin``), never by staff member, so the
+    # owner and Head Admins read the addresses their roles allow.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_emails (
+            message_id        TEXT PRIMARY KEY,
+            mailbox           TEXT NOT NULL,
+            direction         TEXT NOT NULL,
+            sender_address    TEXT NOT NULL,
+            sender_name       TEXT,
+            recipient_address TEXT NOT NULL,
+            subject           TEXT NOT NULL DEFAULT '',
+            body              TEXT NOT NULL DEFAULT '',
+            provider_id       TEXT,
+            staff_user_id     INTEGER,
+            read_at           REAL,
+            created_at        REAL NOT NULL,
+            html              TEXT,
+            quoted            TEXT
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_emails_mailbox "
+        "ON staff_emails (mailbox, created_at)"
+    )
+    # What the provider reported about a sent mail. `status` walks forward from
+    # accepted to delivered to opened (a bounce outranks all of it), and the open
+    # counters are the read receipt: Mailgun is the only one who sees that.
+    # `thread_id` groups a mail with the answers it gets, so one conversation
+    # shows as one thread instead of as unrelated messages with similar
+    # subjects.
+    for col_name, col_def in [
+        ("status", "TEXT"),
+        ("delivered_at", "REAL"),
+        ("opened_at", "REAL"),
+        ("opened_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("last_event_at", "REAL"),
+        ("thread_id", "TEXT"),
+        # Names and sizes of files sent with a mail; the bytes themselves are
+        # handed to the provider and never stored here.
+        ("attachments", "TEXT"),
+        # The body as markup, so the mailbox shows what the recipient's client
+        # shows — formatting, tables, images, and the sender's signature — and
+        # the quoted history a reply carries, kept but folded out of the way.
+        ("html", "TEXT"),
+        ("quoted", "TEXT"),
+        # The unguessable id behind the "report this message" link in the footer
+        # of a sent mail. Null for a delivery: only mail we sent can be reported.
+        ("report_token", "TEXT"),
+    ]:
+        try:
+            await bot.cxn.execute(f"ALTER TABLE staff_emails ADD COLUMN {col_name} {col_def}")
+        except Exception:
+            pass  # column already exists; MongoDB is schema-less
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_emails_thread ON staff_emails (thread_id, created_at)"
+    )
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_emails_report ON staff_emails (report_token)"
+    )
+
+    # A recipient's complaint about one mail, filed from the link in its footer.
+    # `include_thread` records their own choice: the message alone, or the whole
+    # conversation it belongs to, because that is the context they agreed to
+    # share. The owner answers from the review queue and the answer is sent to
+    # the address the mail itself went to.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_email_reports (
+            report_id        TEXT PRIMARY KEY,
+            token            TEXT NOT NULL DEFAULT '',
+            message_id       TEXT NOT NULL,
+            mailbox          TEXT NOT NULL DEFAULT '',
+            reason           TEXT NOT NULL DEFAULT '',
+            details          TEXT NOT NULL DEFAULT '',
+            include_thread   INTEGER NOT NULL DEFAULT 0,
+            reporter_address TEXT NOT NULL DEFAULT '',
+            created_at       REAL NOT NULL,
+            status           TEXT NOT NULL DEFAULT 'open',
+            response         TEXT,
+            responded_at     REAL,
+            responded_by     TEXT
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_email_reports_message "
+        "ON staff_email_reports (message_id, created_at)"
+    )
+
+    # One row per webhook event. The provider's event id is the key because it
+    # re-sends anything it could not hand over, and the message id links it to
+    # the mail it describes. A provider configured account-wide also reports on
+    # other domains, so events that are neither ours nor addressed to us are
+    # simply never written here.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_email_events (
+            event_id    TEXT PRIMARY KEY,
+            message_id  TEXT,
+            mailbox     TEXT,
+            event       TEXT NOT NULL DEFAULT '',
+            recipient   TEXT NOT NULL DEFAULT '',
+            reason      TEXT NOT NULL DEFAULT '',
+            severity    TEXT NOT NULL DEFAULT '',
+            occurred_at REAL NOT NULL
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_email_events_message "
+        "ON staff_email_events (message_id, occurred_at)"
+    )
+    # The provider's own words for why a delivery failed (a bounce message from
+    # the receiving server), shown in full in the reader's status panel.
+    try:
+        await bot.cxn.execute("ALTER TABLE staff_email_events ADD COLUMN detail TEXT")
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
+
+    # The address book: the shared mailboxes live in code, but every staff
+    # member's private address is a row here because it outlives their role. A
+    # suspended or departed member's address still answers (pointing at
+    # support), and a renamed member's old address points at the new one for a
+    # month, so the row keeps the state and the pointer rather than vanishing.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS staff_email_addresses (
+            local            TEXT PRIMARY KEY,
+            user_id          INTEGER NOT NULL,
+            address          TEXT NOT NULL,
+            display_name     TEXT,
+            discord_username TEXT,
+            status           TEXT NOT NULL DEFAULT 'active',
+            redirect_to      TEXT,
+            created_at       REAL NOT NULL,
+            retired_at       REAL
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_staff_email_addresses_user "
+        "ON staff_email_addresses (user_id, status)"
+    )
+
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS guild_profiles (
             guild_id       INTEGER PRIMARY KEY,
