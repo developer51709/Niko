@@ -108,23 +108,35 @@ def _discord_guild_profile_assets(guild_id: str) -> dict:
 
 
 def _global_profile_assets() -> dict:
-    """Resolve Niko's global (application-wide) avatar and banner.
+    """Resolve Niko's global (application-wide) avatar, banner, and bio.
 
     The per-guild profile is what a server sets for itself; until a server sets
     one, the dashboard shows Niko's global identity instead. Each image is
     resolved independently: the live bot user is authoritative, and a REST
     ``/users/@me`` read fills in whichever field the cached user object does not
     carry (the gateway payload only includes a banner when one is set).
+
+    The bio comes from Discord too: a bot cannot write one through the client,
+    so its global bio is the application's ``description`` — the text the
+    Discord client renders as the bot's "About me".
     """
     user = getattr(runtime._discord_bot, "user", None) if runtime._discord_bot is not None else None
     avatar_url = None
     banner_url = None
+    bio = None
     if user is not None:
         avatar_url = str(getattr(getattr(user, "display_avatar", None), "url", "") or "") or None
         banner_url = str(getattr(getattr(user, "banner", None), "url", "") or "") or None
+        # The global bio is whatever /setprofile last wrote to Discord; it lives
+        # on Discord's side and is read back here for the customization tab.
+        bio = str(getattr(user, "bio", "") or "") or None
 
-    if (avatar_url and banner_url) or not config.DISCORD_BOT_TOKEN:
-        return {"avatar_url": avatar_url, "banner_url": banner_url}
+    if not bio and runtime._discord_bot is not None:
+        application = getattr(runtime._discord_bot, "application", None)
+        bio = str(getattr(application, "description", "") or "").strip() or None
+
+    if (avatar_url and banner_url and bio) or not config.DISCORD_BOT_TOKEN:
+        return {"avatar_url": avatar_url, "banner_url": banner_url, "bio": bio}
 
     try:
         response = discord_api.discord_request(
@@ -144,10 +156,14 @@ def _global_profile_assets() -> dict:
             if not banner_url and banner_hash and user_id:
                 extension = "gif" if str(banner_hash).startswith("a_") else "png"
                 banner_url = f"https://cdn.discordapp.com/banners/{user_id}/{banner_hash}.{extension}?size=1024"
+            if not bio:
+                # Self-user payloads have carried the bio as either key; the
+                # application description is the documented one.
+                bio = str(payload.get("bio") or payload.get("description") or "").strip() or None
     except Exception:
         pass
 
-    return {"avatar_url": avatar_url, "banner_url": banner_url}
+    return {"avatar_url": avatar_url, "banner_url": banner_url, "bio": bio}
 
 
 def _get_runtime_guild_profile(guild_id: str) -> dict:
@@ -279,7 +295,7 @@ def _get_runtime_server_config(guild_id: str) -> dict:
         "tickets": _serialize_ticket_config(get_ticket_config(int(guild_id))),
         "profile": _get_runtime_guild_profile(guild_id),
         # Niko's own identity, so the customization tab can show what a server
-        # inherits until it uploads its own avatar or banner.
+        # inherits until it sets its own avatar, banner, or bio.
         "global_profile": _global_profile_assets(),
     }
 

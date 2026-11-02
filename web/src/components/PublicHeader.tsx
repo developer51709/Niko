@@ -24,7 +24,11 @@ export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { p
   useEffect(() => {
     if (!menuOpen) return;
     const closeOnOutsidePress = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuRef.current?.contains(target)) return;
+      // The menu itself is portalled to <body>, so it lives outside this ref.
+      if (target instanceof Element && target.closest("#dashboard-navigation-menu")) return;
       setMenuOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {

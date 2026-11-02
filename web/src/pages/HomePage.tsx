@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getStats } from "../api";
+import { DemoDiscordMessage, type DemoEmojiToken } from "../components/DemoDiscordMessage";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
@@ -18,6 +19,47 @@ const signInErrorMessages: Record<string, string> = {
   token_exchange_failed: "Niko could not complete the token exchange with Discord.",
   user_fetch_failed: "Niko could not read your Discord profile.",
 };
+
+// The bot's own replies, drawn as Discord messages. The ids are real accounts
+// that share a server with the bot, so the names, avatars and the profile
+// popups behind them are the live ones rather than painted-on placeholders.
+const examples: {
+  userId: string;
+  command?: string;
+  message?: string;
+  messageTime?: string;
+  time: string;
+  reply: (emoji: DemoEmojiToken) => string;
+  note: string;
+}[] = [
+  {
+    userId: "1528084386652754010",
+    command: "/ban",
+    time: "Today at 3:04 PM",
+    reply: (emoji) =>
+      `### ${emoji("ban")} User Banned\n**<@1514675711493935114>** has been banned.\n**Reason:** spamming invite links`,
+    note: "Confirms first, clears the last 7 days of their messages, and writes the ban into your log channel.",
+  },
+  {
+    userId: "1451608836174512301",
+    command: "/reminder set",
+    time: "Today at 3:06 PM",
+    // The bot writes its due time as a Discord timestamp, which the viewer's
+    // own client turns into a relative "in 2 hours".
+    reply: (emoji) =>
+      `### ${emoji("reminder")} Reminder Set\nI will remind you about **check the support queue** <t:${Math.floor(Date.now() / 1000) + 7200}:R>.`,
+    note: "Arrives in your DMs, or in the channel it was set in when the whole server needs to see it.",
+  },
+  {
+    userId: "1451608836174512301",
+    // XP comes from talking, so the level-up answers something they said.
+    message: "gm! anyone up for a few rounds later?",
+    messageTime: "Today at 3:08 PM",
+    time: "Today at 3:09 PM",
+    reply: () => "Congratulations <@1451608836174512301>, you leveled up to level **25**!",
+    note: "Talking earns XP; level roles and announcements are set up once and then run themselves.",
+  },
+];
 
 const sections = [
   {
@@ -86,7 +128,7 @@ export function HomePage() {
         )}
 
         <section className="shell home-hero">
-          <div>
+          <div className="home-hero-copy">
             <p className="home-kicker">Discord app</p>
             <h1>One bot,<br />not five.</h1>
             <p className="home-lede">
@@ -101,7 +143,6 @@ export function HomePage() {
             </div>
             <p className="home-meta">Free to start · No card · Four languages</p>
           </div>
-          <VoiceMasterPanel className="home-panel" />
         </section>
 
         <section className="shell home-stats-band" aria-label="Niko in numbers">
@@ -109,6 +150,34 @@ export function HomePage() {
           <div className="home-stat"><strong>{formatNumber(stats?.user_count)}</strong><span>members</span></div>
           <div className="home-stat"><strong>{formatNumber(stats?.command_count)}</strong><span>commands</span></div>
           <p className="home-stats-note"><span className="status-dot" /> Live from the bot</p>
+        </section>
+
+        <section className="shell home-features" aria-labelledby="home-features-title">
+          <header className="home-features-head">
+            <p className="home-kicker">In the server</p>
+            <h2 id="home-features-title">What it actually<br />sends back.</h2>
+            <p>
+              The panel is Niko&rsquo;s real VoiceMaster interface, wired to the same buttons the bot posts — press one.
+              The replies shown with it are what the rest of the stack looks like in a channel.
+            </p>
+          </header>
+          <div className="home-features-grid">
+            <VoiceMasterPanel className="home-panel" />
+            <div className="home-examples">
+              {examples.map((example) => (
+                <DemoDiscordMessage
+                  key={example.time}
+                  userId={example.userId}
+                  command={example.command}
+                  message={example.message}
+                  messageTime={example.messageTime}
+                  time={example.time}
+                  reply={example.reply}
+                  note={example.note}
+                />
+              ))}
+            </div>
+          </div>
         </section>
 
         <section className="shell home-inside">

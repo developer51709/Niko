@@ -45,7 +45,7 @@
 .dc-message-body { flex: 1 1 auto; min-width: 0; }
 
 .dc-message-head { display: flex; align-items: center; gap: 6px; min-height: 22px; }
-.dc-author { padding: 0; color: #f2f3f5; background: none; border: 0; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.dc-author { padding: 0; color: #f2f3f5; background: none; border: 0; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 .dc-author:hover { text-decoration: underline; text-underline-offset: 2px; }
 .dc-author:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; border-radius: 2px; }
 .dc-app-badge {
@@ -61,9 +61,16 @@
   line-height: 1.15;
 }
 .dc-app-badge-check { width: 9px; height: 9px; }
-.dc-timestamp { margin-left: 2px; color: #949ba4; font-size: 11px; }
+.dc-timestamp { margin-left: 2px; color: #949ba4; font-size: 12px; }
 
+/* A Components V2 container is sized by what it holds, never by the message
+   column it sits in — the same rule whether it carries text or interactive
+   components, so the panel and the example cards measure the same way. The box
+   shrink-wraps its contents and only gives width back when a line would no
+   longer fit inside the card. */
 .dc-container {
+  width: fit-content;
+  max-width: 100%;
   margin-top: 4px;
   padding: 12px 14px 14px;
   background: #2b2d31;
@@ -145,6 +152,114 @@
 .dc-ephemeral-dismiss { padding: 0; color: #00a8fc; background: none; border: 0; font: inherit; }
 .dc-ephemeral-dismiss:hover { text-decoration: underline; text-underline-offset: 2px; }
 
+/* The "member used /command" row Discord prints above a slash command's reply.
+   It carries the account that ran the command, so a demo card shows a real
+   profile rather than a name typed into the markup. Discord starts the row on
+   the message column, hangs a small avatar there and runs a connector line up
+   the empty avatar gutter beside it, so the row reads as the cause of the
+   message below. */
+.dc-invocation {
+  --dc-inv-avatar: 24px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 12px calc(var(--dc-avatar) + var(--dc-gap));
+}
+/* Discord's connector: it turns in from the small avatar at that avatar's
+   centre line, then points down the gutter with its end stopped a small gap
+   above the bot's pfp, centred on that pfp. The row is exactly one avatar
+   tall, so the row's bottom is where the bot's pfp begins at any card width. */
+.dc-invocation::before {
+  position: absolute;
+  top: calc(var(--dc-inv-avatar) / 2 - 1px);
+  left: calc(var(--dc-avatar) / 2 - 1px);
+  width: calc(var(--dc-avatar) + var(--dc-gap) - var(--dc-avatar) / 2 - 5px);
+  height: calc(var(--dc-inv-avatar) / 2 + 7px);
+  border-top: 2px solid #4b4d54;
+  border-left: 2px solid #4b4d54;
+  border-top-left-radius: 8px;
+  content: "";
+}
+.dc-invocation-avatar { width: var(--dc-inv-avatar); height: var(--dc-inv-avatar); font-size: 11px; }
+/* A fixed height equal to the avatar keeps the row exactly one avatar tall, so
+   the connector's horizontal stays on the avatar's centre line. */
+.dc-invocation-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: var(--dc-inv-avatar);
+  margin: 0;
+  color: #b5bac1;
+  font-size: 14px;
+  line-height: 1;
+}
+/* White like the bot's name: Discord only colours a display name when the
+   member's role carries a colour for this guild, and these accounts have none. */
+.dc-invocation-name { padding: 0; color: #f2f3f5; background: none; border: 0; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.dc-invocation-name:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dc-invocation-name:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; border-radius: 2px; }
+/* The command wears Discord's slash tile inside a chip painted in the same two
+   colours the client gives a user mention pill. */
+.dc-invocation-command {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 7px 1px 3px;
+  color: #dce4ff;
+  background: rgb(88 101 242 / .3);
+  border-radius: 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 1px;
+}
+/* Discord's command glyph is the blurple square with the slash knocked out of
+   it, drawn straight on the chip: the cut-out shows the chip's own fill.
+   Two classes deep on purpose, because the shared .mask-icon helper is emitted
+   after this file's rules and would otherwise win the 16px size. */
+.dc-invocation-command .dc-invocation-command-glyph { flex: 0 0 auto; width: 17px; height: 17px; color: inherit; }
+
+/* Discord's server tag: the guild's badge in a circle, then the tag in a small
+   chip beside the name, and only for accounts that actually carry one. */
+.dc-server-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 1px 5px 1px 2px;
+  color: #dbdee1;
+  background: rgb(255 255 255 / .07);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.dc-server-tag-badge { width: 14px; height: 14px; border-radius: 50%; object-fit: cover; }
+
+/* The reply container of a demo message: a container message like the panel's,
+   without the legend or buttons under it. Its border carries the whole shape,
+   so the box reads as one block the way a Components V2 container does. */
+.dc-reply-body {
+  padding: 14px 16px 15px;
+  border-color: rgb(255 255 255 / .09);
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.dc-reply-body .discord-md-heading { margin: 0 0 6px; font-size: 1.3em; }
+.dc-reply-body .discord-md-heading:first-child { margin-top: 0; }
+/* Discord draws a relative timestamp as a small inline chip. */
+.dc-reply-body .discord-md-timestamp {
+  padding: 1px 4px;
+  color: #dbdee1;
+  background: rgb(255 255 255 / .06);
+  border-radius: 4px;
+}
+
 .dc-select { position: relative; }
 .dc-select-trigger {
   display: flex;
@@ -219,6 +334,12 @@
   .dc-timestamp { font-size: 10px; }
   .dc-ephemeral-footer { flex-wrap: wrap; font-size: 11px; }
   .dc-reply-indicator { margin-left: 2px; font-size: 11px; }
+  .dc-invocation { --dc-inv-avatar: 22px; }
+  .dc-invocation-text { font-size: 13px; }
+  .dc-invocation-command { font-size: 12px; }
+  .dc-invocation-command .dc-invocation-command-glyph { width: 15px; height: 15px; }
+  .dc-server-tag { font-size: 10px; }
+  .dc-reply-body { padding: 12px 13px 13px; font-size: 14px; }
 }
 
 @media (max-width: 380px) {

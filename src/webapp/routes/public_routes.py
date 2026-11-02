@@ -290,6 +290,7 @@ def api_public_config():
     bot_avatar_url = None
     bot_name = None
     bot_display_name = None
+    bot_discriminator = None
     bot_verified = False
     user = getattr(_discord_bot, "user", None) if _discord_bot is not None else None
     if user is not None:
@@ -301,6 +302,9 @@ def api_public_config():
         # display name when it has one, otherwise the username.
         bot_name = str(getattr(user, "name", "") or "") or None
         bot_display_name = str(getattr(user, "display_name", "") or "") or bot_name
+        # Older accounts carry a four-digit tag; migrated ones report "0" and
+        # Discord shows no discriminator at all.
+        bot_discriminator = str(getattr(user, "discriminator", "") or "") or None
         # Bit 16 of a user's public flags is Discord's verified-bot check — the
         # tick Discord draws inside the APP tag beside a verified bot's name.
         flags = getattr(user, "public_flags", None)
@@ -314,6 +318,7 @@ def api_public_config():
         "bot_avatar_url": bot_avatar_url,
         "bot_name": bot_name,
         "bot_display_name": bot_display_name,
+        "bot_discriminator": bot_discriminator,
         "bot_verified": bot_verified,
         "invite_url": (
             f"https://discord.com/oauth2/authorize?"

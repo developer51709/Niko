@@ -745,6 +745,52 @@ export function useDiscordProfile(enabled = true) {
   return { openProfile, closeProfile, dialog };
 }
 
+export type DiscordUserSummary = {
+  id: string;
+  username: string;
+  display_name: string;
+  guild_nick: string | null;
+  avatar_url: string | null;
+  /** The server tag Discord prints beside a name in this guild, if any. */
+  guild_tag: string | null;
+  guild_badge_url: string | null;
+};
+
+/**
+ * The public parts of one member's profile, for surfaces that draw a person
+ * without opening a popup. It reads the same endpoint the popup does, so a
+ * demo card shows the account's real name and avatar, and an id that cannot be
+ * resolved simply leaves the card on its fallback initial.
+ */
+export function useDiscordUser(userId: string) {
+  const [user, setUser] = useState<DiscordUserSummary | null>(null);
+  useEffect(() => {
+    if (!/^\d{1,22}$/.test(userId)) {
+      setUser(null);
+      return;
+    }
+    let active = true;
+    fetchDiscordProfile(userId)
+      .then((profile) => {
+        if (!active) return;
+        setUser({
+          id: profile.id,
+          username: profile.username,
+          display_name: profile.display_name,
+          guild_nick: profile.guild_nick,
+          avatar_url: profile.avatar_url,
+          guild_tag: profile.guild_tag,
+          guild_badge_url: profile.guild_badge_url,
+        });
+      })
+      .catch(() => {
+        // Keep the initial-letter fallback rather than claiming a profile.
+      });
+    return () => { active = false; };
+  }, [userId]);
+  return user;
+}
+
 export function DiscordMarkdown({ text, mentionNames, guildId, className, style, interactiveUsers = true, inline = false }: {
   text: string;
   mentionNames?: DiscordMentionNames;

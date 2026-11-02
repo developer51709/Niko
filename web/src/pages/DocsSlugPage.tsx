@@ -63,6 +63,9 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
     let i = 0;
     let listType: "ul" | "ol" | null = null;
     let listItems: string[] = [];
+    // Heading ids are counted per level so the table of contents can link to them.
+    let h2Count = 0;
+    let h3Count = 0;
 
     const flushList = () => {
       if (listItems.length === 0) return;
@@ -181,7 +184,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
       if (trimmed.startsWith("## ")) {
         flushList();
         elements.push(
-          <h3 key={`h-${i}`} className="doc-heading doc-heading-h3">
+          <h3 key={`h-${i}`} id={`h3-${h3Count++}`} className="doc-heading doc-heading-h3">
             {renderInline(trimmed.slice(3))}
           </h3>
         );
@@ -191,7 +194,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
       if (trimmed.startsWith("# ")) {
         flushList();
         elements.push(
-          <h2 key={`h-${i}`} className="doc-heading doc-heading-h2">
+          <h2 key={`h-${i}`} id={`h2-${h2Count++}`} className="doc-heading doc-heading-h2">
             {renderInline(trimmed.slice(2))}
           </h2>
         );
@@ -250,6 +253,15 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
     (el): el is React.ReactElement<{ className?: string; children?: React.ReactNode }> =>
       isValidElement(el) && (el.type === "h2" || el.type === "h3")
   );
+  // Mirrors the per-level counters in renderContent so each link reaches its heading.
+  const tocItems = (() => {
+    let h2 = 0;
+    let h3 = 0;
+    return tocHeadings.map((el) => {
+      const isH2 = Boolean(el.props.className?.includes("doc-heading-h2"));
+      return { id: isH2 ? `h2-${h2++}` : `h3-${h3++}`, label: el.props.children, isH2 };
+    });
+  })();
 
   return (
     <>
@@ -291,6 +303,23 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
           {contentElements}
         </article>
 
+        {/* Table of Contents — a sticky rail beside the article on wide screens. */}
+        {tocItems.length > 0 && (
+          <aside className="doc-toc">
+            <div className="toc-title">
+              <Icon name="book" size={14} />
+              <span>On this page</span>
+            </div>
+            <nav className="toc-nav">
+              {tocItems.map((item) => (
+                <a key={item.id} href={`#${item.id}`} className={`toc-link ${item.isH2 ? "toc-h2" : "toc-h3"}`}>
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          </aside>
+        )}
+
         {/* Navigation Footer */}
         <footer className="doc-article-footer">
           <div className="doc-nav-container">
@@ -309,30 +338,6 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
             </div>
           </div>
         </footer>
-
-        {/* Table of Contents */}
-        {tocHeadings.length > 0 && (
-          <aside className="doc-toc">
-            <div className="toc-title">
-              <Icon name="utility" size={16} />
-              <span>On this page</span>
-            </div>
-            <nav className="toc-nav">
-              {tocHeadings.map((el, i) => {
-                  const isH2 = el.props.className?.includes("doc-heading-h2");
-                  return (
-                    <a
-                      key={i}
-                      href={`#${isH2 ? "h2-" : "h3-"}-${i}`}
-                      className={`toc-link ${isH2 ? "toc-h2" : "toc-h3"}`}
-                    >
-                      {el.props.children}
-                    </a>
-                  );
-                })}
-            </nav>
-          </aside>
-        )}
       </main>
       <Footer />
     </>

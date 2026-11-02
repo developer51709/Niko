@@ -477,11 +477,24 @@ def api_guild_resources(guild_id):
 
         channels = [channel_payload(channel) for channel in channels]
         voice_channels = [channel_payload(channel) for channel in voice_channels]
-        roles = [
-            {"id": str(role.id), "name": role.name}
-            for role in guild.roles
-            if not role.is_default()
-        ]
+        def role_payload(role):
+            # Discord draws a role as a coloured dot and shows the gradient for
+            # gradient roles, so the pickers need the colours as well as the
+            # name. A role without a colour keeps an empty list and the
+            # dashboard falls back to Discord's grey dot.
+            values = []
+            for key in ("color", "secondary_color", "tertiary_color"):
+                value = getattr(getattr(role, key, None), "value", None)
+                if isinstance(value, int) and 0 < value <= 0xFFFFFF and value not in values:
+                    values.append(value)
+            return {
+                "id": str(role.id),
+                "name": role.name,
+                "color": f"#{values[0]:06x}" if values else None,
+                "colors": [f"#{value:06x}" for value in values],
+            }
+
+        roles = [role_payload(role) for role in guild.roles if not role.is_default()]
         # A cached guild can exist briefly before its channels are populated.
         # Let the Discord API fallback below resolve names during that window.
         if channels or voice_channels:

@@ -57,8 +57,17 @@ class GlobalProfileAssetTests(unittest.TestCase):
         with mock.patch.object(discord_api, "discord_request", no_rest):
             self.assertEqual(
                 guilds._global_profile_assets(),
-                {"avatar_url": AVATAR_URL, "banner_url": BANNER_URL},
+                {"avatar_url": AVATAR_URL, "banner_url": BANNER_URL, "bio": None},
             )
+
+    def test_the_global_bio_comes_from_the_application_description(self):
+        """A bot's global bio is the application description Discord shows."""
+        runtime._discord_bot = SimpleNamespace(
+            user=_user(), application=SimpleNamespace(description="Beta note")
+        )
+
+        with mock.patch.object(discord_api, "discord_request", lambda *args, **kwargs: _response({})):
+            self.assertEqual(guilds._global_profile_assets()["bio"], "Beta note")
 
     def test_a_cached_user_without_a_banner_fills_it_in_from_rest(self):
         runtime._discord_bot = SimpleNamespace(user=_user(banner_url=None))
@@ -92,7 +101,7 @@ class GlobalProfileAssetTests(unittest.TestCase):
         with mock.patch.object(discord_api, "discord_request", lambda *args, **kwargs: _response({}, 403)):
             self.assertEqual(
                 guilds._global_profile_assets(),
-                {"avatar_url": AVATAR_URL, "banner_url": None},
+                {"avatar_url": AVATAR_URL, "banner_url": None, "bio": None},
             )
 
     def test_a_raising_rest_read_never_breaks_the_config(self):
@@ -111,7 +120,7 @@ class GlobalProfileAssetTests(unittest.TestCase):
         with mock.patch.object(discord_api, "discord_request", lambda *args, **kwargs: _response({})):
             self.assertEqual(
                 guilds._global_profile_assets(),
-                {"avatar_url": None, "banner_url": None},
+                {"avatar_url": None, "banner_url": None, "bio": None},
             )
 
     def test_the_server_config_exposes_the_global_assets(self):
@@ -136,7 +145,7 @@ class GlobalProfileAssetTests(unittest.TestCase):
 
         self.assertEqual(
             config["global_profile"],
-            {"avatar_url": AVATAR_URL, "banner_url": BANNER_URL},
+            {"avatar_url": AVATAR_URL, "banner_url": BANNER_URL, "bio": None},
         )
 
 

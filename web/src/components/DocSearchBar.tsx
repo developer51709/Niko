@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Icon } from "./Icon";
 
+const IS_APPLE = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+
 interface DocSearchBarProps {
   value: string;
   onChange: (value: string) => void;
@@ -76,12 +78,22 @@ export function DocSearchBar({
           className="search-input"
           aria-label="Search documentation"
         />
+        {!!value && (
+          <button
+            className="search-clear"
+            type="button"
+            onClick={() => {
+              onChange("");
+              inputRef.current?.focus();
+            }}
+            aria-label="Clear search"
+          >
+            <Icon name="close" size={12} />
+          </button>
+        )}
         <kbd className="search-shortcut">
-          <span className="shortcut-key">⌘</span>K
+          <span className="shortcut-key">{IS_APPLE ? "⌘" : "Ctrl"}</span>{IS_APPLE ? "K" : "+K"}
         </kbd>
-      </div>
-      <div className="search-hint">
-        Press <kbd>⌘K</kbd> to focus search
       </div>
     </div>
   );

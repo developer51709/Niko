@@ -1,15 +1,12 @@
 /* The landing page: plain rules and no glass; the only motion behind it is the
    site-wide shader canvas.
-   The bot's own panel is the only "art" on the page. */
+   The bot's own panel is the only "art" on the page, and it sits in the
+   features section rather than the hero. */
 
-.home-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
-  align-items: center;
-  gap: 64px;
-  padding-top: 58px;
-  padding-bottom: 52px;
-}
+/* Words only. The panel used to sit beside the headline, which made the hero a
+   two-column layout that had to collapse on every tablet. */
+.home-hero { padding: 62px 0 54px; }
+.home-hero-copy { max-width: 760px; }
 .home-kicker {
   margin: 0 0 14px;
   color: var(--dim);
@@ -19,18 +16,48 @@
 }
 .home-hero h1 {
   margin: 0 0 18px;
-  font-size: clamp(40px, 5.4vw, 60px);
+  font-size: clamp(42px, 5.8vw, 68px);
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: -.045em;
 }
-.home-lede { max-width: 500px; margin: 0 0 26px; color: var(--muted); font-size: 16px; line-height: 1.7; }
+.home-lede { max-width: 560px; margin: 0 0 26px; color: var(--muted); font-size: 16px; line-height: 1.7; }
 .home-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .home-meta { margin: 22px 0 0; color: var(--dim); font: 11px "Space Mono", monospace; letter-spacing: .02em; }
 
-/* Discord does not stretch a container to the viewport, so the panel keeps a
-   fixed width instead of filling a wide desktop column. */
-.home-panel { margin: 0; min-width: 0; max-width: 460px; }
+/* One live interface beside three real replies. */
+.home-features { --demo-width: 584px; padding: 56px 0 8px; }
+.home-features-head { max-width: 620px; margin-bottom: 34px; }
+.home-features-head h2 { margin: 0 0 12px; font-size: 30px; line-height: 1.12; letter-spacing: -.04em; }
+.home-features-head > p:last-child { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.8; }
+/* Discord sizes a Components V2 container to its contents, not to the window,
+   so every card here is capped at one shared width instead of filling the
+   column: a wide screen adds space between the two tracks, never inside them.
+   The tracks shrink only once the viewport can no longer hold both. */
+.home-features-grid {
+  display: grid;
+  grid-template-columns: minmax(0, var(--demo-width)) minmax(0, var(--demo-width));
+  justify-content: space-between;
+  align-items: start;
+  gap: 32px 48px;
+}
+
+/* On a wide desktop the card row is allowed to draw out past the page shell on
+   both sides, which is what lets both tracks reach --demo-width without the
+   section header losing the shell's alignment. Below this the cards simply
+   share the shell. */
+@media (min-width: 1260px) {
+  .home-features-grid { width: calc(100% + 96px); margin-inline: -48px; }
+}
+
+/* The panel takes the same content-driven width as the example cards. */
+.home-panel { margin: 0; min-width: 0; max-width: var(--demo-width); }
+
+.home-examples { display: grid; gap: 16px; }
+/* Each example is the same Discord window as the panel; the window itself
+   draws the member row, the app badge and the reply container. */
+.home-example { display: grid; gap: 9px; margin: 0; }
+.home-example-note { margin: 0; color: var(--dim); font-size: 11.5px; line-height: 1.6; }
 .vm-demo-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; margin-bottom: 10px; }
 .vm-demo-label { color: var(--dim); font: 700 10px "Space Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
 .vm-demo-caption { margin: 12px 0 0; color: var(--dim); font-size: 11.5px; line-height: 1.65; }
@@ -151,13 +178,23 @@
 .select-menu-option small { color: var(--dim); font-size: 10.5px; }
 .select-menu-compact .select-menu-trigger { min-height: 30px; padding: 5px 9px; font-size: 11px; }
 
-@media (max-width: 1000px) {
-  .home-hero { grid-template-columns: minmax(0, 1fr); gap: 38px; padding-top: 44px; }
-  .home-hero h1 { font-size: clamp(36px, 8vw, 50px); }
+/* The tracks split the row evenly until each reaches --demo-width, so the cards
+   give a little width back as the viewport narrows before the columns stack
+   below 1020px and sit at their full width again. */
+@media (max-width: 1020px) {
+  .home-hero { padding-top: 44px; }
+  .home-hero h1 { font-size: clamp(38px, 8vw, 52px); }
+  .home-features { padding-top: 46px; }
+  /* Below the width two tracks need, they stack instead of both squeezing. */
+  .home-features-grid { grid-template-columns: minmax(0, var(--demo-width)); justify-content: start; gap: 32px; }
   .home-inside { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-top: 48px; }
 }
 @media (max-width: 720px) {
   .home-hero { padding-top: 34px; padding-bottom: 38px; }
+  .home-features { padding-top: 40px; }
+  .home-features-head { margin-bottom: 26px; }
+  .home-features-head h2 { font-size: 26px; }
+  .home-examples { gap: 14px; }
   .home-inside-head h2 { font-size: 26px; }
   .home-row { grid-template-columns: 26px minmax(0, 1fr); row-gap: 10px; padding-right: 0; }
   .home-row > a { grid-column: 2; }
