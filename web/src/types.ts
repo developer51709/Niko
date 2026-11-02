@@ -83,6 +83,12 @@ export type StaffAnalytics = {
 export type PublicConfig = {
   application_id: string;
   bot_avatar_url?: string | null;
+  /** The bot's username, as Discord stores it. */
+  bot_name?: string | null;
+  /** The name Discord shows above the bot's messages (global display name). */
+  bot_display_name?: string | null;
+  /** Discord's verified-bot tick, drawn inside the APP tag. */
+  bot_verified?: boolean;
   invite_url: string;
   support_server_url?: string | null;
   oauth_available: boolean;

@@ -288,14 +288,33 @@ def api_bot_emojis():
 @app.route("/api/config")
 def api_public_config():
     bot_avatar_url = None
-    if _discord_bot is not None and getattr(_discord_bot, "user", None) is not None:
+    bot_name = None
+    bot_display_name = None
+    bot_verified = False
+    user = getattr(_discord_bot, "user", None) if _discord_bot is not None else None
+    if user is not None:
         try:
-            bot_avatar_url = str(_discord_bot.user.display_avatar.url)
+            bot_avatar_url = str(user.display_avatar.url)
         except Exception:
             bot_avatar_url = None
+        # The identity Discord prints above the bot's messages: the global
+        # display name when it has one, otherwise the username.
+        bot_name = str(getattr(user, "name", "") or "") or None
+        bot_display_name = str(getattr(user, "display_name", "") or "") or bot_name
+        # Bit 16 of a user's public flags is Discord's verified-bot check — the
+        # tick Discord draws inside the APP tag beside a verified bot's name.
+        flags = getattr(user, "public_flags", None)
+        try:
+            flag_value = int(getattr(flags, "value", flags) or 0)
+        except (TypeError, ValueError):
+            flag_value = 0
+        bot_verified = bool(flag_value & (1 << 16))
     config = {
         "application_id": DISCORD_CLIENT_ID,
         "bot_avatar_url": bot_avatar_url,
+        "bot_name": bot_name,
+        "bot_display_name": bot_display_name,
+        "bot_verified": bot_verified,
         "invite_url": (
             f"https://discord.com/oauth2/authorize?"
             f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands'})}"

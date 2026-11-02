@@ -1,0 +1,228 @@
+/* The VoiceMaster panel, rebuilt as a Discord message.
+   Colours come from Discord's own dark theme so the card reads as the real
+   thing: #313338 behind a message, #2b2d31 for the container, #4e5058 buttons. */
+
+/* The padding, message gap and avatar size are variables because the whole
+   message geometry (full-bleed ephemeral block, footer indent) is built from
+   them, and a phone needs all three smaller at once. */
+.discord-window {
+  --dc-pad: 16px;
+  --dc-gap: 14px;
+  --dc-avatar: 40px;
+  /* A select opened inside a message has to be able to leave the card, the way
+     Discord's own menus do, so the window clips its corners below instead of
+     clipping its content. */
+  overflow: visible;
+  padding: var(--dc-pad) var(--dc-pad) 0;
+  color: #dbdee1;
+  background: #313338;
+  border: 1px solid #26272b;
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.dc-message { display: flex; gap: var(--dc-gap); padding-bottom: 16px; }
+.dc-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--dc-avatar);
+  height: var(--dc-avatar);
+  overflow: hidden;
+  padding: 0;
+  color: #fff;
+  background: #5865f2;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+}
+.dc-avatar:hover { filter: brightness(1.08); }
+.dc-avatar:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; }
+.dc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.dc-message-body { flex: 1 1 auto; min-width: 0; }
+
+.dc-message-head { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.dc-author { padding: 0; color: #f2f3f5; background: none; border: 0; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.dc-author:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dc-author:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; border-radius: 2px; }
+.dc-app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  color: #fff;
+  background: #5865f2;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.dc-app-badge-check { width: 9px; height: 9px; }
+.dc-timestamp { margin-left: 2px; color: #949ba4; font-size: 11px; }
+
+.dc-container {
+  margin-top: 4px;
+  padding: 12px 14px 14px;
+  background: #2b2d31;
+  border: 1px solid rgb(255 255 255 / .05);
+  border-radius: 8px;
+}
+/* An accent colour is what Discord paints down the container's left edge. */
+.dc-reply { border-left: 4px solid #fff; }
+
+.dc-panel-title { font-size: 16.5px; }
+.dc-panel-title .discord-md-heading { margin: 0; }
+.dc-separator { height: 1px; margin: 10px 0; background: #3f4147; }
+
+.dc-legend { margin: 4px 0; font-size: 14.5px; line-height: 1.75; }
+.dc-legend .discord-md-emoji { width: 20px; height: 20px; }
+.dc-legend .discord-md-code { background: #232428; border-color: #3f4147; }
+.dc-reply .discord-md-emoji { width: 20px; height: 20px; }
+.dc-info { font-size: 14px; line-height: 1.6; }
+.dc-info .discord-md-quote { padding-left: 12px; color: #b5bac1; }
+
+/* Discord sizes an emoji-only button to its own content and leaves the rest of
+   the row empty, so the buttons stay compact instead of filling the panel. */
+.dc-button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dc-button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 38px;
+  padding: 0;
+  background: #4e5058;
+  border: 0;
+  border-radius: 6px;
+  transition: background .12s ease;
+}
+.dc-button:hover { background: #6d6f78; }
+.dc-button:active { background: #3f4147; }
+.dc-button:focus-visible { outline: 2px solid #00a8fc; outline-offset: 2px; }
+.dc-button-emoji { width: 20px; height: 20px; object-fit: contain; }
+
+/* An ephemeral message is a blurred-in block: the date divider above it, the
+   blurred-purple rail and tint down the left, the reply line naming the message
+   it answers, and the eye footer that dismisses it. */
+.dc-date-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 calc(-1 * var(--dc-pad)) 10px;
+  padding: 0 var(--dc-pad);
+  color: #949ba4;
+  font-size: 11px;
+  font-weight: 600;
+}
+.dc-date-divider::before,
+.dc-date-divider::after { flex: 1 1 auto; height: 1px; background: #3f4147; content: ""; }
+
+.dc-message-ephemeral {
+  display: block;
+  margin: 0 calc(-1 * var(--dc-pad));
+  padding: 10px var(--dc-pad) 14px;
+  background: rgb(88 101 242 / .08);
+  border-left: 3px solid #5865f2;
+  /* The block is the window's last child and reaches its edges, so it carries
+     the bottom corners the window can no longer clip. */
+  border-radius: 0 0 9px 9px;
+}
+.dc-reply-row { display: flex; gap: var(--dc-gap); }
+.dc-reply-indicator { display: flex; align-items: center; gap: 5px; margin: 0 0 6px 6px; color: #b5bac1; font-size: 12px; }
+.dc-reply-avatar { display: grid; place-items: center; flex: 0 0 auto; width: 16px; height: 16px; overflow: hidden; color: #fff; background: #5865f2; border-radius: 50%; font-size: 9px; font-weight: 700; }
+.dc-reply-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.dc-reply-author { color: #dbdee1; font-weight: 600; }
+.dc-reply-jump { padding: 0; color: #b5bac1; background: none; border: 0; font: inherit; font-style: italic; }
+.dc-reply-jump:hover { color: #f2f3f5; text-decoration: underline; text-underline-offset: 2px; }
+.dc-app-badge-small { padding: 1px 3px; font-size: 8px; }
+
+.dc-ephemeral-footer { display: flex; align-items: center; gap: 6px; margin: 10px 0 0 calc(var(--dc-avatar) + var(--dc-gap)); color: #949ba4; font-size: 12px; }
+.dc-ephemeral-eye { flex: 0 0 auto; width: 15px; height: 15px; }
+.dc-ephemeral-dismiss { padding: 0; color: #00a8fc; background: none; border: 0; font: inherit; }
+.dc-ephemeral-dismiss:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+.dc-select { position: relative; }
+.dc-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  color: #b5bac1;
+  background: #1e1f22;
+  border: 1px solid #1e1f22;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: left;
+}
+.dc-select-trigger:hover { border-color: #040405; }
+.dc-select-trigger svg { flex: 0 0 auto; width: 16px; height: 16px; }
+.dc-select-list {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #111214;
+  border: 1px solid #2b2d31;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / .45);
+}
+/* Opened near the bottom of the viewport, the list flips above its trigger. */
+.dc-select-list.is-up { top: auto; bottom: calc(100% + 4px); }
+.dc-select-list button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  color: #dbdee1;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: left;
+}
+.dc-select-list button:hover { background: #35373c; }
+.dc-select-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  background: #5865f2;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* The panel lives in a phone-width column, so the message tightens rather than
+   letting the five-button row wrap or the legend overflow. */
+@media (max-width: 560px) {
+  .discord-window { --dc-pad: 12px; --dc-gap: 10px; --dc-avatar: 36px; font-size: 14px; }
+  .dc-container { padding: 10px 10px 12px; }
+  .dc-panel-title { font-size: 15px; }
+  .dc-legend { font-size: 13px; line-height: 1.8; }
+  .dc-legend .discord-md-emoji { width: 18px; height: 18px; }
+  .dc-button { width: 38px; min-width: 38px; height: 34px; }
+  .dc-button-emoji { width: 18px; height: 18px; }
+  .dc-app-badge { font-size: 8px; }
+  .dc-timestamp { font-size: 10px; }
+  .dc-ephemeral-footer { flex-wrap: wrap; font-size: 11px; }
+  .dc-reply-indicator { margin-left: 2px; font-size: 11px; }
+}
+
+@media (max-width: 380px) {
+  .dc-button-row { gap: 6px; }
+  .dc-button { width: 34px; min-width: 34px; height: 32px; }
+  .dc-legend { font-size: 12.5px; }
+}

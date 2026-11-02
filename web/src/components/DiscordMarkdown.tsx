@@ -337,7 +337,15 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
     const key = `${prefix}-${index}`;
     if (node.kind === "text") return <span key={key}>{node.text}</span>;
     if (node.kind === "code") return <code key={key} className="discord-md-code">{node.text}</code>;
-    if (node.kind === "link") return <a key={key} className="discord-md-link" href={node.url} target="_blank" rel="noopener noreferrer">{node.text}</a>;
+    if (node.kind === "link") {
+      // Discord lets a masked link's text be an inline code span, which is how
+      // the bot writes its command legend: [`Lock`](url). The code keeps its
+      // box and takes the link's colour instead of the usual code colour.
+      const code = /^`([^`\n]+)`$/.exec(node.text);
+      return <a key={key} className="discord-md-link" href={node.url} target="_blank" rel="noopener noreferrer">
+        {code ? <code className="discord-md-code">{code[1]}</code> : node.text}
+      </a>;
+    }
     if (node.kind === "emoji") return <DiscordEmoji key={key} name={node.name} id={node.id} animated={node.animated} className="discord-md-emoji" />;
     if (node.kind === "timestamp") {
       const label = timestampLabel(node.unix, node.style);
