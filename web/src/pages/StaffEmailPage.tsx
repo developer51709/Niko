@@ -3,6 +3,7 @@ import { ApiError, getAuth, getGuilds, getStaffEmail, getStaffEmailMessage, getS
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { EmailMessageBody } from "../components/EmailMessageBody";
 import { Icon } from "../components/Icon";
+import { Select } from "../components/dashboard/Select";
 import { PublicHeader } from "../components/PublicHeader";
 import { RichTextEditor } from "../components/RichTextEditor";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
@@ -494,11 +495,9 @@ export function StaffEmailPage() {
             <button type="button" className="button button-muted button-small" onClick={() => setCompose(null)}>Cancel</button>
           </div>
           <div className="staff-fields">
-            <label className="form-field"><span className="form-label">From</span>
-              <select value={compose.mailbox} onChange={(event) => setCompose({ ...compose, mailbox: event.target.value })}>
-                {mailboxes.map((mailbox) => <option value={mailbox.local} key={mailbox.local}>{mailbox.address}</option>)}
-              </select>
-            </label>
+            <div className="form-field"><span className="form-label">From</span>
+              <Select ariaLabel="From" placeholder={null} options={mailboxes.map((mailbox) => ({ value: mailbox.local, label: mailbox.address }))} value={compose.mailbox} onChange={(value) => setCompose({ ...compose, mailbox: value })} />
+            </div>
             {composeMailbox?.kind === "shared" && <p className="staff-email-signature-note">
               <Icon name="mail" />
               <span>Your signature is added automatically: your display name, your Discord handle, and {personalAddress || "your Niko address"}.</span>

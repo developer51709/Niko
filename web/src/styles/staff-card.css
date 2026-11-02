@@ -1,13 +1,17 @@
 /* GitHub README card: a collapsed, expandable section at the bottom of the
    staff public-profile tab. The card itself is rendered server-side as SVG. */
 
+/* The section wears the same frosted panel as `.staff-panel`; the `--surface`
+   token alone is only a 3.5% wash and reads as transparent without the blur. */
 .dashboard-layout .staff-card-section {
   margin-top: 18px;
   overflow: hidden;
-  background: var(--surface);
+  background: rgba(255, 255, 255, .035);
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .dashboard-layout .staff-card-section > summary {

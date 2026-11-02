@@ -10,7 +10,8 @@ import {
 import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import { ChannelSelect } from "./ChannelSelect";
-import { RoleSelect } from "./RoleSelect";
+import { RolePicker } from "./RolePicker";
+import { Select } from "./Select";
 import type { GuildResources, NotifierFollow, NotifierResponse } from "../../types";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
 import { Switch } from "./Switch";
@@ -335,7 +336,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
             />
           </Field>
           <Field label="Default ping role" hint="Leave empty for a quiet announcement.">
-            <RoleSelect roles={resources?.roles || []} value={configDraft.ping_role_id} placeholder="No ping" onChange={(value) => setConfigDraft({ ...configDraft, ping_role_id: String(value) })} />
+            <RolePicker roles={resources?.roles || []} value={configDraft.ping_role_id} placeholder="No ping" ariaLabel="Default ping role" onChange={(value) => setConfigDraft({ ...configDraft, ping_role_id: value })} />
           </Field>
         </div>
         <SettingCards>
@@ -356,10 +357,12 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
       <SectionTitle label="New follow" title="Add an account" detail="Paste a profile link or type the account name — Niko checks it against the platform before saving." icon="plus" />
       <div className="form-grid">
         <Field label="Platform">
-          <select value={form.platform} onChange={(event) => { const value = event.target.value; setManualPlatform(Boolean(value)); setForm({ ...form, platform: value }); }}>
-            <option value="">Choose a platform</option>
-            {platforms.map((platform) => <option value={platform.id} key={platform.id}>{platform.label}</option>)}
-          </select>
+          <Select
+            placeholder="Choose a platform"
+            options={platforms.map((platform) => ({ value: platform.id, label: platform.label }))}
+            value={form.platform}
+            onChange={(value) => { setManualPlatform(Boolean(value)); setForm({ ...form, platform: value }); }}
+          />
         </Field>
         <Field label={platformHint?.field_label || "Account"} hint="A profile link is fine too.">
           <input
@@ -388,7 +391,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
           />
         </Field>
         <Field label="Ping role" hint="Optional — mentioned with every announcement.">
-          <RoleSelect roles={resources?.roles || []} value={form.ping_role_id} placeholder="No ping" onChange={(value) => setForm({ ...form, ping_role_id: String(value) })} />
+          <RolePicker roles={resources?.roles || []} value={form.ping_role_id} placeholder="No ping" ariaLabel="Ping role" onChange={(value) => setForm({ ...form, ping_role_id: value })} />
         </Field>
         <Field label="Custom message" hint={`Optional. Use ${data.limits.template_placeholders.map((name) => `{${name}}`).join(", ")} · up to ${data.limits.max_template_length} characters.`}>
           <input value={form.template} maxLength={data.limits.max_template_length} onChange={(event) => setForm({ ...form, template: event.target.value })} placeholder="New from {account}: {title}" />
@@ -435,7 +438,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
                   />
                 </Field>
                 <Field label="Ping role" hint="Leave empty for a quiet announcement.">
-                  <RoleSelect roles={resources?.roles || []} value={draft.ping_role_id} placeholder="No ping" onChange={(value) => updateDraft(follow, { ping_role_id: String(value) })} />
+                  <RolePicker roles={resources?.roles || []} value={draft.ping_role_id} placeholder="No ping" ariaLabel={`Ping role for ${follow.display}`} onChange={(value) => updateDraft(follow, { ping_role_id: value })} />
                 </Field>
                 <Field label="Custom message" hint="Sent above the announcement.">
                   <input value={draft.template} maxLength={data.limits.max_template_length} onChange={(event) => updateDraft(follow, { template: event.target.value })} placeholder="Optional message" />

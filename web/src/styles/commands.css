@@ -1,0 +1,465 @@
+/* Commands reference library.
+   Loaded after the shared stylesheets, so these rules own the toolbar, the card
+   grid and the detail dialog while the page keeps the site's midnight glass. */
+
+/* Match the docs library's page rhythm so the two reference pages line up. */
+.site-content .commands-page { padding-top: 48px; }
+.site-content .commands-page .public-page-intro { padding: 40px 0 30px; margin-bottom: 26px; }
+.site-content .commands-page .public-page-intro h1 { font-size: clamp(40px, 5vw, 56px); }
+
+.site-content .commands-page .command-toolbar {
+  display: grid;
+  gap: 15px;
+  margin-top: 0;
+  padding: 17px 18px 14px;
+  background: rgba(9, 10, 12, .72);
+  border: 1px solid rgba(226, 234, 246, .16);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .26), inset 0 1px 0 rgba(255, 255, 255, .06);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+
+.site-content .commands-page .command-search-row { display: flex; align-items: center; gap: 14px; }
+
+.site-content .commands-page .command-toolbar .search-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  min-height: 46px;
+  padding: 0 13px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(226, 234, 246, .14);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  transition: background .18s, border-color .18s, box-shadow .18s;
+}
+.site-content .commands-page .command-toolbar .search-field:focus-within {
+  background: rgba(255, 255, 255, .07);
+  border-color: rgba(213, 220, 229, .42);
+  box-shadow: 0 0 0 4px rgba(213, 220, 229, .1);
+}
+.site-content .commands-page .command-toolbar .search-field > .icon { color: var(--accent-dark); }
+.site-content .commands-page .command-toolbar .search-field input {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 0;
+  color: #f4f5f7;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-size: 12.5px;
+}
+.site-content .commands-page .command-toolbar .search-field input::placeholder { color: #7f8794; }
+.site-content .commands-page .search-clear {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .09);
+  border: 0;
+  border-radius: 50%;
+  transition: background .18s, color .18s;
+}
+.site-content .commands-page .search-clear:hover { color: #f4f5f7; background: rgba(255, 255, 255, .18); }
+
+.command-count { display: flex; align-items: baseline; gap: 6px; flex: 0 0 auto; padding-right: 3px; color: var(--dim); }
+.command-count strong { color: var(--ink); font: 700 17px "Space Mono", monospace; letter-spacing: -.04em; }
+.command-count span { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+
+.command-filter-rows { display: grid; gap: 9px; padding-top: 14px; border-top: 1px solid rgba(226, 234, 246, .1); }
+.command-filter-row { display: grid; grid-template-columns: 66px minmax(0, 1fr); align-items: center; gap: 12px; }
+.command-filter-label { color: #79828f; font: 700 9px "Space Mono", monospace; text-transform: uppercase; letter-spacing: .12em; }
+.command-filter-row .filter-list { justify-content: flex-start; gap: 6px; }
+
+.site-content .command-filter-row .filter {
+  min-height: 29px;
+  padding: 5px 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  transition: color .16s, background .16s, border-color .16s;
+}
+.site-content .command-filter-row .filter:hover { color: var(--ink); background: rgba(255, 255, 255, .085); }
+.site-content .command-filter-row .filter.active {
+  color: #f4f5f7;
+  background: rgba(213, 220, 229, .16);
+  border-color: rgba(213, 220, 229, .34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+
+.command-toolbar-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--dim); }
+.command-registry-note { display: inline-flex; align-items: center; gap: 7px; font: 700 9px "Space Mono", monospace; text-transform: uppercase; letter-spacing: .12em; }
+.command-registry-note i { width: 6px; height: 6px; background: var(--sage); border-radius: 50%; box-shadow: 0 0 0 3px rgba(139, 213, 177, .16); animation: command-live-pulse 2.4s ease-in-out infinite; }
+.command-registry-hint { font-size: 10.5px; }
+.command-reset {
+  padding: 5px 10px;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 1px solid rgba(226, 234, 246, .18);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  transition: background .18s, border-color .18s;
+}
+.command-reset:hover { background: rgba(255, 255, 255, .08); border-color: rgba(213, 220, 229, .34); }
+@keyframes command-live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+.site-content .commands-page .commands-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+
+.site-content .commands-page .command-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 162px;
+  padding: 17px 18px 15px;
+  overflow: hidden;
+  color: #f4f5f7;
+  text-align: left;
+  background: rgba(10, 11, 14, .8);
+  border: 1px solid rgba(226, 234, 246, .15);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .06);
+  /* The registry holds 300+ cards, so they skip the backdrop blur that the
+     toolbar and dialog keep. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+/* A hairline of light along the top edge appears on hover, so the card lifts
+   without the border jumping in brightness. */
+.site-content .commands-page .command-card::after {
+  position: absolute;
+  top: 0;
+  right: 14px;
+  left: 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(232, 238, 247, .55), transparent);
+  opacity: 0;
+  content: "";
+  transition: opacity .24s ease;
+}
+.site-content .commands-page .command-card:hover {
+  transform: translateY(-2px);
+  background: rgba(18, 20, 24, .88);
+  border-color: rgba(213, 220, 229, .3);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.site-content .commands-page .command-card:hover::after { opacity: 1; }
+.site-content .commands-page .command-card:focus-visible { transform: translateY(-2px); border-color: rgba(213, 220, 229, .5); }
+
+.command-card-top { display: flex; align-items: flex-start; gap: 11px; }
+.command-sigil {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  color: var(--accent-dark);
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(226, 234, 246, .14);
+  border-radius: 9px;
+  font: 700 12px "Space Mono", monospace;
+  line-height: 1;
+}
+.command-sigil.is-hybrid { font-size: 9px; letter-spacing: -.02em; }
+.command-sigil.is-context { font-size: 13px; color: #a9b3c1; }
+.command-sigil-large { width: 42px; height: 42px; border-radius: 12px; font-size: 16px; }
+.command-sigil.is-hybrid.command-sigil-large { font-size: 11px; }
+.command-sigil.is-context.command-sigil-large { font-size: 18px; }
+.command-card:hover .command-sigil { background: rgba(255, 255, 255, .12); }
+
+.command-card-title { display: grid; gap: 4px; min-width: 0; padding-top: 2px; }
+.site-content .commands-page .command-name {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  color: #f4f5f7;
+  font: 700 13px/1.4 "Space Mono", monospace;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.site-content .commands-page .command-name code { color: inherit; }
+.site-content .commands-page .command-or { margin: 0 6px; color: #79828f; font: 400 9px "Space Mono", monospace; text-transform: uppercase; letter-spacing: .06em; }
+.site-content .commands-page .command-type {
+  overflow: hidden;
+  padding: 0;
+  color: #7f8895;
+  background: none;
+  border-radius: 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: .11em;
+  white-space: nowrap;
+}
+.site-content .commands-page .command-card-description {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  margin: 14px 0 15px;
+  overflow: hidden;
+  color: #b4bac3;
+  font-size: 12.5px;
+  line-height: 1.62;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.site-content .commands-page .command-card-footer { align-items: center; gap: 10px; }
+.site-content .commands-page .category-tag {
+  padding: 4px 9px;
+  color: #9aa3b0;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(226, 234, 246, .08);
+  border-radius: 999px;
+  text-transform: capitalize;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.site-content .commands-page .command-expand { gap: 6px; color: var(--accent-dark); font-size: 10px; letter-spacing: .02em; }
+.site-content .commands-page .command-expand .icon { opacity: .6; transition: transform .18s ease, opacity .18s ease; }
+.site-content .commands-page .command-card:hover .command-expand .icon { opacity: 1; transform: translateX(3px); }
+
+/* Loading placeholders mirror the card's silhouette instead of one spinner. */
+.commands-skeleton .command-card-skeleton {
+  min-height: 162px;
+  padding: 17px 18px 15px;
+  background: rgba(9, 10, 12, .5);
+  border: 1px solid rgba(226, 234, 246, .09);
+  border-radius: 16px;
+}
+.command-card-skeleton span { display: block; height: 11px; margin-bottom: 13px; background: linear-gradient(90deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .13), rgba(255, 255, 255, .06)); background-size: 220% 100%; border-radius: 6px; animation: command-skeleton 1.5s ease-in-out infinite; }
+.command-card-skeleton span:first-child { width: 58%; height: 15px; margin-bottom: 20px; }
+.command-card-skeleton span:nth-child(2) { width: 92%; }
+.command-card-skeleton span:nth-child(3) { width: 64%; }
+@keyframes command-skeleton { 0% { background-position: 120% 0; } 100% { background-position: -60% 0; } }
+
+.commands-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 46px 24px;
+  text-align: center;
+  background: rgba(9, 10, 12, .55);
+  border: 1px dashed rgba(226, 234, 246, .16);
+  border-radius: 16px;
+}
+.commands-empty-icon { display: grid; place-items: center; width: 38px; height: 38px; margin-bottom: 6px; color: var(--accent-dark); background: rgba(255, 255, 255, .07); border-radius: 12px; }
+.commands-empty strong { color: var(--ink); font-size: 13px; }
+.commands-empty p { margin: 0; color: var(--muted); font-size: 11.5px; }
+.commands-empty .button { margin-top: 12px; }
+.commands-page .inline-error { margin-top: 16px; padding: 14px 16px; border: 1px solid rgba(226, 234, 246, .18); border-radius: 12px; font-size: 11.5px; }
+.commands-page .inline-error strong { display: block; margin-bottom: 3px; color: var(--ink); font-size: 12px; }
+
+/* Detail dialog */
+.site-content .command-dialog-backdrop { background: rgba(3, 4, 5, .66); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+.site-content .command-dialog {
+  width: min(760px, 100%);
+  max-height: min(780px, calc(100vh - 48px));
+  color: #f4f5f7;
+  background: rgba(10, 11, 13, .93);
+  border: 1px solid rgba(226, 234, 246, .17);
+  border-radius: 20px;
+  box-shadow: 0 42px 96px rgba(0, 0, 0, .58), inset 0 1px 0 rgba(255, 255, 255, .07);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+}
+.site-content .command-dialog-header {
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px 24px 20px;
+  background: rgba(255, 255, 255, .035);
+  border-bottom: 1px solid rgba(226, 234, 246, .12);
+}
+.command-dialog-heading { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.command-dialog-title-group { min-width: 0; }
+.site-content .command-dialog-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #8b95a3;
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  font: 700 9px "Space Mono", monospace;
+}
+.command-dialog-kicker i { width: 3px; height: 3px; background: #5b6472; border-radius: 50%; }
+.site-content .command-dialog-header h2 { margin: 0; color: #f4f5f7; font-size: 22px; line-height: 1.25; letter-spacing: -.04em; }
+.site-content .command-dialog-header h2 code { color: #f4f5f7; font-size: .95em; }
+.site-content .command-dialog-header .context-invocation { color: #d5d9df !important; font-family: "Plus Jakarta Sans", sans-serif !important; font-size: 17px; font-weight: 700; }
+.site-content .command-dialog .dialog-close { width: 32px; height: 32px; color: #9aa3b0; background: rgba(255, 255, 255, .04); border: 1px solid rgba(226, 234, 246, .14); border-radius: 10px; transition: background .18s, color .18s, border-color .18s; }
+.site-content .command-dialog .dialog-close:hover { color: #f4f5f7; background: rgba(255, 255, 255, .1); border-color: rgba(213, 220, 229, .3); }
+
+.site-content .command-dialog-body { display: grid; gap: 12px; padding: 22px 24px 24px; overscroll-behavior: contain; scrollbar-width: thin; }
+.site-content .command-dialog .command-dialog-description { margin: 0 0 4px; color: #c2c9d3; font-size: 13px; line-height: 1.75; }
+
+.site-content .command-dialog .command-detail-section {
+  min-width: 0;
+  padding: 15px 16px 16px;
+  margin: 0;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(226, 234, 246, .11);
+  border-radius: 14px;
+}
+.command-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+.site-content .command-dialog .command-detail-section h3 {
+  margin: 0;
+  color: #8b95a3;
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  font: 700 9px "Space Mono", monospace;
+}
+.command-section-head h3 { display: inline-flex; align-items: center; gap: 8px; }
+.site-content .command-dialog .command-detail-section > h3 { margin-bottom: 11px; }
+.command-section-count { padding: 2px 6px; color: #b4bac3; background: rgba(255, 255, 255, .08); border-radius: 999px; font: 700 9px "Space Mono", monospace; letter-spacing: 0; }
+.command-detail-grid { display: grid; gap: 12px; }
+.site-content .command-dialog .command-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.command-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  color: #b4bac3;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(226, 234, 246, .12);
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  transition: color .16s, background .16s, border-color .16s;
+}
+.command-copy:hover { color: #f4f5f7; background: rgba(255, 255, 255, .11); border-color: rgba(213, 220, 229, .28); }
+.command-copy .icon { color: var(--sage); }
+
+.site-content .command-dialog .command-usage {
+  display: block;
+  padding: 12px 14px;
+  overflow-x: auto;
+  color: #e8edf5;
+  background: rgba(0, 0, 0, .34);
+  border: 1px solid rgba(226, 234, 246, .1);
+  border-radius: 10px;
+  font: 12.5px/1.6 "Space Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.site-content .command-dialog .command-parameter-list { gap: 8px; }
+.site-content .command-dialog .command-parameter {
+  padding: 11px 12px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(226, 234, 246, .09);
+  border-radius: 10px;
+}
+.site-content .command-dialog .command-parameter:first-child { padding-top: 11px; border-top: 1px solid rgba(226, 234, 246, .09); }
+.site-content .command-dialog .command-parameter-title { align-items: center; flex-wrap: wrap; gap: 8px; }
+.site-content .command-dialog .command-parameter-title code { color: #e8edf5; font: 700 12px "Space Mono", monospace; }
+.command-param-flag {
+  padding: 2px 7px;
+  color: #98a1ae;
+  background: rgba(255, 255, 255, .06);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.command-param-flag.is-required { color: #b9ecd3; background: rgba(139, 213, 177, .14); }
+.command-param-type { margin-left: auto; color: #7f8895; font: 10px "Space Mono", monospace; }
+.site-content .command-dialog .command-parameter p { margin: 6px 0 0; color: #b4bac3; font-size: 11.5px; line-height: 1.6; }
+
+.site-content .command-dialog .command-detail-list { gap: 6px; }
+.site-content .command-dialog .command-detail-list li {
+  padding: 5px 9px;
+  color: #c2c9d3;
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(226, 234, 246, .09);
+  border-radius: 999px;
+  font-size: 10.5px;
+}
+.site-content .command-dialog .command-detail-list li code { color: #e8edf5; font-size: 10px; }
+.site-content .command-dialog .command-detail-list li.command-detail-empty { padding: 0; color: #7f8895; background: none; border: 0; font-style: italic; }
+
+.site-content .command-dialog .subcommand-list { gap: 7px; margin: 0; }
+.site-content .command-dialog .subcommand-list code {
+  padding: 7px 10px;
+  color: #c2c9d3;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(226, 234, 246, .09);
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.site-content .command-dialog .command-dialog-footer {
+  padding: 14px 24px;
+  color: #7f8895;
+  background: rgba(255, 255, 255, .025);
+  border-top: 1px solid rgba(226, 234, 246, .12);
+  font-size: 10px;
+}
+
+@media (max-width: 1020px) {
+  .site-content .commands-page .commands-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Below a tablet the intro stacks: side by side the headline and the two
+   buttons would each be squeezed into half a row. */
+@media (max-width: 1020px) {
+  .site-content .commands-page .public-page-intro { align-items: stretch; flex-direction: column; gap: 18px; }
+  .site-content .commands-page .public-page-intro-actions { flex-wrap: wrap; }
+  .site-content .commands-page .public-page-intro-actions .button { flex: 1 1 180px; }
+}
+
+@media (max-width: 720px) {
+  .site-content .commands-page { padding-top: 34px; }
+  .site-content .commands-page .public-page-intro { padding: 26px 0 24px; margin-bottom: 22px; }
+  .site-content .commands-page .public-page-intro h1 { font-size: 36px; }
+  .site-content .commands-page .command-toolbar { padding: 14px 14px 12px; border-radius: 16px; }
+  .site-content .commands-page .command-search-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .command-count { padding: 0; }
+  .command-filter-row { grid-template-columns: 1fr; gap: 7px; }
+  .command-filter-row .filter-list { gap: 5px; }
+  .site-content .command-filter-row .filter { padding: 5px 9px; font-size: 10.5px; }
+  .command-toolbar-footer { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .site-content .commands-page .commands-grid { grid-template-columns: 1fr; gap: 9px; margin-top: 16px; }
+  /* Shorter rows on phones: the registry holds hundreds of commands, so the
+     card drops its fixed height and clamps the description to two lines. */
+  .site-content .commands-page .command-card { min-height: 0; padding: 14px 15px 13px; }
+  .site-content .commands-page .command-card-description { margin: 11px 0 12px; font-size: 12px; -webkit-line-clamp: 2; }
+
+  /* Phone-width dialogs are bottom sheets, so they anchor to the bottom edge
+     and leave room for the home indicator. */
+  .site-content .command-dialog-backdrop { align-items: end; padding: 0; }
+  .site-content .command-dialog { max-height: 92vh; border-radius: 20px 20px 0 0; }
+  .site-content .command-dialog-header { padding: 18px 18px 16px; }
+  .site-content .command-dialog-heading { gap: 11px; }
+  .command-sigil-large { width: 36px; height: 36px; border-radius: 10px; }
+  .site-content .command-dialog-header h2 { font-size: 18px; }
+  .site-content .command-dialog-header h2 code { font-size: .92em; }
+  .site-content .command-dialog-body { gap: 10px; padding: 17px 18px 20px; }
+  .site-content .command-dialog .command-detail-grid { grid-template-columns: 1fr; }
+  .site-content .command-dialog .command-detail-section { padding: 14px; border-radius: 12px; }
+  .command-param-type { margin-left: 0; }
+  .site-content .command-dialog .command-dialog-footer { align-items: stretch; gap: 11px; padding: 13px 18px max(17px, env(safe-area-inset-bottom)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-content .commands-page .command-card,
+  .site-content .commands-page .command-card:hover,
+  .site-content .commands-page .command-card:focus-visible { transform: none; }
+  .command-registry-note i,
+  .command-card-skeleton span { animation: none; }
+}

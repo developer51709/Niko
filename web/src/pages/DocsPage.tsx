@@ -170,8 +170,9 @@ export function DocsPage() {
             className="mobile-menu-toggle"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle documentation menu"
+            aria-expanded={mobileMenuOpen}
           >
-            <Icon name="utility" size={20} />
+            <Icon name={mobileMenuOpen ? "close" : "menu"} size={20} />
           </button>
           {mobileMenuOpen && (
             <div className="mobile-nav-panel">
@@ -182,7 +183,7 @@ export function DocsPage() {
                   onClick={() => setMobileMenuOpen(false)}
                   aria-label="Close menu"
                 >
-                  <Icon name="utility" size={16} className="rotated" />
+                  <Icon name="close" size={15} />
                 </button>
               </div>
               <div className="mobile-nav-sections">
@@ -213,8 +214,8 @@ export function DocsPage() {
         {tagCloud.length > 0 && !hasActiveFilters && (
           <div className="docs-tags-cloud">
             <div className="tags-cloud-title">
-              <Icon name="utility" size={16} />
-              <span>Popular Topics</span>
+              <Icon name="spark" size={14} />
+              <span>Popular topics</span>
             </div>
             <div className="tags-cloud-list">
               {tagCloud.slice(0, 15).map(({ tag, count }) => (
@@ -222,9 +223,6 @@ export function DocsPage() {
                   key={tag}
                   className="tag-cloud-item"
                   onClick={() => toggleTag(tag)}
-                  style={{
-                    fontSize: `${0.75 + Math.min(count / 4, 1)}rem`,
-                  }}
                 >
                   #{tag}
                   <span className="tag-count">{count}</span>
@@ -264,7 +262,7 @@ export function DocsPage() {
               }}
               disabled={!hasActiveFilters}
             >
-              <Icon name="utility" size={14} />
+              <Icon name="close" size={13} />
               Clear all filters
             </button>
           </div>
@@ -273,6 +271,16 @@ export function DocsPage() {
         {/* Documentation Content */}
         <div className="docs-content">
           {hasActiveFilters ? (
+            !results.length ? (
+              <div className="docs-empty">
+                <span className="docs-empty-icon" aria-hidden="true"><Icon name="search" size={16} /></span>
+                <strong>No articles match {filters.query ? `“${filters.query}”` : "these filters"}</strong>
+                <p>Try a broader search term, or clear the filters to browse every guide.</p>
+                <button className="button button-muted button-small" type="button" onClick={() => { clearFilters(); setSelectedSection(""); }}>
+                  Clear filters
+                </button>
+              </div>
+            ) : (
             /* Search Results View */
             <div className="search-results-view">
               {Object.entries(groupedResults).map(([category, categoryResults]) => (
@@ -288,6 +296,7 @@ export function DocsPage() {
                 </section>
               ))}
             </div>
+            )
           ) : selectedSection ? (
             /* Single Category View */
             <div className="category-view">

@@ -1,8 +1,10 @@
 import asyncio
 import json
+import re
 import string
 import sys
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -498,6 +500,74 @@ class VoiceMasterCommandMetadataTests(unittest.TestCase):
         self.assertEqual(parsed["en"], "Lock your voice channel so nobody else can join")
         self.assertEqual(parsed["de"], "Sperrt deinen Sprachkanal für andere")
         self.assertIn("Bloquea", parsed["es"])
+
+
+class PanelPreviewCopyTests(unittest.TestCase):
+    """The website replays the panel, so its copy must match the bot's.
+
+    ``web/src/data/voiceMasterPanel.ts`` holds a copy of the strings the panel
+    and its ephemeral replies render. The bot's locale files stay the source of
+    truth: if a translation changes there and not here, the landing page would
+    quietly show members wording the bot no longer sends.
+    """
+
+    WEBSITE_COPY = Path("web/src/data/voiceMasterPanel.ts")
+
+    #: Every message key the website mirrors.
+    MIRRORED = (
+        "interface_title",
+        "interface_lock",
+        "interface_unlock",
+        "interface_hide",
+        "interface_reveal",
+        "interface_claim",
+        "interface_disconnect",
+        "interface_view",
+        "interface_increase",
+        "interface_decrease",
+        "action_locked",
+        "action_unlocked",
+        "action_hidden",
+        "action_revealed",
+        "action_claimed",
+        "action_limit_increased",
+        "action_limit_decreased",
+        "info_owner",
+        "info_members",
+        "info_limit",
+        "info_bitrate",
+        "info_region",
+        "info_status",
+        "info_no_limit",
+        "info_automatic",
+        "info_open",
+        "disconnect_placeholder",
+        "disconnect_option",
+        "disconnect_done",
+    )
+
+    def _website_strings(self) -> set:
+        source = self.WEBSITE_COPY.read_text(encoding="utf-8")
+        return {
+            json.loads(f'"{literal}"')
+            for literal in re.findall(r'"((?:[^"\\]|\\.)*)"', source)
+        }
+
+    def test_every_translation_reaches_the_website(self):
+        website = self._website_strings()
+
+        for lang in ("en", "de", "es", "fr"):
+            catalogue = load_locales("cogs.voicemaster", "messages")[lang]
+            for key in self.MIRRORED:
+                self.assertIn(
+                    catalogue[key], website,
+                    f"{lang}:{key} is missing from the website's panel copy",
+                )
+
+    def test_the_preview_pings_the_owners_account(self):
+        source = self.WEBSITE_COPY.read_text(encoding="utf-8")
+
+        self.assertIn('PANEL_OWNER_ID = "1052690741874401360"', source)
 
 
 if __name__ == "__main__":

@@ -4,12 +4,14 @@ import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import { DiscordMarkdown } from "../DiscordMarkdown";
 import { RoleSelect } from "./RoleSelect";
+import { Select, selectOptions } from "./Select";
 import type { StaffApplicationQuestionType, GuildResources, StaffApplication, StaffApplicationSubmission } from "../../types";
 import { DashHeading } from "./DashboardViews";
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
 type QuestionDraft = { id: string; prompt: string; required: boolean; type: StaffApplicationQuestionType; options: string[] };
 const newQuestion = (): QuestionDraft => ({ id: crypto.randomUUID(), prompt: "", required: true, type: "paragraph", options: ["", ""] });
+const ANSWER_TYPES = selectOptions([["short_text", "Short text"], ["paragraph", "Long answer"], ["single_choice", "Choose one"], ["multi_choice", "Choose many"], ["yes_no", "Yes / no"], ["date", "Date"]]);
 
 export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) {
   const [applications, setApplications] = useState<StaffApplication[]>([]);
@@ -49,6 +51,7 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (!roleId) { notifyError("Choose the Discord role this opening is hiring for.", "applications-editor"); return; }
     const invalidChoices = questions.some((question) => ["single_choice", "multi_choice"].includes(question.type)
       && (question.options.filter((option) => option.trim()).length < 2 || question.options.some((option) => !option.trim())));
     if (invalidChoices) { notifyError("Each choice question needs at least two non-empty options.", "applications-editor"); return; }
@@ -131,14 +134,14 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
         <div className="panel-heading"><div><span className="panel-kicker">{editingId ? "Edit opening" : "New opening"}</span><h3>{editingId ? "Update role application" : "Create a role application"}</h3><p>{editingId ? "Changes apply to the existing link. Previously submitted answers remain attached." : "One saved opening per role and hiring round. Reopen it later to reuse its URL."}</p></div><span className="panel-icon"><Icon name={editingId ? "settings" : "plus"} /></span></div>
         <div className="form-grid applications-fields">
           <label className="form-field"><span className="form-label">Opening title</span><input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Community moderator" /></label>
-          <label className="form-field"><span className="form-label">Discord role</span><RoleSelect required roles={resources?.roles || []} value={roleId} placeholder="Choose the role you’re hiring for" onChange={(value) => setRoleId(String(value))} /></label>
+          <div className="form-field"><span className="form-label">Discord role</span><RoleSelect roles={resources?.roles || []} value={roleId} placeholder="Choose the role you’re hiring for" ariaLabel="Discord role" onChange={(value) => setRoleId(String(value))} /></div>
           <label className="form-field application-description"><span className="form-label">About this opening</span><textarea rows={3} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Share what the role involves and who you’re looking for." />{description.trim() && <DiscordMarkdown text={description} className="role-select-preview" interactiveUsers={false} />}</label>
           <label className="form-field application-role-gates"><span className="form-label">Eligibility role gates</span><RoleSelect roles={resources?.roles || []} value={eligibleRoles} multiple ariaLabel="Eligibility role gates" onChange={(value) => setEligibleRoles(Array.isArray(value) ? value : [])} /><small>Applicants need at least one selected role. Leave empty to allow any server member.</small></label>
         </div>
         <div className="application-question-heading"><div><span className="form-label">Application questions</span><small>Ask up to 12 questions. Required answers must be completed.</small></div><button type="button" className="button button-muted button-small" onClick={() => setQuestions((current) => current.length < 12 ? [...current, newQuestion()] : current)} disabled={questions.length >= 12}>＋ Add question</button></div>
         <div className="application-question-list">{questions.map((question, index) => <div className="application-question" key={question.id}>
           <label className="form-field"><span className="form-label">Question {index + 1}</span><input required maxLength={240} value={question.prompt} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, prompt: event.target.value } : item))} placeholder="Why would you be a good fit?" /></label>
-          <label className="form-field application-type-field"><span className="form-label">Answer type</span><select value={question.type} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, type: event.target.value as StaffApplicationQuestionType } : item))}><option value="short_text">Short text</option><option value="paragraph">Long answer</option><option value="single_choice">Choose one</option><option value="multi_choice">Choose many</option><option value="yes_no">Yes / no</option><option value="date">Date</option></select></label>
+          <div className="form-field application-type-field"><span className="form-label">Answer type</span><Select ariaLabel="Answer type" placeholder={null} options={ANSWER_TYPES} value={question.type} onChange={(value) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, type: value as StaffApplicationQuestionType } : item))} /></div>
           {["single_choice", "multi_choice"].includes(question.type) && <div className="application-options-field"><span className="form-label">Options <small>At least two choices</small></span><div className="application-option-list">{question.options.map((option, optionIndex) => <div className="application-option-row" key={`${question.id}-${optionIndex}`}><input required maxLength={100} aria-label={`Question ${index + 1}, option ${optionIndex + 1}`} value={option} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, options: item.options.map((value, i) => i === optionIndex ? event.target.value : value) } : item))} placeholder={`Option ${optionIndex + 1}`} /><button type="button" className="application-option-remove" onClick={() => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, options: item.options.filter((_, i) => i !== optionIndex) } : item))} disabled={question.options.length <= 2} aria-label={`Remove option ${optionIndex + 1}`}>Remove</button></div>)}</div><button type="button" className="button button-muted button-small application-option-add" onClick={() => setQuestions((current) => current.map((item) => item.id === question.id && item.options.length < 20 ? { ...item, options: [...item.options, ""] } : item))} disabled={question.options.length >= 20}>＋ Add option</button></div>}
           <label className="application-required"><input type="checkbox" checked={question.required} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, required: event.target.checked } : item))} /> Required</label>{questions.length > 1 && <button type="button" className="application-remove-question" onClick={() => setQuestions((current) => current.filter((item) => item.id !== question.id))} aria-label={`Remove question ${index + 1}`}>×</button>}
         </div>)}</div>

@@ -70,6 +70,13 @@ export function DashboardShell({
   const sidebarRef = useRef<HTMLElement>(null);
   const wasSidebarOpen = useRef(false);
   const installedGuilds = guilds.filter((guild) => guild.installed !== false);
+  // The private staff pages are routed outside the view/section state this shell
+  // drives, so their current entry is read from the path itself; the mailbox and
+  // its report queue share one entry.
+  const path = window.location.pathname.replace(/\/+$/, "");
+  const staffPage: "workspace" | "email" | null = path.startsWith("/dashboard/staff/email")
+    ? "email"
+    : path === "/dashboard/staff" ? "workspace" : null;
 
   useEffect(() => {
     if (!sidebarOpen) {
@@ -142,8 +149,8 @@ export function DashboardShell({
       {personalSections.map(([id, label, icon]) => (
         <button
           key={id}
-          className={view === "overview" && userTab === id ? "active" : ""}
-          aria-current={view === "overview" && userTab === id ? "page" : undefined}
+          className={view === "overview" && !staffPage && userTab === id ? "active" : ""}
+          aria-current={view === "overview" && !staffPage && userTab === id ? "page" : undefined}
           onClick={() => { onUserTabChange(id); setSidebarOpen(false); }}
         >
           <Icon name={icon} /><span>{label}</span>
@@ -154,15 +161,23 @@ export function DashboardShell({
 
   const primaryNav = (mobile = false) => (
     <nav className={mobile ? "dash-nav dash-primary-nav dash-nav-mobile" : "dash-nav dash-primary-nav"} aria-label="Dashboard">
-      <button className={view === "overview" ? "active" : ""} aria-current={view === "overview" ? "page" : undefined} onClick={() => { onHome(); setSidebarOpen(false); }}>
+      <button className={view === "overview" && !staffPage ? "active" : ""} aria-current={view === "overview" && !staffPage ? "page" : undefined} onClick={() => { onHome(); setSidebarOpen(false); }}>
         <Icon name="grid" /><span>My overview</span>
       </button>
       <button className={view === "servers" ? "active" : ""} aria-current={view === "servers" ? "page" : undefined} onClick={() => { onServers(); setSidebarOpen(false); }}>
         <Icon name="users" /><span>My servers</span>
       </button>
-      {staffRole && <button onClick={() => { navigate("/dashboard/staff"); setSidebarOpen(false); }}><Icon name="shield" /><span>Staff workspace</span></button>}
+      {staffRole && <button
+        className={staffPage === "workspace" ? "active" : ""}
+        aria-current={staffPage === "workspace" ? "page" : undefined}
+        onClick={() => { navigate("/dashboard/staff"); setSidebarOpen(false); }}
+      ><Icon name="shield" /><span>Staff workspace</span></button>}
       {/* Every staff member holds an address here, and the page is never linked publicly. */}
-      {staffRole && <button onClick={() => { navigate("/dashboard/staff/email"); setSidebarOpen(false); }}><Icon name="mail" /><span>Staff email</span></button>}
+      {staffRole && <button
+        className={staffPage === "email" ? "active" : ""}
+        aria-current={staffPage === "email" ? "page" : undefined}
+        onClick={() => { navigate("/dashboard/staff/email"); setSidebarOpen(false); }}
+      ><Icon name="mail" /><span>Staff email</span></button>}
     </nav>
   );
 

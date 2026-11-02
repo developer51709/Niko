@@ -83,6 +83,14 @@ export type StaffAnalytics = {
 export type PublicConfig = {
   application_id: string;
   bot_avatar_url?: string | null;
+  /** The bot's username, as Discord stores it. */
+  bot_name?: string | null;
+  /** The four-digit tag, or "0" for accounts Discord no longer tags. */
+  bot_discriminator?: string | null;
+  /** The name Discord shows above the bot's messages (global display name). */
+  bot_display_name?: string | null;
+  /** Discord's verified-bot tick, drawn inside the APP tag. */
+  bot_verified?: boolean;
   invite_url: string;
   support_server_url?: string | null;
   oauth_available: boolean;
@@ -600,10 +608,12 @@ export type GuildProfile = {
   name_colors?: number[];
 };
 
-/** Niko's application-wide avatar and banner, shown until a server sets its own. */
+/** Niko's application-wide identity, shown until a server sets its own. */
 export type GlobalProfile = {
   avatar_url?: string | null;
   banner_url?: string | null;
+  /** The bot's Discord bio, set globally with /setprofile. */
+  bio?: string | null;
 };
 
 export type ServerConfig = {
@@ -831,7 +841,7 @@ export type GuildConfig = {
 export type GuildResources = {
   channels: { id: string; name: string; type?: string }[];
   voice_channels?: { id: string; name: string; type?: string }[];
-  roles: { id: string; name: string }[];
+  roles: { id: string; name: string; color?: string | null; colors?: string[] }[];
 };
 
 export type BoosterSettings = {

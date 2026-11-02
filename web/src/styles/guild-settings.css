@@ -4,25 +4,21 @@
 .dashboard-menu { position: relative; }
 .dashboard-menu-trigger { gap: 8px; }
 .dashboard-menu-trigger .icon { width: 15px; height: 15px; }
-/* The popover floats over page content, so it keeps the dashboard's dark glass
-   treatment at a high enough opacity for its labels to stay readable. */
+/* Same frosted panel as the dashboard's cards and panels, so the menu reads as
+   another sheet of glass over the page rather than a separate dark slab. */
 .dashboard-menu-popover {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  z-index: 20;
+  position: fixed;
+  z-index: 70;
   display: grid;
   min-width: 208px;
   gap: 3px;
   padding: 9px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 42%),
-    linear-gradient(150deg, rgba(30, 34, 41, .9), rgba(8, 9, 11, .92));
-  border: 1px solid rgba(226, 234, 246, .22);
-  border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .52), inset 0 1px 0 rgba(255, 255, 255, .14);
-  -webkit-backdrop-filter: blur(26px) saturate(160%);
-  backdrop-filter: blur(26px) saturate(160%);
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-soft);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
   animation: dash-menu-in .16s ease both;
 }
 .dashboard-menu-popover a {
@@ -269,17 +265,23 @@
 .profile-editor-heading p { margin: 0; color: var(--muted); font-size: 11px; }
 .profile-server-tag { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; color: var(--sage); background: rgba(139, 213, 177, .08); border: 1px solid rgba(139, 213, 177, .16); border-radius: 999px; font: 9px "Space Mono", monospace; white-space: nowrap; }
 .profile-server-tag .status-dot { width: 6px; height: 6px; }
-.profile-preview-card { position: relative; overflow: hidden; max-width: 610px; margin: auto; background: #1d2025; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-soft); }
-.profile-preview-banner { position: relative; display: flex; justify-content: flex-end; align-items: flex-start; width: 100%; height: 176px; padding: 14px; background: radial-gradient(ellipse at 72% 12%, rgba(139,213,177,.23), transparent 38%), radial-gradient(ellipse at 18% 100%, rgba(198,181,142,.16), transparent 44%), linear-gradient(125deg,#32383a,#24292d 52%,#3a3d37); background-size: cover; background-position: center; border: 0; cursor: pointer; }
+.profile-preview-card { position: relative; overflow: hidden; max-width: 468px; margin: auto; background: #232428; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-soft); }
+.profile-preview-banner { position: relative; display: flex; justify-content: flex-end; align-items: flex-start; width: 100%; height: 148px; padding: 14px; background: radial-gradient(ellipse at 72% 12%, rgba(139,213,177,.23), transparent 38%), radial-gradient(ellipse at 18% 100%, rgba(198,181,142,.16), transparent 44%), linear-gradient(125deg,#32383a,#24292d 52%,#3a3d37); background-size: cover; background-position: center; border: 0; cursor: pointer; }
 .profile-preview-banner:hover { filter: brightness(1.1); }
 .profile-preview-banner > span { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; color: #f4f5f7; background: rgba(8,9,11,.7); border: 1px solid rgba(255,255,255,.16); border-radius: 8px; font-size: 10px; }
-.profile-preview-avatar { position: absolute; top: 127px; left: 24px; display: grid; place-items: center; width: 94px; height: 94px; padding: 5px; color: #eff5ef; background: #1d2025; border: 0; border-radius: 28px; font-size: 36px; font-weight: 800; cursor: pointer; }
-.profile-preview-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 23px; }
-.profile-preview-avatar > span { display: grid; place-items: center; width: 100%; height: 100%; background: linear-gradient(145deg,#8bd5b1,#647a68); border-radius: 23px; }
-.profile-preview-avatar i { position: absolute; right: -3px; bottom: 0; display: grid; place-items: center; width: 28px; height: 28px; color: #f4f5f7; background: #32363c; border: 3px solid #1d2025; border-radius: 50%; }
-.profile-preview-body { min-height: 186px; padding: 54px 24px 21px; }
+.profile-preview-avatar { position: absolute; top: 103px; left: 18px; display: grid; place-items: center; width: 88px; height: 88px; padding: 4px; color: #eff5ef; background: #232428; border: 0; border-radius: 50%; font-size: 34px; font-weight: 800; cursor: pointer; }
+.profile-preview-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.profile-preview-avatar > span { display: grid; place-items: center; width: 100%; height: 100%; background: linear-gradient(145deg,#8bd5b1,#647a68); border-radius: 50%; }
+.profile-preview-avatar i { position: absolute; right: -1px; bottom: 1px; display: grid; place-items: center; width: 26px; height: 26px; color: #f4f5f7; background: #32363c; border: 3px solid #232428; border-radius: 50%; }
+.profile-preview-body { min-height: 178px; padding: 50px 18px 18px; }
+.profile-preview-identity { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.profile-preview-identity .profile-preview-name { width: auto; max-width: 100%; }
+.profile-preview-identity .dc-app-badge { padding: 3px 5px; border-radius: 4px; }
+.profile-preview-handle { display: block; margin-top: 3px; color: #a8afba; font-size: 12px; }
+.profile-preview-divider { height: 1px; margin: 13px 0 11px; background: rgba(255,255,255,.07); }
+.profile-preview-label { display: block; margin-bottom: 5px; color: #dbdee1; text-transform: uppercase; letter-spacing: .02em; font-size: 10px; font-weight: 700; }
 .profile-preview-name,.profile-preview-bio { position: relative; display: flex; align-items: center; width: 100%; color: var(--ink); text-align: left; background: transparent; border: 0; cursor: pointer; }
-.profile-preview-name { gap: 12px; padding: 0; font-size: 22px; font-weight: 800; }
+.profile-preview-name { gap: 12px; padding: 0; font-size: 20px; font-weight: 700; }
 .profile-preview-name:hover,.profile-preview-bio:hover { color: #fff; }
 .profile-preview-banner > span { width: 32px; height: 32px; justify-content: center; padding: 0; opacity: 0; transition: opacity .16s ease; }
 .profile-preview-banner:hover > span,.profile-preview-banner:focus-visible > span { opacity: 1; }
@@ -293,9 +295,11 @@
 .profile-image-upload input[type=file] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .profile-image-upload p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .profile-preview-name > span,.profile-preview-bio > span { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; padding: 5px 8px; color: #c3c9d0; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); border-radius: 7px; font: 9px "Space Mono",monospace; }
-.profile-preview-bio { justify-content: space-between; gap: 16px; margin-top: 10px; padding: 0; color: #c1c6cd; font-size: 11px; line-height: 1.6; }
-.profile-preview-presence { display: flex; align-items: center; gap: 7px; margin-top: 17px; color: #aeb6bf; font-size: 10px; }
-.profile-preview-presence i { width: 7px; height: 7px; background: var(--sage); border-radius: 50%; box-shadow: 0 0 10px rgba(139,213,177,.55); }
+.profile-preview-bio { display: block; justify-content: space-between; gap: 16px; margin-top: 0; padding: 0; color: #c3c9d2; font-size: 12px; line-height: 1.55; }
+.profile-preview-bio .discord-markdown { color: inherit; line-height: inherit; }
+.profile-preview-bio .discord-markdown .discord-md-emoji { width: 1.375em; height: 1.375em; vertical-align: -.28em; }
+.profile-preview-bio:hover { text-decoration: underline; text-underline-offset: 2px; }
+.profile-preview-bio.is-empty { color: #7b828d; font-style: italic; }
 .profile-edit-hint { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; color: var(--dim); font-size: 10px; }
 .profile-edit-hint .icon { color: var(--sage); }
 .profile-editor-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(4,5,6,.72); backdrop-filter: blur(8px); }
@@ -304,8 +308,27 @@
 .profile-editor-dialog header h2 { margin: 6px 0 0; font-size: 19px; letter-spacing: -.04em; }
 .profile-editor-dialog footer { justify-content: flex-end; padding-top: 6px; }
 .profile-editor-close { display: grid; place-items: center; width: 34px; height: 34px; color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+/* AI experiment learn-more sheet: the dashboard's glass panel, floating over a
+   dimmed and blurred page instead of the old flat card. */
+.ai-experiment-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(4, 5, 6, .66); backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%); animation: dialog-fade-in .16s ease-out; }
+.ai-experiment-dialog { display: grid; gap: 16px; width: min(468px, 100%); max-height: min(680px, calc(100vh - 40px)); overflow-y: auto; padding: 22px; color: var(--ink); background: rgba(16, 18, 21, .84); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-soft), 0 30px 90px rgba(0, 0, 0, .55); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); animation: dialog-rise-in .18s ease-out; }
+.ai-experiment-dialog header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 13px; }
+.ai-experiment-mark { width: 38px; height: 38px; display: grid; place-items: center; color: var(--accent-dark); background: var(--surface-muted); border: 1px solid var(--line); border-radius: 12px; }
+.ai-experiment-meta { display: flex; align-items: center; gap: 9px; }
+.ai-experiment-state { display: inline-flex; align-items: center; padding: 3px 7px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; background: var(--surface-muted); border: 1px solid var(--line-soft); border-radius: 999px; font: 700 9px "Space Mono", monospace; }
+.ai-experiment-state.is-on { color: #a7e4bf; background: rgba(82, 165, 116, .14); border-color: rgba(139, 213, 177, .24); }
+.ai-experiment-dialog header h2 { margin: 7px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -.045em; }
+.ai-experiment-lead { margin: 0; padding: 11px 13px; color: var(--ink); background: var(--callout); border: 1px solid var(--line-soft); border-radius: 11px; font-size: 12px; line-height: 1.6; }
+.ai-experiment-copy { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.ai-experiment-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 15px; margin-top: 2px; border-top: 1px solid var(--line-soft); }
+.ai-experiment-scope { display: inline-flex; align-items: center; gap: 7px; color: var(--dim); font-size: 10px; }
+@media (max-width: 640px) {
+  .ai-experiment-dialog { padding: 18px; }
+  .ai-experiment-dialog footer { flex-direction: column-reverse; align-items: stretch; gap: 11px; }
+  .ai-experiment-dialog footer .button { width: 100%; }
+}
 .profile-color-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 640px) { .profile-editor-panel { padding: 18px; }.profile-editor-heading { flex-direction: column; }.profile-preview-banner { height: 132px; }.profile-preview-avatar { top: 93px; width: 78px; height: 78px; border-radius: 24px; }.profile-preview-body { padding: 47px 17px 19px; }.profile-preview-name { flex-wrap: wrap; font-size: 19px; }.profile-preview-bio { align-items: flex-start; flex-direction: column; gap: 8px; }.profile-color-fields { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .profile-editor-panel { padding: 18px; }.profile-editor-heading { flex-direction: column; }.profile-preview-banner { height: 132px; }.profile-preview-avatar { top: 93px; width: 78px; height: 78px; border-radius: 50%; }.profile-preview-body { padding: 47px 17px 19px; }.profile-preview-name { flex-wrap: wrap; font-size: 19px; }.profile-preview-bio { align-items: flex-start; flex-direction: column; gap: 8px; }.profile-color-fields { grid-template-columns: 1fr; } }
 .settings-section-title { margin-bottom: 18px; }
 .settings-section-title p { margin: 6px 0 0; color: var(--dim); font-size: 10px; line-height: 1.5; }
 /* One shared treatment for top-right icons on guild settings and analytics cards. */
@@ -670,7 +693,8 @@
   min-height: 76px;
   padding-right: max(24px, calc((100vw - 1120px) / 2));
   padding-left: max(24px, calc((100vw - 1120px) / 2));
-  background: rgba(5, 6, 7, .94);
+  /* The bar stays see-through so the animated backdrop reads through it, the
+     same way the public header does. */
 }
 .dashboard-sidebar-toggle {
   display: none;
@@ -705,6 +729,14 @@
   border-right: 1px solid var(--line-soft);
   border-bottom: 0;
   z-index: 1;
+}
+/* The rail wears the header's own tint and blur, so the sidebar and the navbar
+   read as one continuous sheet of glass down the left edge of the workspace.
+   Below 900px the sliding drawer keeps its darker overlay tint instead. */
+.dashboard-layout .dash-sidebar {
+  background: rgba(5, 6, 7, .82);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
 }
 .dashboard-layout .dash-sidebar .side-rail-heading { display: flex; }
 .dashboard-layout .dash-sidebar .dash-mobile-controls { display: none; }
@@ -804,4 +836,13 @@
 @media (prefers-reduced-motion: reduce) {
   .dashboard-layout .dash-sidebar,
   .dashboard-sidebar-backdrop { transition-duration: .01ms; animation-duration: .01ms; }
+  .ai-experiment-backdrop, .ai-experiment-dialog { animation: none; }
+}
+
+/* Keep the tint but drop the blur when transparency effects are turned off,
+   like the rest of the dashboard's glass. */
+@media (prefers-reduced-transparency: reduce) {
+  .dashboard-layout .dash-sidebar { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .ai-experiment-backdrop { background: rgba(4, 5, 6, .86); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .ai-experiment-dialog { background: #101215; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

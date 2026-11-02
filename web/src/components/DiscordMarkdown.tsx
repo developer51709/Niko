@@ -337,7 +337,15 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
     const key = `${prefix}-${index}`;
     if (node.kind === "text") return <span key={key}>{node.text}</span>;
     if (node.kind === "code") return <code key={key} className="discord-md-code">{node.text}</code>;
-    if (node.kind === "link") return <a key={key} className="discord-md-link" href={node.url} target="_blank" rel="noopener noreferrer">{node.text}</a>;
+    if (node.kind === "link") {
+      // Discord lets a masked link's text be an inline code span, which is how
+      // the bot writes its command legend: [`Lock`](url). The code keeps its
+      // box and takes the link's colour instead of the usual code colour.
+      const code = /^`([^`\n]+)`$/.exec(node.text);
+      return <a key={key} className="discord-md-link" href={node.url} target="_blank" rel="noopener noreferrer">
+        {code ? <code className="discord-md-code">{code[1]}</code> : node.text}
+      </a>;
+    }
     if (node.kind === "emoji") return <DiscordEmoji key={key} name={node.name} id={node.id} animated={node.animated} className="discord-md-emoji" />;
     if (node.kind === "timestamp") {
       const label = timestampLabel(node.unix, node.style);
@@ -735,6 +743,52 @@ export function useDiscordProfile(enabled = true) {
     : null;
 
   return { openProfile, closeProfile, dialog };
+}
+
+export type DiscordUserSummary = {
+  id: string;
+  username: string;
+  display_name: string;
+  guild_nick: string | null;
+  avatar_url: string | null;
+  /** The server tag Discord prints beside a name in this guild, if any. */
+  guild_tag: string | null;
+  guild_badge_url: string | null;
+};
+
+/**
+ * The public parts of one member's profile, for surfaces that draw a person
+ * without opening a popup. It reads the same endpoint the popup does, so a
+ * demo card shows the account's real name and avatar, and an id that cannot be
+ * resolved simply leaves the card on its fallback initial.
+ */
+export function useDiscordUser(userId: string) {
+  const [user, setUser] = useState<DiscordUserSummary | null>(null);
+  useEffect(() => {
+    if (!/^\d{1,22}$/.test(userId)) {
+      setUser(null);
+      return;
+    }
+    let active = true;
+    fetchDiscordProfile(userId)
+      .then((profile) => {
+        if (!active) return;
+        setUser({
+          id: profile.id,
+          username: profile.username,
+          display_name: profile.display_name,
+          guild_nick: profile.guild_nick,
+          avatar_url: profile.avatar_url,
+          guild_tag: profile.guild_tag,
+          guild_badge_url: profile.guild_badge_url,
+        });
+      })
+      .catch(() => {
+        // Keep the initial-letter fallback rather than claiming a profile.
+      });
+    return () => { active = false; };
+  }, [userId]);
+  return user;
 }
 
 export function DiscordMarkdown({ text, mentionNames, guildId, className, style, interactiveUsers = true, inline = false }: {

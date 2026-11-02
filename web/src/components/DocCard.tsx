@@ -52,7 +52,11 @@ export function DocCard({ doc, variant = "default" }: DocCardProps) {
           <span className="doc-order">#{page.order}</span>
         </div>
 
-        <h3 className="doc-title">{page.title}</h3>
+        <h3 className="doc-title">
+          <a href={`/docs/${page.slug}`} onClick={handleClick} onKeyDown={handleKeyDown}>
+            {page.title}
+          </a>
+        </h3>
 
         <p className="doc-excerpt">{page.excerpt}</p>
 
