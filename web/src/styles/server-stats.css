@@ -16,6 +16,12 @@
 .dashboard-layout .server-stat-metrics span { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-layout .server-stat-metrics strong { grid-column: 1 / -1; overflow: hidden; color: var(--ink); font-size: 17px; letter-spacing: -.05em; text-overflow: ellipsis; }
 .dashboard-layout .server-stat-metrics small { grid-column: 1 / -1; overflow: hidden; color: var(--dim); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+/* Week-over-week movement, kept as one quiet line under the tile's note. */
+.dashboard-layout .server-stat-metrics em { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 4px; overflow: hidden; color: var(--muted); font-size: 8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-layout .server-stat-metrics em i { flex: 0 0 auto; font-size: 7px; font-style: normal; line-height: 1; }
+.dashboard-layout .server-stat-metrics em.is-up i { color: var(--sage); }
+.dashboard-layout .server-stat-metrics em.is-down i { color: #b58a68; }
+.dashboard-layout .server-stat-metrics em.is-flat i { color: var(--dot); }
 .dashboard-layout .stats-tabs { width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
 .dashboard-layout .stats-tabs-list { position: relative; display: flex; gap: 3px; overflow-x: auto; padding: 5px 5px 0; border-bottom: 1px solid var(--line); background: var(--surface-raised); }
 .dashboard-layout .stats-tabs-indicator { position: absolute; top: 4px; bottom: -1px; z-index: 0; border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; background: var(--surface); }
@@ -52,7 +58,7 @@
 .dashboard-layout .server-chart-point { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
 .dashboard-layout .server-chart-point.is-selected { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
 .dashboard-layout .server-chart-days { display: flex; justify-content: space-between; gap: 2px; padding: 0 0 0 12%; color: var(--dim); font: 8px "Space Mono", monospace; }
-.dashboard-layout .server-member-chart { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); align-items: end; gap: 5px; height: 112px; padding: 9px 2px 0; border-bottom: 1px solid var(--line-soft); border-radius: 6px; outline: none; touch-action: pan-y; }
+.dashboard-layout .server-member-chart { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); align-items: end; gap: 5px; height: 112px; padding: 9px 2px 0; border-bottom: 1px solid var(--line-soft); border-radius: 6px; outline: none; touch-action: pan-y; }
 .dashboard-layout .server-member-chart:focus-visible { outline: 2px solid rgba(213, 220, 229, .5); outline-offset: 2px; }
 .dashboard-layout .server-member-day { min-width: 0; width: 100%; display: flex; height: 100%; padding: 0; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; color: var(--dim); background: transparent; border: 0; border-radius: 5px; font: 7px "Space Mono", monospace; appearance: none; cursor: pointer; transition: background .15s ease, color .15s ease; }
 .dashboard-layout .server-member-day:hover, .dashboard-layout .server-member-day.is-selected { color: var(--ink); background: rgba(255, 255, 255, .06); }

@@ -198,7 +198,6 @@
 
 /* Team cards and member profile; higher specificity intentionally overrides the page-local style block. */
 .site-content .team-card,
-.site-content .team-profile-card,
 .site-content .team-activity-content .activity-card {
   color: #f4f5f7;
   background: rgba(9, 10, 12, .78);
@@ -220,8 +219,28 @@
 .site-content .team-activity-content .presence-line { color: #b4bac3; }
 .site-content .team-role { color: #d5d9df; }
 .site-content .team-profile-links a { color: #d5d9df; background: rgba(255, 255, 255, .07); border-color: rgba(226, 234, 246, .16); }
-.site-content .team-profile-banner { border-radius: 18px 18px 0 0; }
-.site-content .team-profile-card { border-top: 0; border-radius: 0 0 18px 18px; }
+/* Staff member profile: the outer shell is the only frame. The banner and the
+   card sit inside it, so a border or radius of their own would draw a second
+   outline just inside the shell's and round the corners at a different angle. */
+.site-content .team-profile-shell {
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
+  border-radius: 18px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.site-content .team-profile-banner,
+.site-content .team-profile-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.site-content .team-profile-card {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 .site-content .team-avatar { border-color: rgba(15, 20, 29, .9); }
 
 /* Changelog timeline and release details */
@@ -297,7 +316,7 @@
   .site-content .docs-page .doc-card,
   .site-content .commands-grid .command-card,
   .site-content .team-card,
-  .site-content .team-profile-card,
+  .site-content .team-profile-shell,
   .site-content .changelog-entry-card,
   .site-content .changelog-highlight-card { background: rgba(5, 6, 7, .94); }
 }
@@ -334,7 +353,7 @@
   .site-content .docs-page .doc-card,
   .site-content .commands-grid .command-card,
   .site-content .team-card,
-  .site-content .team-profile-card,
+  .site-content .team-profile-shell,
   .site-content .changelog-entry-card,
   .site-content .changelog-highlight-card { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(5, 6, 7, .96); }
 }

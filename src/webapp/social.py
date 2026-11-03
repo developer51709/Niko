@@ -175,17 +175,16 @@ def _guild_embed_context(guild_id: str) -> dict | None:
     }
 
 
-def _staff_embed_context(member_id: str) -> dict | None:
+def _staff_embed_context(profile_key: str) -> dict | None:
     """One team member, from the public roster only.
 
-    ``_load_staff_rows`` is the same list the team page itself serves, so a
-    hidden or suspended profile has no context and falls back to the section's
-    generic copy rather than leaking through the preview.
+    ``_find_staff_member`` reads the same roster the team page itself serves, so
+    a hidden or suspended profile has no context and falls back to the section's
+    generic copy rather than leaking through the preview. The key is the shared
+    profile link, so both `/team/<username>` and `/team/<user id>` preview alike.
     """
-    if not member_id or not member_id.isdigit():
-        return None
     try:
-        member = next((item for item in staff._load_staff_rows() if str(item.get("id")) == member_id), None)
+        member = staff._find_staff_member(profile_key)
     except Exception:
         member = None
     if not member:

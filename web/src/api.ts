@@ -89,9 +89,12 @@ export const resolveDiscordText = (text: string, guildId?: string) => api<{
   body: JSON.stringify({ text, ...(guildId ? { guild_id: guildId } : {}) }),
 });
 export const getTeam = () => api<StaffMember[]>("/api/team");
-export const getTeamRecruitmentOpenings = () => api<{ openings: TeamRecruitmentOpening[] }>("/api/team-recruitment");
-export const getTeamRecruitmentOpening = (openingId: string) => api<TeamRecruitmentOpening>(`/api/team-recruitment/${encodeURIComponent(openingId)}`);
-export const submitTeamRecruitmentApplication = (openingId: string, answers: Record<string, string | string[]>, csrfToken?: string) => api<{ ok: boolean; message: string }>(`/api/team-recruitment/${encodeURIComponent(openingId)}/submit`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ answers }) });
+// `bypassMembership` is the owner devtools switch. The server honours it only
+// for a configured owner session, so it cannot be used to skip the real check.
+const membershipQuery = (bypassMembership?: boolean) => (bypassMembership ? "?bypass_membership=1" : "");
+export const getTeamRecruitmentOpenings = (bypassMembership?: boolean) => api<{ openings: TeamRecruitmentOpening[] }>(`/api/team-recruitment${membershipQuery(bypassMembership)}`);
+export const getTeamRecruitmentOpening = (openingId: string, bypassMembership?: boolean) => api<TeamRecruitmentOpening>(`/api/team-recruitment/${encodeURIComponent(openingId)}${membershipQuery(bypassMembership)}`);
+export const submitTeamRecruitmentApplication = (openingId: string, answers: Record<string, string | string[]>, csrfToken?: string, bypassMembership?: boolean) => api<{ ok: boolean; message: string }>(`/api/team-recruitment/${encodeURIComponent(openingId)}/submit${membershipQuery(bypassMembership)}`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ answers }) });
 export const getTeamRecruitmentSettings = () => api<TeamRecruitmentSettings>("/api/staff/team-recruitment");
 export const setTeamRecruitmentOpeningStatus = (openingId: string, status: "open" | "closed", csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/status`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
 export const getTeamRecruitmentSubmissions = (openingId: string) => api<{ opening: TeamRecruitmentOpening; submissions: TeamRecruitmentSubmission[] }>(`/api/staff/team-recruitment/${encodeURIComponent(openingId)}/submissions`);

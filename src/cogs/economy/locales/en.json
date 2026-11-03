@@ -1,6 +1,6 @@
 {
   "data": {
-    "daily_wait": "You can only claim your daily reward once every 24 hours.",
+    "daily_wait": "You can only claim your daily reward once every 20 hours.",
     "daily_success": "You claimed your daily reward of {reward} coins!",
     "work_wait": "You can only work once every hour.",
     "work_success": "You worked and earned {reward} coins!",

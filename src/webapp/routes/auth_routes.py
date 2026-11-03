@@ -120,6 +120,9 @@ def auth_status():
         "authenticated":   True,
         "oauth_available": True,
         "user":            session["user"],
+        # Only decides whether the owner devtools button is rendered; every
+        # devtools action it exposes is still a browser-local aid.
+        "owner":           _is_owner(),
         "csrf_token":      session["csrf_token"],
         "blacklisted":     bool(blacklist_entry),
         "blacklist_reason": (blacklist_entry.get("reason") or "No reason provided.") if blacklist_entry else None,

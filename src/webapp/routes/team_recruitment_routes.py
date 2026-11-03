@@ -345,6 +345,25 @@ def _member_exists(user_id):
         raise RuntimeError("Discord membership could not be verified right now.") from error
 
 
+def _membership_skipped():
+    """Whether this request may skip the support-server membership gate.
+
+    The owner devtools panel asks for this per request, and only a configured
+    owner session makes the parameter count. That keeps the bypass useful when
+    the bot itself is not in the support server — Discord answers 404 in that
+    case, which reads as "not a member" and would hide every opening — without
+    letting an applicant skip verification by adding the parameter themselves.
+
+    It covers submission as well as reading. The membership check runs first in
+    the submit pipeline, so skipping it is the only way to reach the eligibility
+    and required-answer gates behind it while testing.
+    """
+    if not _server._is_owner():
+        return False
+    value = str(request.args.get("bypass_membership") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def _opening(opening_id):
     row = run_on_bot_loop(_pool().fetchrow(
         "SELECT id, role_id, title, description, questions, status, created_at "
@@ -389,7 +408,7 @@ def team_recruitment_membership():
 def team_recruitment_openings():
     user_id = str(session["user"].get("id", ""))
     try:
-        if not _member_exists(user_id):
+        if not _membership_skipped() and not _member_exists(user_id):
             return jsonify({"error": "Join the Niko support server to view team openings."}), 403
         _ensure_fixed_openings()
         rows = run_on_bot_loop(_pool().fetch(
@@ -417,7 +436,7 @@ def team_recruitment_openings():
 @require_auth
 def team_recruitment_opening(opening_id):
     try:
-        if not _member_exists(session["user"].get("id", "")):
+        if not _membership_skipped() and not _member_exists(session["user"].get("id", "")):
             return jsonify({"error": "Join the Niko support server before applying."}), 403
         _ensure_fixed_openings()
         if not _is_fixed_application(opening_id):
@@ -427,6 +446,8 @@ def team_recruitment_opening(opening_id):
             return jsonify({"error": "That Niko team opening could not be found."}), 404
         if opening["status"] != "open":
             return jsonify({"error": "This Niko team opening is closed."}), 410
+
+
         exists = run_on_bot_loop(_pool().fetchrow(
             "SELECT user_id FROM staff_team_submissions WHERE opening_id = $1 AND user_id = $2",
             opening_id, str(session["user"].get("id", "")),
@@ -445,7 +466,7 @@ def team_recruitment_opening(opening_id):
 def submit_team_recruitment(opening_id):
     user_id = str(session["user"].get("id", ""))
     try:
-        if not _member_exists(user_id):
+        if not _membership_skipped() and not _member_exists(user_id):
             return jsonify({"error": "Join the Niko support server before applying."}), 403
         _ensure_fixed_openings()
         if not _is_fixed_application(opening_id):

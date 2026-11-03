@@ -25,6 +25,43 @@ function reportingWindow(activity: ServerStats["activity"]) {
   return start === end ? start : `${start} – ${end}`;
 }
 
+/** The comparison window: the last week against the week before it. */
+const TREND_DAYS = 7;
+
+type Trend = { direction: "up" | "down" | "flat"; text: string };
+
+/**
+ * Speak the change as a sentence rather than a raw number, so a tile still
+ * reads correctly when the previous week was empty (there is no percentage
+ * change from zero) or when the totals did not move at all.
+ */
+function trendOf(current: number, previous: number): Trend {
+  if (!previous) {
+    return current
+      ? { direction: "up", text: "new this week" }
+      : { direction: "flat", text: "no activity in 7 days" };
+  }
+  const change = Math.round(((current - previous) / previous) * 100);
+  if (!change) return { direction: "flat", text: "level with last week" };
+  return { direction: change > 0 ? "up" : "down", text: `${Math.abs(change)}% ${change > 0 ? "up" : "down"} on last week` };
+}
+
+/** Week-over-week movement for the three tiles fed by daily activity. */
+function weeklyTrend(activity: ServerStats["activity"]) {
+  const count = (rows: typeof activity, key: "messages" | "joins" | "leaves") =>
+    rows.reduce((sum, row) => sum + row[key], 0);
+  const current = activity.slice(-TREND_DAYS);
+  const previous = activity.slice(-TREND_DAYS * 2, -TREND_DAYS);
+  return {
+    messages: trendOf(count(current, "messages"), count(previous, "messages")),
+    joins: trendOf(count(current, "joins"), count(previous, "joins")),
+    net: trendOf(
+      count(current, "joins") - count(current, "leaves"),
+      count(previous, "joins") - count(previous, "leaves"),
+    ),
+  };
+}
+
 /**
  * The one day a chart is inspecting. Touch screens have no hover state, so a
  * tap (or a drag across the plot) selects a day and its readout stays visible;
@@ -144,6 +181,7 @@ function MemberChart({ stats }: Props) {
   const joined = stats.activity.reduce((sum, day) => sum + day.joins, 0);
   const left = stats.activity.reduce((sum, day) => sum + day.leaves, 0);
   const net = joined - left;
+  const busiestJoin = stats.activity.reduce((best, day) => day.joins > best.joins ? day : best, stats.activity[0] || { date: "", messages: 0, joins: 0, leaves: 0 });
   const max = Math.max(1, ...stats.activity.flatMap((day) => [day.joins, day.leaves]));
   const chartRef = useRef<HTMLDivElement>(null);
   const { selected, select, move, clear } = useDayScrub(stats.activity.length);
@@ -160,6 +198,7 @@ function MemberChart({ stats }: Props) {
     <div className="server-chart-heading"><div><span>Member movement</span><strong>{net > 0 ? "+" : ""}{formatNumber(net)} net members</strong></div><small>{reportingWindow(stats.activity)}</small></div>
     <p className="server-chart-description">Each date compares joins with departures; bar height shares one scale across all days.</p>
     {(joined || left) ? <>
+      <div className="server-chart-insights"><span>Daily average <strong>{net > 0 ? "+" : ""}{formatNumber(Math.round(net / stats.activity.length))}</strong></span><span>Most joins <strong>{formatNumber(busiestJoin.joins)} · {dayLabel(busiestJoin.date)}</strong></span></div>
       <div className={`server-chart-readout${selectedDay ? " is-active" : ""}`} aria-live="polite" aria-atomic="true">
         {selectedDay
           ? <><strong>{dayLabel(selectedDay.date)}</strong><span>{formatNumber(selectedDay.joins)} joined</span><span>{formatNumber(selectedDay.leaves)} left</span></>
@@ -168,6 +207,7 @@ function MemberChart({ stats }: Props) {
       <div
         ref={chartRef}
         className="server-member-chart"
+        style={{ gridTemplateColumns: `repeat(${Math.max(1, stats.activity.length)}, minmax(0, 1fr))` }}
         role="group"
         tabIndex={0}
         aria-label="Daily member joins and departures. Tap, hover, or use the arrow keys to inspect a day."
@@ -221,7 +261,7 @@ function LayoutChart({ stats }: Props) {
  * One metric tile. A live refresh counts the number up to its new value and
  * breathes the tile once, so movement is felt rather than just repainted.
  */
-function LiveMetric({ icon, label, value, note, signed = false }: { icon: ReactNode; label: string; value: number; note: string; signed?: boolean }) {
+function LiveMetric({ icon, label, value, note, signed = false, trend }: { icon: ReactNode; label: string; value: number; note: string; signed?: boolean; trend?: Trend }) {
   const reduceMotion = useReducedMotion();
   const display = useCountUp(value, !reduceMotion);
   const fresh = useFreshSignal(String(value), 1_400) && !reduceMotion;
@@ -229,6 +269,9 @@ function LiveMetric({ icon, label, value, note, signed = false }: { icon: ReactN
     {icon}<span>{label}</span>
     <strong>{signed && display > 0 ? "+" : ""}{formatNumber(display)}</strong>
     <small>{note}</small>
+    {trend && <em className={`server-metric-trend is-${trend.direction}`}>
+      <i aria-hidden="true">{trend.direction === "up" ? "▲" : trend.direction === "down" ? "▼" : "—"}</i>{trend.text}
+    </em>}
   </div>;
 }
 
@@ -241,6 +284,7 @@ export function ServerStatsCard({ stats }: Props) {
     leaves: stats.activity.reduce((sum, day) => sum + day.leaves, 0),
   }), [stats.activity]);
   const net = totals.joins - totals.leaves;
+  const trend = useMemo(() => weeklyTrend(stats.activity), [stats.activity]);
   // Only a refresh that actually moved the numbers brightens the chart.
   const chartFresh = useFreshSignal(
     `${totals.messages}|${totals.joins}|${totals.leaves}|${stats.member_count}|${stats.channel_count}|${stats.role_count}`,
@@ -249,12 +293,12 @@ export function ServerStatsCard({ stats }: Props) {
   const panel = tab === "members" ? <MemberChart stats={stats} /> : tab === "layout" ? <LayoutChart stats={stats} /> : <MessageChart stats={stats} />;
 
   return <section className="dash-panel server-stats-card" aria-label="Server statistics">
-    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">Community analytics</span><h3>Server pulse</h3><p>Daily totals for {reportingWindow(stats.activity)}. These trends begin when Niko’s activity tracking is enabled.</p></div><span className="panel-icon"><Activity /></span></div>
+    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">Community analytics</span><h3>Server pulse</h3><p>Daily totals for {reportingWindow(stats.activity)}. The tiles compare the last 7 days with the week before; history starts when activity tracking is enabled.</p></div><span className="panel-icon"><Activity /></span></div>
     <div className="server-stat-metrics">
       <LiveMetric icon={<Users />} label="Members now" value={stats.member_count} note="Current server size" />
-      <LiveMetric icon={<BarChart3 />} label="Messages" value={totals.messages} note="Across this period" />
-      <LiveMetric icon={<Hash />} label="Joined" value={totals.joins} note="Across this period" />
-      <LiveMetric icon={<Users />} label="Net members" value={net} note="Joined minus left" signed />
+      <LiveMetric icon={<BarChart3 />} label="Messages" value={totals.messages} note="Across this period" trend={trend.messages} />
+      <LiveMetric icon={<Hash />} label="Joined" value={totals.joins} note="Across this period" trend={trend.joins} />
+      <LiveMetric icon={<Users />} label="Net members" value={net} note="Joined minus left" signed trend={trend.net} />
     </div>
     <div className={chartFresh ? "server-live-panel is-fresh" : "server-live-panel"}>
       <Tabs items={tabItems} value={tab} onValueChange={setTab} label="Server statistics" renderPanel={() => panel} />

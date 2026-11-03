@@ -10,6 +10,8 @@ import "./styles/data-removal.css";
 import "./styles/broadcast-studio.css";
 import "./styles/staff-card.css";
 import "./styles/discord-name-fonts.css";
+import "./styles/devtools.css";
+import "./styles/team-applications.css";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

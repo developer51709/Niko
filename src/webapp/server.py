@@ -62,7 +62,7 @@ from .donations import _confirm_donation_from_webhook, _donation_bot
 from .guilds import _discord_guild_profile_assets, _get_runtime_guild_profile, _get_runtime_server_config, _guild_resource_ids, _read_moderation_config_sync, _refresh_captcha_panel, _refresh_ticket_panel, _save_runtime_guild_profile, _serialize_ticket_config, get_runtime_moderation_config
 from .runtime import _discord_bot, bot_guild_ids, configure_bot, load_json, oauth_enabled, public_base_url, redirect_uri, run_on_bot_loop, save_json, schedule_on_bot_loop
 from .social import render_site_shell
-from .staff import STAFF_PRIORITY, _current_staff_role, _load_staff_management_rows, _load_staff_rows, _presence_member, _staff_role_label, _staff_row, custom_status_text
+from .staff import STAFF_PRIORITY, _current_staff_role, _find_staff_member, _is_owner, _load_staff_management_rows, _load_staff_rows, _presence_member, _staff_role_label, _staff_row, custom_status_text
 
 # ── Flask application ─────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 {
   "data": {
-    "daily_wait": "Du kannst deine tägliche Belohnung nur alle 24 Stunden abholen.",
+    "daily_wait": "Du kannst deine tägliche Belohnung nur alle 20 Stunden abholen.",
     "daily_success": "Du hast deine tägliche Belohnung von {reward} Münzen abgeholt!",
     "work_wait": "Du kannst nur einmal pro Stunde arbeiten.",
     "work_success": "Du hast gearbeitet und {reward} Münzen verdient!",

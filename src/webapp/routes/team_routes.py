@@ -14,9 +14,10 @@ def api_team():
     return jsonify(_load_staff_rows())
 
 
-@app.route("/api/team/<user_id>")
-def api_team_member(user_id):
-    member = next((item for item in _load_staff_rows() if item["id"] == str(user_id)), None)
+@app.route("/api/team/<profile_key>")
+def api_team_member(profile_key):
+    # Accepts both `/team/<username>` and the permanent `/team/<user id>` link.
+    member = _find_staff_member(profile_key)
     if not member:
         return jsonify({"error": "Team member not found."}), 404
     return jsonify(member)
