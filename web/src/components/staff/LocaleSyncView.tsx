@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { getOwnerLocales, syncOwnerLocales } from "../../api";
 import { useStrings } from "../../i18n";
-import type { OwnerLocales } from "../../types";
+import type { OwnerLocalePage, OwnerLocales } from "../../types";
 import { notifyError, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 
@@ -20,6 +21,79 @@ function ago(timestamp: number | null | undefined, t: Translate) {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return t("owner.minutesAgo", { count: minutes });
   return t("owner.hoursAgo", { count: Math.floor(minutes / 60) });
+}
+
+/** One collapsible slice of the catalogue card, with its own count in the header. */
+function Fold({
+  title,
+  meta,
+  children,
+}: {
+  title: string;
+  meta: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <details
+      className="owner-fold"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <span className="owner-fold-title">{title}</span>
+        <span className="owner-fold-meta">{meta}</span>
+      </summary>
+      <div className="owner-fold-body">{children}</div>
+    </details>
+  );
+}
+
+/**
+ * The coverage grid for one catalogue family.
+ *
+ * Bot catalogues and website pages are counted the same way — English keys per
+ * file, translated keys per language — so they share one table.
+ */
+function CatalogueTable({
+  rows,
+  firstColumn,
+  languages,
+  t,
+}: {
+  rows: OwnerLocalePage[];
+  firstColumn: string;
+  languages: { code: string }[];
+  t: Translate;
+}) {
+  return (
+    <div className="owner-table">
+      <div className="owner-table-head">
+        <span>{firstColumn}</span>
+        <span>{t("owner.locales.keysColumn")}</span>
+        {languages.map((language) => <span key={language.code}>{language.code}</span>)}
+      </div>
+      {rows.map((row) => (
+        <div className="owner-table-row" key={row.page}>
+          <span className="owner-table-name">{row.page}</span>
+          <span className="owner-cell is-keys" data-label={t("owner.locales.keysColumn")}>{row.keys}</span>
+          {languages.map((language) => {
+            const done = row.languages[language.code] ?? 0;
+            const complete = row.keys > 0 && done >= row.keys;
+            return (
+              <span
+                key={language.code}
+                data-label={language.code}
+                className={`owner-cell${complete ? " is-complete" : done > 0 ? " is-partial" : ""}`}
+              >
+                {done ? percent(done, row.keys) : "—"}
+              </span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -131,6 +205,14 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
           <div><dt>{t("owner.locales.scanned")}</dt><dd>{ago(data.generated_at, t)}</dd></div>
           <div><dt>{t("owner.locales.pages")}</dt><dd>{data.pages.length}</dd></div>
           <div><dt>{t("owner.locales.keys")}</dt><dd>{data.total_keys}</dd></div>
+          <div>
+            <dt>{t("owner.locales.botSyncLabel")}</dt>
+            <dd>
+              {data.bot_sync?.files
+                ? t("owner.locales.botSyncLive", { count: data.bot_sync.files })
+                : t("owner.locales.botSyncNone")}
+            </dd>
+          </div>
         </dl>
       </section>
 
@@ -168,34 +250,35 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
             <p>{t("owner.locales.cataloguesBody")}</p>
           </div>
         </div>
-        {/* The header is the desktop grid; a phone gets one card per page, where
-            every language becomes a labelled chip instead of a squeezed column. */}
-        <div className="owner-table">
-          <div className="owner-table-head">
-            <span>{t("owner.locales.page")}</span>
-            <span>{t("owner.locales.keysColumn")}</span>
-            {data.languages.map((language) => <span key={language.code}>{language.code}</span>)}
-          </div>
-          {data.pages.map((page) => (
-            <div className="owner-table-row" key={page.page}>
-              <span className="owner-table-name">{page.page}</span>
-              <span className="owner-cell is-keys" data-label={t("owner.locales.keysColumn")}>{page.keys}</span>
-              {data.languages.map((language) => {
-                const done = page.languages[language.code] ?? 0;
-                const complete = page.keys > 0 && done >= page.keys;
-                return (
-                  <span
-                    key={language.code}
-                    data-label={language.code}
-                    className={`owner-cell${complete ? " is-complete" : done > 0 ? " is-partial" : ""}`}
-                  >
-                    {done ? percent(done, page.keys) : "—"}
-                  </span>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        {/* The two halves of the feed: the bot keeps its strings in each cog's
+            ``locales`` folder, the site in its own page folders. They are read
+            from the same manifest, so they belong in one card, folded apart. */}
+        <Fold
+          title={t("owner.locales.botSection")}
+          meta={t("owner.locales.catalogueCount", { count: data.bot?.length ?? 0 })}
+        >
+          <p className="owner-fold-note">{t("owner.locales.botSectionBody")}</p>
+          <CatalogueTable
+            rows={data.bot ?? []}
+            firstColumn={t("owner.locales.catalogueColumn")}
+            languages={data.languages}
+            t={t}
+          />
+        </Fold>
+        <Fold
+          title={t("owner.locales.siteSection")}
+          meta={t("owner.locales.pageCount", { count: data.pages.length })}
+        >
+          <p className="owner-fold-note">{t("owner.locales.siteSectionBody")}</p>
+          {/* The header is the desktop grid; a phone gets one card per page, where
+              every language becomes a labelled chip instead of a squeezed column. */}
+          <CatalogueTable
+            rows={data.pages}
+            firstColumn={t("owner.locales.page")}
+            languages={data.languages}
+            t={t}
+          />
+        </Fold>
       </section>
     </div>
   );

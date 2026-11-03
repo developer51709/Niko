@@ -1,0 +1,14 @@
+{
+  "applications.unavailable": "Seite Team-Bewerbungen nicht verfügbar.",
+  "applications.changing": "Ausschreibung wird geändert…",
+  "applications.statusFailed": "Der Status der Ausschreibung konnte nicht geändert werden.",
+  "applications.revokeConfirm": "Die Annahme von {name} zurücknehmen und die Rolle {role} entfernen?",
+  "applications.teamRole": "Team",
+  "applications.savingDecision": "Entscheidung wird gespeichert…",
+  "applications.alreadyRecorded": "Für {name} ist diese Entscheidung bereits erfasst. Es wurde nichts gesendet oder geändert.",
+  "applications.approvedNoDm": "{name} wurde angenommen und die Team-Rolle vergeben, aber die Entscheidungs-DM konnte nicht zugestellt werden.",
+  "applications.approved": "{name} wurde angenommen, die Team-Rolle vergeben und die Entscheidungs-DM gesendet.",
+  "applications.declinedRoleRemoved": "{name} wurde abgelehnt und die zuvor vergebene Team-Rolle entfernt.",
+  "applications.declined": "{name} wurde abgelehnt.",
+  "applications.saveFailed": "Die Bewerbungsentscheidung konnte nicht gespeichert werden."
+}

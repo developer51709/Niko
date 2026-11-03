@@ -53,9 +53,12 @@ def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -
 
     ``port`` exists for diagnostics and tests; the process uses ``PORT``.
     """
-    from webapp import configure_bot
+    from webapp import configure_bot, locale_feed
 
     configure_bot(bot)
+    # Bot wording is refreshed from beta on a timer as well as on demand: the bot
+    # answers Discord messages whether or not anyone has the dashboard open.
+    locale_feed.start_sync_loop()
 
     port = int(port or os.environ.get("PORT", "5000"))
     server = make_server("0.0.0.0", port, _flask_app(), threaded=True, fd=fd)

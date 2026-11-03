@@ -1,0 +1,14 @@
+{
+  "applications.unavailable": "Página de solicitudes del equipo no disponible.",
+  "applications.changing": "Cambiando esa vacante…",
+  "applications.statusFailed": "No se pudo cambiar el estado de la vacante.",
+  "applications.revokeConfirm": "¿Revertir la aprobación de {name} y quitarle el rol {role}?",
+  "applications.teamRole": "de equipo",
+  "applications.savingDecision": "Guardando esa decisión…",
+  "applications.alreadyRecorded": "{name} ya tiene esa decisión registrada. No se reenvió ni se cambió nada.",
+  "applications.approvedNoDm": "{name} fue aprobado y se asignó el rol de equipo, pero no se pudo entregar el MD con la decisión.",
+  "applications.approved": "{name} fue aprobado, se asignó el rol de equipo y se envió el MD con la decisión.",
+  "applications.declinedRoleRemoved": "{name} fue rechazado y se retiró el rol de equipo concedido anteriormente.",
+  "applications.declined": "{name} fue rechazado.",
+  "applications.saveFailed": "No se pudo guardar la decisión de la solicitud."
+}

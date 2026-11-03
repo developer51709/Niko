@@ -307,6 +307,31 @@ def api_locale_catalogue(page, language):
     return response
 
 
+@app.route("/api/locales/bot/<catalogue>/<language>.json")
+def api_locale_bot_catalogue(catalogue, language):
+    """One bot catalogue, so a production instance can show beta's wording.
+
+    The bot keeps its strings next to each cog (``src/cogs/music/locales``), not
+    in the website's page folders, so it gets its own route and its own entry in
+    ``/api/locales/source.json``. Beta answers with its own file only; production
+    fetches these and hands them to the running bot as a live overlay.
+    """
+    found = locale_feed.local_bot_catalogue(catalogue, language)
+    if not found:
+        return jsonify({"error": "No such catalogue."}), 404
+    etag = f'"{found["hash"]}"'
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "public, max-age=120",
+        "X-Locale-Origin": found["origin"],
+    }
+    if request.headers.get("If-None-Match") == etag:
+        return "", 304, headers
+    response = jsonify(found["strings"])
+    response.headers.update(headers)
+    return response
+
+
 @app.route("/api/status")
 def api_status():
     """Everything the website's /status page draws, in one live payload.

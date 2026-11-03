@@ -46,6 +46,7 @@ import type {
   OwnerLocales,
   OwnerUpdates,
   OwnerUpdateApply,
+  OwnerUpdateProgress,
   StatusPayload,
   TeamRecruitmentOpening,
   TeamRecruitmentSettings,
@@ -109,6 +110,8 @@ export const syncOwnerLocales = (csrfToken?: string) => api<OwnerLocales>("/api/
 });
 /** What beta has that this deployment does not, area by area. */
 export const getOwnerUpdates = () => api<OwnerUpdates>("/api/owner/updates");
+/** Where the update in flight has got to. */
+export const getOwnerUpdateProgress = () => api<OwnerUpdateProgress>("/api/owner/updates/progress");
 /** Stage and apply the selected areas, reloading only what changed. */
 export const applyOwnerUpdates = (areas: string[], csrfToken?: string) => api<OwnerUpdateApply>("/api/owner/updates/apply", {
   method: "POST",

@@ -1,0 +1,16 @@
+{
+  "title": "Nouveautés — Niko",
+  "detail.notFoundTitle": "Entrée introuvable",
+  "detail.notFoundBody": "Nous n’avons trouvé aucune entrée de journal pour « {slug} ».",
+  "detail.viewAll": "Voir toutes les entrées du journal",
+  "detail.highlights": "Points clés",
+  "detail.allChanges": "Toutes les modifications",
+  "detail.commits": "Commits",
+  "intro.eyebrow": "Quoi de neuf",
+  "intro.title": "Nouveautés",
+  "intro.titleEm": "et mises à jour.",
+  "intro.description": "Le registre de chaque amélioration, correction et nouvelle fonctionnalité ajoutée à Niko, regroupé par version pour plus de clarté.",
+  "filters.all": "Tout",
+  "entry.readMore": "Lire les notes de version complètes",
+  "empty": "Aucune entrée du journal ne correspond à ce filtre."
+}

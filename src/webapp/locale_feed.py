@@ -13,6 +13,14 @@ manifest is re-read every :data:`FEED_TTL` seconds, and a catalogue is fetched
 the first time a page asks for a hash it has not seen, so strings written on
 beta reach the browser on the next navigation instead of the next deploy.
 
+The bot's own wording travels the same way. Every cog keeps its strings in
+``src/<package>/locales/<lang>.json``, and the manifest lists those catalogues
+too (``bot_pages``). Beta serves them at
+``/api/locales/bot/<package>/<lang>.json``; production fetches the ones whose
+hash it has not seen and hands the whole set to :mod:`utils.locales` as a live
+overlay, which every ``msg()`` lookup reads. A bot reply written on beta is
+therefore shown by the running process — no cog reload, no deploy, no restart.
+
 Three rules keep that safe on a live site:
 
 - **The build is always the fallback.** If beta is not configured, is down, is
@@ -32,7 +40,6 @@ exactly as it did before, reading local files only.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import threading
@@ -41,7 +48,8 @@ from pathlib import Path
 
 import requests
 
-#: The website's per-page catalogue folders (``web/src/locales/<page>``).
+#: The website's per-page catalogue folders (``web/src/locales/<page>``, with
+#: subfolders of their own once a page has sub pages).
 SITE_LOCALES = Path("web/src/locales")
 
 #: Origin of the beta instance, e.g. ``https://beta.niko.sryze.cc``. Empty keeps
@@ -64,10 +72,32 @@ LOCAL_TTL = 30.0
 _NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 _LANGUAGE = re.compile(r"^[a-z]{2}(?:-[a-z]{2})?$")
 
+#: A bot catalogue is named after the package that owns it (``cogs.music``),
+#: which :func:`webapp.status.bot_catalogue_name` produces from its folder.
+_BOT_NAME = re.compile(r"^[a-z0-9_]+(?:\.[a-z0-9_]+){0,4}$")
+
 _lock = threading.Lock()
 _beta: dict = {"manifest": None, "at": 0.0, "error": None, "stale": False, "refreshing": False}
 _local: dict = {"snapshot": None, "at": 0.0}
 _catalogues: dict[tuple[str, str, str], dict] = {}
+
+#: Bot catalogue bytes fetched from beta, keyed by (package, language, hash).
+_bot_files: dict[tuple[str, str, str], dict] = {}
+_bot: dict = {
+    "packages": 0,
+    "files": 0,
+    "fetched": 0,
+    "reused": 0,
+    #: The catalogues the running bot is actually serving, so a failed fetch can
+    #: keep its last good copy instead of falling back to English.
+    "applied": {},
+    "applied_at": 0.0,
+    "error": None,
+    "refreshing": False,
+}
+
+#: The background poller is started once per process (:func:`start_sync_loop`).
+_loop: dict = {"started": False}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -87,13 +117,6 @@ def _status():
 
 def _digest(raw: bytes) -> str:
     return hashlib.sha1(raw).hexdigest()[:12]
-
-
-def _read_json(path: Path):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
 
 
 def _order(codes) -> list[str]:
@@ -121,24 +144,18 @@ def local_snapshot(force: bool = False) -> dict:
 
     if SITE_LOCALES.is_dir():
         for folder in sorted(path for path in SITE_LOCALES.iterdir() if path.is_dir()):
-            english_path = folder / "en.json"
-            if not english_path.is_file():
-                continue
-            english = _read_json(english_path)
-            if not isinstance(english, dict):
+            english, _ = status.site_catalogue(folder, "en")
+            if not english:
                 continue
             english_keys = set(status._leaf_keys(english))
             entry: dict = {"keys": len(english_keys), "langs": {}}
-            for path in sorted(folder.glob("*.json")):
-                code = path.stem
+            for code in status.site_page_languages(folder):
                 if not _LANGUAGE.match(code):
                     continue
-                try:
-                    raw = path.read_bytes()
-                    catalogue = json.loads(raw)
-                except Exception:
-                    continue
-                if not isinstance(catalogue, dict):
+                # A page split into subfolders is one catalogue to the site, so
+                # the count and the hash cover every file that carries its copy.
+                catalogue, raw = status.site_catalogue(folder, code)
+                if not catalogue:
                     continue
                 keys = set(status._leaf_keys(catalogue))
                 translated = len(english_keys) if code == "en" else len(english_keys & keys)
@@ -150,6 +167,10 @@ def local_snapshot(force: bool = False) -> dict:
         "languages": [{"code": code, "label": labels[code]} for code in _order(labels)],
         "pages": pages,
         "bot": status._bot_locale_status(),
+        # Per-catalogue detail for the bot half of the feed: the coverage rows
+        # above are what the status page draws, while these hashes are what a
+        # production instance needs to fetch only the files that changed.
+        "bot_pages": status.bot_catalogues(force=force),
         "generated_at": int(time.time()),
     }
     with _lock:
@@ -219,16 +240,46 @@ def _validated(snapshot) -> dict | None:
             continue
         bot.append(row)
 
+    bot_pages: dict[str, dict] = {}
+    raw_bot_pages = snapshot.get("bot_pages")
+    if isinstance(raw_bot_pages, dict):
+        for name, entry in raw_bot_pages.items():
+            if not isinstance(name, str) or not _BOT_NAME.match(name) or not isinstance(entry, dict):
+                continue
+            keys = entry.get("keys")
+            langs = entry.get("langs")
+            if not isinstance(keys, int) or keys < 0 or not isinstance(langs, dict):
+                continue
+            clean: dict[str, dict] = {}
+            for code, info in langs.items():
+                if not isinstance(code, str) or not _LANGUAGE.match(code) or not isinstance(info, dict):
+                    continue
+                digest = info.get("hash")
+                translated = info.get("translated")
+                if not isinstance(digest, str) or not digest:
+                    continue
+                if not isinstance(translated, int) or translated < 0:
+                    translated = 0
+                clean[code] = {"translated": min(translated, keys), "hash": digest[:40]}
+            if "en" in clean:
+                bot_pages[name] = {"keys": keys, "langs": clean}
+
     return {
         "languages": languages,
         "pages": pages,
         "bot": bot,
+        "bot_pages": bot_pages,
         "generated_at": int(snapshot.get("generated_at") or 0),
     }
 
 
-def _pull() -> None:
-    """Fetch beta's manifest once, keeping the old one if the call fails."""
+def _pull(pull_bot: bool = True) -> None:
+    """Fetch beta's manifest once, keeping the old one if the call fails.
+
+    ``pull_bot`` is false when the caller is about to refresh the bot's overlay
+    itself (the owner pressed Sync): spawning the background pass there would
+    race with the synchronous one and report a half-finished state.
+    """
     try:
         response = requests.get(
             f"{BETA_INSTANCE_URL}/api/locales/source.json",
@@ -242,6 +293,10 @@ def _pull() -> None:
             raise ValueError("beta returned no usable catalogues")
         with _lock:
             _beta.update({"manifest": snapshot, "at": time.monotonic(), "error": None, "stale": False})
+        # The bot's overlay is refreshed off the request path: a page asking for
+        # its copy must never wait for a hundred catalogue files.
+        if pull_bot:
+            _sync_bot_async()
     except Exception as exc:
         # Keep the last good manifest and mark it stale: a translation the site
         # already fetched should not disappear because one poll timed out.
@@ -256,7 +311,7 @@ def _pull() -> None:
             _beta["refreshing"] = False
 
 
-def _refresh(force: bool = False) -> None:
+def _refresh(force: bool = False, pull_bot: bool = True) -> None:
     """Keep beta's manifest warm without ever making a page wait for beta.
 
     The first read of a process has to block — the site has nothing to show yet —
@@ -274,9 +329,206 @@ def _refresh(force: bool = False) -> None:
         if cached and not force:
             if not _beta.get("refreshing"):
                 _beta["refreshing"] = True
-                threading.Thread(target=_pull, daemon=True, name="locale-feed").start()
+                threading.Thread(target=_pull, args=(pull_bot,), daemon=True, name="locale-feed").start()
             return
-    _pull()
+    _pull(pull_bot)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Bot catalogues
+# ──────────────────────────────────────────────────────────────────────────────
+def local_bot_catalogue(name: str, language: str) -> dict | None:
+    """One bot catalogue from this instance's own ``locales`` folder.
+
+    This is what beta answers a production instance with; it never consults a
+    feed of its own, so a deployment pointed at itself cannot recurse.
+    """
+    if not _BOT_NAME.match(name or "") or not _LANGUAGE.match(language or ""):
+        return None
+    strings, raw = _status().bot_catalogue(name, language)
+    if not strings:
+        return None
+    return {"strings": strings, "hash": _digest(raw), "origin": "build"}
+
+
+def _fetch_bot_catalogue(name: str, code: str) -> dict | None:
+    """One bot catalogue over the wire, or ``None`` when beta could not serve it."""
+    try:
+        response = requests.get(
+            f"{BETA_INSTANCE_URL}/api/locales/bot/{name}/{code}.json",
+            timeout=(2.0, FEED_TIMEOUT),
+            headers={"Accept": "application/json", "User-Agent": "niko-locale-feed"},
+        )
+        if response.status_code != 200:
+            raise ValueError(f"beta answered {response.status_code}")
+        payload = response.json()
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) and payload else None
+
+
+def _bot_overlay(document: dict, previous: dict) -> tuple[dict[str, dict[str, dict]], int, int]:
+    """Every bot catalogue the given manifest advertises, fetching new hashes.
+
+    A catalogue already fetched for this hash is reused, so a translation pass
+    over one cog costs one file per language, not the whole bot. A language beta
+    no longer lists is simply absent from the result, which is how a removed
+    translation stops being served.
+
+    A file that cannot be fetched keeps the copy already in use for that
+    catalogue: one dropped request must not pull a live server back to English
+    while the rest of the pass succeeds. Returns the catalogues, how many files
+    were downloaded, and how many fell back.
+    """
+    built: dict[str, dict[str, dict]] = {}
+    fetched = 0
+    reused = 0
+    for name, entry in (document.get("bot_pages") or {}).items():
+        for code, info in entry.get("langs", {}).items():
+            digest = info.get("hash")
+            if not digest:
+                continue
+            key = (name, code, digest)
+            with _lock:
+                catalogue = _bot_files.get(key)
+            if catalogue is None:
+                catalogue = _fetch_bot_catalogue(name, code)
+                if catalogue is None:
+                    catalogue = (previous.get(name) or {}).get(code)
+                    if not isinstance(catalogue, dict) or not catalogue:
+                        continue
+                    reused += 1
+                else:
+                    with _lock:
+                        if len(_bot_files) > 512:
+                            _bot_files.clear()
+                        _bot_files[key] = catalogue
+                    fetched += 1
+            built.setdefault(name, {})[code] = catalogue
+    return built, fetched, reused
+
+
+def apply_bot_catalogues(document: dict | None = None) -> dict:
+    """Give the running bot beta's wording, without touching its files.
+
+    The overlay lives in :mod:`utils.locales` and every ``load_locales`` table
+    reads through it, so a translation written on beta is used by the next reply
+    rather than the next deploy. When beta is unreachable the overlay is left
+    alone: a network blip must not roll the bot back to English mid-conversation.
+    """
+    with _lock:
+        if _bot.get("refreshing"):
+            return dict(_bot)
+        _bot["refreshing"] = True
+    try:
+        document = document if document is not None else manifest(pull_bot=False)
+        source = (document or {}).get("source") or {}
+        if source.get("mode") != "beta" or not document.get("bot_pages"):
+            # No feed: drop any stale overlay so the bot serves its own files.
+            error = None if not BETA_INSTANCE_URL else source.get("error")
+            try:
+                from utils.locales import apply_overlay
+
+                apply_overlay({})
+            except Exception as exc:
+                error = f"{type(exc).__name__}: {exc}"
+            with _lock:
+                _bot.update({
+                    "packages": 0,
+                    "files": 0,
+                    "fetched": 0,
+                    "reused": 0,
+                    "applied": {},
+                    "error": error,
+                    "applied_at": time.time(),
+                })
+            return dict(_bot)
+
+        with _lock:
+            previous = dict(_bot["applied"])
+        built, fetched, reused = _bot_overlay(document, previous)
+        if not built:
+            # Beta answered with nothing usable. Keep exactly what the bot is
+            # already serving rather than swapping in an empty overlay.
+            with _lock:
+                _bot.update({"error": source.get("error") or "no bot catalogues could be read", "applied_at": time.time()})
+            return dict(_bot)
+
+        try:
+            from utils.locales import apply_overlay
+
+            apply_overlay(built)
+            error = source.get("error")
+        except Exception as exc:
+            # Never let a bad overlay reach the bot: keep serving what it has.
+            error = f"{type(exc).__name__}: {exc}"
+            with _lock:
+                _bot.update({"error": error, "applied_at": time.time()})
+            return dict(_bot)
+        with _lock:
+            _bot.update({
+                "packages": len(built),
+                "files": sum(len(langs) for langs in built.values()),
+                "fetched": fetched,
+                "reused": reused,
+                "applied": built,
+                "error": error,
+                "applied_at": time.time(),
+            })
+        return dict(_bot)
+    finally:
+        with _lock:
+            _bot["refreshing"] = False
+
+
+def _sync_bot_async() -> None:
+    """Refresh the bot overlay on a daemon thread, never on the caller's."""
+    if not BETA_INSTANCE_URL:
+        return
+    with _lock:
+        if _bot.get("refreshing"):
+            return
+    threading.Thread(target=apply_bot_catalogues, name="locale-bot-sync", daemon=True).start()
+
+
+def bot_sync_state() -> dict:
+    """What the last bot-catalogue sync did, for the owner's locale page."""
+    with _lock:
+        return {
+            "packages": _bot["packages"],
+            "files": _bot["files"],
+            "fetched": _bot["fetched"],
+            "reused": _bot["reused"],
+            "error": _bot["error"],
+            "applied_at": int(_bot["applied_at"]) or None,
+        }
+
+
+def start_sync_loop() -> None:
+    """Keep beta's bot wording warm even when nobody is browsing the site.
+
+    The website refreshes the manifest when a page asks for it, but the bot
+    answers Discord messages whether or not anyone has the dashboard open. One
+    daemon thread per process polls the same feed, so a translator saving
+    ``fr.json`` on beta reaches the live bot within :data:`FEED_TTL` seconds.
+    """
+    if not BETA_INSTANCE_URL:
+        return
+    with _lock:
+        if _loop["started"]:
+            return
+        _loop["started"] = True
+
+    def run() -> None:
+        while True:
+            try:
+                _refresh()
+            except Exception:
+                # The feed records its own errors; the loop only has to survive.
+                pass
+            time.sleep(FEED_TTL)
+
+    threading.Thread(target=run, name="locale-sync", daemon=True).start()
 
 
 def _merged_languages(local: dict, beta: dict) -> list[dict]:
@@ -295,19 +547,31 @@ def sync() -> dict:
 
     The owner's locale page calls this after adding a language or landing a
     batch of translations, so the page it shows is the one beta has right now.
+    The bot's overlay is refreshed here as well, synchronously: the owner pressed
+    the button expecting the running bot to be on beta's copy when it returns.
     """
-    _refresh(force=True)
-    return manifest(force=True)
+    document = manifest(force=True, pull_bot=False)
+    # A background pass may already be downloading catalogues. Wait for it to
+    # finish (bounded) so the page the owner gets back describes what the bot
+    # is actually serving, instead of the state from before their click.
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        with _lock:
+            if not _bot.get("refreshing"):
+                break
+        time.sleep(0.05)
+    apply_bot_catalogues(document)
+    return manifest(pull_bot=False)
 
 
-def manifest(force: bool = False) -> dict:
+def manifest(force: bool = False, pull_bot: bool = True) -> dict:
     """The catalogue manifest the live site should use, beta first.
 
     ``source`` travels with it so the status page can say whether it is looking
     at beta's working copy or at the deployed build, and how old the reading is.
     """
     local = local_snapshot()
-    _refresh(force=force)
+    _refresh(force=force, pull_bot=pull_bot)
 
     with _lock:
         beta = _beta["manifest"]
@@ -337,6 +601,7 @@ def manifest(force: bool = False) -> dict:
         "languages": _merged_languages(local, beta),
         "pages": pages,
         "bot": beta["bot"] or local["bot"],
+        "bot_pages": beta.get("bot_pages") or local.get("bot_pages") or {},
         "generated_at": beta["generated_at"] or local["generated_at"],
         "source": {
             "mode": "beta",
@@ -376,19 +641,19 @@ def catalogue(page: str, language: str) -> dict | None:
     if info is None:
         return None
     digest = info["hash"]
-    local_path = SITE_LOCALES / page / f"{language}.json"
+    folder = SITE_LOCALES / page
 
     with _lock:
         cached = _catalogues.get((page, language, digest))
     if cached is not None:
         return {"strings": cached, "hash": digest, "origin": "cache"}
 
-    # The build may already hold exactly this file; then no HTTP is needed even
+    # The build may already hold exactly these files; then no HTTP is needed even
     # on a feed-enabled instance.
     local_entry = local_snapshot()["pages"].get(page, {}).get("langs", {}).get(language)
-    if local_entry is not None and local_entry["hash"] == digest and local_path.is_file():
-        strings = _read_json(local_path)
-        if isinstance(strings, dict):
+    if local_entry is not None and local_entry["hash"] == digest:
+        strings, _ = _status().site_catalogue(folder, language)
+        if strings:
             _remember(page, language, digest, strings)
             return {"strings": strings, "hash": digest, "origin": "build"}
 
@@ -408,14 +673,14 @@ def catalogue(page: str, language: str) -> dict | None:
             # Fall through to the build: a slow beta must not slow the page down.
             pass
 
-    strings = _read_json(local_path) if local_path.is_file() else None
-    if isinstance(strings, dict):
+    strings, raw = _status().site_catalogue(folder, language)
+    if strings:
         # The hash of what is actually being served, not the one beta advertised:
         # an ETag that claims beta's content for a build file would earn a wrong
         # 304 the moment beta comes back.
         return {
             "strings": strings,
-            "hash": local_entry["hash"] if local_entry else digest,
+            "hash": local_entry["hash"] if local_entry else _digest(raw),
             "origin": "build",
         }
     return None

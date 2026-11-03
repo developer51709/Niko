@@ -51,6 +51,17 @@ export type OwnerLocalePage = {
   languages: Record<string, number>;
 };
 
+/** What the last bot-catalogue sync did, for the same page's source card. */
+export type OwnerBotSync = {
+  packages: number;
+  files: number;
+  fetched: number;
+  /** Files beta could not serve this pass, kept from the previous copy. */
+  reused: number;
+  error: string | null;
+  applied_at: number | null;
+};
+
 /** What the owner's locale page reads from `/api/owner/locales`. */
 export type OwnerLocales = {
   configured: boolean;
@@ -61,6 +72,10 @@ export type OwnerLocales = {
   coverage: StatusCoverage[];
   pages: OwnerLocalePage[];
   total_keys: number;
+  /** The bot's own catalogues, one row per cog package. */
+  bot: OwnerLocalePage[];
+  bot_total_keys: number;
+  bot_sync: OwnerBotSync;
   synced_at?: number;
 };
 
@@ -134,6 +149,21 @@ export type OwnerUpdateApply = {
   areas: Record<string, OwnerUpdateRunArea>;
   last?: OwnerUpdateRun | null;
   handoff?: OwnerUpdates["handoff"];
+};
+
+/** A live snapshot of the update currently being applied. */
+export type OwnerUpdateProgress = {
+  active: boolean;
+  /** Areas chosen for this run, in the order they are applied. */
+  areas: string[];
+  /** The area being worked on, or null between areas. */
+  area: string | null;
+  index: number;
+  total: number;
+  /** Areas that have finished, oldest first. */
+  done: string[];
+  phase: "starting" | "pulling" | "applying" | "applied" | "skipped" | "failed" | "";
+  started_at: number | null;
 };
 
 export type StatusCoverage = {

@@ -39,16 +39,26 @@ _source_lock = threading.Lock()
 # ──────────────────────────────────────────────────────────────────────────────
 # Locales
 # ──────────────────────────────────────────────────────────────────────────────
-def _locale_payload() -> dict:
-    document = locale_feed.manifest()
-    pages = []
-    for name, entry in sorted(document["pages"].items()):
+def _locale_rows(entries: dict) -> list[dict]:
+    """One row per page or bot catalogue, with the keys each language covers."""
+    rows = []
+    for name, entry in sorted(entries.items()):
         languages = entry.get("langs") or {}
-        pages.append({
+        rows.append({
             "page": name,
             "keys": entry.get("keys", 0),
             "languages": {code: info.get("translated", 0) for code, info in languages.items()},
         })
+    return rows
+
+
+def _locale_payload() -> dict:
+    document = locale_feed.manifest()
+    pages = _locale_rows(document["pages"])
+    # The bot keeps its wording in each cog's own ``locales`` folder, so it has
+    # its own catalogue list. The page shows the two side by side because a
+    # translation pass usually touches one and then the other.
+    bot = _locale_rows(document.get("bot_pages") or {})
     return {
         "configured": bool(locale_feed.BETA_INSTANCE_URL),
         "origin": locale_feed.BETA_INSTANCE_URL or None,
@@ -58,6 +68,9 @@ def _locale_payload() -> dict:
         "coverage": locale_feed.coverage_rows(document),
         "pages": pages,
         "total_keys": sum(entry.get("keys", 0) for entry in document["pages"].values()),
+        "bot": bot,
+        "bot_total_keys": sum(entry.get("keys", 0) for entry in (document.get("bot_pages") or {}).values()),
+        "bot_sync": locale_feed.bot_sync_state(),
     }
 
 
@@ -107,6 +120,16 @@ def api_owner_updates():
     payload["handoff"] = handoff.last()
     payload["token_set"] = bool(updates.token())
     return jsonify(payload)
+
+
+@app.route("/api/owner/updates/progress")
+@require_auth
+def api_owner_updates_progress():
+    """Where the update in flight has got to, polled by the page's live bar."""
+    error = _require_owner()
+    if error:
+        return error
+    return jsonify(updates.progress())
 
 
 @app.route("/api/owner/updates/apply", methods=["POST"])

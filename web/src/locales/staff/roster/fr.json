@@ -1,0 +1,21 @@
+{
+  "roster.loadFailed": "La liste du staff n’a pas pu être chargée.",
+  "roster.updating": "Mise à jour de l’accès staff…",
+  "roster.assignSuspended": "{name} a le rôle {role} enregistré, mais sa suspension reste active. Lève-la quand l’enquête sera terminée.",
+  "roster.assignDone": "{name} possède désormais le rôle {role}. Ses réglages de profil public conservés ont été préservés.",
+  "roster.suspended": "{name} est suspendu. Ses rôles staff Discord et tout accès staff ont été retirés ; le rôle enregistré et le profil public sont conservés.",
+  "roster.lifted": "La suspension de {name} a été levée et ses rôles staff Discord ont été rétablis.",
+  "roster.demoted": "{name} a été rétrogradé. Son profil public est conservé mais masqué, au cas où il reviendrait.",
+  "roster.updateFailed": "La mise à jour du staff n’a pas pu être effectuée.",
+  "roster.chooseRole": "Choisis d’abord un rôle staff.",
+  "roster.confirmAssign": "Attribuer à {name} le rôle {role} ?",
+  "roster.suspendPrompt": "Pourquoi {name} est-il suspendu ?\n\nCela est enregistré dans la liste du staff. Son rôle enregistré et son profil public sont conservés, mais tout accès staff est retiré jusqu’à ce que tu lèves la suspension.",
+  "roster.reasonTooShort": "Ajoute un court motif de suspension.",
+  "roster.confirmSuspend": "Suspendre {name} et retirer immédiatement son accès staff ?",
+  "roster.confirmDemote": "Rétrograder {name} ? Son profil public sera conservé mais masqué, au cas où il reviendrait.",
+  "roster.demoteReason": "Motif de la rétrogradation (facultatif)",
+  "roster.confirmLift": "Lever la suspension de {name} et rétablir ses rôles staff ?",
+  "roster.enterId": "Saisis un ID utilisateur Discord et choisis un rôle staff.",
+  "roster.confirmAdd": "Attribuer à l’utilisateur {id} le rôle {role} ?",
+  "roster.userName": "Utilisateur {id}"
+}

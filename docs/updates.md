@@ -29,14 +29,24 @@ machine.
 ## The locale page
 
 **Staff settings → Locales** shows the merged catalogue set the live site is
-using: every language, its coverage per page, whether the figures come from beta
-or from this build, and how old the reading is. **Sync now** forces a re-read
-instead of waiting for the next poll.
+using: every language, its coverage, whether the figures come from beta or from
+this build, and how old the reading is. The catalogue card has two collapsible
+sections — **Bot locales**, one row per cog package, and **Website locales**, one
+row per page — because a translation pass usually touches one and then the other.
+**Sync now** forces a re-read instead of waiting for the next poll.
 
 A language appears as soon as one page has a file for it, so a translator can
 add `it.json` on beta and see it in the picker on production without a deploy.
 The same numbers are on the public `/status` page, which labels its section
 **Live from beta** when the feed is answering.
+
+Bot wording is part of the same feed. Beta publishes each cog's catalogues at
+`/api/locales/bot/<package>/<lang>.json`, production fetches the ones it has not
+seen yet, and `utils.locales` serves them as a live overlay — so a reply rewritten
+on beta appears in Discord without reloading a cog or restarting the bot. The
+poller runs every `LOCALE_FEED_TTL` seconds, and **Sync now** applies the same
+pass synchronously. The *Running bot* fact on the page says how many catalogue
+files the bot is currently serving from beta.
 
 ## The update page
 

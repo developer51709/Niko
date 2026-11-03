@@ -1,0 +1,21 @@
+{
+  "roster.loadFailed": "The staff roster could not be loaded.",
+  "roster.updating": "Updating staff access…",
+  "roster.assignSuspended": "{name} has the {role} role saved, but their suspension remains active. Lift it when the investigation ends.",
+  "roster.assignDone": "{name} now has the {role} role. Their retained public-profile settings were preserved.",
+  "roster.suspended": "{name} is suspended. Their Discord staff roles and all staff access were removed; the stored role and public profile are retained.",
+  "roster.lifted": "{name}'s suspension was lifted and their Discord staff roles were restored.",
+  "roster.demoted": "{name} was demoted. Their public profile is retained but hidden in case they return.",
+  "roster.updateFailed": "The staff update could not be completed.",
+  "roster.chooseRole": "Choose a staff role first.",
+  "roster.confirmAssign": "Give {name} the {role} role?",
+  "roster.suspendPrompt": "Why is {name} being suspended?\n\nThis is recorded in the staff roster. Their stored role and public profile are retained, but all staff access is removed until you lift the suspension.",
+  "roster.reasonTooShort": "Add a short reason for the suspension.",
+  "roster.confirmSuspend": "Suspend {name} and remove their staff access now?",
+  "roster.confirmDemote": "Demote {name}? Their public profile will be kept but hidden in case they return.",
+  "roster.demoteReason": "Reason for the demotion (optional)",
+  "roster.confirmLift": "Lift {name}'s suspension and restore their staff roles?",
+  "roster.enterId": "Enter a Discord user ID and choose a staff role.",
+  "roster.confirmAdd": "Give user {id} the {role} role?",
+  "roster.userName": "User {id}"
+}

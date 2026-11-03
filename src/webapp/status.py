@@ -18,10 +18,13 @@ extension is loaded, skipped or fails.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
 import platform
+import re
+import threading
 import time
 from pathlib import Path
 
@@ -40,7 +43,8 @@ from .commands import (
 LANGUAGES = ("en", "de", "es", "fr")
 LANGUAGE_LABELS = {"en": "English", "de": "German", "es": "Spanish", "fr": "French"}
 
-#: The website's own per-page catalogues (``web/src/locales/<page>/<lang>.json``).
+#: The website's own per-page catalogues (``web/src/locales/<page>/<lang>.json``,
+#: or ``<page>/<sub>/<lang>.json`` for a page made of sub pages).
 SITE_LOCALES = Path("web/src/locales")
 
 #: How long the translation scan is reused, in seconds. Short, because
@@ -48,6 +52,12 @@ SITE_LOCALES = Path("web/src/locales")
 #: right now; the scan itself is cached for longer inside the feed.
 _LOCALE_TTL = 15.0
 _locale_cache: dict = {"at": 0.0, "payload": None}
+_locale_cache_lock = threading.Lock()
+
+
+def _digest(raw: bytes) -> str:
+    """A short content hash, the same shape the website feed uses for a page."""
+    return hashlib.sha1(raw).hexdigest()[:12]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -73,64 +83,184 @@ def _leaf_keys(value, prefix: str = "") -> list[str]:
     return keys
 
 
+def site_language_files(folder: Path, code: str) -> list[Path]:
+    """Every file that carries one page's copy in one language.
+
+    A page keeps its chrome in ``<page>/<code>.json`` and, when it is large
+    enough to have sub pages, each one's strings in ``<page>/<sub>/<code>.json``.
+    The page-level file comes first so it wins if a key is defined twice, then
+    the subfolders in name order, because a merge has to be deterministic.
+    """
+    paths: list[Path] = []
+    root = folder / f"{code}.json"
+    if root.is_file():
+        paths.append(root)
+    paths.extend(sorted(path for path in folder.glob(f"*/{code}.json") if path.is_file()))
+    return paths
+
+
+def site_page_languages(folder: Path) -> list[str]:
+    """Language codes a page ships, at its root or in any of its subfolders."""
+    codes = {path.stem for path in folder.glob("*.json")}
+    codes.update(path.stem for path in folder.glob("*/*.json"))
+    return sorted(codes)
+
+
+def site_catalogue(folder: Path, code: str) -> tuple[dict, bytes]:
+    """One page's catalogue in one language, merged across its files.
+
+    Returns the merged strings and the bytes that identify that merge, so a
+    catalogue's hash covers every file that went into it — editing only the
+    moderation tab's copy has to change the hash the browser caches against.
+    """
+    merged: dict = {}
+    chunks: list[bytes] = []
+    for path in site_language_files(folder, code):
+        try:
+            raw = path.read_bytes()
+            strings = json.loads(raw)
+        except Exception:
+            # One unreadable subfolder file must not take the page's copy with it.
+            continue
+        if isinstance(strings, dict):
+            chunks.append(raw)
+            merged.update(strings)
+    return merged, b"".join(chunks)
+
+
 def _locale_dirs() -> list[Path]:
     """Every folder that holds a shipped ``<lang>.json`` catalogue."""
     found = [path for path in Path("src").glob("**/locales") if path.is_dir()]
     return sorted(found)
 
 
-def _bot_locale_status() -> list[dict]:
-    """Per-language coverage of the bot's own wording.
+#: A bot catalogue is addressed by the package that owns it, never by a path:
+#: ``cogs.music`` is ``src/cogs/music/locales``. The feed carries this name over
+#: HTTP, so it has to be both stable and safe to put in a URL.
+_BOT_NAME = re.compile(r"^[a-z0-9_]+(?:\.[a-z0-9_]+){0,4}$")
 
-    Counted per catalogue, not by leaf key: two cogs both have an ``error`` key
-    and they are different strings, so a set of bare keys across the whole bot
-    would undercount the English total and could report more than 100% covered.
-    """
-    total = 0
-    translated: dict[str, int] = {code: 0 for code in LANGUAGES}
-    catalogues = 0
 
+def bot_catalogue_name(folder: Path) -> str | None:
+    """``"cogs.music"`` for ``src/cogs/music/locales``, or ``None`` elsewhere."""
+    try:
+        relative = folder.resolve().relative_to(Path("src").resolve())
+    except Exception:
+        return None
+    parts = relative.parts[:-1]
+    if not parts:
+        return None
+    name = ".".join(parts)
+    return name if _BOT_NAME.match(name) else None
+
+
+def _bot_catalogue_dirs() -> dict[str, Path]:
+    """Every bot catalogue folder, keyed by the package name the bot calls it by."""
+    found: dict[str, Path] = {}
     for folder in _locale_dirs():
-        english_file = folder / "en.json"
-        if not english_file.exists():
+        if not (folder / "en.json").is_file():
             continue
+        name = bot_catalogue_name(folder)
+        if name is not None:
+            found[name] = folder
+    return found
+
+
+def bot_catalogue(name: str, code: str) -> tuple[dict, bytes]:
+    """One bot catalogue file, for an instance serving it to its successor.
+
+    Returns the decoded strings and the exact bytes they came from, so the hash
+    a consumer verifies against is the hash of what was actually published.
+    """
+    if not _BOT_NAME.match(name or "") or code not in LANGUAGES:
+        return {}, b""
+    folder = _bot_catalogue_dirs().get(name)
+    if folder is None:
+        return {}, b""
+    try:
+        raw = (folder / f"{code}.json").read_bytes()
+        strings = json.loads(raw)
+    except Exception:
+        return {}, b""
+    return (strings, raw) if isinstance(strings, dict) else ({}, b"")
+
+
+#: The bot catalogue manifest changes when a translator saves a file, so it is
+#: cached for the same few seconds as the website scan.
+_bot_cache: dict = {"at": 0.0, "payload": None}
+
+
+def bot_catalogues(force: bool = False) -> dict[str, dict]:
+    """Every bot catalogue, with its English key count and per-language hashes.
+
+    The website's feed publishes this so a production instance can fetch bot
+    wording from beta the same way it fetches page copy: one entry per
+    catalogue, a hash per language, and only the files that changed. Coverage is
+    counted per catalogue rather than by leaf key, because two cogs both have an
+    ``error`` key and they are different strings.
+    """
+    now = time.monotonic()
+    with _locale_cache_lock:
+        cached = _bot_cache["payload"]
+        if cached is not None and not force and now - _bot_cache["at"] < _LOCALE_TTL:
+            return cached
+
+    catalogues: dict[str, dict] = {}
+    for name, folder in _bot_catalogue_dirs().items():
         try:
-            english_keys = set(_leaf_keys(json.loads(english_file.read_text(encoding="utf-8"))))
+            english_raw = (folder / "en.json").read_bytes()
+            english_keys = set(_leaf_keys(json.loads(english_raw)))
         except Exception:
             continue
-        catalogues += 1
-        total += len(english_keys)
-        translated["en"] += len(english_keys)
+        if not english_keys:
+            continue
+        entry: dict = {"keys": len(english_keys), "langs": {}}
         for code in LANGUAGES:
-            if code == "en":
-                continue
             path = folder / f"{code}.json"
-            if not path.exists():
+            if not path.is_file():
                 continue
             try:
-                keys = set(_leaf_keys(json.loads(path.read_text(encoding="utf-8"))))
+                raw = path.read_bytes()
+                strings = json.loads(raw)
             except Exception:
                 continue
-            translated[code] += len(english_keys & keys)
+            if not isinstance(strings, dict):
+                continue
+            keys = set(_leaf_keys(strings))
+            translated = len(english_keys) if code == "en" else len(english_keys & keys)
+            entry["langs"][code] = {"translated": translated, "hash": _digest(raw)}
+        if "en" in entry["langs"]:
+            catalogues[name] = entry
 
-    return [
-        _coverage_row(code, translated[code], total, extra={"catalogues": catalogues})
-        for code in LANGUAGES
-    ]
+    with _locale_cache_lock:
+        _bot_cache.update({"at": now, "payload": catalogues})
+    return catalogues
+
+
+def _bot_locale_status() -> list[dict]:
+    """Per-language coverage of the bot's own wording, rolled up by catalogue."""
+    catalogues = bot_catalogues()
+    total = sum(entry["keys"] for entry in catalogues.values())
+    rows = []
+    for code in LANGUAGES:
+        translated = sum(entry["langs"].get(code, {}).get("translated", 0) for entry in catalogues.values())
+        rows.append(_coverage_row(code, translated, total, extra={"catalogues": len(catalogues)}))
+    return rows
 
 
 def _website_locale_status() -> list[dict]:
     """Per-language coverage of the website's own page catalogues.
 
     Every page ships a catalogue folder (``web/src/locales/<page>``), the same
-    way it ships an Open Graph card, and ``en.json`` inside it is the source
-    copy. Measuring the bot's command descriptions here was what made the website
-    look fully translated while none of its own copy was: those strings belong to
-    the command catalogue, not to the site's interface.
+    way it ships an Open Graph card, and the English copy inside it is the
+    source. A page with sub pages spreads that copy over subfolders, so the files
+    are read through :func:`site_catalogue` and counted as the one page they are.
+    Measuring the bot's command descriptions here was what made the website look
+    fully translated while none of its own copy was: those strings belong to the
+    command catalogue, not to the site's interface.
 
-    A page is only counted as done (``complete_pages``) when its file for that
-    language covers every key its ``en.json`` has — a translation someone started
-    and stopped is still partial, however many keys it filled in.
+    A page is only counted as done (``complete_pages``) when its copy for that
+    language covers every English key it has — a translation someone started and
+    stopped is still partial, however many keys it filled in.
     """
     total = 0
     translated: dict[str, int] = {code: 0 for code in LANGUAGES}
@@ -139,30 +269,24 @@ def _website_locale_status() -> list[dict]:
 
     if SITE_LOCALES.is_dir():
         for folder in sorted(path for path in SITE_LOCALES.iterdir() if path.is_dir()):
-            english_file = folder / "en.json"
-            if not english_file.exists():
+            english, _ = site_catalogue(folder, "en")
+            if not english:
                 continue
-            try:
-                english_keys = set(_leaf_keys(json.loads(english_file.read_text(encoding="utf-8"))))
-            except Exception:
-                continue
+            english_keys = set(_leaf_keys(english))
             pages += 1
             total += len(english_keys)
             translated["en"] += len(english_keys)
-            # ``en.json`` is the source copy, so a page that has any at all is
+            # English is the source copy, so a page that has any at all is
             # translated into English by definition.
             if english_keys:
                 complete["en"] += 1
             for code in LANGUAGES:
                 if code == "en":
                     continue
-                path = folder / f"{code}.json"
-                if not path.exists():
+                catalogue, _ = site_catalogue(folder, code)
+                if not catalogue:
                     continue
-                try:
-                    keys = set(_leaf_keys(json.loads(path.read_text(encoding="utf-8"))))
-                except Exception:
-                    continue
+                keys = set(_leaf_keys(catalogue))
                 translated[code] += len(english_keys & keys)
                 if english_keys and english_keys <= keys:
                     complete[code] += 1
