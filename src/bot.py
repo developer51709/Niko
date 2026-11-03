@@ -21,6 +21,7 @@ from utils.discord_proxy import DiscordProxyManager
 from utils import analytics, logging
 from utils.i18n import get_lang
 from utils.maintenance import check_interaction as check_maintenance_interaction
+from utils import handoff
 from events.on_ready import handle_ready
 from events.on_message import handle_message
 import database
@@ -72,7 +73,13 @@ async def _slash_gate(interaction: discord.Interaction) -> bool:
     A command the owner paused is answered with the maintenance notice and never
     counted as a command attempt, so a paused cog does not push ordinary members
     toward the abuse limit.
+
+    A successor process that has not been acknowledged yet answers nothing: its
+    predecessor is still the live handler, and handling the same command in both
+    would run it twice.
     """
+    if not handoff.commands_allowed():
+        return False
     if not await check_interaction_blacklist(interaction):
         return False
     if not await check_maintenance_interaction(interaction):
@@ -96,6 +103,13 @@ bot.tree.interaction_check = _slash_gate
 # ── Events ───────────────────────────────────────────────────────────────────
 @bot.event
 async def on_ready():
+    if handoff.is_candidate() and not getattr(bot, "_handoff_announced", False):
+        # Fully loaded and online: adopt the inherited socket, then tell the
+        # predecessor it can let go of the gateway.
+        bot._handoff_announced = True
+        import threading
+
+        threading.Thread(target=handoff.become_successor, args=(bot,), name="niko-handoff", daemon=True).start()
     try:
         # A reconnect can replace discord.py's aiohttp session; re-attaching is
         # idempotent and keeps worker routing available on the new session.
@@ -138,6 +152,8 @@ async def on_app_command_completion(interaction: discord.Interaction, command):
 
 @bot.event
 async def on_message(msg: discord.Message):
+    if not handoff.commands_allowed():
+        return
     try:
         await handle_message(bot, msg)
     except Exception as e:
@@ -192,8 +208,12 @@ if __name__ == "__main__":
         if bot.proxy_manager is not None:
             bot.proxy_manager.attach(bot)
 
-        start_api_server(bot)
-        logging.info("Startup", "Dashboard API started alongside the bot.")
+        # A successor inherits the predecessor's listening socket, but it only
+        # adopts it once it is fully loaded (see on_ready): sharing it earlier
+        # would send traffic to a process whose cogs are not loaded yet.
+        if not handoff.is_candidate():
+            start_api_server(bot)
+            logging.info("Startup", "Dashboard API started alongside the bot.")
 
         device_choice = STATUS_DEVICE
         patch_identify(device_choice)

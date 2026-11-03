@@ -13,6 +13,8 @@ import { LavalinkView } from "../components/dashboard/LavalinkView";
 import { BotAnalyticsView } from "../components/dashboard/BotAnalyticsView";
 import { BroadcastStudioView } from "../components/dashboard/BroadcastStudioView";
 import { MaintenanceView } from "../components/dashboard/MaintenanceView";
+import { LocaleSyncView } from "../components/staff/LocaleSyncView";
+import { UpdatesView } from "../components/staff/UpdatesView";
 import { Switch } from "../components/dashboard/Switch";
 import { ColorPicker } from "../components/dashboard/ColorPicker";
 import { Select, selectOptions } from "../components/dashboard/Select";
@@ -48,7 +50,7 @@ const PUBLIC_LINK_TYPES = [
 const CARD_THEMES = selectOptions([["dark", "Dark"], ["light", "Light"]]);
 const BLACKLIST_TYPES = selectOptions([["user", "User"], ["guild", "Guild"]]);
 
-type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "lavalink" | "maintenance" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
+type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "lavalink" | "maintenance" | "locales" | "updates" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
 
 const OWNER_ROLES = ["owner"];
 
@@ -80,6 +82,8 @@ const TAB_ROLES: Record<StaffTab, string[]> = {
   "proxy-workers": OWNER_ROLES,
   lavalink: OWNER_ROLES,
   maintenance: OWNER_ROLES,
+  locales: OWNER_ROLES,
+  updates: OWNER_ROLES,
   "team-recruitment": OWNER_ROLES,
   "staff-management": OWNER_ROLES,
   broadcasts: OWNER_ROLES,
@@ -319,6 +323,8 @@ export function StaffDashboardPage() {
   const canManageProxyWorkers = tabAllowedForRole(staff.role, "proxy-workers");
   const canManageLavalink = tabAllowedForRole(staff.role, "lavalink");
   const canManageMaintenance = tabAllowedForRole(staff.role, "maintenance");
+  const canManageLocales = tabAllowedForRole(staff.role, "locales");
+  const canManageUpdates = tabAllowedForRole(staff.role, "updates");
   const canManageNikoApplications = tabAllowedForRole(staff.role, "team-recruitment");
   const canManageStaffRoster = tabAllowedForRole(staff.role, "staff-management");
   const canManageBilling = tabAllowedForRole(staff.role, "billing");
@@ -681,6 +687,8 @@ export function StaffDashboardPage() {
       {canManageLavalink && <button type="button" role="tab" id="staff-lavalink-tab" aria-selected={activeTab === "lavalink"} aria-controls="staff-lavalink-panel" className={activeTab === "lavalink" ? "active" : ""} onClick={() => setActiveTab("lavalink")}><Icon name="guild_server" /> {t("tabs.lavalink")}</button>}
       {canManageNikoApplications && <button type="button" role="tab" id="staff-team-recruitment-tab" aria-selected={activeTab === "team-recruitment"} aria-controls="staff-team-recruitment-panel" className={activeTab === "team-recruitment" ? "active" : ""} onClick={() => setActiveTab("team-recruitment")}><Icon name="users" /> {t("tabs.applications")} <span>{nikoApplications.reduce((count, application) => count + application.submission_count, 0)}</span></button>}
       {canManageMaintenance && <button type="button" role="tab" id="staff-maintenance-tab" aria-selected={activeTab === "maintenance"} aria-controls="staff-maintenance-panel" className={activeTab === "maintenance" ? "active" : ""} onClick={() => setActiveTab("maintenance")}><Icon name="settings" /> {t("tabs.maintenance")}</button>}
+      {canManageLocales && <button type="button" role="tab" id="staff-locales-tab" aria-selected={activeTab === "locales"} aria-controls="staff-locales-panel" className={activeTab === "locales" ? "active" : ""} onClick={() => setActiveTab("locales")}><Icon name="doc" /> {t("tabs.locales")}</button>}
+      {canManageUpdates && <button type="button" role="tab" id="staff-updates-tab" aria-selected={activeTab === "updates"} aria-controls="staff-updates-panel" className={activeTab === "updates" ? "active" : ""} onClick={() => setActiveTab("updates")}><Icon name="spark" /> {t("tabs.updates")}</button>}
       {canManageStaffRoster && <button type="button" role="tab" id="staff-staff-management-tab" aria-selected={activeTab === "staff-management"} aria-controls="staff-staff-management-panel" className={activeTab === "staff-management" ? "active" : ""} onClick={() => setActiveTab("staff-management")}><Icon name="users" /> {t("tabs.roster")} <span>{staffRoster.filter((member) => member.staff_status !== "former").length}</span></button>}
       {canManageStaffRoster && <button type="button" role="tab" id="staff-broadcasts-tab" aria-selected={activeTab === "broadcasts"} aria-controls="staff-broadcasts-panel" className={activeTab === "broadcasts" ? "active" : ""} onClick={() => setActiveTab("broadcasts")}><Icon name="message" /> {t("tabs.broadcasts")}</button>}
       {canManageDataRemoval && <button type="button" role="tab" id="staff-data-removal-tab" aria-selected={activeTab === "data-removal"} aria-controls="staff-data-removal-panel" className={activeTab === "data-removal" ? "active" : ""} onClick={() => setActiveTab("data-removal")}><Icon name="lock" /> {t("tabs.dataRemoval")} <span>{dataRemoval?.filter((request) => request.status === "pending").length ?? 0}</span></button>}
@@ -809,6 +817,8 @@ export function StaffDashboardPage() {
     {activeTab === "proxy-workers" && canManageProxyWorkers && <section id="staff-proxy-workers-panel" role="tabpanel" aria-labelledby="staff-proxy-workers-tab" className="staff-guild-operations"><ProxyWorkersView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "lavalink" && canManageLavalink && <section id="staff-lavalink-panel" role="tabpanel" aria-labelledby="staff-lavalink-tab" className="staff-guild-operations"><LavalinkView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "maintenance" && canManageMaintenance && <section id="staff-maintenance-panel" role="tabpanel" aria-labelledby="staff-maintenance-tab" className="staff-guild-operations"><MaintenanceView csrfToken={auth.csrf_token} /></section>}
+    {activeTab === "locales" && canManageLocales && <section id="staff-locales-panel" role="tabpanel" aria-labelledby="staff-locales-tab" className="staff-guild-operations"><LocaleSyncView csrfToken={auth.csrf_token} /></section>}
+    {activeTab === "updates" && canManageUpdates && <section id="staff-updates-panel" role="tabpanel" aria-labelledby="staff-updates-tab" className="staff-guild-operations"><UpdatesView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "staff-management" && canManageStaffRoster && <section id="staff-staff-management-panel" role="tabpanel" aria-labelledby="staff-staff-management-tab" className="staff-guild-operations">
       <header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · access control</span><h2>Staff management</h2><p>View the full staff roster, assign or change roles, and suspend access during investigations. Suspension preserves the stored role and the member's public profile but removes every official Discord staff role and blocks staff commands and website pages until you lift it.</p></div><div className="staff-guild-count"><strong>{staffRoster.filter((member) => member.staff_status !== "former").length}</strong><span>{staffRoster.filter((member) => member.staff_status === "suspended").length} suspended · {staffRoster.filter((member) => member.staff_status === "former").length} former</span></div></header>
       <div className="staff-guild-toolbar"><label className="staff-guild-search"><Icon name="search" /><input type="search" value={staffRosterSearch} onChange={(event) => setStaffRosterSearch(event.target.value)} placeholder="Search staff by name, role, or ID" aria-label="Search staff roster" /></label><button type="button" className="button button-muted" onClick={() => void refreshStaffRoster()} disabled={staffRosterLoading}><Icon name="spark" />{staffRosterLoading ? "Refreshing…" : "Refresh roster"}</button></div>

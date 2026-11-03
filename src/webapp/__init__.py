@@ -12,6 +12,7 @@ from .routes import (  # noqa: E402,F401
     staff_email_routes,
     staff_analytics_routes,
     staff_broadcast_routes,
+    owner_routes,
     public_routes,
     dashboard_routes,
     notifier_routes,

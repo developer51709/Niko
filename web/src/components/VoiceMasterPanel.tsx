@@ -53,13 +53,18 @@ export function VoiceMasterPanel({ className }: { className?: string }) {
   // The panel is a replay of the bot's own message, so it opens in the language
   // the page is showing; the selector above it stays for trying the others.
   const { language: siteLanguage } = useLanguage();
-  const [language, setLanguage] = useState<PanelLanguage>(siteLanguage);
+  // The panel only ships four replays, so a language the feed adds but the bot
+  // does not speak yet falls back to English here instead of the site's copy.
+  const panelLanguage: PanelLanguage = PANEL_LANGUAGES.some((entry) => entry.value === siteLanguage)
+    ? (siteLanguage as PanelLanguage)
+    : "en";
+  const [language, setLanguage] = useState<PanelLanguage>(panelLanguage);
   const [reply, setReply] = useState<Reply | null>(null);
 
   useEffect(() => {
-    setLanguage(siteLanguage);
+    setLanguage(panelLanguage);
     setReply(null);
-  }, [siteLanguage]);
+  }, [panelLanguage]);
   const panelRef = useRef<HTMLDivElement>(null);
   const { openProfile, dialog: profileDialog } = useDiscordProfile();
   const strings = PANEL_STRINGS[language];

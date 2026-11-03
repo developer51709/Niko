@@ -89,7 +89,14 @@ def api_health_local():
 
 @app.after_request
 def prevent_dynamic_cache(response):
-    """Never let auth or dashboard API responses become stale in production."""
+    """Never let auth or dashboard API responses become stale in production.
+
+    Translation catalogues are the one exception: they are public, carry an ETag
+    per file, and are meant to be cached for a couple of minutes so a page does
+    not re-download its strings on every navigation.
+    """
+    if request.path.startswith("/api/locales/"):
+        return response
     if request.path.startswith("/api/") or request.path.startswith("/auth/"):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
