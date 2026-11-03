@@ -33,7 +33,7 @@ function Fold({
   meta: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
     <details
       className="owner-fold"
@@ -41,6 +41,7 @@ function Fold({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>
+        <Icon name="chevron" className="owner-fold-arrow" />
         <span className="owner-fold-title">{title}</span>
         <span className="owner-fold-meta">{meta}</span>
       </summary>
@@ -50,48 +51,68 @@ function Fold({
 }
 
 /**
- * The coverage grid for one catalogue family.
+ * One collapsible card per catalogue, with a one-line overview.
  *
  * Bot catalogues and website pages are counted the same way — English keys per
- * file, translated keys per language — so they share one table.
+ * file, translated keys per language — so both families share this list. The
+ * overview answers "is this one done?" without opening anything; the body then
+ * gives each language its own bar, because a half-translated catalogue is the
+ * thing a translator actually needs to find.
  */
-function CatalogueTable({
+function CatalogueList({
   rows,
-  firstColumn,
   languages,
   t,
 }: {
   rows: OwnerLocalePage[];
-  firstColumn: string;
   languages: { code: string }[];
   t: Translate;
 }) {
   return (
-    <div className="owner-table">
-      <div className="owner-table-head">
-        <span>{firstColumn}</span>
-        <span>{t("owner.locales.keysColumn")}</span>
-        {languages.map((language) => <span key={language.code}>{language.code}</span>)}
-      </div>
-      {rows.map((row) => (
-        <div className="owner-table-row" key={row.page}>
-          <span className="owner-table-name">{row.page}</span>
-          <span className="owner-cell is-keys" data-label={t("owner.locales.keysColumn")}>{row.keys}</span>
-          {languages.map((language) => {
-            const done = row.languages[language.code] ?? 0;
-            const complete = row.keys > 0 && done >= row.keys;
-            return (
-              <span
-                key={language.code}
-                data-label={language.code}
-                className={`owner-cell${complete ? " is-complete" : done > 0 ? " is-partial" : ""}`}
-              >
-                {done ? percent(done, row.keys) : "—"}
+    <div className="owner-catalogue-list">
+      {rows.map((row) => {
+        const covered = languages.reduce((sum, language) => sum + (row.languages[language.code] ?? 0), 0);
+        const finished = languages.filter(
+          (language) => row.keys > 0 && (row.languages[language.code] ?? 0) >= row.keys,
+        ).length;
+        const overall = row.keys && languages.length
+          ? Math.round((covered / (row.keys * languages.length)) * 100)
+          : 0;
+        return (
+          <details className="owner-catalogue" key={row.page}>
+            <summary>
+              <Icon name="chevron" className="owner-catalogue-arrow" />
+              <span className="owner-catalogue-name">{row.page}</span>
+              <span className="owner-catalogue-overview">
+                <span className="owner-language-meter" aria-hidden="true">
+                  <span style={{ width: `${overall ? Math.max(1.5, overall) : 0}%` }} />
+                </span>
+                <small>
+                  {t("owner.locales.cardKeys", { count: row.keys })} · {t("owner.locales.cardLanguages", { done: finished, total: languages.length })}
+                </small>
               </span>
-            );
-          })}
-        </div>
-      ))}
+              <strong className={`owner-catalogue-percent${overall >= 100 ? " is-complete" : ""}`}>{overall}%</strong>
+            </summary>
+            <ul className="owner-catalogue-langs">
+              {languages.map((language) => {
+                const done = row.languages[language.code] ?? 0;
+                const share = percent(done, row.keys);
+                const tone = !done ? "" : done >= row.keys ? "is-complete" : "is-partial";
+                return (
+                  <li key={language.code} className={tone}>
+                    <span className="owner-catalogue-code">{language.code}</span>
+                    <span className="owner-language-meter" aria-hidden="true">
+                      <span style={{ width: `${done ? Math.max(1.5, share) : 0}%` }} />
+                    </span>
+                    <strong>{done ? `${share}%` : "—"}</strong>
+                    <small>{done} / {row.keys}</small>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        );
+      })}
     </div>
   );
 }
@@ -163,7 +184,7 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
         </div>
         <div className="staff-guild-count">
           <strong>{data.languages.length}</strong>
-          <span>{t("owner.locales.languageCount", { keys: data.total_keys })}</span>
+          <span>{t("owner.locales.languageCount", { keys: data.total_keys + (data.bot_total_keys ?? 0) })}</span>
         </div>
       </header>
 
@@ -204,7 +225,8 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
           <div><dt>{t("owner.locales.beta")}</dt><dd>{data.origin ?? t("owner.locales.unset")}</dd></div>
           <div><dt>{t("owner.locales.scanned")}</dt><dd>{ago(data.generated_at, t)}</dd></div>
           <div><dt>{t("owner.locales.pages")}</dt><dd>{data.pages.length}</dd></div>
-          <div><dt>{t("owner.locales.keys")}</dt><dd>{data.total_keys}</dd></div>
+          <div><dt>{t("owner.locales.botCatalogues")}</dt><dd>{data.bot?.length ?? 0}</dd></div>
+          <div><dt>{t("owner.locales.keys")}</dt><dd>{data.total_keys + (data.bot_total_keys ?? 0)}</dd></div>
           <div>
             <dt>{t("owner.locales.botSyncLabel")}</dt>
             <dd>
@@ -225,20 +247,24 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
           </div>
         </div>
         <ul className="owner-language-list">
-          {languages.map((row) => (
-            <li key={row.code} className={row.missing === 0 ? "is-complete" : ""}>
-              <span className="owner-language-code">{row.code}</span>
-              <span className="owner-language-name">{row.label}</span>
-              <span className="owner-language-meter" aria-hidden="true"><span style={{ width: `${Math.max(1.5, row.percent)}%` }} /></span>
-              <strong>{row.percent}%</strong>
-              <small>
-                {row.translated} / {row.total}
-                {row.complete_pages !== undefined && row.pages !== undefined
-                  ? ` · ${row.complete_pages}/${row.pages} ${t("owner.locales.pagesDone")}`
-                  : ""}
-              </small>
-            </li>
-          ))}
+          {languages.map((row) => {
+            // Pages and cogs are counted together in the percentage, so the
+            // finished tally has to add both halves up as well.
+            const done = (row.complete_pages ?? 0) + (row.complete_bot ?? 0);
+            const entries = (row.pages ?? 0) + (row.bot ?? 0);
+            return (
+              <li key={row.code} className={row.missing === 0 ? "is-complete" : ""}>
+                <span className="owner-language-code">{row.code}</span>
+                <span className="owner-language-name">{row.label}</span>
+                <span className="owner-language-meter" aria-hidden="true"><span style={{ width: `${Math.max(1.5, row.percent)}%` }} /></span>
+                <strong>{row.percent}%</strong>
+                <small>
+                  {row.translated} / {row.total}
+                  {entries ? ` · ${done}/${entries} ${t("owner.locales.pagesDone")}` : ""}
+                </small>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
@@ -258,26 +284,14 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
           meta={t("owner.locales.catalogueCount", { count: data.bot?.length ?? 0 })}
         >
           <p className="owner-fold-note">{t("owner.locales.botSectionBody")}</p>
-          <CatalogueTable
-            rows={data.bot ?? []}
-            firstColumn={t("owner.locales.catalogueColumn")}
-            languages={data.languages}
-            t={t}
-          />
+          <CatalogueList rows={data.bot ?? []} languages={data.languages} t={t} />
         </Fold>
         <Fold
           title={t("owner.locales.siteSection")}
           meta={t("owner.locales.pageCount", { count: data.pages.length })}
         >
           <p className="owner-fold-note">{t("owner.locales.siteSectionBody")}</p>
-          {/* The header is the desktop grid; a phone gets one card per page, where
-              every language becomes a labelled chip instead of a squeezed column. */}
-          <CatalogueTable
-            rows={data.pages}
-            firstColumn={t("owner.locales.page")}
-            languages={data.languages}
-            t={t}
-          />
+          <CatalogueList rows={data.pages} languages={data.languages} t={t} />
         </Fold>
       </section>
     </div>

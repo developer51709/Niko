@@ -689,26 +689,44 @@ def catalogue(page: str, language: str) -> dict | None:
 # ──────────────────────────────────────────────────────────────────────────────
 # Status
 # ──────────────────────────────────────────────────────────────────────────────
-def coverage_rows(document: dict) -> list[dict]:
-    """Website coverage, counted from whichever manifest the site is using."""
+def _covered(entries: dict, code: str) -> int:
+    """How many of one language's keys a family of catalogues covers."""
+    return sum(entry["langs"].get(code, {}).get("translated", 0) for entry in entries.values())
+
+
+def _finished(entries: dict, code: str) -> int:
+    """How many catalogues of a family a language has translated completely."""
+    return sum(
+        1
+        for entry in entries.values()
+        if entry["keys"] and entry["langs"].get(code, {}).get("translated", 0) >= entry["keys"]
+    )
+
+
+def coverage_rows(document: dict, include_bot: bool = False) -> list[dict]:
+    """Coverage counted from whichever manifest the site is using.
+
+    The public status page keeps the two catalogue families apart, one block
+    each, so it reads the website rows alone. The owner's coverage card wants
+    the single figure a translator works towards, so it asks for the merged
+    totals and still gets each family's finished counts alongside them.
+    """
     status = _status()
     pages = document["pages"]
+    bot_pages = document.get("bot_pages") or {}
     total = sum(entry["keys"] for entry in pages.values())
+    if include_bot:
+        total += sum(entry["keys"] for entry in bot_pages.values())
     rows = []
     for language in document["languages"]:
         code = language["code"]
-        translated = sum(entry["langs"].get(code, {}).get("translated", 0) for entry in pages.values())
-        complete = sum(
-            1
-            for entry in pages.values()
-            if entry["keys"] and entry["langs"].get(code, {}).get("translated", 0) >= entry["keys"]
-        )
-        row = status._coverage_row(
-            code,
-            translated,
-            total,
-            extra={"pages": len(pages), "complete_pages": complete},
-        )
+        translated = _covered(pages, code)
+        extra = {"pages": len(pages), "complete_pages": _finished(pages, code)}
+        if include_bot:
+            translated += _covered(bot_pages, code)
+            extra["bot"] = len(bot_pages)
+            extra["complete_bot"] = _finished(bot_pages, code)
+        row = status._coverage_row(code, translated, total, extra=extra)
         row["label"] = language["label"]
         rows.append(row)
     return rows

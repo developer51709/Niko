@@ -179,6 +179,10 @@ export type StatusCoverage = {
   pages?: number;
   /** Website rows: how many of those pages this language has finished. */
   complete_pages?: number;
+  /** Merged rows: how many bot catalogues were counted alongside the pages. */
+  bot?: number;
+  /** Merged rows: how many of those bot catalogues this language has finished. */
+  complete_bot?: number;
 };
 
 export type StatusHost = {
