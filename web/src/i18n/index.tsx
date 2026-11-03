@@ -7,6 +7,13 @@
  * translation is missing simply falls back to English, so a half-translated
  * site never shows raw keys or blank text.
  *
+ * The bundled catalogues are only the *base*, though: while a translation pass
+ * is being written on the beta instance, the live site reads the newer files
+ * from `/api/locales/index.json` and `/api/locales/<page>/<lang>.json` (see
+ * `webapp/locale_feed.py`). That is what makes a language appear here as soon as
+ * someone starts translating it — no rebuild, no restart, no git pull. If the
+ * feed is off or unreachable the bundled files answer, exactly as before.
+ *
  * `shared/` is the chrome every page renders — navigation, and anything else
  * cross-page — and is always consulted after the page's own catalogue, so a page
  * can override a shared string when its own wording is better.
@@ -24,22 +31,25 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
-export const LANGUAGES = [
+export type LanguageOption = { code: string; label: string };
+
+/** Language codes are open-ended: the feed can add one before a build does. */
+export type LanguageCode = string;
+
+/** The languages the build ships, used until the feed answers. */
+export const LANGUAGES: LanguageOption[] = [
   { code: "en", label: "English" },
   { code: "de", label: "German" },
   { code: "es", label: "Spanish" },
   { code: "fr", label: "French" },
-] as const;
-
-export type LanguageCode = (typeof LANGUAGES)[number]["code"];
+];
 
 /** Where the devtools override lives; only this browser sees it. */
 const STORAGE_KEY = "niko.site.language";
-
-type Catalogue = Record<string, string>;
 
 /** `../locales/status/en.json` → `CATALOGUES.status.en`.
  *
@@ -53,10 +63,12 @@ const catalogueModules = import.meta.glob<string>("../locales/*/*.json", {
   import: "default",
 });
 
+type Catalogue = Record<string, string>;
+
 const CATALOGUES: Record<string, Partial<Record<LanguageCode, Catalogue>>> = {};
 for (const [path, source] of Object.entries(catalogueModules)) {
   const match = /locales\/([^/]+)\/([^/]+)\.json$/.exec(path);
-  if (!match || !isLanguage(match[2])) continue;
+  if (!match) continue;
   let strings: Catalogue;
   try {
     strings = JSON.parse(source) as Catalogue;
@@ -66,34 +78,181 @@ for (const [path, source] of Object.entries(catalogueModules)) {
   CATALOGUES[match[1]] = { ...(CATALOGUES[match[1]] ?? {}), [match[2]]: strings };
 }
 
-function isLanguage(value: string | null | undefined): value is LanguageCode {
-  return LANGUAGES.some((entry) => entry.code === value);
+// ──────────────────────────────────────────────────────────────────────────────
+// Live catalogues
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** `/api/locales/index.json`: what exists, and the hash of every file. */
+type LocaleIndex = {
+  languages?: LanguageOption[];
+  pages?: Record<string, { keys: number; langs: Record<string, { translated: number; hash: string }> }>;
+  source?: { mode: "beta" | "local"; stale?: boolean };
+};
+
+/** How long the index is reused before asking the server again. */
+const INDEX_TTL = 30_000;
+const INDEX_STORAGE = "niko.locales.index";
+const CATALOGUE_STORAGE = "niko.locales.";
+
+/** The language list the picker and the browser match should use. */
+let languages: LanguageOption[] = LANGUAGES;
+
+/** Newest strings, keyed `<page>:<language>`. */
+const remote: Record<string, Catalogue> = {};
+/** `<page>:<language>` → hash of the file the server currently has. */
+const hashes: Record<string, string> = {};
+const requested = new Set<string>();
+
+let index: LocaleIndex | null = null;
+let indexAt = 0;
+let indexTried = 0;
+let indexPromise: Promise<LocaleIndex | null> | null = null;
+
+let revision = 0;
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
-/** Map `de-DE`, `fr_CA`, … onto a shipped language, or null when unsupported. */
-function matchLanguage(tag: string | null | undefined): LanguageCode | null {
-  const code = String(tag ?? "").toLowerCase().split("-")[0];
-  return isLanguage(code) ? code : null;
+function getRevision() {
+  return revision;
 }
 
-function browserLanguage(): LanguageCode {
-  if (typeof navigator === "undefined") return "en";
-  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
-  for (const candidate of preferred) {
-    const code = matchLanguage(candidate);
-    if (code) return code;
-  }
-  return "en";
+function publish() {
+  revision += 1;
+  for (const listener of listeners) listener();
 }
 
-function storedLanguage(): LanguageCode | null {
+function readStorage<T>(key: string): T | null {
   try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    return isLanguage(value) ? value : null;
+    const raw = window.sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
   } catch {
-    // Storage can be blocked; the browser default is still a good answer.
     return null;
   }
+}
+
+function writeStorage(key: string, value: unknown) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Private mode and full quotas are allowed to just skip the cache.
+  }
+}
+
+function applyIndex(document: LocaleIndex) {
+  index = document;
+  indexAt = Date.now();
+  writeStorage(INDEX_STORAGE, { at: indexAt, document });
+  if (Array.isArray(document.languages) && document.languages.length) {
+    languages = document.languages.filter((entry) => entry && entry.code).map((entry) => ({
+      code: entry.code,
+      label: entry.label || entry.code.toUpperCase(),
+    }));
+  }
+  for (const [page, entry] of Object.entries(document.pages ?? {})) {
+    for (const [language, file] of Object.entries(entry?.langs ?? {})) {
+      if (!file?.hash) continue;
+      const key = `${page}:${language}`;
+      const seen = hashes[key];
+      hashes[key] = file.hash;
+      // A page that is already on screen and whose file changed on beta is
+      // fetched again straight away; everything else waits for its next visit.
+      if (seen && seen !== file.hash && remote[key]) {
+        requested.delete(key);
+        loadCatalogue(page, language);
+      }
+    }
+  }
+  publish();
+}
+
+/** Restore the last index before React mounts, so the picker has no empty tick. */
+function restoreIndex(): LocaleIndex | null {
+  const stored = readStorage<{ at: number; document: LocaleIndex }>(INDEX_STORAGE);
+  if (!stored?.document || !stored.at) return null;
+  if (Date.now() - stored.at > INDEX_TTL) return null;
+  return stored.document;
+}
+
+const restored = typeof window === "undefined" ? null : restoreIndex();
+if (restored) applyIndex(restored);
+
+function loadIndex(force = false): Promise<LocaleIndex | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (!force && index && Date.now() - indexAt < INDEX_TTL) return Promise.resolve(index);
+  // A feed that is off or down should not be re-asked by every component that
+  // renders a string; the bundled catalogues already answered.
+  if (!index && !force && Date.now() - indexTried < 10_000) return Promise.resolve(null);
+  if (indexPromise) return indexPromise;
+  indexTried = Date.now();
+  indexPromise = fetch("/api/locales/index.json", { cache: "no-store" })
+    .then((response) => (response.ok ? (response.json() as Promise<LocaleIndex>) : null))
+    .then((document) => {
+      if (document) applyIndex(document);
+      return document;
+    })
+    .catch(() => index)
+    .finally(() => {
+      indexPromise = null;
+    });
+  return indexPromise;
+}
+
+/** Fetch one page's catalogue if the server has a file this tab has not seen. */
+function loadCatalogue(page: string, language: LanguageCode) {
+  if (typeof window === "undefined") return;
+  const key = `${page}:${language}`;
+  if (requested.has(key)) return;
+  const hash = hashes[key];
+  if (!hash) return;
+  requested.add(key);
+
+  const cached = readStorage<{ hash: string; strings: Catalogue }>(`${CATALOGUE_STORAGE}${key}`);
+  if (cached && cached.hash === hash && cached.strings) {
+    remote[key] = cached.strings;
+    publish();
+    return;
+  }
+
+  fetch(`/api/locales/${page}/${language}.json`, { cache: "no-cache" })
+    .then((response) => (response.ok ? (response.json() as Promise<Catalogue>) : null))
+    .then((strings) => {
+      if (!strings) return;
+      remote[key] = strings;
+      writeStorage(`${CATALOGUE_STORAGE}${key}`, { hash, strings });
+      publish();
+    })
+    .catch(() => {
+      // The bundled catalogue already answered; this is only the newer copy.
+    });
+}
+
+/**
+ * Trigger the feed for one page and subscribe to it.
+ *
+ * Both `useStrings` and `usePageTitle` go through here, so a page with no visible
+ * copy of its own still gets its translated title.
+ */
+function useCatalogue(page: string) {
+  const { language } = useLanguage();
+  const revision = useSyncExternalStore(subscribe, getRevision, getRevision);
+
+  useEffect(() => {
+    let live = true;
+    void loadIndex().then(() => {
+      if (live) loadCatalogue(page, language);
+    });
+    return () => {
+      live = false;
+    };
+  }, [page, language]);
+
+  return { language, revision };
 }
 
 function interpolate(template: string, values: Record<string, string | number>) {
@@ -104,6 +263,8 @@ function interpolate(template: string, values: Record<string, string | number>) 
 
 type LanguageContextValue = {
   language: LanguageCode;
+  /** Every language with a catalogue, from the feed when it has one. */
+  languages: LanguageOption[];
   /** What the browser asked for, shown in devtools next to the override. */
   browser: LanguageCode;
   /** True while the owner devtools override is active. */
@@ -114,9 +275,45 @@ type LanguageContextValue = {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
+/** Map `de-DE`, `fr_CA`, … onto a language that has a catalogue, or null. */
+function matchLanguage(tag: string | null | undefined, available: LanguageOption[]): LanguageCode | null {
+  const code = String(tag ?? "").toLowerCase().split("-")[0];
+  return available.some((entry) => entry.code === code) ? code : null;
+}
+
+function browserTags(): string[] {
+  if (typeof navigator === "undefined") return [];
+  return navigator.languages?.length ? [...navigator.languages] : [navigator.language];
+}
+
+function storedLanguage(): LanguageCode | null {
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) || null;
+  } catch {
+    // Storage can be blocked; the browser default is still a good answer.
+    return null;
+  }
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [browser] = useState(browserLanguage);
+  const [tags] = useState(browserTags);
   const [override, setOverride] = useState<LanguageCode | null>(storedLanguage);
+  const revision = useSyncExternalStore(subscribe, getRevision, getRevision);
+
+  // Ask for the index once per tab: it carries the language list and the hashes
+  // the first page needs.
+  useEffect(() => {
+    void loadIndex();
+  }, []);
+
+  const available = useMemo(() => languages, [revision]);
+  const browser = useMemo(() => {
+    for (const tag of tags) {
+      const code = matchLanguage(tag, available);
+      if (code) return code;
+    }
+    return "en";
+  }, [tags, available]);
   const language = override ?? browser;
 
   // The document language drives hyphenation, screen-reader voice, and
@@ -144,8 +341,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<LanguageContextValue>(
-    () => ({ language, browser, overridden: override !== null && override !== browser, setLanguage, resetLanguage }),
-    [language, browser, override, setLanguage, resetLanguage],
+    () => ({ language, languages: available, browser, overridden: override !== null && override !== browser, setLanguage, resetLanguage }),
+    [language, available, browser, override, setLanguage, resetLanguage],
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
@@ -163,15 +360,20 @@ export function useLanguage(): LanguageContextValue {
  * `t("nav.home")` reads the page catalogue first, then `shared`, then the
  * English fallback of each; an unknown key returns the key itself, which makes a
  * missing string obvious in development instead of silently empty.
+ *
+ * The catalogue starts as the bundled one and is replaced by the feed's newer
+ * file the moment it arrives, so a translation written on beta shows up on the
+ * next navigation without a deploy.
  */
 export function useStrings(page: string) {
-  const { language } = useLanguage();
+  const { language, revision } = useCatalogue(page);
 
   return useMemo(() => {
-    const own = CATALOGUES[page]?.[language] ?? {};
-    const ownEnglish = CATALOGUES[page]?.en ?? {};
-    const shared = page === "shared" ? {} : CATALOGUES.shared?.[language] ?? {};
-    const sharedEnglish = page === "shared" ? {} : CATALOGUES.shared?.en ?? {};
+    const key = `${page}:${language}`;
+    const own = remote[key] ?? CATALOGUES[page]?.[language] ?? {};
+    const ownEnglish = remote[`${page}:en`] ?? CATALOGUES[page]?.en ?? {};
+    const shared = page === "shared" ? {} : remote[`shared:${language}`] ?? CATALOGUES.shared?.[language] ?? {};
+    const sharedEnglish = page === "shared" ? {} : remote["shared:en"] ?? CATALOGUES.shared?.en ?? {};
 
     const t = (key: string, values?: Record<string, string | number>) => {
       const template = own[key] ?? shared[key] ?? ownEnglish[key] ?? sharedEnglish[key] ?? key;
@@ -179,7 +381,9 @@ export function useStrings(page: string) {
     };
 
     return { t, language };
-  }, [page, language]);
+    // `revision` is the feed's version counter: it changes when a newer
+    // catalogue lands, which is the only reason `t` can give a different answer.
+  }, [page, language, revision]);
 }
 
 /**
@@ -191,13 +395,16 @@ export function useStrings(page: string) {
  * generic catalogue title must not overwrite.
  */
 export function usePageTitle(page: string) {
-  const { language } = useLanguage();
+  const { language, revision } = useCatalogue(page);
 
   useEffect(() => {
     if (STATIC_TITLELESS_PAGES.has(page)) return;
-    const title = CATALOGUES[page]?.[language]?.title ?? CATALOGUES[page]?.en?.title;
+    const title = remote[`${page}:${language}`]?.title
+      ?? CATALOGUES[page]?.[language]?.title
+      ?? remote[`${page}:en`]?.title
+      ?? CATALOGUES[page]?.en?.title;
     if (title) document.title = title;
-  }, [page, language]);
+  }, [page, language, revision]);
 }
 
 /**

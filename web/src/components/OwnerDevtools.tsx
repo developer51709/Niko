@@ -21,7 +21,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { getAuth } from "../api";
 import { devtools, useDevtoolsFlag } from "../devtools";
-import { LANGUAGES, useLanguage, type LanguageCode } from "../i18n";
+import { useLanguage, type LanguageCode } from "../i18n";
 import { pageFromPath } from "../router";
 import type { AuthStatus } from "../types";
 import { notifyError, notifySuccess } from "../utils/toast";
@@ -79,7 +79,7 @@ export function OwnerDevtools() {
   const bypassSupportServer = useDevtoolsFlag(devtools.supportServerBypass);
   // The site's own language choice, not the browser's: this is the control that
   // makes testing a translation possible without changing device settings.
-  const { language, browser, overridden, setLanguage, resetLanguage } = useLanguage();
+  const { language, languages, browser, overridden, setLanguage, resetLanguage } = useLanguage();
 
   const toggleRef = useRef<HTMLButtonElement | null>(null);
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ page: null, browser: null, tools: null });
@@ -253,11 +253,11 @@ export function OwnerDevtools() {
               value={language}
               onChange={(event) => setLanguage(event.target.value as LanguageCode)}
             >
-              {LANGUAGES.map((entry) => <option key={entry.code} value={entry.code}>{entry.label}</option>)}
+              {languages.map((entry) => <option key={entry.code} value={entry.code}>{entry.label}</option>)}
             </select>
           </div>
           {overridden && <button type="button" className="owner-devtools-reset" onClick={resetLanguage}>
-            Use browser language ({LANGUAGES.find((entry) => entry.code === browser)?.label ?? "English"})
+            Use browser language ({languages.find((entry) => entry.code === browser)?.label ?? "English"})
           </button>}
           {page === "team-application" && <div className="owner-devtools-tool">
             <div>

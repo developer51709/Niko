@@ -31,6 +31,111 @@ export type StatusShard = {
   ratelimited: boolean;
 };
 
+/** Where the locale figures came from: the beta feed or this deployment. */
+export type StatusLocaleSource = {
+  mode: "beta" | "local";
+  /** The configured beta origin, when there is one. */
+  origin?: string | null;
+  /** Why the last pull failed, if it did. */
+  error?: string | null;
+  /** Seconds since beta's manifest was read. */
+  age_seconds?: number | null;
+  /** True when beta is unreachable and the last good reading is being shown. */
+  stale?: boolean;
+};
+
+/** One page's translation file, as the owner's locale page lists it. */
+export type OwnerLocalePage = {
+  page: string;
+  keys: number;
+  languages: Record<string, number>;
+};
+
+/** What the owner's locale page reads from `/api/owner/locales`. */
+export type OwnerLocales = {
+  configured: boolean;
+  origin: string | null;
+  source: StatusLocaleSource;
+  generated_at: number | null;
+  languages: { code: string; label: string }[];
+  coverage: StatusCoverage[];
+  pages: OwnerLocalePage[];
+  total_keys: number;
+  synced_at?: number;
+};
+
+/** One file an update would add, replace or delete. */
+export type OwnerUpdateFile = {
+  path: string;
+  status: "added" | "modified" | "removed";
+  bytes: number;
+};
+
+export type OwnerUpdateArea = {
+  label: string;
+  changed: number;
+  bytes: number;
+  files: OwnerUpdateFile[];
+  truncated: number;
+};
+
+/** What one area did when an update was applied. */
+export type OwnerUpdateRunArea = {
+  ok?: boolean;
+  changed?: number;
+  written?: number;
+  removed?: number;
+  strategy?: string;
+  error?: string;
+  rolled_back?: boolean;
+  reloaded?: string[];
+  loaded?: string[];
+  unloaded?: string[];
+  failed?: string[];
+  dashboard?: { swapped?: boolean; routes?: number };
+  purged?: string[];
+};
+
+export type OwnerUpdateRun = {
+  id: string;
+  started_at: number;
+  finished_at: number;
+  areas: Record<string, OwnerUpdateRunArea>;
+  handoff?: boolean;
+};
+
+/** The plan the owner's update page reads, and the result of applying it. */
+export type OwnerUpdates = {
+  ok: boolean;
+  configured: boolean;
+  beta: string | null;
+  error?: string;
+  generated_at?: number;
+  areas: Record<string, OwnerUpdateArea>;
+  total_changed: number;
+  total_bytes: number;
+  running?: boolean;
+  last?: OwnerUpdateRun | null;
+  token_set?: boolean;
+  handoff?: {
+    state: string;
+    pid?: number;
+    port?: number;
+    at: number;
+    error?: string;
+  } | null;
+};
+
+export type OwnerUpdateApply = {
+  ok: boolean;
+  error?: string;
+  beta?: string | null;
+  run?: string;
+  areas: Record<string, OwnerUpdateRunArea>;
+  last?: OwnerUpdateRun | null;
+  handoff?: OwnerUpdates["handoff"];
+};
+
 export type StatusCoverage = {
   code: string;
   label: string;
@@ -92,6 +197,8 @@ export type StatusPayload = {
     bot: StatusCoverage[];
     website: StatusCoverage[];
     scanned_at: number;
+    /** Which copy of the catalogues the figures describe. */
+    source?: StatusLocaleSource;
   };
   generated_at: number;
 };

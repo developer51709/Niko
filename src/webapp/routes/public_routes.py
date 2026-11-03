@@ -5,6 +5,7 @@ import time
 
 from config import links as bot_links
 from .. import leaderboard_cache
+from .. import locale_feed
 from .. import server as _server
 from .. import status as status_source
 from ..bot_card import render_bot_card
@@ -257,6 +258,53 @@ def api_commands():
 @app.route("/api/health")
 def api_health():
     return jsonify({"ok": True, "service": "niko-api", "static_build": os.path.exists(os.path.join(WEB_DIST_DIR, "index.html"))})
+
+
+@app.route("/api/locales/source.json")
+def api_locales_source():
+    """This instance's own translation files, in the feed's manifest shape.
+
+    Beta serves this and production pulls it (``BETA_INSTANCE_URL``), which is what
+    lets the live site show translations while they are still being written.
+    It only ever describes the files on the machine answering it — never a feed
+    of its own — so pointing a feed at itself cannot recurse.
+    """
+    response = jsonify(locale_feed.local_snapshot())
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/locales/index.json")
+def api_locales_index():
+    """Which pages have which languages, with a content hash per file.
+
+    The website reads this at startup: the picker shows the languages in it, and
+    every page asks for the catalogue matching the hash it finds here, so a
+    translation written on beta is fetched once and then cached by the browser.
+    """
+    document = locale_feed.manifest()
+    response = jsonify(document)
+    response.headers["Cache-Control"] = "public, max-age=15"
+    return response
+
+
+@app.route("/api/locales/<page>/<language>.json")
+def api_locale_catalogue(page, language):
+    """One page's strings in one language, beta's copy first when it has it."""
+    found = locale_feed.catalogue(page, language)
+    if not found:
+        return jsonify({"error": "No such catalogue."}), 404
+    etag = f'"{found["hash"]}"'
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "public, max-age=120",
+        "X-Locale-Origin": found["origin"],
+    }
+    if request.headers.get("If-None-Match") == etag:
+        return "", 304, headers
+    response = jsonify(found["strings"])
+    response.headers.update(headers)
+    return response
 
 
 @app.route("/api/status")

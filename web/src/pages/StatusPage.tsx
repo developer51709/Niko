@@ -386,6 +386,13 @@ export function StatusPage() {
                   </span>
                 </span>
                 <span className="status-section-meta">
+                  {locales?.source && (
+                    <span className={`status-pill ${locales.source.mode === "beta" ? "ok" : "wait"}`}>
+                      {locales.source.mode === "beta"
+                        ? t("locales.live", { seconds: formatNumber(locales.source.age_seconds ?? 0) })
+                        : t("locales.local")}
+                    </span>
+                  )}
                   {locales && <span className="status-pill wait">{t("locales.languages", { count: locales.languages.length })}</span>}
                   {locales && (
                     <span className="status-pill ok">
@@ -416,6 +423,16 @@ export function StatusPage() {
                       </ul>
                     </section>
                   </div>
+                  {locales.source?.mode === "beta" && locales.source.stale && (
+                    <p className="status-locale-foot">{t("locales.feedStale")}</p>
+                  )}
+                  {locales.source?.mode === "local" && locales.source.origin && (
+                    <p className="status-locale-foot">
+                      {locales.source.error
+                        ? t("locales.feedError", { error: locales.source.error })
+                        : t("locales.feedWaiting")}
+                    </p>
+                  )}
                   <p className="status-locale-foot">
                     {t("locales.foot", { time: formatClock(locales.scanned_at) })}
                   </p>

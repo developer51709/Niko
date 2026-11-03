@@ -43,8 +43,10 @@ LANGUAGE_LABELS = {"en": "English", "de": "German", "es": "Spanish", "fr": "Fren
 #: The website's own per-page catalogues (``web/src/locales/<page>/<lang>.json``).
 SITE_LOCALES = Path("web/src/locales")
 
-#: How long the translation scan is reused, in seconds.
-_LOCALE_TTL = 60.0
+#: How long the translation scan is reused, in seconds. Short, because
+#: :mod:`webapp.locale_feed` may be reading a beta instance that is being edited
+#: right now; the scan itself is cached for longer inside the feed.
+_LOCALE_TTL = 15.0
 _locale_cache: dict = {"at": 0.0, "payload": None}
 
 
@@ -192,7 +194,16 @@ def _coverage_row(code: str, done: int, total: int, extra: dict | None = None) -
 
 
 def locale_status(force: bool = False) -> dict:
-    """Bot and website translation coverage, cached for a minute."""
+    """Bot and website translation coverage, cached for a few seconds.
+
+    The rows are built from this deployment's files and then handed to
+    :func:`webapp.locale_feed.decorate`, which swaps in the beta instance's
+    catalogues when ``BETA_INSTANCE_URL`` is set — so a translation written on beta
+    shows up here without a deploy, and ``source`` always says which copy the
+    figures describe.
+    """
+    from . import locale_feed
+
     now = time.monotonic()
     if not force and _locale_cache["payload"] and now - _locale_cache["at"] < _LOCALE_TTL:
         return _locale_cache["payload"]
@@ -202,6 +213,7 @@ def locale_status(force: bool = False) -> dict:
         "website": _website_locale_status(),
         "scanned_at": int(time.time()),
     }
+    payload = locale_feed.decorate(payload)
     _locale_cache.update({"at": now, "payload": payload})
     return payload
 

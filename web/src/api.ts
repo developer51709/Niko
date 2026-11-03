@@ -43,6 +43,9 @@ import type {
   NotifierFollow,
   NotifierResponse,
   StaffMaintenanceResponse,
+  OwnerLocales,
+  OwnerUpdates,
+  OwnerUpdateApply,
   StatusPayload,
   TeamRecruitmentOpening,
   TeamRecruitmentSettings,
@@ -95,6 +98,24 @@ export const setStaffMaintenance = (
   headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
   body: JSON.stringify(body),
 });
+// ── Owner localization & updates (staff settings) ───────────────────────────
+/** Which languages the live site can render right now, and where they came from. */
+export const getOwnerLocales = () => api<OwnerLocales>("/api/owner/locales");
+/** Pull beta's catalogues immediately instead of waiting for the next poll. */
+export const syncOwnerLocales = (csrfToken?: string) => api<OwnerLocales>("/api/owner/locales/sync", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify({}),
+});
+/** What beta has that this deployment does not, area by area. */
+export const getOwnerUpdates = () => api<OwnerUpdates>("/api/owner/updates");
+/** Stage and apply the selected areas, reloading only what changed. */
+export const applyOwnerUpdates = (areas: string[], csrfToken?: string) => api<OwnerUpdateApply>("/api/owner/updates/apply", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify({ areas }),
+});
+
 export const resolveDiscordText = (text: string, guildId?: string) => api<{
   text: string;
   mention_names: Partial<Record<"user" | "channel" | "role", Record<string, string>>>;
