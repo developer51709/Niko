@@ -41,7 +41,7 @@ Each job has:
 
 ### Cooldowns
 - Work: 1 hour cooldown
-- Daily: 24 hour cooldown
+- Daily: 20 hour cooldown
 - Gambling: Varies by game
 
 ## Job Commands

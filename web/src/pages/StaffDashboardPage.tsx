@@ -16,7 +16,7 @@ import { Switch } from "../components/dashboard/Switch";
 import { ColorPicker } from "../components/dashboard/ColorPicker";
 import { Select, selectOptions } from "../components/dashboard/Select";
 import { SettingCard, SettingCards } from "../components/dashboard/SettingCards";
-import { PublicHeader } from "../components/PublicHeader";
+import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
 import type { AuthStatus, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingPayment, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffGuild, StaffMember, StaffRosterRole } from "../types";
 
@@ -277,7 +277,14 @@ export function StaffDashboardPage() {
   }, [activeTab]);
 
   if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>Verifying your account and staff access…</p></div>;
-  if (accessError || !staff || !auth?.authenticated) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff workspace</div><h1>{!auth && accessError ? "Staff access unavailable." : "Private team area."}</h1><p>{!auth && accessError ? accessError : !auth?.authenticated ? "You are not logged in. Sign in with Discord to continue to staff settings." : accessError || "This area is only available to official Niko staff."}</p>{auth && !auth.authenticated && <a className="button button-primary full-width" href="/auth/login?next=/dashboard/staff">Continue with Discord</a>}<button className="back-link" onClick={() => navigate("/dashboard")}>Return to dashboard</button></div></main></>;
+  if (accessError || !staff || !auth?.authenticated) return <AuthScreen
+    eyebrow="Staff workspace"
+    title={!auth && accessError ? "Staff access unavailable." : <>Private <em>team area.</em></>}
+    description={!auth && accessError ? accessError : !auth?.authenticated ? "You are not logged in. Sign in with Discord to continue to staff settings." : accessError || "This area is only available to official Niko staff."}
+    back={{ label: "Return to dashboard", onClick: () => navigate("/dashboard") }}
+  >
+    {auth && !auth.authenticated && <DiscordSignIn next="/dashboard/staff" available={auth.oauth_available} />}
+  </AuthScreen>;
 
   const signedInUser = auth.user!;
   const discordDefaultAvatar = `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(signedInUser.id) % 5n)}.png`;
@@ -291,7 +298,8 @@ export function StaffDashboardPage() {
   const cardPreviewUrl = `${cardBaseUrl}?theme=${form.card_theme}&accent=${encodeURIComponent(form.card_accent.replace(/^#/, "").toUpperCase())}&status=${form.card_show_status ? 1 : 0}&t=${cardPreviewStamp}`;
   // The image itself is the link, so clicking the card on GitHub opens the
   // member's public staff profile instead of the raw SVG.
-  const cardProfileUrl = `${window.location.origin}/team/${staff.profile.id}`;
+  // The shareable profile link is the username; the id link still resolves.
+  const cardProfileUrl = `${window.location.origin}/team/${staff.profile.handle || staff.profile.id}`;
   const cardMarkdown = `[![Niko staff card](${cardBaseUrl})](${cardProfileUrl})`;
   const copyCardMarkdown = async () => {
     try {

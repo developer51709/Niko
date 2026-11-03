@@ -9,7 +9,7 @@ import { BoostersView } from "../components/dashboard/BoostersView";
 import { LevelingView, OverviewView, SectionSkeleton, ServersView, UserOverviewView } from "../components/dashboard/DashboardViews";
 import { AchievementsView } from "../components/dashboard/AchievementsView";
 import { EconomyView } from "../components/dashboard/EconomyView";
-import { PublicHeader } from "../components/PublicHeader";
+import { AuthBackLink, AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { useLiveResource } from "../hooks/useLiveResource";
 import type { PublicConfig } from "../types";
@@ -19,12 +19,19 @@ import { Icon } from "../components/Icon";
 
 function AuthCard({ auth }: { auth: AuthStatus }) {
   const config = useBotConfig();
-  return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card">
-    <span className="auth-mark">n</span><div className="eyebrow">Private workspace</div><h1>Settle in, <em>admin.</em></h1><p>Sign in with Discord to see your Niko profile and manage the servers you look after.</p>
-    {auth.oauth_available ? <a className="button button-primary full-width" href="/auth/login?next=/dashboard"><Icon name="lock" /> Continue with Discord <Icon name="arrow" /></a> : <div className="notice warning">Discord login is not configured yet. Add <code>DISCORD_CLIENT_SECRET</code> to the environment and restart the bot.</div>}
+  return <AuthScreen
+    eyebrow="Private workspace"
+    title={<>Settle in, <em>admin.</em></>}
+    description="Sign in with Discord to see your Niko profile and manage the servers you look after."
+    back={{ label: "Return to public site", href: "/", onClick: () => navigate("/") }}
+  >
+    <DiscordSignIn
+      next="/dashboard"
+      available={auth.oauth_available}
+      unavailableNotice={<>Discord login is not configured yet. Add <code>DISCORD_CLIENT_SECRET</code> to the environment and restart the bot.</>}
+    />
     {!config && <p className="form-hint">The public bot configuration is still loading.</p>}
-    <a className="back-link" href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>Return to public site</a>
-  </div></main></>;
+  </AuthScreen>;
 }
 
 /** How often the overview's analytics refresh themselves while it is open. */
@@ -168,7 +175,23 @@ function BlacklistAppealScreen({ scope, reason, guildId, guildName, supportUrl, 
       .catch(() => { if (active) setAppealable(false); });
     return () => { active = false; };
   }, [guildId, scope]);
-  return <>{!embedded && <PublicHeader page="dashboard" />}<div className={`auth-page blacklist-appeal-page${embedded ? " blacklist-appeal-embedded" : ""}`}><section className="auth-card blacklist-appeal-card" role="alert"><span className="blacklist-appeal-mark"><Icon name="lock" /></span><div className="eyebrow">Dashboard access restricted</div><h1>{scope === "guild" ? "This server is blacklisted." : "This account is blacklisted."}</h1><p>{scope === "guild" ? `${guildName || "This server"} can’t use Niko’s dashboard or bot features right now.` : "This Discord account can’t access Niko’s dashboard or bot features right now."}</p><div className="blacklist-appeal-reason"><span className="panel-kicker">Reason for the restriction</span><p>{reason?.trim() || "No reason was recorded. Contact the support team for clarification."}</p></div><p className="blacklist-appeal-note">If you believe this restriction was made in error, submit an appeal directly to the Niko team. You don’t need to join the support server.</p>{scope === "user" ? <a className="button button-primary full-width" href="/appeals/blacklist">Appeal this blacklist <Icon name="arrow" /></a> : appealable ? <a className="button button-primary full-width" href={`/appeals/blacklist?guild_id=${encodeURIComponent(guildId || "")}`}>Appeal this server blacklist <Icon name="arrow" /></a> : <button type="button" className="button button-muted full-width" disabled>{appealable === null ? "Checking appeal eligibility…" : "This guild blacklist cannot be appealed"}</button>}{safeSupportUrl && <a className="back-link" href={safeSupportUrl} target="_blank" rel="noreferrer">Or visit the support server <Icon name="external" /></a>}{!embedded && <a className="back-link" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>Return to the public site</a>}</section></div></>;
+  return <AuthScreen
+    header={!embedded}
+    pageClassName={`blacklist-appeal-page${embedded ? " blacklist-appeal-embedded" : ""}`}
+    cardClassName="blacklist-appeal-card"
+    role="alert"
+    mark={<Icon name="lock" />}
+    markClassName="blacklist-appeal-mark"
+    eyebrow="Dashboard access restricted"
+    title={scope === "guild" ? "This server is blacklisted." : "This account is blacklisted."}
+    description={scope === "guild" ? `${guildName || "This server"} can’t use Niko’s dashboard or bot features right now.` : "This Discord account can’t access Niko’s dashboard or bot features right now."}
+  >
+    <div className="blacklist-appeal-reason"><span className="panel-kicker">Reason for the restriction</span><p>{reason?.trim() || "No reason was recorded. Contact the support team for clarification."}</p></div>
+    <p className="blacklist-appeal-note">If you believe this restriction was made in error, submit an appeal directly to the Niko team. You don’t need to join the support server.</p>
+    {scope === "user" ? <a className="button button-primary full-width" href="/appeals/blacklist">Appeal this blacklist <Icon name="arrow" /></a> : appealable ? <a className="button button-primary full-width" href={`/appeals/blacklist?guild_id=${encodeURIComponent(guildId || "")}`}>Appeal this server blacklist <Icon name="arrow" /></a> : <button type="button" className="button button-muted full-width" disabled>{appealable === null ? "Checking appeal eligibility…" : "This guild blacklist cannot be appealed"}</button>}
+    {safeSupportUrl && <AuthBackLink label={<>Or visit the support server <Icon name="external" /></>} href={safeSupportUrl} external />}
+    {!embedded && <AuthBackLink label="Return to the public site" href="/" onClick={() => navigate("/")} />}
+  </AuthScreen>;
 }
 
 function DashboardLoading() {
@@ -262,7 +285,15 @@ export function DashboardPage() {
   }, [guilds, route.guildId, route.view]);
 
   if (loading || !auth) return <div className="dashboard-state"><div className="loading-ring" /><p>Connecting to Niko…</p></div>;
-  if (error) return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><span className="auth-mark">!</span><div className="eyebrow">Connection issue</div><h1>Couldn’t load<br /><em>your workspace.</em></h1><p>{error}</p><button className="button button-primary" onClick={() => window.location.reload()}>Try again <Icon name="arrow" /></button></div></main></>;
+  if (error) return <AuthScreen
+    mark="!"
+    eyebrow="Connection issue"
+    title={<>Couldn’t load<br /><em>your workspace.</em></>}
+    description={error}
+    back={{ label: "Return to public site", href: "/", onClick: () => navigate("/") }}
+  >
+    <button className="button button-primary full-width" onClick={() => window.location.reload()}>Try again <Icon name="arrow" /></button>
+  </AuthScreen>;
   if (!auth.authenticated) return <AuthCard auth={auth} />;
   if (blacklist?.blacklisted) {
     return <BlacklistAppealScreen scope="user" reason={blacklist.reason} supportUrl={config?.support_server_url} />;

@@ -347,7 +347,7 @@ LOTTERY_BASE_POT     = 5_000           # seed for the very first draw
 # Cooldowns shared across commands (seconds)
 # ──────────────────────────────────────────────────────────────────────────
 
-COOLDOWN_DAILY  = 86400
+COOLDOWN_DAILY  = 20 * 3600   # 20 hours, so a claim a little late still keeps the streak
 COOLDOWN_WORK   = 3600
 COOLDOWN_CRIME  = 3600
 COOLDOWN_ROB    = 3600

@@ -862,6 +862,8 @@ export type StaffMember = {
   id: string;
   name: string;
   username?: string | null;
+  /** Readable public profile slug: `/team/<handle>`; `id` stays the permanent link. */
+  handle?: string | null;
   role: string;
   role_label: string;
   bio?: string | null;
@@ -944,6 +946,8 @@ export type StaffCustomStatus = {
 export type AuthStatus = {
   authenticated: boolean;
   oauth_available: boolean;
+  /** Configured owner sessions see the in-page devtools button. */
+  owner?: boolean;
   user?: User;
   csrf_token?: string;
   blacklisted?: boolean;

@@ -1,0 +1,123 @@
+/* Niko team applications: the presentation layer for the recruitment flow.
+   Layered on top of the `.team-apply-*` base in styles.css, which still owns
+   the page frame, form fields and state screens. Kept deliberately plain: one
+   column, hairline separators, no numbered steps or badge chips. */
+
+/* ── Page frame ──────────────────────────────────────────────────────────── */
+
+.team-apply-page .team-apply-shell { width: min(820px, 100%); }
+.team-apply-page .team-apply-layout { gap: 22px; }
+.team-apply-page .team-apply-card { border-radius: 14px; }
+.team-apply-page .team-apply-back-link { margin-bottom: 16px; }
+
+/* ── Hero: a line of intent, nothing else ────────────────────────────────── */
+
+.team-apply-page .team-apply-hero { padding: 22px 0 2px; }
+.team-apply-page .team-apply-hero h1 { margin-bottom: 12px; }
+.team-apply-page .team-apply-hero > p { max-width: 54ch; }
+
+/* ── Openings ────────────────────────────────────────────────────────────── */
+
+.team-apply-page .team-apply-section-heading { padding-bottom: 2px; border-bottom: 0; }
+.team-apply-page .team-apply-section-heading h2 { margin: 0 0 6px; font-size: 22px; }
+
+.team-apply-page .team-apply-opening-list { gap: 10px; margin-top: 18px; }
+.team-apply-page .team-apply-opening-card { border-radius: 10px; }
+
+.team-apply-opening-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, .028);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  transition: border-color .18s ease, background .18s ease;
+}
+
+.team-apply-opening-card.is-actionable { color: inherit; cursor: pointer; }
+.team-apply-opening-card.is-actionable:hover { background: rgba(255, 255, 255, .045); border-color: rgba(226, 234, 246, .26); }
+.team-apply-opening-card:focus-visible { outline: 2px solid rgba(154, 169, 185, .5); outline-offset: 3px; }
+
+.team-apply-opening-main { min-width: 0; }
+.team-apply-opening-card h2 { margin: 0 0 5px; font-size: 18px; letter-spacing: -.03em; }
+.team-apply-opening-card p { max-width: 58ch; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+
+.team-apply-opening-role {
+  margin: 0 0 9px !important;
+  color: var(--dim) !important;
+  font: 9px "Space Mono", monospace;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.team-apply-opening-action { display: flex; align-items: center; justify-content: flex-end; }
+.team-apply-opening-card .button { min-width: 104px; }
+.team-apply-opening-locked { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .04em; text-transform: uppercase; }
+
+/* ── Application card ───────────────────────────────────────────────────── */
+
+.team-apply-page .team-apply-role-head { display: block; padding: 0 26px; }
+.team-apply-page .team-apply-role-head h1 { margin: 0; font-size: clamp(23px, 4vw, 30px); letter-spacing: -.05em; }
+.team-apply-page .team-apply-role-description { margin: 14px 26px 18px; }
+
+.team-apply-page .team-apply-verified { margin: 0 26px 4px; }
+
+.team-apply-page .team-apply-form { padding: 0 26px 26px; }
+.team-apply-page .team-apply-form-intro { padding: 24px 0 18px; }
+.team-apply-page .team-apply-form-intro h2 { margin: 0 0 6px; font-size: 19px; }
+
+.team-apply-answer-progress { display: grid; gap: 7px; margin-top: 12px; }
+.team-apply-answer-progress > span:first-child { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .06em; }
+.team-apply-answer-progress b { color: var(--ink); }
+
+.team-apply-answer-track {
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .07);
+  border-radius: 999px;
+}
+
+.team-apply-answer-track i { display: block; height: 100%; background: var(--sage); border-radius: inherit; transition: width .24s ease; }
+
+/* A required answer left blank on an attempt to continue or submit. */
+.team-apply-field.is-invalid input:not([type="radio"]):not([type="checkbox"]),
+.team-apply-field.is-invalid textarea { border-color: rgba(224, 128, 115, .78); }
+.team-apply-field.is-invalid .team-apply-choice-list label { border-color: rgba(224, 128, 115, .5); }
+.team-apply-field.is-invalid input:focus-visible,
+.team-apply-field.is-invalid textarea:focus-visible { outline-color: rgba(224, 128, 115, .55); }
+.team-apply-field > small.team-apply-field-error { margin-top: 7px; color: #e8a79e; font-size: 10px; line-height: 1.5; text-align: left; }
+
+.team-apply-page .team-apply-field { padding: 16px 0; }
+.team-apply-page .team-apply-label i { color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+
+.team-apply-page .team-apply-submit-footer { justify-content: flex-end; margin-top: 18px; padding-top: 18px; }
+.team-apply-submit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.team-apply-submit-actions .button { min-width: 128px; }
+
+/* ── State screens ───────────────────────────────────────────────────────── */
+
+.team-apply-page .team-apply-state > .team-apply-symbol,
+.team-apply-page .team-apply-state > .team-apply-success { margin-bottom: 18px; }
+.team-apply-page .team-apply-state h1 { margin: 0 0 12px; }
+.team-apply-page .team-apply-state .team-apply-notice { margin-bottom: 18px; }
+.team-apply-state-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 2px; }
+
+/* ── Small screens ───────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .team-apply-opening-card { grid-template-columns: 1fr; gap: 14px; padding: 16px; }
+  .team-apply-opening-action { justify-content: flex-start; }
+  .team-apply-opening-card .button { width: 100%; }
+  .team-apply-page .team-apply-role-head { padding: 0 18px; }
+  .team-apply-page .team-apply-role-description { margin-right: 18px; margin-left: 18px; }
+  .team-apply-page .team-apply-verified { margin-right: 18px; margin-left: 18px; }
+  .team-apply-page .team-apply-form { padding: 0 18px 20px; }
+}
+
+@media (max-width: 640px) {
+  .team-apply-submit-actions { width: 100%; }
+  .team-apply-state-actions .button { width: 100%; }
+}

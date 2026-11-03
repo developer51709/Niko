@@ -1,6 +1,6 @@
 {
   "data": {
-    "daily_wait": "Solo puedes reclamar tu recompensa diaria una vez cada 24 horas.",
+    "daily_wait": "Solo puedes reclamar tu recompensa diaria una vez cada 20 horas.",
     "daily_success": "¡Has reclamado tu recompensa diaria de {reward} monedas!",
     "work_wait": "Solo puedes trabajar una vez cada hora.",
     "work_success": "¡Trabajaste y ganaste {reward} monedas!",

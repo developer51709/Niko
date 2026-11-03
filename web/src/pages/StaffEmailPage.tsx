@@ -4,7 +4,7 @@ import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { EmailMessageBody } from "../components/EmailMessageBody";
 import { Icon } from "../components/Icon";
 import { Select } from "../components/dashboard/Select";
-import { PublicHeader } from "../components/PublicHeader";
+import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { RichTextEditor } from "../components/RichTextEditor";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
 import { notifyError, notifyLoading, notifySuccess } from "../utils/toast";
@@ -406,13 +406,30 @@ export function StaffEmailPage() {
 
   if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>Checking your staff access…</p></div>;
   if (!auth?.authenticated) {
-    return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff mailbox</div><h1>Sign in to continue.</h1><p>The staff mailbox opens with your Discord account.</p><a className="button button-primary full-width" href="/auth/login?next=/dashboard/staff/email">Continue with Discord</a><button className="back-link" onClick={() => navigate("/dashboard")}>Return to dashboard</button></div></main></>;
+    return <AuthScreen
+      eyebrow="Staff mailbox"
+      title={<>Sign in to <em>continue.</em></>}
+      description="The staff mailbox opens with your Discord account."
+      back={{ label: "Return to dashboard", onClick: () => navigate("/dashboard") }}
+    >
+      <DiscordSignIn next="/dashboard/staff/email" available={auth?.oauth_available} />
+    </AuthScreen>;
   }
   if (!staffRole) {
-    return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff mailbox</div><h1>Staff only.</h1><p>Niko's own-domain mail is limited to the staff team. Your account does not hold a staff role.</p><button className="back-link" onClick={() => navigate("/dashboard/staff")}>Back to the staff workspace</button></div></main></>;
+    return <AuthScreen
+      eyebrow="Staff mailbox"
+      title={<>Staff <em>only.</em></>}
+      description="Niko's own-domain mail is limited to the staff team. Your account does not hold a staff role."
+      back={{ label: "Back to the staff workspace", onClick: () => navigate("/dashboard/staff") }}
+    />;
   }
   if (accessError && !inbox) {
-    return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Staff mailbox</div><h1>No mailbox yet.</h1><p>{accessError}</p><button className="back-link" onClick={() => navigate("/dashboard/staff")}>Back to the staff workspace</button></div></main></>;
+    return <AuthScreen
+      eyebrow="Staff mailbox"
+      title={<>No mailbox <em>yet.</em></>}
+      description={accessError}
+      back={{ label: "Back to the staff workspace", onClick: () => navigate("/dashboard/staff") }}
+    />;
   }
 
   const mailboxes = inbox?.mailboxes || [];

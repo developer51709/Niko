@@ -25,6 +25,7 @@ import { TeamStaffApplicationPage } from "./pages/TeamStaffApplicationPage";
 import { DiscordRedirectPage, SupportPage } from "./pages/SupportPage";
 import { PartnershipPage } from "./pages/PartnershipPage";
 import { ToastHost } from "./components/ToastHost";
+import { OwnerDevtools } from "./components/OwnerDevtools";
 import { ShaderBackground } from "./components/ShaderBackground";
 import { pageFromPath, type Page } from "./router";
 
@@ -56,7 +57,7 @@ export function App() {
   else if (page === "team-application") pageContent = <TeamStaffApplicationPage />;
   else if (page === "dashboard") pageContent = <DashboardPage />;
   else if (page === "team") pageContent = <TeamPage />;
-  else if (page === "team-member") pageContent = <TeamMemberPage id={window.location.pathname.split("/").filter(Boolean)[1] || ""} />;
+  else if (page === "team-member") pageContent = <TeamMemberPage profileKey={window.location.pathname.split("/").filter(Boolean)[1] || ""} />;
   else if (page === "support") pageContent = <SupportPage />;
   else if (page === "discord") pageContent = <DiscordRedirectPage />;
   else if (page === "partnership") pageContent = <PartnershipPage />;
@@ -84,6 +85,7 @@ export function App() {
       </div>
       <div className="site-content">{pageContent}</div>
       <ToastHost />
+      <OwnerDevtools />
     </>
   );
 }

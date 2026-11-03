@@ -3,7 +3,7 @@ import { ApiError, actOnEmailReport, getAuth, getEmailReports, getGuilds, getSta
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { EmailMessageBody } from "../components/EmailMessageBody";
 import { Icon } from "../components/Icon";
-import { PublicHeader } from "../components/PublicHeader";
+import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
 import { notifyError, notifyLoading, notifySuccess } from "../utils/toast";
 import type { AuthStatus, BotStats, Guild, StaffEmailMessage, StaffEmailReport } from "../types";
@@ -146,13 +146,30 @@ export function StaffEmailReportsPage() {
 
   if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>Checking your access…</p></div>;
   if (!auth?.authenticated) {
-    return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Message reports</div><h1>Sign in to continue.</h1><p>The report queue opens with the bot owner's Discord account.</p><a className="button button-primary full-width" href={`/auth/login?next=${encodeURIComponent(staffEmailReportsPath())}`}>Continue with Discord</a><button className="back-link" onClick={() => navigate(dashboardPath())}>Return to dashboard</button></div></main></>;
+    return <AuthScreen
+      eyebrow="Message reports"
+      title={<>Sign in to <em>continue.</em></>}
+      description="The report queue opens with the bot owner's Discord account."
+      back={{ label: "Return to dashboard", onClick: () => navigate(dashboardPath()) }}
+    >
+      <DiscordSignIn next={staffEmailReportsPath()} available={auth?.oauth_available} />
+    </AuthScreen>;
   }
   if (staffRole !== "owner") {
-    return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Message reports</div><h1>Owner only.</h1><p>Reports filed from a staff email are read by the bot owner. Your account does not hold that role.</p><button className="back-link" onClick={() => navigate(dashboardPath())}>Back to dashboard</button></div></main></>;
+    return <AuthScreen
+      eyebrow="Message reports"
+      title={<>Owner <em>only.</em></>}
+      description="Reports filed from a staff email are read by the bot owner. Your account does not hold that role."
+      back={{ label: "Back to dashboard", onClick: () => navigate(dashboardPath()) }}
+    />;
   }
   if (loadError && reports.length === 0) {
-    return <><PublicHeader page="dashboard" /><main className="auth-page"><div className="auth-card"><div className="eyebrow">Message reports</div><h1>The queue is unavailable.</h1><p>{loadError}</p><button className="back-link" onClick={() => navigate(dashboardPath())}>Back to dashboard</button></div></main></>;
+    return <AuthScreen
+      eyebrow="Message reports"
+      title={<>The queue is <em>unavailable.</em></>}
+      description={loadError}
+      back={{ label: "Back to dashboard", onClick: () => navigate(dashboardPath()) }}
+    />;
   }
 
   const content = <div className="staff-page staff-email-page">

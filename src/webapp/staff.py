@@ -3,10 +3,11 @@ the team pages."""
 
 from urllib.parse import urlparse
 import json
+import re
 import sqlite3
 import time
 from cogs.staff.records import STAFF_ROLES
-from config.ids import OWNER_IDS
+from config.ids import OWNER_IDS, is_owner_id
 from flask import session
 from . import database, runtime
 
@@ -269,6 +270,21 @@ def _staff_status(row) -> str:
     return value if value in STAFF_STATUS_LABELS else "active"
 
 
+def _staff_handle(user_id: str, username, name) -> str:
+    """The readable part of a member's public profile link.
+
+    Discord usernames are unique and already URL-safe, so they make the short
+    ``/team/<handle>`` link. A member whose identity is only partly resolvable
+    falls back to their display name, and then to their id, so a profile link is
+    always available. The id itself stays a permanent link either way.
+    """
+    for candidate in (username, name):
+        slug = re.sub(r"[^a-z0-9._-]+", "-", str(candidate or "").strip().lower()).strip("-._")
+        if slug:
+            return slug
+    return f"user-{user_id}"
+
+
 def _staff_row(row) -> dict:
     role = str(row.get("role"))
     identity = _staff_identity(str(row.get("user_id")))
@@ -276,6 +292,8 @@ def _staff_row(row) -> dict:
     profile_visible = bool(row.get("public_visible", 1))
     return {
         **identity,
+        # `/team/<handle>` is the link to share; `id` stays the permanent one.
+        "handle": _staff_handle(str(row.get("user_id")), identity.get("username"), identity.get("name")),
         "role": role,
         "role_label": "Owner" if role == "owner" else _staff_role_label(role),
         "bio": row.get("public_bio"),
@@ -422,6 +440,35 @@ def _load_staff_rows() -> list[dict]:
 def _load_staff_management_rows() -> list[dict]:
     """Owner roster including suspended and former staff profiles."""
     return _load_staff_records(include_inactive=True)
+
+
+def _find_staff_member(profile_key) -> dict | None:
+    """Resolve a public profile link, by permanent user id or by handle.
+
+    An id is checked first so an old link never starts pointing at a different
+    member whose username happens to be those digits. Only the public roster is
+    searched, so a hidden or suspended profile stays a 404.
+    """
+    key = str(profile_key or "").strip()
+    if not key:
+        return None
+    rows = _load_staff_rows()
+    if key.isdigit():
+        member = next((item for item in rows if str(item.get("id")) == key), None)
+        if member:
+            return member
+    wanted = key.casefold()
+    return next((item for item in rows if str(item.get("handle") or "").casefold() == wanted), None)
+
+
+def _is_owner() -> bool:
+    """Whether the signed-in session belongs to a configured owner.
+
+    This is an id check against configuration, not a database read, so it can be
+    answered on every auth status request to decide whether the owner devtools
+    button is rendered at all.
+    """
+    return is_owner_id(session.get("user", {}).get("id"))
 
 
 def _current_staff_role() -> str | None:
