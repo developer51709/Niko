@@ -30,10 +30,16 @@ machine.
 
 **Staff settings → Locales** shows the merged catalogue set the live site is
 using: every language, its coverage, whether the figures come from beta or from
-this build, and how old the reading is. The catalogue card has two collapsible
-sections — **Bot locales**, one row per cog package, and **Website locales**, one
-row per page — because a translation pass usually touches one and then the other.
-**Sync now** forces a re-read instead of waiting for the next poll.
+this build, and how old the reading is. Coverage counts the site's page
+catalogues and the bot's cog catalogues together, so a language's percentage
+describes the whole product rather than one half of it.
+
+The catalogue card has two collapsible sections, both closed until opened —
+**Bot locales**, one card per cog package, and **Website locales**, one card per
+page. Each card carries a small overview (key count, languages finished, overall
+bar) and folds open into that catalogue's per-language coverage, because a
+translation pass usually touches one family and then the other. **Sync now**
+forces a re-read instead of waiting for the next poll.
 
 A language appears as soon as one page has a file for it, so a translator can
 add `it.json` on beta and see it in the picker on production without a deploy.

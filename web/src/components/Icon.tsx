@@ -7,6 +7,7 @@ import {
   Bot,
   Brush,
   Check,
+  ChevronRight,
   ClipboardList,
   Coins,
   DoorOpen,
@@ -41,6 +42,7 @@ import {
 
 const icons: Record<string, LucideIcon> = {
   arrow: ArrowRight,
+  chevron: ChevronRight,
   alert: AlertTriangle,
   grid: LayoutGrid,
   terminal: Terminal,

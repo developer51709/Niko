@@ -143,14 +143,18 @@
   border-radius: inherit;
 }
 .owner-fold > summary::-webkit-details-marker { display: none; }
-.owner-fold > summary::before {
-  content: "\25B8";
+/* A real icon rather than a text glyph, so the marker keeps its weight and
+   alignment whatever font the staff member's browser falls back to. */
+.owner-fold > summary .owner-fold-arrow {
   flex: none;
+  width: 13px;
+  height: 13px;
   color: var(--dim);
-  font-size: 11px;
-  transition: transform .18s ease;
+  stroke-width: 2.2;
+  transition: transform .18s ease, color .18s ease;
 }
-.owner-fold[open] > summary::before { transform: rotate(90deg); }
+.owner-fold > summary:hover .owner-fold-arrow { color: var(--muted); }
+.owner-fold[open] > summary .owner-fold-arrow { transform: rotate(90deg); }
 .owner-fold-title { flex: 1; color: var(--ink); font-size: 12.5px; }
 .owner-fold-meta {
   color: var(--dim);
@@ -161,32 +165,74 @@
 }
 .owner-fold-body { padding: 0 14px 14px; }
 .owner-fold-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.6; }
-.owner-fold .owner-table { margin-top: 10px; }
-
-.owner-table { margin-top: 16px; border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
-.owner-table-head,
-.owner-table-row {
-  display: grid;
-  grid-template-columns: minmax(120px, 1.4fr) 60px repeat(auto-fit, minmax(44px, 1fr));
-  gap: 8px;
+/* One collapsible card per catalogue: the overview line answers "is this one
+   done?" and the body gives each language its own bar. */
+.owner-catalogue-list { display: grid; gap: 8px; margin-top: 10px; }
+.owner-catalogue { border: 1px solid var(--line-soft); border-radius: 11px; background: rgba(255, 255, 255, .025); }
+.owner-catalogue > summary {
+  display: flex;
+  gap: 10px;
   align-items: center;
-  padding: 7px 12px;
+  padding: 9px 11px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: inherit;
+  transition: background-color .18s ease;
+}
+.owner-catalogue > summary::-webkit-details-marker { display: none; }
+.owner-catalogue > summary:hover { background: rgba(255, 255, 255, .04); }
+.owner-catalogue > summary:focus-visible { outline: 2px solid var(--sage); outline-offset: -2px; }
+.owner-catalogue > summary .owner-catalogue-arrow {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--dim);
+  stroke-width: 2.2;
+  transition: transform .18s ease, color .18s ease;
+}
+.owner-catalogue > summary:hover .owner-catalogue-arrow { color: var(--muted); }
+.owner-catalogue[open] > summary .owner-catalogue-arrow { transform: rotate(90deg); }
+.owner-catalogue-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-family: "Space Mono", monospace;
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+.owner-catalogue-overview { flex: 0 0 auto; display: grid; gap: 4px; justify-items: end; width: min(150px, 34vw); }
+.owner-catalogue-overview .owner-language-meter { width: 100%; height: 4px; }
+.owner-catalogue-overview small { color: var(--dim); font-size: 9.5px; white-space: nowrap; }
+.owner-catalogue-percent {
+  flex: 0 0 auto;
+  min-width: 42px;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.owner-catalogue-percent.is-complete { color: #a9e3c6; }
+.owner-catalogue-langs { display: grid; margin: 0; padding: 2px 11px 10px; list-style: none; }
+.owner-catalogue-langs li {
+  display: grid;
+  grid-template-columns: 22px minmax(36px, 1fr) 46px minmax(58px, auto);
+  gap: 9px;
+  align-items: center;
+  padding: 5px 0;
+  border-top: 1px solid rgba(255, 255, 255, .04);
   font-size: 11px;
 }
-.owner-table-head {
-  color: var(--dim);
+.owner-catalogue-langs li:first-child { border-top: 0; }
+.owner-catalogue-code {
+  color: var(--accent-dark);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: .07em;
-  font-size: 9.5px;
-  background: rgba(0, 0, 0, .22);
-  border-bottom: 1px solid var(--line-soft);
 }
-.owner-table-row { border-bottom: 1px solid rgba(255, 255, 255, .04); }
-.owner-table-row:last-child { border-bottom: 0; }
-.owner-table-name { color: var(--ink); font-family: "Space Mono", monospace; font-size: 10.5px; }
-.owner-cell { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
-.owner-cell.is-partial { color: #f0d79b; }
-.owner-cell.is-complete { color: #a9e3c6; }
+.owner-catalogue-langs strong { color: var(--dim); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.owner-catalogue-langs small { color: var(--dim); font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; }
+.owner-catalogue-langs li.is-partial strong { color: #f0d79b; }
+.owner-catalogue-langs li.is-complete strong { color: #a9e3c6; }
 
 .owner-area-list { display: grid; gap: 10px; }
 .owner-area {
@@ -273,10 +319,9 @@
 }
 
 /* ── Small screens ───────────────────────────────────────────────────────────
-   Two things break a phone first: the language row (five columns of numbers) and
-   the page table (one column per language, which has nowhere to go past four).
-   The row becomes three lines the eye can follow, and each page becomes a card
-   whose languages wrap as labelled chips. */
+   The language row is five columns of numbers, which is the first thing to
+   break on a phone: it becomes three lines the eye can follow. The catalogue
+   cards then move their overview onto its own line under the catalogue name. */
 
 @media (max-width: 760px) {
   .owner-card { padding: 14px; }
@@ -292,59 +337,21 @@
     padding: 11px 12px;
     font-size: 12px;
   }
-  .owner-language-code { grid-column: 1; grid-row: 1; align-self: center; }
-  .owner-language-name { grid-column: 2; grid-row: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .owner-language-list .owner-language-code { grid-column: 1; grid-row: 1; align-self: center; }
+  .owner-language-list .owner-language-name { grid-column: 2; grid-row: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .owner-language-list strong { grid-column: 3; grid-row: 1; font-size: 13px; }
-  .owner-language-meter { grid-column: 1 / -1; grid-row: 2; height: 6px; margin-top: 2px; }
+  /* Scoped to the language row: the same meter also sits in a catalogue card,
+   * where it belongs to that card's own grid instead. */
+  .owner-language-list .owner-language-meter { grid-column: 1 / -1; grid-row: 2; height: 6px; margin-top: 2px; }
   .owner-language-list small { grid-column: 1 / -1; grid-row: 3; font-size: 10.5px; line-height: 1.5; }
 
-  /* The table stops being a table. */
-  .owner-table {
-    display: grid;
-    gap: 8px;
-    margin-top: 13px;
-    border: 0;
-    border-radius: 0;
-    overflow: visible;
-  }
-  .owner-table-head { display: none; }
-  .owner-table-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 10px 11px;
-    border: 1px solid var(--line-soft);
-    border-radius: 11px;
-    background: rgba(255, 255, 255, .025);
-    font-size: 11px;
-  }
-  .owner-table-name {
-    flex: 1 1 100%;
-    margin-bottom: 2px;
-    font-size: 11.5px;
-    overflow-wrap: anywhere;
-  }
-  .owner-table-row > .owner-cell {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 5px;
-    min-height: 26px;
-    padding: 4px 9px;
-    border: 1px solid var(--line-soft);
-    border-radius: 999px;
-    background: rgba(0, 0, 0, .22);
-    text-align: left;
-    font-size: 10.5px;
-  }
-  .owner-table-row > .owner-cell::before {
-    content: attr(data-label);
-    color: var(--dim);
-    font-family: "Space Mono", monospace;
-    font-size: 8.5px;
-    letter-spacing: .07em;
-    text-transform: uppercase;
-  }
-  .owner-cell.is-keys { color: var(--muted); }
+  /* The overview drops under the catalogue name instead of competing with it
+   * for the same row. */
+  .owner-catalogue > summary { flex-wrap: wrap; padding: 10px 11px; }
+  .owner-catalogue-name { flex: 1 1 auto; font-size: 11.5px; }
+  .owner-catalogue-overview { order: 3; flex: 1 1 100%; width: auto; justify-items: stretch; }
+  .owner-catalogue-overview small { white-space: normal; }
+  .owner-catalogue-langs li { grid-template-columns: 22px minmax(30px, 1fr) 42px minmax(52px, auto); }
 
   .owner-facts { gap: 10px 14px; margin-top: 14px; }
   .owner-facts dd { font-size: 12px; }
@@ -363,12 +370,10 @@
   .owner-card-actions .owner-chip { order: -1; align-self: flex-start; }
   .owner-facts { grid-template-columns: 1fr 1fr; }
   .owner-language-list li { padding: 10px 11px; }
-  .owner-table-row > .owner-cell { padding: 5px 9px; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .owner-card,
   .owner-area,
-  .owner-language-list li,
-  .owner-table-row > .owner-cell { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .owner-language-list li { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

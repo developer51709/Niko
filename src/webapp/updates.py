@@ -463,6 +463,43 @@ def reload_extensions(bot, names=None) -> dict:
     return {"reloaded": reloaded, "failed": failed}
 
 
+#: What the feed owns rather than defines: carried across a reload so an update
+#: never blanks the site or drops the bot back to its own files.
+_FEED_STATE = ("_lock", "_beta", "_local", "_catalogues", "_bot_files", "_bot", "_loop")
+
+
+def reload_locale_feed() -> bool:
+    """Re-read ``webapp.locale_feed`` from disk, keeping its caches.
+
+    The feed is kept out of the purge in :func:`reload_webapp` so the site does
+    not fall back to its own files in the middle of an update. Keeping it there
+    pins its *code* as well, and a rebuilt route then calls functions the running
+    module does not have — which is how a new ``coverage_rows`` argument once
+    500'd ``/api/owner/locales`` on a process that had just updated itself.
+
+    Reloading in place fixes that without losing the manifest, the fetched
+    catalogues or the bot overlay: ``importlib.reload`` re-executes the file in
+    this module's own namespace (so the poller thread, whose function globals are
+    that namespace, runs the new code on its next pass) and the state below is
+    put back afterwards.
+    """
+    module = sys.modules.get("webapp.locale_feed")
+    if module is None:
+        return False
+    carried = {name: getattr(module, name) for name in _FEED_STATE if hasattr(module, name)}
+    try:
+        importlib.reload(module)
+    except Exception:
+        # A broken feed file must not leave a half-executed module behind: drop
+        # it and let the rebuild import it from disk like any other module.
+        sys.modules.pop("webapp.locale_feed", None)
+        return False
+    for name, value in carried.items():
+        setattr(module, name, value)
+    importlib.invalidate_caches()
+    return True
+
+
 def reload_webapp(bot) -> dict:
     """Rebuild the Flask application and swap it into the running server.
 
@@ -480,6 +517,7 @@ def reload_webapp(bot) -> dict:
                 continue
             sys.modules.pop(name, None)
     importlib.invalidate_caches()
+    reload_locale_feed()
 
     fresh = importlib.import_module("webapp")
     fresh.configure_bot(bot)

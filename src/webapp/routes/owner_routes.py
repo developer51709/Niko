@@ -13,6 +13,7 @@ Three kinds of endpoint live here, and only one of them is for the browser:
 """
 
 import hmac
+import inspect
 import logging
 import threading
 import time
@@ -34,6 +35,16 @@ log = logging.getLogger(__name__)
 #: Beta hashes a few thousand files to answer a manifest; reuse it briefly.
 _source_cache: dict = {"at": 0.0, "document": None}
 _source_lock = threading.Lock()
+
+#: Whether the loaded feed can count the bot's catalogues in the coverage rows.
+#:
+#: A zero-downtime update replaces files under a running process, and the feed is
+#: reloaded in place there (see :func:`webapp.updates.reload_locale_feed`) so the
+#: site keeps its caches. A process updated by an older reloader can therefore
+#: still hold a feed older than this route, and asking it for merged rows would
+#: 500 the page. This route is re-imported from disk on every rebuild, so looking
+#: at the signature once here is enough; the numbers catch up with the next start.
+_MERGED_COVERAGE = "include_bot" in inspect.signature(locale_feed.coverage_rows).parameters
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -65,7 +76,13 @@ def _locale_payload() -> dict:
         "source": document.get("source"),
         "generated_at": document.get("generated_at"),
         "languages": document.get("languages", []),
-        "coverage": locale_feed.coverage_rows(document),
+        # The owner's Coverage card reports one figure per language, so these
+        # rows count the site's pages and the bot's cog catalogues together.
+        "coverage": (
+            locale_feed.coverage_rows(document, include_bot=True)
+            if _MERGED_COVERAGE
+            else locale_feed.coverage_rows(document)
+        ),
         "pages": pages,
         "total_keys": sum(entry.get("keys", 0) for entry in document["pages"].values()),
         "bot": bot,

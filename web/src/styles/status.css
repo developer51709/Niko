@@ -445,7 +445,12 @@
   .site-header .site-nav a { padding: 5px 0 8px; font-size: 11px; }
   .site-content .status-page .status-hero { padding-top: 34px; }
   .site-content .status-page .status-metric strong { font-size: 22px; }
-  .status-section > .status-section-summary { flex-wrap: wrap; padding: 13px 14px; }
+  /* Wrapped, the summary lays its parts on separate lines. The chevron was the
+   * last one, so on the translation card — whose pills fill the width — it fell
+   * onto a line of its own and sat in the bottom-left corner. Pin it to the
+   * corner instead, with room reserved so the pills never run underneath it. */
+  .status-section > .status-section-summary { position: relative; flex-wrap: wrap; padding: 13px 34px 13px 14px; }
+  .status-section > .status-section-summary::after { position: absolute; right: 15px; bottom: 16px; }
   .status-section-meta { justify-content: flex-start; }
   .status-section-body { padding: 12px 14px 15px; }
   /* One card per row: at this width two columns would squeeze the figure
