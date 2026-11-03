@@ -1,6 +1,6 @@
 # Languages & Localization
 
-Niko ships in **English**, **German**, and **Spanish**. English is the default and the fallback: if a string has not been translated yet, the English wording is used instead of an empty reply.
+Niko ships in **English**, **German**, **Spanish**, and **French**. English is the default and the fallback: if a string has not been translated yet, the English wording is used instead of an empty reply.
 
 ## What is translated
 
@@ -11,12 +11,12 @@ Niko ships in **English**, **German**, and **Spanish**. English is the default a
 
 ## How the language is chosen
 
-Niko reads the **server's preferred locale** in Discord (Server Settings → Overview → Server Language). Any `de` locale picks German, any `es` locale picks Spanish, and everything else falls back to English, so a server only has to set its language once.
+Niko reads the **server's preferred locale** in Discord (Server Settings → Overview → Server Language). Any `de` locale picks German, any `es` locale picks Spanish, any `fr` locale picks French, and everything else falls back to English, so a server only has to set its language once. A regional locale such as `fr-FR` or `fr-CA` counts as French, and `es-419` counts as Spanish.
 
 Slash command names stay in English so permissions, documentation, and moderation logs match; their descriptions are localized. Some context menus also rename themselves, for example *Translate* becomes *Übersetzen*.
 
 ## Keeping translations up to date
 
-Translations live next to the code, not in a translation service: every cog has a `locales` folder with `en.json`, `de.json`, and `es.json`, and the command wording sits in the `commands` namespace of those files. A key that exists in English but not yet in German or Spanish is served in English, so a release never blocks on a translation.
+Translations live next to the code, not in a translation service: every cog has a `locales` folder with `en.json`, `de.json`, `es.json`, and `fr.json`, and the command wording sits in the `commands` namespace of those files. A key that exists in English but not yet in German, Spanish, or French is served in English, so a release never blocks on a translation.
 
 If you spot a wrong or awkward translation, report it in the [support server](/support) with the command name and the language — the wording is a one-line edit in the matching JSON file.

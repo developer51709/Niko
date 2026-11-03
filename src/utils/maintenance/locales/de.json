@@ -1,0 +1,10 @@
+{
+  "gate": {
+    "title": "### {warning} Wartungsarbeiten",
+    "body": "{target} befindet sich im Wartungsmodus und kann gerade nicht verwendet werden.",
+    "cog_target": "Das Cog **{name}**",
+    "command_target": "**{command}**",
+    "reason": "**Grund:** {reason}",
+    "cta": "Bitte versuche es später erneut."
+  }
+}

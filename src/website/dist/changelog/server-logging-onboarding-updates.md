@@ -1,6 +1,7 @@
 # Logging Reliability & Onboarding Rules
 
 - Date: 2026-09-29
+- Version: 2.11.1
 - Tags: logging, onboarding, dashboard
 
 Server event logs are less likely to be delayed during busy periods, and onboarding now gives communities more room to share their rules with new members.

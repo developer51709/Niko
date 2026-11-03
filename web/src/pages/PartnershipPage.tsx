@@ -3,30 +3,24 @@ import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
+import { useStrings } from "../i18n";
 
 /** The link partners paste: one URL that Discord renders as the ad card. */
 const AD_PATH = "/discord/partnership";
 
+// Icon names stay here; the copy they sit beside lives in the catalogue.
 const memberBenefits = [
-  ["shield", "Moderation that stays calm", "Warnings, timeouts and AutoMod that explain what happened, so a rule break never turns into an argument."],
-  ["chart", "Reasons to stay", "Leveling, an economy, games, music and a weekly lottery give people a reason to come back tomorrow."],
-  ["message", "Help without a queue", "Private tickets, a public help forum and an assistant that answers the small questions for you."],
+  { icon: "shield", title: "benefits.calm.title", body: "benefits.calm.body" },
+  { icon: "chart", title: "benefits.stay.title", body: "benefits.stay.body" },
+  { icon: "message", title: "benefits.help.title", body: "benefits.help.body" },
 ];
 
-const partnerBenefits = [
-  "A permanent listing in our partners channel, with the description you write",
-  "A shout-out for your community from the partnerships team",
-  "A direct line to us when something needs a human",
-];
-
-const partnerExpectations = [
-  "An active, well-moderated community with a clear purpose",
-  "Advertisements people opt into — no mass DMs, no invite bait",
-  "Nothing built around scams, hate, or NSFW content",
-];
+const partnerBenefits = ["terms.benefits.1", "terms.benefits.2", "terms.benefits.3"];
+const partnerExpectations = ["terms.expect.1", "terms.expect.2", "terms.expect.3"];
 
 export function PartnershipPage() {
   const config = useBotConfig();
+  const { t } = useStrings("partnership");
   const [copied, setCopied] = useState(false);
   const adLink = `${window.location.origin}${AD_PATH}`;
 
@@ -47,82 +41,73 @@ export function PartnershipPage() {
       <main className="shell page-main partner-page">
         <section className="partner-hero">
           <div className="partner-hero-copy">
-            <div className="eyebrow">Niko partnerships</div>
-            <h1>One link.<br /><em>A whole pitch.</em></h1>
-            <p>
-              Instead of pasting a bot message into your partnership channel, share a single link.
-              Discord turns it into a clean card — headline, gallery and working buttons — so your
-              recommendation looks deliberate, and joining takes one tap.
-            </p>
+            <div className="eyebrow">{t("hero.eyebrow")}</div>
+            <h1>{t("hero.titleA")}<br /><em>{t("hero.titleEm")}</em></h1>
+            <p>{t("hero.body")}</p>
             <div className="partner-actions">
               <button type="button" className="button button-primary" onClick={() => void copyLink()}>
-                {copied ? "Link copied" : "Copy the ad link"} <Icon name="arrow" />
+                {t(copied ? "hero.copied" : "hero.copy")} <Icon name="arrow" />
               </button>
-              <a className="button button-muted" href="/discord">Visit the support server</a>
+              <a className="button button-muted" href="/discord">{t("hero.support")}</a>
             </div>
             <div className="partner-link-field">
               <span>{adLink}</span>
-              <a href={AD_PATH}>open <Icon name="external" /></a>
+              <a href={AD_PATH}>{t("link.open")} <Icon name="external" /></a>
             </div>
-            <p className="partner-note">
-              Members who open it land on this page and can add Niko straight to their own server.
-            </p>
+            <p className="partner-note">{t("hero.note")}</p>
           </div>
 
           {/* The card as Discord draws it from the link: the same sections, the
               same buttons. It is the whole advertisement, so it leads the page. */}
-          <div className="partner-card" aria-label="The partnership card Discord shows for this link">
+          <div className="partner-card" aria-label={t("card.aria")}>
             <div className="partner-card-inner">
               <div className="partner-card-head">
                 <span className="partner-card-mark">n</span>
                 <div>
-                  <strong>Partner with Niko</strong>
-                  <small>A friendly bot for communities that care</small>
+                  <strong>{t("card.title")}</strong>
+                  <small>{t("card.subtitle")}</small>
                 </div>
               </div>
-              <p className="partner-card-lead">
-                Niko keeps the busywork off your staff: AutoMod that explains itself, private tickets,
-                leveling, music, games and a full economy — configured from a dashboard.
-              </p>
+              <p className="partner-card-lead">{t("card.lead")}</p>
               <div className="partner-card-section">
-                <p className="partner-card-heading">What your members get</p>
+                <p className="partner-card-heading">{t("card.membersTitle")}</p>
                 <ul>
-                  <li><b>Moderation that stays calm</b> — answered in plain language</li>
-                  <li><b>Reasons to stay</b> — levels, coins, games and music</li>
-                  <li><b>Help without a queue</b> — tickets and a help forum</li>
+                  <li><b>{t("card.members.calm")}</b> — {t("card.members.calm.body")}</li>
+                  <li><b>{t("card.members.stay")}</b> — {t("card.members.stay.body")}</li>
+                  <li><b>{t("card.members.help")}</b> — {t("card.members.help.body")}</li>
                 </ul>
               </div>
               <div className="partner-card-rule" />
               <div className="partner-card-section">
-                <p className="partner-card-heading">What partners get</p>
+                <p className="partner-card-heading">{t("card.partnersTitle")}</p>
                 <ul>
-                  <li>A permanent listing with your own description</li>
-                  <li>A shout-out from the partnerships team</li>
+                  <li>{t("card.partners.listing")}</li>
+                  <li>{t("card.partners.shoutout")}</li>
                 </ul>
               </div>
               <div className="partner-card-gallery">
                 <span /><span />
               </div>
               <div className="partner-card-buttons">
-                <span>Add Niko</span><span>Partner with us</span><span>Join the server</span>
+                <span>{t("card.buttons.add")}</span><span>{t("card.buttons.partner")}</span><span>{t("card.buttons.server")}</span>
               </div>
             </div>
-            <span className="partner-card-caption">Your link renders as this card</span>
+            <span className="partner-card-caption">{t("card.caption")}</span>
           </div>
         </section>
 
         <section className="partner-section">
           <div className="partner-section-heading">
-            <div className="section-kicker">What you are recommending</div>
-            <h2>Tools your members will notice.</h2>
-            <p>Niko is built to be configured once and then trusted: a dashboard for the staff team, and features members actually use.</p>
+            <div className="section-kicker">{t("section.kicker")}</div>
+            <h2>{t("section.title")}</h2>
+            <p>{t("section.body")}</p>
           </div>
           <div className="partner-grid">
-            {memberBenefits.map(([icon, title, text]) => (
-              <article className="partner-tile" key={title}>
-                <span className="partner-tile-icon"><Icon name={icon} /></span>
-                <h3>{title}</h3>
-                <p>{text}</p>
+            {memberBenefits.map((benefit) => (
+              <article className="partner-tile" key={benefit.title}>
+                <span className="partner-tile-icon"><Icon name={benefit.icon} /></span>
+                <h3>{t(benefit.title)}</h3>
+                <p>{t(benefit.body)}</p>
               </article>
             ))}
           </div>
@@ -130,32 +115,32 @@ export function PartnershipPage() {
 
         <section className="partner-section partner-terms">
           <article className="partner-terms-card">
-            <div className="section-kicker">What partners get</div>
-            <h2>Something worth sharing.</h2>
+            <div className="section-kicker">{t("terms.get.kicker")}</div>
+            <h2>{t("terms.get.title")}</h2>
             <ul>
-              {partnerBenefits.map((item) => <li key={item}>{item}</li>)}
+              {partnerBenefits.map((key) => <li key={key}>{t(key)}</li>)}
             </ul>
           </article>
           <article className="partner-terms-card">
-            <div className="section-kicker">What we look for</div>
-            <h2>A community, not a link drop.</h2>
+            <div className="section-kicker">{t("terms.look.kicker")}</div>
+            <h2>{t("terms.look.title")}</h2>
             <ul>
-              {partnerExpectations.map((item) => <li key={item}>{item}</li>)}
+              {partnerExpectations.map((key) => <li key={key}>{t(key)}</li>)}
             </ul>
           </article>
         </section>
 
         <section className="partner-cta">
           <div>
-            <div className="section-kicker">Ready when you are</div>
-            <h2>Paste the link,<br />or say hello first.</h2>
-            <p>Partnerships are reviewed by the Niko team. Introduce your community in the support server and we will take it from there.</p>
+            <div className="section-kicker">{t("cta.kicker")}</div>
+            <h2>{t("cta.titleA")}<br />{t("cta.titleB")}</h2>
+            <p>{t("cta.body")}</p>
           </div>
           <div className="partner-cta-actions">
             <a className="button button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">
-              Add Niko to your server <Icon name="external" />
+              {t("cta.add")} <Icon name="external" />
             </a>
-            <a className="button button-muted" href="/discord">Join the support server <Icon name="arrow" /></a>
+            <a className="button button-muted" href="/discord">{t("cta.support")} <Icon name="arrow" /></a>
           </div>
         </section>
       </main>

@@ -1,6 +1,7 @@
 # Team Profiles Get Platform Cards and a Spotify Progress Bar
 
 - Date: 2026-10-16
+- Version: 2.17.0
 - Tags: team, profiles, notifier, twitch, added
 
 Staff profiles now draw a real profile card for every supported platform instead of a bare link — GitHub, Bluesky, Twitch, YouTube, Reddit and X — the Spotify status keeps the custom-status card layout with a live track progress bar, and Twitch joins the notifier using the same application credentials those cards use, so the credentials earn their keep twice.

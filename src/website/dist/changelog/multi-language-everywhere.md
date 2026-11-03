@@ -1,6 +1,7 @@
 # Niko Now Speaks German and Spanish — Everywhere
 
 - Date: 2026-10-29
+- Version: 2.24.0
 - Tags: languages, localization, commands, website, dashboard, added
 
 Niko is trilingual. Command help lines, replies, the help menu, and the website's command reference now exist in English, German, and Spanish, and Discord itself receives translated slash command and option descriptions so each member sees the `/` picker in their own language. Every cog keeps its wording in a `locales` folder next to the code, which makes adding the next language a translation job rather than a refactor.

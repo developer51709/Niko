@@ -129,8 +129,8 @@ Deployments configured with `MONGODB_URL` keep the same records in MongoDB inste
 
 Niko ships `/legal privacy`, `/legal terms` and `/legal community` slash commands
 that display the full Privacy Policy, Terms of Service and Community Policy
-directly in Discord (ephemeral, visible only to the requesting user). These are
-trilingual (EN / DE / ES).
+directly in Discord (ephemeral, visible only to the requesting user). These ship
+in English, German, Spanish and French (EN / DE / ES / FR).
 
 The same documents are published on the website, and those are the URLs to submit
 with a verification or monetization application:

@@ -1,10 +1,12 @@
 """Flask routes for public."""
 
 import datetime
+import time
 
 from config import links as bot_links
 from .. import leaderboard_cache
 from .. import server as _server
+from .. import status as status_source
 from ..bot_card import render_bot_card
 from ..staff_card import avatar_data_url
 
@@ -256,6 +258,85 @@ def api_commands():
 def api_health():
     return jsonify({"ok": True, "service": "niko-api", "static_build": os.path.exists(os.path.join(WEB_DIST_DIR, "index.html"))})
 
+
+@app.route("/api/status")
+def api_status():
+    """Everything the website's /status page draws, in one live payload.
+
+    The bot half has to run on the Discord event loop; the host and translation
+    halves do not, and the translation scan is cached for a minute inside
+    :mod:`webapp.status`. When the bot is not connected the page still gets a
+    payload — with ``online: false`` — so it can show host and locale figures and
+    say plainly that the bot is down, instead of failing the request.
+    """
+    loop = getattr(_discord_bot, "loop", None) if _discord_bot is not None else None
+    if _discord_bot is not None and loop is not None and loop.is_running():
+        try:
+            payload = run_on_bot_loop(status_source.bot_status(_discord_bot), timeout=6)
+        except Exception as exc:
+            logging.warning("Status", f"Could not read live bot status: {exc}")
+            payload = status_source.offline_status(f"{type(exc).__name__}: {exc}")
+    else:
+        payload = status_source.offline_status("The bot is not connected.")
+    payload["host"] = status_source.host_stats()
+    payload["locales"] = status_source.locale_status()
+    payload["generated_at"] = int(time.time())
+    return jsonify(payload)
+
+def _server_emoji_sample(guild, emoji):
+    """The lab's payload for one guild emoji, or None for an emoji it cannot use.
+
+    Managed emojis belong to another application and an unavailable one no
+    longer exists, so neither can stand in for a server's own emoji.
+    """
+    if getattr(emoji, "managed", False) or not getattr(emoji, "available", True):
+        return None
+    icon = getattr(guild, "icon", None)
+    return {
+        "name": emoji.name,
+        "id": str(emoji.id),
+        "animated": bool(getattr(emoji, "animated", False)),
+        "guild_name": guild.name,
+        "guild_icon_url": str(icon.with_size(128).url) if icon is not None else None,
+    }
+
+
+def _sample_server_emoji():
+    """One real server emoji, for the rendering lab's server-emoji popup.
+
+    The lab needs an emoji that genuinely belongs to a guild, together with the
+    guild's name and icon: an application emoji forced into the server layout
+    would only fake it. The support server answers first, then any guild the bot
+    is in. A guild with nothing cached is asked over REST once, so a cache that
+    predates the emoji cannot leave the lab with no sample.
+    """
+    if _discord_bot is None:
+        return None
+    from config.ids import SUPPORT_GUILD
+
+    preferred = _discord_bot.get_guild(SUPPORT_GUILD)
+    guilds = ([preferred] if preferred is not None else [])
+    guilds += [guild for guild in getattr(_discord_bot, "guilds", ()) if guild is not preferred]
+    for guild in guilds:
+        for emoji in getattr(guild, "emojis", ()):
+            sample = _server_emoji_sample(guild, emoji)
+            if sample is not None:
+                return sample
+    for guild in guilds:
+        try:
+            from ..runtime import run_on_bot_loop
+            emojis = run_on_bot_loop(guild.fetch_emojis(), timeout=6) or ()
+        except Exception as exc:
+            # A guild the bot cannot read is not worth failing the page over.
+            app.logger.warning("server emoji sample unavailable: %s", exc)
+            continue
+        for emoji in emojis:
+            sample = _server_emoji_sample(guild, emoji)
+            if sample is not None:
+                return sample
+    return None
+
+
 @app.route("/api/emojis")
 def api_bot_emojis():
     """Every emoji the bot sends, for the website's own emoji rendering.
@@ -282,6 +363,7 @@ def api_bot_emojis():
             }
             for emoji in live_emoji_catalog()
         ],
+        "server_emoji": _sample_server_emoji(),
     })
 
 

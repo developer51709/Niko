@@ -8,6 +8,7 @@ import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { RichTextEditor } from "../components/RichTextEditor";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
 import { notifyError, notifyLoading, notifySuccess } from "../utils/toast";
+import { useStrings } from "../i18n";
 import type { AuthStatus, BotStats, Guild, StaffEmailAttachment, StaffEmailInbox, StaffEmailMessage } from "../types";
 
 /** Mirrors the server's limits so the composer refuses what the API would. */
@@ -70,17 +71,17 @@ function threadKey(message: StaffEmailMessage) {
 }
 
 /** What the provider last reported about a sent mail, in one word. */
-function statusLabel(message: StaffEmailMessage) {
+function statusLabel(message: StaffEmailMessage, t: (key: string, values?: Record<string, string | number>) => string) {
   const opens = message.opened_count || 0;
   switch (message.status) {
-    case "opened": return opens > 1 ? `Opened ${opens}×` : "Opened";
-    case "delivered": return "Delivered";
-    case "accepted": return "Accepted";
-    case "retrying": return "Retrying";
-    case "failed": return "Not delivered";
-    case "complained": return "Marked spam";
-    case "unsubscribed": return "Unsubscribed";
-    default: return "Sent";
+    case "opened": return opens > 1 ? t("status.openedCount", { count: opens }) : t("status.opened");
+    case "delivered": return t("status.delivered");
+    case "accepted": return t("status.accepted");
+    case "retrying": return t("status.retrying");
+    case "failed": return t("status.notDelivered");
+    case "complained": return t("status.markedSpam");
+    case "unsubscribed": return t("status.unsubscribed");
+    default: return t("status.sent");
   }
 }
 
@@ -91,31 +92,31 @@ function failureReason(message: StaffEmailMessage) {
 }
 
 /** What the provider's machine reasons mean, when it sent no sentence of its own. */
-const FAILURE_HINTS: Record<string, string> = {
-  espblock: "The receiving provider blocked it as spam. This is usually the sending domain's reputation, not this recipient's address.",
-  spam: "The receiving provider filed it as spam.",
-  "suppress-bounce": "An earlier mail to this address bounced, so the provider will not try it again.",
-  "suppress-unsubscribe": "The recipient unsubscribed, so the provider will not send to them.",
-  "suppress-complaint": "The recipient marked earlier mail as spam, so the provider suppresses mail to them.",
-  mailboxfull: "The recipient's mailbox is full.",
-  notfound: "The recipient's server says that address does not exist.",
-  timeout: "The recipient's server did not answer in time; the provider will retry.",
+const FAILURE_HINT_KEYS: Record<string, string> = {
+  espblock: "hint.espblock",
+  spam: "hint.spam",
+  "suppress-bounce": "hint.suppressBounce",
+  "suppress-unsubscribe": "hint.suppressUnsubscribe",
+  "suppress-complaint": "hint.suppressComplaint",
+  mailboxfull: "hint.mailboxFull",
+  notfound: "hint.notFound",
+  timeout: "hint.timeout",
 };
 
 /** The provider's words, in the order they happened. */
-const EVENT_LABELS: Record<string, string> = {
-  accepted: "Accepted",
-  stored: "Stored",
-  delivered: "Delivered",
-  opened: "Opened",
-  clicked: "Link clicked",
-  failed: "Delivery failed",
-  rejected: "Rejected",
-  dropped: "Dropped",
-  temporary_fail: "Retrying",
-  permanent_fail: "Delivery failed",
-  complained: "Marked as spam",
-  unsubscribed: "Unsubscribed",
+const EVENT_KEYS: Record<string, string> = {
+  accepted: "event.accepted",
+  stored: "event.stored",
+  delivered: "event.delivered",
+  opened: "event.opened",
+  clicked: "event.clicked",
+  failed: "event.deliveryFailed",
+  rejected: "event.rejected",
+  dropped: "event.dropped",
+  temporary_fail: "event.retrying",
+  permanent_fail: "event.deliveryFailed",
+  complained: "event.markedSpam",
+  unsubscribed: "event.unsubscribed",
 };
 
 function formatStamp(epoch?: number | null) {
@@ -124,13 +125,14 @@ function formatStamp(epoch?: number | null) {
 }
 
 function Receipt({ message, onOpen }: { message: StaffEmailMessage; onOpen: (message: StaffEmailMessage) => void }) {
+  const { t } = useStrings("staff-email");
   return (
     <p className="staff-email-receipt">
-      <button type="button" className="staff-email-receipt-state" onClick={() => onOpen(message)} title="Show the full delivery status">
-        {statusLabel(message)}
+      <button type="button" className="staff-email-receipt-state" onClick={() => onOpen(message)} title={t("receipt.showStatus")}>
+        {statusLabel(message, t)}
       </button>
-      {message.delivered_at ? <span>Delivered {new Date(message.delivered_at * 1000).toLocaleString()}</span> : null}
-      {message.opened_at ? <span>First opened {new Date(message.opened_at * 1000).toLocaleString()}</span> : null}
+      {message.delivered_at ? <span>{t("receipt.delivered", { date: new Date(message.delivered_at * 1000).toLocaleString() })}</span> : null}
+      {message.opened_at ? <span>{t("receipt.firstOpened", { date: new Date(message.opened_at * 1000).toLocaleString() })}</span> : null}
       {failureReason(message) ? <span>{failureReason(message)}</span> : null}
     </p>
   );
@@ -138,6 +140,7 @@ function Receipt({ message, onOpen }: { message: StaffEmailMessage; onOpen: (mes
 
 /** Everything the provider has said about one sent mail, in one panel. */
 function StatusDialog({ message, domain, onClose }: { message: StaffEmailMessage; domain: string; onClose: () => void }) {
+  const { t } = useStrings("staff-email");
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -157,34 +160,34 @@ function StatusDialog({ message, domain, onClose }: { message: StaffEmailMessage
     >
       <div className="panel-heading">
         <div>
-          <span className="panel-kicker">Delivery status</span>
-          <h3 id="staff-email-status-title">{message.subject || "(no subject)"}</h3>
-          <p>{statusLabel(message)} · {message.to_address}</p>
+          <span className="panel-kicker">{t("dialog.kicker")}</span>
+          <h3 id="staff-email-status-title">{message.subject || t("dialog.noSubject")}</h3>
+          <p>{statusLabel(message, t)} · {message.to_address}</p>
         </div>
-        <button type="button" className="button button-muted" onClick={onClose}>Close</button>
+        <button type="button" className="button button-muted" onClick={onClose}>{t("dialog.close")}</button>
       </div>
 
       <dl className="staff-email-status-facts">
-        <div><dt>Status</dt><dd>{statusLabel(message)}</dd></div>
-        <div><dt>Sent</dt><dd>{formatStamp(message.created_at)}</dd></div>
-        <div><dt>Delivered</dt><dd>{formatStamp(message.delivered_at)}</dd></div>
-        <div><dt>First opened</dt><dd>{formatStamp(message.opened_at)}</dd></div>
-        <div><dt>Opens</dt><dd>{message.opened_count || 0}</dd></div>
-        <div><dt>Address</dt><dd>{message.mailbox}@{domain}</dd></div>
-        <div className="is-wide"><dt>From</dt><dd>{message.from_address}</dd></div>
-        <div className="is-wide"><dt>To</dt><dd>{message.to_address}</dd></div>
+        <div><dt>{t("dialog.status")}</dt><dd>{statusLabel(message, t)}</dd></div>
+        <div><dt>{t("dialog.sent")}</dt><dd>{formatStamp(message.created_at)}</dd></div>
+        <div><dt>{t("dialog.delivered")}</dt><dd>{formatStamp(message.delivered_at)}</dd></div>
+        <div><dt>{t("dialog.firstOpened")}</dt><dd>{formatStamp(message.opened_at)}</dd></div>
+        <div><dt>{t("dialog.opens")}</dt><dd>{message.opened_count || 0}</dd></div>
+        <div><dt>{t("dialog.address")}</dt><dd>{message.mailbox}@{domain}</dd></div>
+        <div className="is-wide"><dt>{t("dialog.from")}</dt><dd>{message.from_address}</dd></div>
+        <div className="is-wide"><dt>{t("dialog.to")}</dt><dd>{message.to_address}</dd></div>
       </dl>
 
       <AttachmentList files={message.attachments} />
 
       <div className="staff-email-status-events">
-        <h4>Provider events</h4>
+        <h4>{t("dialog.events")}</h4>
         {events.length === 0
-          ? <p>No delivery events are recorded for this message. The provider reports them a moment after a mail leaves, so a fresh send often has none.</p>
+          ? <p>{t("dialog.noEvents")}</p>
           : <ol>
             {events.map((entry) => <li key={`${entry.event}-${entry.occurred_at}-${entry.recipient}`}>
               <div className="staff-email-status-event-head">
-                <strong>{EVENT_LABELS[entry.event] || entry.event}</strong>
+                <strong>{EVENT_KEYS[entry.event] ? t(EVENT_KEYS[entry.event]) : entry.event}</strong>
                 <time dateTime={new Date(entry.occurred_at * 1000).toISOString()}>{formatStamp(entry.occurred_at)}</time>
               </div>
               {entry.reason ? <p className="staff-email-status-code">
@@ -192,7 +195,7 @@ function StatusDialog({ message, domain, onClose }: { message: StaffEmailMessage
               </p> : null}
               {entry.detail
                 ? <p className="staff-email-status-detail">{entry.detail}</p>
-                : FAILURE_HINTS[entry.reason] ? <p className="staff-email-status-detail">{FAILURE_HINTS[entry.reason]}</p> : null}
+                : FAILURE_HINT_KEYS[entry.reason] ? <p className="staff-email-status-detail">{t(FAILURE_HINT_KEYS[entry.reason])}</p> : null}
             </li>)}
           </ol>}
       </div>
@@ -201,6 +204,7 @@ function StatusDialog({ message, domain, onClose }: { message: StaffEmailMessage
 }
 
 export function StaffEmailPage() {
+  const { t } = useStrings("staff-email");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessError, setAccessError] = useState("");
@@ -242,11 +246,11 @@ export function StaffEmailPage() {
           const loaded = await getStaffEmail();
           if (active) setInbox(loaded);
         } catch (reason) {
-          if (active) setAccessError(reason instanceof Error ? reason.message : "The mailbox could not be loaded.");
+          if (active) setAccessError(reason instanceof Error ? reason.message : t("error.mailboxLoad"));
         }
       } catch (reason) {
         if (active) {
-          setAccessError(reason instanceof Error ? reason.message : "Staff mailbox unavailable.");
+          setAccessError(reason instanceof Error ? reason.message : t("error.mailboxUnavailable"));
           setAccessLoading(false);
         }
       }
@@ -262,7 +266,7 @@ export function StaffEmailPage() {
       if (reason instanceof ApiError && reason.status === 403) {
         setAccessError(reason.message);
       } else {
-        notifyError(reason instanceof Error ? reason.message : "The mailbox could not be loaded.", "staff-email");
+        notifyError(reason instanceof Error ? reason.message : t("error.mailboxLoad"), "staff-email");
       }
     } finally {
       setInboxLoading(false);
@@ -284,7 +288,7 @@ export function StaffEmailPage() {
         });
       }
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "That message could not be opened.", "staff-email");
+      notifyError(reason instanceof Error ? reason.message : t("error.openMessage"), "staff-email");
     } finally {
       setOpeningId(null);
     }
@@ -301,7 +305,7 @@ export function StaffEmailPage() {
     setCompose({
       mailbox: message.mailbox || fallback,
       to: counterpart(message),
-      subject: /^re:/i.test(subject) ? subject : `Re: ${subject || "(no subject)"}`,
+      subject: /^re:/i.test(subject) ? subject : `Re: ${subject || t("dialog.noSubject")}`,
       html: "",
       text: "",
       attachments: [],
@@ -327,14 +331,14 @@ export function StaffEmailPage() {
     const next = [...compose.attachments];
     for (const file of Array.from(files)) {
       if (next.length >= MAX_ATTACHMENTS) {
-        notifyError(`Attach at most ${MAX_ATTACHMENTS} files.`, "staff-email");
+        notifyError(t("error.tooManyAttachments", { count: MAX_ATTACHMENTS }), "staff-email");
         break;
       }
       if (next.some((item) => item.name === file.name && item.size === file.size)) continue;
       next.push(file);
     }
     if (next.reduce((total, file) => total + file.size, 0) > MAX_ATTACHMENT_BYTES) {
-      notifyError("Those attachments are too large together. Keep them under 10 MB.", "staff-email");
+      notifyError(t("error.attachmentsTooLarge"), "staff-email");
       return;
     }
     setCompose({ ...compose, attachments: next });
@@ -343,11 +347,11 @@ export function StaffEmailPage() {
   async function submitCompose() {
     if (sending || !compose) return;
     if (!compose.to.trim() || !compose.subject.trim() || !compose.text.trim()) {
-      notifyError("Add a recipient, a subject, and a message.", "staff-email");
+      notifyError(t("error.composeIncomplete"), "staff-email");
       return;
     }
     setSending(true);
-    notifyLoading("Sending from Niko…", "staff-email");
+    notifyLoading(t("sending"), "staff-email");
     try {
       const result = await sendStaffEmail({
         mailbox: compose.mailbox,
@@ -358,12 +362,12 @@ export function StaffEmailPage() {
         thread_id: compose.thread_id,
         attachments: compose.attachments,
       }, auth?.csrf_token);
-      notifySuccess(`Sent to ${result.message.to_address}.`, "staff-email");
+      notifySuccess(t("sent", { address: result.message.to_address }), "staff-email");
       setCompose(null);
       setSelected(result.message);
       await loadInbox();
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The message could not be sent.", "staff-email");
+      notifyError(reason instanceof Error ? reason.message : t("error.sendFailed"), "staff-email");
     } finally {
       setSending(false);
     }
@@ -404,36 +408,36 @@ export function StaffEmailPage() {
       .sort((a, b) => b.latest.created_at - a.latest.created_at);
   }, [visible]);
 
-  if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>Checking your staff access…</p></div>;
+  if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>{t("auth.checkingAccess")}</p></div>;
   if (!auth?.authenticated) {
     return <AuthScreen
-      eyebrow="Staff mailbox"
-      title={<>Sign in to <em>continue.</em></>}
-      description="The staff mailbox opens with your Discord account."
-      back={{ label: "Return to dashboard", onClick: () => navigate("/dashboard") }}
+      eyebrow={t("auth.eyebrow")}
+      title={<>{t("auth.signInBefore")} <em>{t("auth.signInEmphasis")}</em></>}
+      description={t("auth.signedOutText")}
+      back={{ label: t("auth.back"), onClick: () => navigate("/dashboard") }}
     >
       <DiscordSignIn next="/dashboard/staff/email" available={auth?.oauth_available} />
     </AuthScreen>;
   }
   if (!staffRole) {
     return <AuthScreen
-      eyebrow="Staff mailbox"
-      title={<>Staff <em>only.</em></>}
-      description="Niko's own-domain mail is limited to the staff team. Your account does not hold a staff role."
-      back={{ label: "Back to the staff workspace", onClick: () => navigate("/dashboard/staff") }}
+      eyebrow={t("auth.eyebrow")}
+      title={<>{t("auth.staffOnlyBefore")} <em>{t("auth.staffOnlyEmphasis")}</em></>}
+      description={t("auth.staffOnlyText")}
+      back={{ label: t("auth.backStaff"), onClick: () => navigate("/dashboard/staff") }}
     />;
   }
   if (accessError && !inbox) {
     return <AuthScreen
-      eyebrow="Staff mailbox"
-      title={<>No mailbox <em>yet.</em></>}
+      eyebrow={t("auth.eyebrow")}
+      title={<>{t("auth.noMailboxBefore")} <em>{t("auth.noMailboxEmphasis")}</em></>}
       description={accessError}
-      back={{ label: "Back to the staff workspace", onClick: () => navigate("/dashboard/staff") }}
+      back={{ label: t("auth.backStaff"), onClick: () => navigate("/dashboard/staff") }}
     />;
   }
 
   const mailboxes = inbox?.mailboxes || [];
-  const activeMailboxLabel = inbox?.mailboxes.find((mailbox) => mailbox.local === mailboxFilter)?.label || "All addresses";
+  const activeMailboxLabel = inbox?.mailboxes.find((mailbox) => mailbox.local === mailboxFilter)?.label || t("inbox.allAddresses");
   const selectedKey = selected ? threadKey(selected) : "";
   const composeMailbox = mailboxes.find((mailbox) => mailbox.local === compose?.mailbox);
   const personalAddress = mailboxes.find((mailbox) => mailbox.kind === "personal")?.address;
@@ -441,25 +445,25 @@ export function StaffEmailPage() {
   const content = <div className="staff-page staff-email-page">
     <header className="staff-heading">
       <div>
-        <div className="eyebrow">Correspondence</div>
-        <h1>Staff mailbox.</h1>
-        <p>Niko's own-domain inbox. Partners, applicants, and members write to the team addresses and to each staff member's private address, and replies stay in one conversation per exchange. Nothing here is linked from the public site.</p>
+        <div className="eyebrow">{t("page.eyebrow")}</div>
+        <h1>{t("page.title")}</h1>
+        <p>{t("page.body")}</p>
       </div>
       <div className="staff-email-head-side">
         {staffRole === "owner" && <button type="button" className="button button-muted button-small" onClick={() => navigate(staffEmailReportsPath())}>
-          <Icon name="alert" /> Report queue
+          <Icon name="alert" /> {t("page.reportQueue")}
         </button>}
-        <div className="staff-role-card"><span className="staff-role-mark staff-email-mark"><Icon name="mail" /></span><span><small>{mailboxes.length > 1 ? "All addresses" : "Your address"}</small><strong>{activeMailboxLabel}</strong></span></div>
+        <div className="staff-role-card"><span className="staff-role-mark staff-email-mark"><Icon name="mail" /></span><span><small>{mailboxes.length > 1 ? t("inbox.allAddresses") : t("inbox.yourAddress")}</small><strong>{activeMailboxLabel}</strong></span></div>
       </div>
     </header>
 
-    {!inbox && inboxLoading && <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading the mailbox…</p></div>}
+    {!inbox && inboxLoading && <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("inbox.loading")}</p></div>}
 
     {inbox && !inbox.configured && <section className="staff-email-setup" role="status">
       <div className="staff-email-setup-copy">
-        <span className="panel-kicker">Not connected yet</span>
-        <h2>The addresses exist, the mail service is not wired up.</h2>
-        <p>Add these keys in the environment settings, add <strong>{inbox.domain}</strong> at Mailgun together with the DNS records it gives you, then add a receive route that forwards to <code>/api/staff/email/inbound</code>. Until then the page shows what it knows and refuses to pretend a message was sent.</p>
+        <span className="panel-kicker">{t("setup.kicker")}</span>
+        <h2>{t("setup.title")}</h2>
+        <p>{t("setup.before")} <strong>{inbox.domain}</strong> {t("setup.between")} <code>/api/staff/email/inbound</code>{t("setup.after")}</p>
       </div>
       <ul className="staff-email-setup-keys">
         {inbox.missing.map((name) => <li key={name}><code>{name}</code></li>)}
@@ -467,20 +471,20 @@ export function StaffEmailPage() {
     </section>}
 
     {inbox && <div className="staff-email-layout">
-      <aside className="staff-email-inbox" aria-label="Inbox">
+      <aside className="staff-email-inbox" aria-label={t("inbox.aria")}>
         <div className="staff-email-inbox-head">
-          <div className="staff-email-mailboxes" role="group" aria-label="Addresses">
-            <button type="button" className={mailboxFilter ? "" : "active"} onClick={() => setMailboxFilter("")}>All <span>{conversations.length}</span></button>
+          <div className="staff-email-mailboxes" role="group" aria-label={t("inbox.addresses")}>
+            <button type="button" className={mailboxFilter ? "" : "active"} onClick={() => setMailboxFilter("")}>{t("inbox.all")} <span>{conversations.length}</span></button>
             {mailboxes.map((mailbox) => <button type="button" key={mailbox.local} className={mailboxFilter === mailbox.local ? "active" : ""} onClick={() => setMailboxFilter(mailbox.local)}>{mailbox.label} <span>{conversations.filter((conversation) => conversation.latest.mailbox === mailbox.local).length}</span></button>)}
           </div>
-          <button type="button" className="button button-primary button-small" onClick={() => startCompose()}><Icon name="plus" /> Write</button>
+          <button type="button" className="button button-primary button-small" onClick={() => startCompose()}><Icon name="plus" /> {t("inbox.write")}</button>
         </div>
         <div className="staff-email-toolbar">
-          <label className="staff-guild-search"><Icon name="search" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search the mailbox" aria-label="Search the mailbox" /></label>
-          <button type="button" className="staff-email-refresh" onClick={() => void loadInbox()} disabled={inboxLoading} aria-label="Refresh mailbox"><Icon name="spark" /></button>
+          <label className="staff-guild-search"><Icon name="search" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("inbox.search")} aria-label={t("inbox.search")} /></label>
+          <button type="button" className="staff-email-refresh" onClick={() => void loadInbox()} disabled={inboxLoading} aria-label={t("inbox.refresh")}><Icon name="spark" /></button>
         </div>
-        {inboxLoading && inbox.messages.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading messages…</p></div>
-          : conversations.length === 0 ? <div className="staff-email-empty-list">{inbox.messages.length ? "No messages match that search." : "No mail yet. Anything sent to your address lands here."}</div>
+        {inboxLoading && inbox.messages.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("inbox.loadingMessages")}</p></div>
+          : conversations.length === 0 ? <div className="staff-email-empty-list">{inbox.messages.length ? t("inbox.noMatch") : t("inbox.emptyList")}</div>
           : <div className="staff-email-list">
             {conversations.map((conversation) => {
               const message = conversation.latest;
@@ -491,46 +495,46 @@ export function StaffEmailPage() {
                 onClick={() => void openMessage(message)}
               >
                 <span className="staff-email-item-top">
-                  <strong>{message.direction === "outbound" ? `To ${message.to_address}` : message.from_name || message.from_address}</strong>
+                  <strong>{message.direction === "outbound" ? t("item.to", { address: message.to_address }) : message.from_name || message.from_address}</strong>
                   <span className="staff-email-item-when">
-                    {conversation.messages.length > 1 && <b className="staff-email-thread-count" title={`${conversation.messages.length} messages in this conversation`}>{conversation.messages.length}</b>}
+                    {conversation.messages.length > 1 && <b className="staff-email-thread-count" title={t("thread.count", { count: conversation.messages.length })}>{conversation.messages.length}</b>}
                     <time dateTime={new Date(message.created_at * 1000).toISOString()}>{formatWhen(message.created_at)}</time>
                   </span>
                 </span>
-                <span className="staff-email-item-subject">{message.subject}{message.direction === "outbound" && <em>{statusLabel(message)}</em>}</span>
-                <span className="staff-email-item-preview">{message.preview || "No message text."}</span>
-                <span className="staff-email-item-address">{conversation.messages.length > 1 ? `${message.mailbox}@${inbox.domain} · ${conversation.messages.length} messages` : `${message.mailbox}@${inbox.domain}`}</span>
+                <span className="staff-email-item-subject">{message.subject}{message.direction === "outbound" && <em>{statusLabel(message, t)}</em>}</span>
+                <span className="staff-email-item-preview">{message.preview || t("item.noPreview")}</span>
+                <span className="staff-email-item-address">{conversation.messages.length > 1 ? t("item.addressConversation", { address: `${message.mailbox}@${inbox.domain}`, count: conversation.messages.length }) : `${message.mailbox}@${inbox.domain}`}</span>
               </button>;
             })}
           </div>}
       </aside>
 
-      <section className="staff-email-reader" aria-label="Message">
+      <section className="staff-email-reader" aria-label={t("reader.aria")}>
         {compose ? <div className="staff-email-compose">
           <div className="staff-email-reader-head">
-            <div><span className="panel-kicker">{compose.thread_id ? "Reply in this conversation" : "New message"}</span><h2>Write from Niko</h2></div>
-            <button type="button" className="button button-muted button-small" onClick={() => setCompose(null)}>Cancel</button>
+            <div><span className="panel-kicker">{compose.thread_id ? t("compose.replyKicker") : t("compose.newKicker")}</span><h2>{t("compose.title")}</h2></div>
+            <button type="button" className="button button-muted button-small" onClick={() => setCompose(null)}>{t("compose.cancel")}</button>
           </div>
           <div className="staff-fields">
-            <div className="form-field"><span className="form-label">From</span>
-              <Select ariaLabel="From" placeholder={null} options={mailboxes.map((mailbox) => ({ value: mailbox.local, label: mailbox.address }))} value={compose.mailbox} onChange={(value) => setCompose({ ...compose, mailbox: value })} />
+            <div className="form-field"><span className="form-label">{t("compose.from")}</span>
+              <Select ariaLabel={t("compose.from")} placeholder={null} options={mailboxes.map((mailbox) => ({ value: mailbox.local, label: mailbox.address }))} value={compose.mailbox} onChange={(value) => setCompose({ ...compose, mailbox: value })} />
             </div>
             {composeMailbox?.kind === "shared" && <p className="staff-email-signature-note">
               <Icon name="mail" />
-              <span>Your signature is added automatically: your display name, your Discord handle, and {personalAddress || "your Niko address"}.</span>
+              <span>{t("compose.signature", { address: personalAddress || t("compose.yourAddress") })}</span>
             </p>}
-            <label className="form-field"><span className="form-label">To</span>
+            <label className="form-field"><span className="form-label">{t("compose.to")}</span>
               <input type="email" value={compose.to} onChange={(event) => setCompose({ ...compose, to: event.target.value })} placeholder="name@example.com" autoComplete="off" />
             </label>
-            <label className="form-field"><span className="form-label">Subject</span>
-              <input value={compose.subject} onChange={(event) => setCompose({ ...compose, subject: event.target.value })} maxLength={300} placeholder="What is this about?" />
+            <label className="form-field"><span className="form-label">{t("compose.subject")}</span>
+              <input value={compose.subject} onChange={(event) => setCompose({ ...compose, subject: event.target.value })} maxLength={300} placeholder={t("compose.subjectPlaceholder")} />
             </label>
             <div className="form-field">
-              <span className="form-label">Message</span>
+              <span className="form-label">{t("compose.message")}</span>
               <RichTextEditor
                 value={compose.html}
                 onChange={(html, text) => setCompose((current) => current ? { ...current, html, text } : current)}
-                placeholder="Write the message…"
+                placeholder={t("compose.placeholder")}
                 disabled={sending}
               />
             </div>
@@ -543,9 +547,9 @@ export function StaffEmailPage() {
                 onChange={(event) => { addAttachments(event.target.files); event.target.value = ""; }}
               />
               <button type="button" className="button button-muted button-small" onClick={() => attachInput.current?.click()} disabled={sending}>
-                <Icon name="attach" /> Attach files
+                <Icon name="attach" /> {t("compose.attach")}
               </button>
-              <span className="staff-email-attach-note">Images or files · up to {MAX_ATTACHMENTS} files · 10 MB total</span>
+              <span className="staff-email-attach-note">{t("compose.attachNote", { count: MAX_ATTACHMENTS })}</span>
             </div>
             {compose.attachments.length > 0 && <ul className="staff-email-attach-list">
               {compose.attachments.map((file, index) => <li key={`${file.name}-${index}`}>
@@ -554,19 +558,19 @@ export function StaffEmailPage() {
                 <small>{formatBytes(file.size)}</small>
                 <button
                   type="button"
-                  aria-label={`Remove ${file.name}`}
+                  aria-label={t("compose.removeFile", { name: file.name })}
                   onClick={() => setCompose((current) => current ? { ...current, attachments: current.attachments.filter((_, item) => item !== index) } : current)}
                 ><Icon name="close" /></button>
               </li>)}
             </ul>}
           </div>
-          <div className="staff-panel-footer"><span>Sent from {compose.mailbox}@{inbox.domain}{compose.thread_id ? " · this reply joins the conversation" : ""} · a copy is kept in this mailbox.</span><button type="button" className="button button-primary" onClick={() => void submitCompose()} disabled={sending}>{sending ? "Sending…" : "Send message"}</button></div>
+          <div className="staff-panel-footer"><span>{t("compose.footer", { address: `${compose.mailbox}@${inbox.domain}` })}{compose.thread_id ? t("compose.footerReply") : ""}</span><button type="button" className="button button-primary" onClick={() => void submitCompose()} disabled={sending}>{sending ? t("compose.sending") : t("compose.send")}</button></div>
         </div>
           : selected ? <article className="staff-email-message">
             <div className="staff-email-reader-head">
               <div>
-                <span className="panel-kicker">{selected.direction === "outbound" ? "Sent" : `Received on ${selected.to_address}`}</span>
-                <h2>{selected.subject || "(no subject)"}</h2>
+                <span className="panel-kicker">{selected.direction === "outbound" ? t("reader.sent") : t("reader.receivedOn", { address: selected.to_address })}</span>
+                <h2>{selected.subject || t("dialog.noSubject")}</h2>
                 <p className="staff-email-meta">
                   <strong>{selected.from_name ? `${selected.from_name} · ` : ""}{selected.from_address}</strong>
                   <span>{new Date(selected.created_at * 1000).toLocaleString()}</span>
@@ -574,10 +578,10 @@ export function StaffEmailPage() {
                 {selected.direction === "outbound" && <Receipt message={selected} onOpen={(message) => void openStatus(message)} />}
                 <AttachmentList files={selected.attachments} />
               </div>
-              <button type="button" className="button button-primary button-small" onClick={() => startCompose(selected)}><Icon name="arrow" /> Reply</button>
+              <button type="button" className="button button-primary button-small" onClick={() => startCompose(selected)}><Icon name="arrow" /> {t("reader.reply")}</button>
             </div>
             {selected.thread && selected.thread.length > 1 ? <div className="staff-email-thread">
-              <p className="staff-email-thread-head"><span>{selected.thread.length} messages in this conversation</span><small>Oldest first</small></p>
+              <p className="staff-email-thread-head"><span>{t("thread.count", { count: selected.thread.length })}</span><small>{t("thread.oldestFirst")}</small></p>
               {selected.thread.map((entry) => <article key={entry.message_id} className={`staff-email-turn is-${entry.direction}${entry.message_id === selected.message_id ? " is-current" : ""}`}>
                 <header>
                   <strong>{entry.direction === "outbound" ? `Niko · ${entry.from_address}` : entry.from_name || entry.from_address}</strong>
@@ -592,9 +596,9 @@ export function StaffEmailPage() {
           </article>
           : <div className="staff-email-reader-empty">
             <span className="staff-email-reader-icon"><Icon name="mail" /></span>
-            <h2>{inbox.messages.length ? "Pick a conversation." : "The inbox is empty."}</h2>
-            <p>{inbox.messages.length ? "Conversations are on the left; opening one shows every message in it and a reply button." : `Mail sent to ${mailboxes.map((mailbox) => mailbox.address).join(" or ")} will show up here as soon as the provider forwards it.`}</p>
-            <button type="button" className="button button-muted" onClick={() => startCompose()}><Icon name="plus" /> Write a message</button>
+            <h2>{inbox.messages.length ? t("reader.pickTitle") : t("reader.emptyTitle")}</h2>
+            <p>{inbox.messages.length ? t("reader.pickBody") : t("reader.emptyBody", { addresses: mailboxes.map((mailbox) => mailbox.address).join(" / ") })}</p>
+            <button type="button" className="button button-muted" onClick={() => startCompose()}><Icon name="plus" /> {t("reader.writeMessage")}</button>
           </div>}
       </section>
     </div>}

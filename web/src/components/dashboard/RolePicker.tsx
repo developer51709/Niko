@@ -1,5 +1,6 @@
 import { Select, type SelectOption } from "./Select";
 import type { GuildResources } from "../../types";
+import { useStrings } from "../../i18n";
 
 type Role = GuildResources["roles"][number];
 
@@ -30,7 +31,9 @@ type Props = {
 };
 
 /** A role picker: the shared `Select`, with a dot in each role's colour or gradient. */
-export function RolePicker({ roles, value, onChange, placeholder = "Choose a role", ariaLabel, disabled, id }: Props) {
+export function RolePicker({ roles, value, onChange, placeholder, ariaLabel, disabled, id }: Props) {
+  const { t } = useStrings("dashboard");
+  const resolvedPlaceholder = placeholder === undefined ? t("pickers.chooseRole") : placeholder;
   const options: SelectOption[] = roles.map((role) => ({
     value: String(role.id),
     label: role.name,
@@ -41,9 +44,9 @@ export function RolePicker({ roles, value, onChange, placeholder = "Choose a rol
     options={options}
     value={value}
     onChange={onChange}
-    placeholder={placeholder}
-    placeholderGlyph={placeholder === null ? undefined : <span className="role-picker-glyph" aria-hidden="true">@</span>}
-    unknownOption={(saved) => ({ value: saved, label: `Saved role · ${saved}`, glyph: <RoleGlyph /> })}
+    placeholder={resolvedPlaceholder}
+    placeholderGlyph={resolvedPlaceholder === null ? undefined : <span className="role-picker-glyph" aria-hidden="true">@</span>}
+    unknownOption={(saved) => ({ value: saved, label: t("pickers.savedRole", { id: saved }), glyph: <RoleGlyph /> })}
     ariaLabel={ariaLabel}
     disabled={disabled}
     id={id}

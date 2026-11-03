@@ -42,6 +42,8 @@ import type {
   NotifierConfig,
   NotifierFollow,
   NotifierResponse,
+  StaffMaintenanceResponse,
+  StatusPayload,
   TeamRecruitmentOpening,
   TeamRecruitmentSettings,
   TeamRecruitmentSubmission,
@@ -81,6 +83,18 @@ export const getDashboardAccess = () => api<{ blacklisted: boolean; scope?: "use
 export const getPublicConfig = () => api<PublicConfig>("/api/config");
 export const getBotEmojis = () => api<BotEmojisResponse>("/api/emojis");
 export const getStats = () => api<BotStats>("/api/botstats");
+export const getStatus = () => api<StatusPayload>("/api/status");
+
+// ── Owner maintenance controls (staff settings) ─────────────
+export const getStaffMaintenance = () => api<StaffMaintenanceResponse>("/api/staff/maintenance");
+export const setStaffMaintenance = (
+  body: { kind: "cog" | "command"; key: string; enabled: boolean; reason?: string },
+  csrfToken?: string,
+) => api<StaffMaintenanceResponse>("/api/staff/maintenance", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify(body),
+});
 export const resolveDiscordText = (text: string, guildId?: string) => api<{
   text: string;
   mention_names: Partial<Record<"user" | "channel" | "role", Record<string, string>>>;

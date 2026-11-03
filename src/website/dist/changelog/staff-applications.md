@@ -1,6 +1,7 @@
 # Staff Applications
 
 - Date: 2026-09-29
+- Version: 2.12.0
 - Tags: applications, staff, dashboard, discord
 
 Guild dashboards can now manage multiple staff role openings with shareable web forms, Discord membership and eligibility checks, and reusable application links.

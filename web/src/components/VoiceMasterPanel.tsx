@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DiscordAppBadge } from "./DiscordAppBadge";
 import { DiscordEmoji, DiscordMarkdown, useDiscordProfile } from "./DiscordMarkdown";
 import { SelectMenu } from "./SelectMenu";
 import { useBotEmojis } from "../data/botEmojis";
 import { useBotConfig } from "../hooks/useBotConfig";
+import { useLanguage, useStrings } from "../i18n";
 import {
   PANEL_COMMANDS,
   PANEL_EMOJI,
@@ -48,8 +49,17 @@ type Reply =
 export function VoiceMasterPanel({ className }: { className?: string }) {
   const config = useBotConfig();
   const emojis = useBotEmojis();
-  const [language, setLanguage] = useState<PanelLanguage>("en");
+  const { t } = useStrings("home");
+  // The panel is a replay of the bot's own message, so it opens in the language
+  // the page is showing; the selector above it stays for trying the others.
+  const { language: siteLanguage } = useLanguage();
+  const [language, setLanguage] = useState<PanelLanguage>(siteLanguage);
   const [reply, setReply] = useState<Reply | null>(null);
+
+  useEffect(() => {
+    setLanguage(siteLanguage);
+    setReply(null);
+  }, [siteLanguage]);
   const panelRef = useRef<HTMLDivElement>(null);
   const { openProfile, dialog: profileDialog } = useDiscordProfile();
   const strings = PANEL_STRINGS[language];
@@ -107,9 +117,9 @@ export function VoiceMasterPanel({ className }: { className?: string }) {
   return (
     <figure className={`vm-demo${className ? ` ${className}` : ""}`}>
       <div className="vm-demo-bar">
-        <span className="vm-demo-label">VoiceMaster · live preview</span>
+        <span className="vm-demo-label">{t("voicemaster.label")}</span>
         <SelectMenu
-          label="Panel language"
+          label={t("voicemaster.language")}
           value={language}
           options={PANEL_LANGUAGES}
           onChange={(next) => { setLanguage(next); setReply(null); }}
@@ -119,7 +129,7 @@ export function VoiceMasterPanel({ className }: { className?: string }) {
 
       <div className="discord-window" ref={panelRef}>
         <article className="dc-message">
-          <button type="button" className="dc-avatar" data-discord-user-id={botId} onClick={openBot} aria-label={`Open ${botName}'s Discord profile`}>
+          <button type="button" className="dc-avatar" data-discord-user-id={botId} onClick={openBot} aria-label={t("voicemaster.openProfile", { name: botName })}>
             {botAvatar ? <img src={botAvatar} alt="" /> : botName.slice(0, 1)}
           </button>
           <div className="dc-message-body">
@@ -173,11 +183,11 @@ export function VoiceMasterPanel({ className }: { className?: string }) {
                   className="dc-reply-jump"
                   onClick={() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
                 >
-                  Click to see message
+                  {t("voicemaster.jump")}
                 </button>
               </div>
               <div className="dc-reply-row">
-                <button type="button" className="dc-avatar" data-discord-user-id={botId} onClick={openBot} aria-label={`Open ${botName}'s Discord profile`}>
+                <button type="button" className="dc-avatar" data-discord-user-id={botId} onClick={openBot} aria-label={t("voicemaster.openProfile", { name: botName })}>
                   {botAvatar ? <img src={botAvatar} alt="" /> : botName.slice(0, 1)}
                 </button>
                 <div className="dc-message-body">
@@ -217,18 +227,16 @@ export function VoiceMasterPanel({ className }: { className?: string }) {
                   <path d="M12 5.2c-5.6 0-9.7 4.6-10.7 6.2a1.2 1.2 0 0 0 0 1.2C2.3 14.2 6.4 18.8 12 18.8s9.7-4.6 10.7-6.2a1.2 1.2 0 0 0 0-1.2C21.7 9.8 17.6 5.2 12 5.2Z" fill="none" stroke="currentColor" strokeWidth="1.6" />
                   <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
                 </svg>
-                <span>Only you can see this</span>
+                <span>{t("voicemaster.onlyYou")}</span>
                 <span aria-hidden="true">•</span>
-                <button type="button" className="dc-ephemeral-dismiss" onClick={() => setReply(null)}>Dismiss message</button>
+                <button type="button" className="dc-ephemeral-dismiss" onClick={() => setReply(null)}>{t("voicemaster.dismiss")}</button>
               </footer>
             </article>
           </>
         )}
       </div>
 
-      <figcaption className="vm-demo-caption">
-        The bot’s real control panel. Press a button for the ephemeral reply it sends, or switch the language above.
-      </figcaption>
+      <figcaption className="vm-demo-caption">{t("voicemaster.caption")}</figcaption>
       {profileDialog}
     </figure>
   );

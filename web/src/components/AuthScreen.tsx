@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 import { PublicHeader } from "./PublicHeader";
+import { useStrings } from "../i18n";
 
 type BackLink = {
   label: ReactNode;
@@ -14,10 +15,11 @@ type BackLink = {
  * Every sign-in prompt goes through `DiscordSignIn`, so the CTA and its
  * fallback notice look the same on every page.
  */
-export function DiscordSignIn({ next, available = true, label = "Continue with Discord", unavailableNotice }: { next: string; available?: boolean; label?: string; unavailableNotice?: ReactNode }) {
-  if (!available) return <div className="notice warning">{unavailableNotice ?? "Discord sign-in isn’t available right now. Try again later."}</div>;
+export function DiscordSignIn({ next, available = true, label, unavailableNotice }: { next: string; available?: boolean; label?: string; unavailableNotice?: ReactNode }) {
+  const { t } = useStrings("shared");
+  if (!available) return <div className="notice warning">{unavailableNotice ?? t("auth.unavailable")}</div>;
   return <a className="button button-primary full-width" href={`/auth/login?next=${encodeURIComponent(next)}`}>
-    <Icon name="lock" /> {label} <Icon name="arrow" />
+    <Icon name="lock" /> {label ?? t("auth.continue")} <Icon name="arrow" />
   </a>;
 }
 

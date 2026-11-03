@@ -1,0 +1,226 @@
+/* Owner maintenance tab: one collapsible card per cog, commands inside. */
+.dashboard-layout .maintenance-view { display: grid; gap: 14px; }
+
+.maintenance-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+.maintenance-badge i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sage);
+  box-shadow: 0 0 0 4px rgba(139, 213, 177, .14);
+}
+.maintenance-badge.is-on i {
+  background: #e9c877;
+  box-shadow: 0 0 0 4px rgba(233, 200, 119, .16);
+}
+.maintenance-badge span { display: grid; gap: 2px; }
+.maintenance-badge small {
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font: 700 9px "Space Mono", monospace;
+}
+.maintenance-badge strong { color: var(--ink); font-size: 12px; }
+
+.maintenance-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ── Cog cards ────────────────────────────────────────────────────────────── */
+.maintenance-cards { display: grid; gap: 9px; }
+
+/* Same sheet of glass as `.staff-guild-card`, so this tab sits in the same
+   rhythm as the other staff pages. */
+.maintenance-cog-card {
+  overflow: hidden;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .14);
+  backdrop-filter: blur(20px) saturate(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.maintenance-cog-card:hover { transform: translateY(-1px); }
+.maintenance-cog-card:hover,
+.maintenance-cog-card.is-open { border-color: color-mix(in srgb, var(--accent-dark) 44%, var(--line)); box-shadow: var(--shadow-soft); }
+.maintenance-cog-card.is-paused {
+  background: rgba(233, 200, 119, .07);
+  border-color: rgba(233, 200, 119, .26);
+}
+.maintenance-cog-card.is-paused:hover,
+.maintenance-cog-card.is-paused.is-open { border-color: rgba(233, 200, 119, .46); }
+
+.maintenance-cog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+}
+
+/* The disclosure is a real button, so the switch beside it stays a switch. */
+.maintenance-cog-toggle {
+  flex: 1 1 280px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 0;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.maintenance-cog-toggle:focus-visible { outline: 2px solid rgba(226, 234, 246, .4); outline-offset: 3px; border-radius: 6px; }
+.maintenance-cog-toggle.is-static { cursor: default; }
+
+.maintenance-cog-caret {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-right: 1.5px solid var(--dim);
+  border-bottom: 1.5px solid var(--dim);
+  transform: rotate(-45deg);
+  transition: transform .18s ease;
+}
+.maintenance-cog-toggle[aria-expanded="true"] .maintenance-cog-caret { transform: rotate(45deg); }
+.maintenance-cog-caret.is-static { visibility: hidden; }
+
+.maintenance-cog-title { display: grid; gap: 2px; min-width: 0; }
+.maintenance-cog-title strong { color: var(--ink); font-size: 12.5px; letter-spacing: -.01em; }
+.maintenance-cog-title small { color: var(--dim); font-size: 10px; }
+.maintenance-cog-reason {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maintenance-cog-state {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  color: #f0d79b;
+  background: rgba(233, 200, 119, .12);
+  border: 1px solid rgba(233, 200, 119, .26);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font: 700 8.5px "Space Mono", monospace;
+}
+.maintenance-cog-state.is-quiet {
+  color: var(--dim);
+  background: rgba(255, 255, 255, .05);
+  border-color: var(--line);
+}
+
+.maintenance-cog-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 1 auto; }
+.maintenance-cog-controls .maintenance-reason-field { flex: 0 1 210px; }
+
+.maintenance-cog-body {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.maintenance-cog-summary { margin: 0 2px 5px; color: var(--dim); font-size: 10.5px; line-height: 1.6; }
+.maintenance-empty { margin: 4px 2px; color: var(--dim); font-size: 11px; }
+
+/* ── Rows (commands inside a card) ────────────────────────────────────────── */
+.maintenance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background-color .18s ease;
+}
+.maintenance-row:last-child { border-bottom: 0; }
+
+.maintenance-identity { display: grid; gap: 3px; min-width: 0; }
+.maintenance-identity strong {
+  color: var(--ink);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.maintenance-meta { color: var(--muted); font-size: 10.5px; line-height: 1.5; }
+
+.maintenance-tag {
+  justify-self: start;
+  padding: 2px 6px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font: 700 8px "Space Mono", monospace;
+}
+
+.maintenance-controls { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+.maintenance-reason-field { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.maintenance-reason-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 9px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 8px 22px rgba(0, 0, 0, .12);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  font-size: 11px;
+  font-family: inherit;
+  transition: background .18s ease, border-color .18s ease;
+}
+.maintenance-reason-field input::placeholder { color: var(--dim); }
+.maintenance-reason-field input:disabled { opacity: .55; }
+.maintenance-reason-field input:focus-visible {
+  outline: 2px solid rgba(226, 234, 246, .4);
+  outline-offset: 1px;
+  background: rgba(255, 255, 255, .07);
+  border-color: rgba(226, 234, 246, .28);
+}
+.maintenance-reason-field .button { flex: 0 0 auto; white-space: nowrap; }
+
+.maintenance-note { margin: 2px 2px 0; color: var(--dim); font-size: 10.5px; line-height: 1.7; }
+
+@media (max-width: 900px) {
+  .maintenance-cog-toggle { flex: 1 1 100%; }
+  .maintenance-cog-controls { flex: 1 1 100%; justify-content: space-between; }
+  .maintenance-cog-controls .maintenance-reason-field { flex: 1 1 auto; }
+  .maintenance-row { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .maintenance-controls { justify-content: space-between; }
+}
+
+@media (max-width: 620px) {
+  .dashboard-layout .maintenance-view .staff-guilds-heading { flex-direction: column; align-items: flex-start; }
+  .maintenance-badge { width: 100%; }
+  .maintenance-cog-header { padding: 10px; }
+  .maintenance-cog-body { padding: 8px 10px 10px; }
+  .maintenance-reason-field { flex-wrap: wrap; }
+  .maintenance-reason-field input { flex: 1 1 100%; }
+}

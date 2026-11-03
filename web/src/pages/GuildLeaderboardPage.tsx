@@ -5,6 +5,7 @@ import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
 import type { GuildLevelsResponse } from "../types";
 import { formatNumber, initials } from "../utils/format";
@@ -17,6 +18,7 @@ const POLL_MS = 6_000;
 const MOVE_MS = 4_500;
 
 export function GuildLeaderboardPage({ guildId }: { guildId: string }) {
+  const { t } = useStrings("guild-leaderboard");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<GuildLevelsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +76,7 @@ export function GuildLeaderboardPage({ guildId }: { guildId: string }) {
         // A failed poll keeps the standings already on screen and lets the next
         // one catch up; only a first load that never landed is an error.
         if (!hasDataRef.current) {
-          setError(reason instanceof Error ? reason.message : "This leaderboard could not be loaded.");
+          setError(reason instanceof Error ? reason.message : "state.error");
         }
       } finally {
         inFlight = false;
@@ -104,34 +106,36 @@ export function GuildLeaderboardPage({ guildId }: { guildId: string }) {
     <PublicHeader page="leaderboard" />
     <main className="shell page-main guild-leaderboard-page">
       {unknownGuild ? <UnknownGuild /> : <>
-        <section className="guild-leaderboard-hero" aria-label="Server leaderboard">
+        <section className="guild-leaderboard-hero" aria-label={t("hero.aria")}>
           <span className={`guild-leaderboard-icon${guild ? "" : " is-loading"}`}>
             {guild?.icon_url
               ? <img src={guild.icon_url} alt="" />
               : guild ? initials(guild.name || "Server") : null}
           </span>
           <div className="guild-leaderboard-heading">
-            <span className="eyebrow">Niko · server leveling</span>
-            <h1>{guild?.name || "Server leaderboard"}</h1>
+            <span className="eyebrow">{t("hero.eyebrow")}</span>
+            <h1>{guild?.name || t("hero.titleFallback")}</h1>
             <p>{guild
-              ? `${formatNumber(guild.member_count)} members · ${formatNumber(data?.total ?? 0)} ranked by XP`
-              : "The live XP standings for this server"}</p>
+              ? t("hero.bodyCount", { members: formatNumber(guild.member_count), ranked: formatNumber(data?.total ?? 0) })
+              : t("hero.bodyLatest")}</p>
           </div>
-          <span className="guild-leaderboard-live"><i aria-hidden="true" />Live</span>
+          <span className="guild-leaderboard-live"><i aria-hidden="true" />{t("hero.live")}</span>
         </section>
 
-        <section className="leaderboard-panel" aria-label="Leveling leaderboard">
+        <section className="leaderboard-panel" aria-label={t("panel.aria")}>
           <div className="leaderboard-panel-heading">
             <div>
-              <span className="panel-kicker">Leveling leaderboard</span>
-              <h2>Top members</h2>
-              <p>{data ? `${formatNumber(data.total)} member${data.total === 1 ? "" : "s"} earning XP in this server` : "The latest server standings"}</p>
+              <span className="panel-kicker">{t("panel.kicker")}</span>
+              <h2>{t("panel.title")}</h2>
+              <p>{data
+                ? t(data.total === 1 ? "panel.membersOne" : "panel.membersMany", { count: formatNumber(data.total) })
+                : t("panel.bodyLatest")}</p>
             </div>
           </div>
-          {loading ? <div className="leaderboard-state" role="status"><span className="loading-ring" />Loading standings…</div>
-            : error ? <div className="leaderboard-state leaderboard-error" role="alert">{error}</div>
-            : boardDisabled ? <div className="leaderboard-state">Leveling is turned off in this server right now.</div>
-            : !data?.entries.length ? <div className="leaderboard-state">No one has earned XP here yet — the board fills up as members chat.</div>
+          {loading ? <div className="leaderboard-state" role="status"><span className="loading-ring" />{t("state.loading")}</div>
+            : error ? <div className="leaderboard-state leaderboard-error" role="alert">{error.startsWith("state.") ? t(error) : error}</div>
+            : boardDisabled ? <div className="leaderboard-state">{t("state.disabled")}</div>
+            : !data?.entries.length ? <div className="leaderboard-state">{t("state.empty")}</div>
             : <div className="leaderboard-list">
               <AnimatePresence initial={false} mode="popLayout">
                 {data.entries.map((entry) => {
@@ -139,7 +143,7 @@ export function GuildLeaderboardPage({ guildId }: { guildId: string }) {
                   const progress = entry.xp_for_next > 0
                     ? Math.min(100, Math.max(0, (entry.xp / entry.xp_for_next) * 100))
                     : 0;
-                  const name = entry.display_name || entry.username || "Niko member";
+                  const name = entry.display_name || entry.username || t("row.member");
                   return <motion.article
                     layout={!reduceMotion}
                     transition={rowTransition}
@@ -154,7 +158,7 @@ export function GuildLeaderboardPage({ guildId }: { guildId: string }) {
                         {move !== 0 && <motion.span
                           key={`${entry.key}-move`}
                           className={`leaderboard-move ${move > 0 ? "leaderboard-move-up" : "leaderboard-move-down"}`}
-                          aria-label={move > 0 ? `Up ${move} places` : `Down ${Math.abs(move)} places`}
+                          aria-label={move > 0 ? t("move.up", { count: move }) : t("move.down", { count: Math.abs(move) })}
                           initial={{ opacity: 0, y: move > 0 ? 5 : -5 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: move > 0 ? -5 : 5 }}
@@ -173,27 +177,27 @@ export function GuildLeaderboardPage({ guildId }: { guildId: string }) {
                       <span
                         className="guild-leaderboard-bar"
                         role="progressbar"
-                        aria-label={`${name} progress to level ${entry.level + 1}`}
+                        aria-label={t("row.progress", { name, level: entry.level + 1 })}
                         aria-valuemin={0}
                         aria-valuemax={entry.xp_for_next}
                         aria-valuenow={entry.xp}
                       ><i style={{ width: `${progress}%` }} /></span>
                     </span>
                     <span className="guild-leaderboard-level">
-                      <strong>Level {entry.level}</strong>
-                      <small>{formatNumber(entry.xp)} / {formatNumber(entry.xp_for_next)} XP</small>
+                      <strong>{t("row.level", { level: entry.level })}</strong>
+                      <small>{t("row.xp", { xp: formatNumber(entry.xp), next: formatNumber(entry.xp_for_next) })}</small>
                     </span>
                   </motion.article>;
                 })}
               </AnimatePresence>
             </div>}
-          {data && data.pages > 1 && <nav className="leaderboard-pagination" aria-label="Leaderboard pages">
-            <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}><Icon name="arrow" /> Previous</button>
-            <span>Page <strong>{page}</strong> of {data.pages}</span>
-            <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.min(data.pages, current + 1))} disabled={page >= data.pages}>Next <Icon name="arrow" /></button>
+          {data && data.pages > 1 && <nav className="leaderboard-pagination" aria-label={t("pagination.aria")}>
+            <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}><Icon name="arrow" /> {t("pagination.previous")}</button>
+            <span>{t("pagination.page", { page, pages: data.pages })}</span>
+            <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.min(data.pages, current + 1))} disabled={page >= data.pages}>{t("pagination.next")} <Icon name="arrow" /></button>
           </nav>}
         </section>
-        <aside className="leaderboard-privacy-note"><Icon name="chart" /><p><strong>XP is earned together.</strong> Members gain XP by chatting in {guild?.name || "this server"}, and this board updates on its own. Read how <a href="/docs/leveling-overview">leveling works</a> or ask an admin to tune it from the leveling panel.</p></aside>
+        <aside className="leaderboard-privacy-note"><Icon name="chart" /><p><strong>{t("privacy.title")}</strong> {t("privacy.before")} {guild?.name || t("privacy.server")}{t("privacy.middle")} <a href="/docs/leveling-overview">{t("privacy.link")}</a> {t("privacy.after")}</p></aside>
       </>}
     </main>
     <Footer />
@@ -202,14 +206,15 @@ export function GuildLeaderboardPage({ guildId }: { guildId: string }) {
 
 function UnknownGuild() {
   const config = useBotConfig();
+  const { t } = useStrings("guild-leaderboard");
   return <section className="guild-leaderboard-unknown">
     <span className="guild-leaderboard-unknown-mark"><Icon name="alert" /></span>
-    <span className="panel-kicker">Unknown server</span>
-    <h1>Niko isn’t in this server.</h1>
-    <p>This leaderboard only exists while Niko is a member. Double-check the link, or add Niko to the server to start collecting XP.</p>
+    <span className="panel-kicker">{t("unknown.kicker")}</span>
+    <h1>{t("unknown.title")}</h1>
+    <p>{t("unknown.body")}</p>
     <div className="guild-leaderboard-unknown-actions">
-      <a className="button button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">Add Niko to Discord <Icon name="arrow" /></a>
-      <a className="button button-muted" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>Back to Niko</a>
+      <a className="button button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">{t("unknown.add")} <Icon name="arrow" /></a>
+      <a className="button button-muted" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>{t("unknown.back")}</a>
     </div>
   </section>;
 }

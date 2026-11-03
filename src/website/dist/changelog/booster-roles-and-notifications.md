@@ -1,6 +1,7 @@
 # Booster Roles and Boost Announcements
 
 - Date: 2026-10-24
+- Version: 2.22.0
 - Tags: boosters, roles, dashboard, notifications, added
 
 Server admins can now customize boost and unboost announcements in the dashboard and enable personal roles for active boosters. Boosters can rename, recolor, add an eligible role icon, choose gradient colors when Discord unlocks them, and share or unshare their role.

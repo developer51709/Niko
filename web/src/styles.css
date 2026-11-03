@@ -13,6 +13,8 @@
 @import "./styles/staff-email.css";
 @import "./styles/commands.css";
 @import "./styles/docs-theme.css";
+@import "./styles/status.css";
+@import "./styles/maintenance.css";
 
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;
@@ -196,6 +198,8 @@ a.discord-server-tag-invite.is-join:hover { background: #4752c4; }
 .discord-emoji-popup-copy { min-width: 0; }
 .discord-emoji-popup-name { display: block; margin: 0 0 3px; color: #f2f3f5; font-size: 15.5px; font-weight: 700; overflow-wrap: anywhere; }
 .discord-emoji-popup-copy p { margin: 0; color: #b5bac1; font-size: 13.5px; line-height: 1.4; }
+.discord-emoji-popup-learn { color: #00a8fc; text-decoration: none; }
+.discord-emoji-popup-learn:hover { text-decoration: underline; }
 .discord-emoji-popup-nitro { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; padding: 10px 12px; color: #111214; background: #fff; border-radius: 8px; font-size: 15px; font-weight: 700; text-decoration: none; box-shadow: 0 0 0 1px #fff, 0 0 18px rgba(88, 101, 242, .65), 0 0 32px rgba(235, 69, 158, .35); }
 .discord-emoji-popup-nitro:hover { color: #111214; background: #f6f6f6; text-decoration: none; }
 .discord-emoji-popup-nitro-mark { width: 18px; height: 18px; flex: 0 0 auto; }
@@ -254,8 +258,11 @@ a.discord-server-tag-invite.is-join:hover { background: #4752c4; }
 .dash-select-value.is-placeholder { color: var(--dim); }
 .dash-select-chevron { flex: 0 0 auto; color: var(--dim); transition: transform .18s; }
 .dash-select.is-open .dash-select-chevron { transform: rotate(180deg); }
-/* Positioned from the trigger by Select, which renders the list in a portal. */
-.dash-select-list { position: fixed; z-index: 60; max-height: 256px; overflow-y: auto; padding: 5px; background: rgba(12, 13, 15, .68); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06); backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%); }
+/* Positioned from the trigger by Select, which renders the list in a portal.
+   The list must clear the modal backdrops it is opened from (the profile editor
+   and the AI experiment sheet sit at 1000), or the options paint behind the
+   dialog's card instead of over it. */
+.dash-select-list { position: fixed; z-index: 2000; max-height: 256px; overflow-y: auto; padding: 5px; background: rgba(12, 13, 15, .68); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06); backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%); }
 .dash-select-option { display: flex; width: 100%; align-items: center; gap: 9px; padding: 8px 9px; color: var(--muted); background: transparent; border: 0; border-radius: 7px; font: inherit; font-size: 12px; text-align: left; }
 .dash-select-option.is-highlighted { color: var(--ink); background: rgba(255, 255, 255, .07); }
 .dash-select-option.is-selected { color: var(--ink); font-weight: 650; }
@@ -1504,6 +1511,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .dashboard-layout .staff-card-section,
   .dashboard-layout .staff-profile-preview,
   .dashboard-layout .staff-guild-card,
+  .dashboard-layout .maintenance-cog-card,
+  .dashboard-layout .maintenance-badge,
+  .dashboard-layout .maintenance-reason-field input,
   .dashboard-layout .staff-guild-count,
   .dashboard-layout .staff-guild-search,
   .dashboard-layout .staff-guild-toolbar .button,

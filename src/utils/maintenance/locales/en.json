@@ -1,0 +1,10 @@
+{
+  "gate": {
+    "title": "### {warning} Under maintenance",
+    "body": "{target} is in maintenance mode, so it cannot be used right now.",
+    "cog_target": "The **{name}** cog",
+    "command_target": "**{command}**",
+    "reason": "**Reason:** {reason}",
+    "cta": "Please check back later."
+  }
+}

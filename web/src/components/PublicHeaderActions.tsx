@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { useStrings } from "../i18n";
 import { Icon } from "./Icon";
 
 interface PublicHeaderActionsProps {
@@ -11,11 +12,12 @@ interface PublicHeaderActionsProps {
 }
 
 const publicLinks = [
-  { label: "Home", path: "/" },
-  { label: "Commands", path: "/commands" },
-  { label: "Docs", path: "/docs" },
-  { label: "Team", path: "/team" },
-  { label: "Changelog", path: "/changelog" },
+  { key: "nav.home", path: "/" },
+  { key: "nav.commands", path: "/commands" },
+  { key: "nav.docs", path: "/docs" },
+  { key: "nav.status", path: "/status" },
+  { key: "nav.team", path: "/team" },
+  { key: "nav.changelog", path: "/changelog" },
 ];
 
 export function PublicHeaderActions({
@@ -25,6 +27,7 @@ export function PublicHeaderActions({
   menuOpen = false,
   onMenuToggle,
 }: PublicHeaderActionsProps) {
+  const { t } = useStrings("shared");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLElement>(null);
   const [placement, setPlacement] = useState<{ top: number; right: number } | null>(null);
@@ -71,28 +74,28 @@ export function PublicHeaderActions({
           onClick={onMenuToggle}
         >
           <Icon name={menuOpen ? "close" : "menu"} />
-          <span>Menu</span>
+          <span>{t("header.menu")}</span>
         </button>
         {menuOpen && createPortal(
           <nav
             id="dashboard-navigation-menu"
             ref={popoverRef}
             className="dashboard-menu-popover"
-            aria-label="Dashboard navigation"
+            aria-label={t("header.dashboardNavigation")}
             style={{
               top: placement?.top ?? 0,
               right: placement?.right ?? 0,
               visibility: placement ? "visible" : "hidden",
             }}
           >
-            <span className="dashboard-menu-label">Navigate</span>
+            <span className="dashboard-menu-label">{t("header.navigate")}</span>
             {publicLinks.map((link) => (
               <a key={link.path} href={link.path} onClick={onNavigate(link.path)}>
-                {link.label}
+                {t(link.key)}
               </a>
             ))}
             <a className="dashboard-menu-current" href="/dashboard" aria-current="page" onClick={onNavigate("/dashboard")}>
-              Dashboard
+              {t("header.dashboard")}
             </a>
           </nav>,
           document.body,
@@ -104,10 +107,10 @@ export function PublicHeaderActions({
   return (
     <>
       <a className="button button-small button-muted dashboard-link" href="/dashboard" onClick={onNavigate("/dashboard")}>
-        Dashboard <Icon name="arrow" />
+        {t("header.dashboard")} <Icon name="arrow" />
       </a>
       <a className="button button-small button-primary" href={inviteUrl || "#"} target="_blank" rel="noreferrer">
-        Add to Discord
+        {t("header.add")}
       </a>
     </>
   );

@@ -1,6 +1,7 @@
 # Economy & Leveling Cards Match the Website Theme
 
 - Date: 2026-10-14
+- Version: 2.16.1
 - Tags: economy, leveling, theme, cards, dashboard
 
 Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.

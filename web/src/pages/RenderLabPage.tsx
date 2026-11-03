@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { DiscordBadgeList } from "../components/DiscordBadgeList";
 import { DiscordEmoji, DiscordEmojiProvider, DiscordMarkdown, type DiscordMentionNames } from "../components/DiscordMarkdown";
-import { botEmojiToken, botEmojisFailed, useBotEmojis } from "../data/botEmojis";
+import { botEmojiToken, botEmojisFailed, useBotEmojis, useBotServerEmoji } from "../data/botEmojis";
 import { BADGE_GROUPS, profileBadges } from "../data/profileBadges";
 import { navigate, RENDER_LAB_PATH } from "../router";
 
@@ -175,6 +175,9 @@ export function RenderLabPage() {
   // to the exact token the bot sends. Nothing here is a copy of the config, so
   // an added or re-uploaded emoji shows up on the next page load.
   const emojis = useBotEmojis();
+  // A real server emoji with its guild, so the server popup is shown from a
+  // guild that owns the emoji instead of an application emoji standing in.
+  const serverEmoji = useBotServerEmoji();
   const emojiParade = useMemo(() => emojis.map(botEmojiToken).join(" "), [emojis]);
   // The popup samples draw whichever id the bot currently has for that emoji,
   // so a re-uploaded emoji never leaves a dead id in the lab.
@@ -290,18 +293,31 @@ export function RenderLabPage() {
           )}
           <h3 style={{ marginTop: 18 }}>Emoji popup layouts</h3>
           <p>
-            Click either emoji: the first opens the application-emoji popup, the second previews the server-emoji popup
-            with its Nitro prompt and server row.
+            Click either emoji: the first opens the application-emoji popup, the second the server-emoji popup with its
+            Nitro prompt and server row. The server sample is a real emoji from a guild the bot is in, so the row names
+            the guild that actually owns it.
           </p>
           {popupSample ? (
             <div className="render-lab-render" style={{ marginTop: 10 }}>
               <span className="discord-markdown"><DiscordEmoji name={popupSample.name} id={popupSample.id} animated={popupSample.animated} className="discord-md-emoji" /></span>
-              <span> application emoji · </span>
-              <span className="discord-markdown"><DiscordEmoji name={popupSample.name} id={popupSample.id} animated={popupSample.animated} className="discord-md-emoji" source="server" /></span>
-              <span> server emoji</span>
+              <span> application emoji</span>
+              {serverEmoji && <>
+                <span> · </span>
+                <span className="discord-markdown">
+                  <DiscordEmojiProvider guildName={serverEmoji.guild_name} guildIconUrl={serverEmoji.guild_icon_url}>
+                    <DiscordEmoji name={serverEmoji.name} id={serverEmoji.id} animated={serverEmoji.animated} className="discord-md-emoji" />
+                  </DiscordEmojiProvider>
+                </span>
+                <span> server emoji from {serverEmoji.guild_name}</span>
+              </>}
             </div>
           ) : (
             <p className="render-lab-empty">The popup samples need the emoji list above.</p>
+          )}
+          {popupSample && !serverEmoji && (
+            <p className="render-lab-empty">
+              The bot is not in a server with custom emojis right now, so there is no real server emoji to preview.
+            </p>
           )}
           <h3 style={{ marginTop: 18 }}>Emoji the CDN cannot resolve</h3>
           <p>Bold, italic, underline, strike and spoiler around emojis with an unknown id, a stale id and no id at all.</p>

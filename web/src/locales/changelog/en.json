@@ -1,0 +1,16 @@
+{
+  "title": "Changelog — Niko",
+  "detail.notFoundTitle": "Entry Not Found",
+  "detail.notFoundBody": "We couldn't find a changelog entry for \"{slug}\".",
+  "detail.viewAll": "View all changelog entries",
+  "detail.highlights": "Highlights",
+  "detail.allChanges": "All Changes",
+  "detail.commits": "Commits",
+  "intro.eyebrow": "What’s new",
+  "intro.title": "Changelog",
+  "intro.titleEm": "& updates.",
+  "intro.description": "A record of every improvement, fix, and new feature added to Niko, grouped by release for clarity.",
+  "filters.all": "All",
+  "entry.readMore": "Read full release notes",
+  "empty": "No changelog entries match this filter."
+}

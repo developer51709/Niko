@@ -5,16 +5,18 @@ import type { LavalinkNodeRow, LavalinkPoolResponse } from "../../types";
 import { Icon } from "../Icon";
 import { Switch } from "./Switch";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
+import { useStrings } from "../../i18n";
 
 /** A pool node's status, in the wording the buttons on the panel use. */
 function statusTone(status: string) {
-  if (status === "connected") return { label: "Connected", className: "is-online" };
-  if (status === "connecting") return { label: "Connecting", className: "is-connecting" };
-  if (status === "disconnected") return { label: "Disconnected", className: "is-offline" };
-  return { label: "Not in pool", className: "" };
+  if (status === "connected") return { label: "lavalink.connected", className: "is-online" };
+  if (status === "connecting") return { label: "lavalink.connecting", className: "is-connecting" };
+  if (status === "disconnected") return { label: "lavalink.disconnected", className: "is-offline" };
+  return { label: "lavalink.notInPool", className: "" };
 }
 
 function NodeCard({ node, busy, onRemove }: { node: LavalinkNodeRow; busy: boolean; onRemove?: () => void }) {
+  const { t } = useStrings("dashboard");
   const tone = statusTone(node.status);
   const title = node.label || node.identifier;
   return (
@@ -23,17 +25,17 @@ function NodeCard({ node, busy, onRemove }: { node: LavalinkNodeRow; busy: boole
         <span className={`lavalink-node-dot ${tone.className}`} aria-hidden="true" />
         <div className="lavalink-node-title">
           <strong>{title}</strong>
-          <small>{node.identifier}{node.secure ? " · TLS" : " · plain"}</small>
+          <small>{node.identifier}{node.secure ? t("lavalink.tls") : t("lavalink.plain")}</small>
         </div>
       </div>
       <div className="lavalink-node-stats">
-        <span className={`lavalink-node-status ${tone.className}`}>{tone.label}</span>
-        <span title="Players running on this node"><b>{node.players}</b> players</span>
-        <span title="Websocket heartbeat">{node.status === "connected" ? `${Math.round(node.heartbeat)} ms` : "—"}</span>
+        <span className={`lavalink-node-status ${tone.className}`}>{t(tone.label)}</span>
+        <span title={t("lavalink.playersTitle")}><b>{node.players}</b> {t("lavalink.players")}</span>
+        <span title={t("lavalink.heartbeatTitle")}>{node.status === "connected" ? `${Math.round(node.heartbeat)} ms` : "—"}</span>
       </div>
       {onRemove && (
         <button type="button" className="button button-danger button-small" disabled={busy} onClick={onRemove}>
-          Remove
+          {t("lavalink.remove")}
         </button>
       )}
     </article>
@@ -41,6 +43,7 @@ function NodeCard({ node, busy, onRemove }: { node: LavalinkNodeRow; busy: boole
 }
 
 export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
+  const { t } = useStrings("dashboard");
   const [data, setData] = useState<LavalinkPoolResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -56,7 +59,7 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
       setData(await getStaffLavalinkPool());
       setLoadError("");
     } catch (reason) {
-      if (!silent) setLoadError(reason instanceof Error ? reason.message : "The Lavalink pool is unavailable.");
+      if (!silent) setLoadError(reason instanceof Error ? reason.message : t("lavalink.poolUnavailable"));
     } finally {
       refreshing.current = false;
       if (!silent) setLoading(false);
@@ -91,7 +94,7 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
-    notifyLoading("Saving the private node…", "staff-lavalink");
+    notifyLoading(t("lavalink.savingNode"), "staff-lavalink");
     try {
       const result = await addStaffLavalinkNode(
         { host: draft.host.trim(), port: draft.port.trim(), password: draft.password, secure: draft.secure, label: draft.label.trim() },
@@ -101,27 +104,27 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
       await refresh(true);
       notifySuccess(
         result.applied
-          ? `${result.identifier} was saved and added to the live pool.`
-          : `${result.identifier} was saved. It will join the pool on the next rescan.`,
+          ? t("lavalink.savedAndAdded", { id: result.identifier })
+          : t("lavalink.savedNextRescan", { id: result.identifier }),
         "staff-lavalink",
       );
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The private node could not be saved.", "staff-lavalink");
+      notifyError(reason instanceof Error ? reason.message : t("lavalink.saveFailed"), "staff-lavalink");
     } finally {
       setBusy(false);
     }
   };
 
   const removeNode = async (node: LavalinkNodeRow) => {
-    if (busy || !window.confirm(`Remove ${node.identifier} from the private node list?\n\nIts players are disconnected and the node leaves the pool.`)) return;
+    if (busy || !window.confirm(t("lavalink.removeConfirm", { id: node.identifier }))) return;
     setBusy(true);
-    notifyLoading("Removing the private node…", "staff-lavalink");
+    notifyLoading(t("lavalink.removingNode"), "staff-lavalink");
     try {
       await removeStaffLavalinkNode(node.identifier, csrfToken);
       await refresh(true);
-      notifySuccess(`${node.identifier} was removed.`, "staff-lavalink");
+      notifySuccess(t("lavalink.removed", { id: node.identifier }), "staff-lavalink");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The private node could not be removed.", "staff-lavalink");
+      notifyError(reason instanceof Error ? reason.message : t("lavalink.removeFailed"), "staff-lavalink");
     } finally {
       setBusy(false);
     }
@@ -130,13 +133,13 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
   const applyChanges = async () => {
     if (busy) return;
     setBusy(true);
-    notifyLoading("Probing the catalogue and rescanning the pool…", "staff-lavalink");
+    notifyLoading(t("lavalink.rescanning"), "staff-lavalink");
     try {
       await applyStaffLavalinkChanges(csrfToken);
       await refresh(true);
-      notifySuccess("Pool rescan finished. Every node above shows its current state.", "staff-lavalink");
+      notifySuccess(t("lavalink.rescanDone"), "staff-lavalink");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The pool could not be rescanned.", "staff-lavalink");
+      notifyError(reason instanceof Error ? reason.message : t("lavalink.rescanFailed"), "staff-lavalink");
     } finally {
       setBusy(false);
     }
@@ -146,19 +149,17 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
     <div className="lavalink-view">
       <header className="staff-panel lavalink-headline">
         <div>
-          <span className="panel-kicker">Owner-only · Music backend</span>
-          <h2>Lavalink nodes</h2>
+          <span className="panel-kicker">{t("lavalink.kicker")}</span>
+          <h2>{t("lavalink.title")}</h2>
           <p>
-            The pool is built from two places: the hardcoded catalogue committed in <code>config/lavalink.py</code>, and the private
-            nodes you add here. Private nodes are stored in the music database — never in the repository — and always get a pool slot
-            ahead of public nodes.
+            {t("lavalink.introBefore")} <code>config/lavalink.py</code>{t("lavalink.introAfter")}
           </p>
         </div>
         <div className={`lavalink-pool-badge${(data?.connected || 0) > 0 ? " is-on" : ""}`}>
           <i />
           <span>
-            <small>Pool</small>
-            <strong>{loading && !data ? "Reading…" : `${data?.connected ?? 0} / ${data?.target ?? 0} connected`}</strong>
+            <small>{t("lavalink.pool")}</small>
+            <strong>{loading && !data ? t("lavalink.reading") : t("lavalink.connectedOf", { connected: data?.connected ?? 0, target: data?.target ?? 0 })}</strong>
           </span>
         </div>
       </header>
@@ -168,16 +169,16 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
       <section className="staff-panel lavalink-section">
         <div className="lavalink-section-heading">
           <div>
-            <h3>Private nodes</h3>
-            <p>Your own servers. Passwords are sent once, stored in the database, and never returned to the browser.</p>
+            <h3>{t("lavalink.privateTitle")}</h3>
+            <p>{t("lavalink.privateText")}</p>
           </div>
           <button type="button" className="button button-muted" onClick={() => void refresh()} disabled={loading}>
-            <Icon name="refresh" />{loading ? "Refreshing…" : "Refresh status"}
+            <Icon name="refresh" />{t(loading ? "lavalink.refreshing" : "lavalink.refreshStatus")}
           </button>
         </div>
 
         {privateNodes.length === 0 ? (
-          <div className="lavalink-empty">No private nodes yet. Add one below and it joins the pool immediately.</div>
+          <div className="lavalink-empty">{t("lavalink.noPrivate")}</div>
         ) : (
           <div className="lavalink-node-list">
             {privateNodes.map((node) => (
@@ -188,21 +189,21 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
 
         <form className="lavalink-add" onSubmit={addNode}>
           <div className="lavalink-add-heading">
-            <span className="panel-kicker">Add private node</span>
-            <small>Use the host and port your Lavalink server listens on. TLS is on unless the server is plain HTTP.</small>
+            <span className="panel-kicker">{t("lavalink.addKicker")}</span>
+            <small>{t("lavalink.addHint")}</small>
           </div>
           <div className="lavalink-add-fields">
-            <label className="form-field"><span className="form-label">Host</span><input value={draft.host} onChange={(event) => update("host", event.target.value)} placeholder="lavalink.example.com" autoComplete="off" required /></label>
-            <label className="form-field lavalink-add-port"><span className="form-label">Port</span><input value={draft.port} onChange={(event) => update("port", event.target.value)} inputMode="numeric" placeholder="2333" required /></label>
-            <label className="form-field"><span className="form-label">Password</span><input type="password" value={draft.password} onChange={(event) => update("password", event.target.value)} placeholder="Node password" autoComplete="new-password" required /></label>
-            <label className="form-field"><span className="form-label">Label (optional)</span><input value={draft.label} onChange={(event) => update("label", event.target.value)} placeholder="Home node" maxLength={60} /></label>
+            <label className="form-field"><span className="form-label">{t("lavalink.host")}</span><input value={draft.host} onChange={(event) => update("host", event.target.value)} placeholder="lavalink.example.com" autoComplete="off" required /></label>
+            <label className="form-field lavalink-add-port"><span className="form-label">{t("lavalink.port")}</span><input value={draft.port} onChange={(event) => update("port", event.target.value)} inputMode="numeric" placeholder="2333" required /></label>
+            <label className="form-field"><span className="form-label">{t("lavalink.password")}</span><input type="password" value={draft.password} onChange={(event) => update("password", event.target.value)} placeholder={t("lavalink.passwordPlaceholder")} autoComplete="new-password" required /></label>
+            <label className="form-field"><span className="form-label">{t("lavalink.label")}</span><input value={draft.label} onChange={(event) => update("label", event.target.value)} placeholder={t("lavalink.labelPlaceholder")} maxLength={60} /></label>
           </div>
           <div className="lavalink-add-footer">
             <label className="lavalink-add-secure">
-              <Switch checked={draft.secure} onCheckedChange={(value) => update("secure", value)} aria-label="Connect over HTTPS and WSS" />
-              <span>HTTPS / WSS <small>Turn off only for a plain-HTTP node</small></span>
+              <Switch checked={draft.secure} onCheckedChange={(value) => update("secure", value)} aria-label={t("lavalink.secureAria")} />
+              <span>{t("lavalink.secure")} <small>{t("lavalink.secureHint")}</small></span>
             </label>
-            <button type="submit" className="button button-primary" disabled={busy}>{busy ? "Working…" : "Save and connect"}</button>
+            <button type="submit" className="button button-primary" disabled={busy}>{t(busy ? "lavalink.working" : "lavalink.saveAndConnect")}</button>
           </div>
         </form>
       </section>
@@ -211,10 +212,10 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
         <section className="staff-panel lavalink-section">
           <div className="lavalink-section-heading">
             <div>
-              <h3>Awaiting removal</h3>
-              <p>These nodes are still in the live pool but are no longer configured. Rescan to close them.</p>
+              <h3>{t("lavalink.orphansTitle")}</h3>
+              <p>{t("lavalink.orphansText")}</p>
             </div>
-            <button type="button" className="button button-muted" onClick={() => void applyChanges()} disabled={busy}>Rescan pool</button>
+            <button type="button" className="button button-muted" onClick={() => void applyChanges()} disabled={busy}>{t("lavalink.rescan")}</button>
           </div>
           <div className="lavalink-node-list">
             {orphans.map((node) => <NodeCard key={node.identifier} node={node} busy={busy} />)}
@@ -225,15 +226,15 @@ export function LavalinkView({ csrfToken }: { csrfToken?: string }) {
       <section className="staff-panel lavalink-section">
         <div className="lavalink-section-heading">
           <div>
-            <h3>Hardcoded catalogue</h3>
-            <p>{data?.static_count ?? 0} public nodes ship with the bot in <code>config/lavalink.py</code>. They are read-only here — edit the source to change them.</p>
+            <h3>{t("lavalink.catalogueTitle")}</h3>
+            <p>{t("lavalink.catalogueText", { count: data?.static_count ?? 0 })} <code>config/lavalink.py</code>{t("lavalink.catalogueAfter")}</p>
           </div>
           <div className="lavalink-section-actions">
             <button type="button" className="button button-muted" onClick={() => void applyChanges()} disabled={busy}>
-              <Icon name="spark" />{busy ? "Working…" : "Rescan pool"}
+              <Icon name="spark" />{t(busy ? "lavalink.working" : "lavalink.rescan")}
             </button>
             <button type="button" className="button button-muted" onClick={() => setShowStatic((open) => !open)} aria-expanded={showStatic}>
-              {showStatic ? "Hide" : "Show"} catalogue
+              {t(showStatic ? "lavalink.hide" : "lavalink.show")} {t("lavalink.catalogueWord")}
             </button>
           </div>
         </div>

@@ -10,6 +10,10 @@ import discord
 
 from utils.prefix_manager import dynamic_prefix
 from utils.blacklist import check_message_blacklist
+from utils.maintenance import (
+    check_feature as check_maintenance_feature,
+    check_message as check_maintenance_message,
+)
 from utils.abuse_detection import record_request, strike_notice
 from utils.ai.config import load_config, MIN_AI_NAME_LENGTH
 from utils.ai.reply import generate_reply, split_reply
@@ -131,6 +135,10 @@ async def handle_message(bot, msg: discord.Message):
                 if abuse.get("blacklisted"):
                     await check_message_blacklist(msg)
                     return
+                # A command the owner paused answers here and stops: it never
+                # reaches its own checks, cooldowns, or usage counters.
+                if await check_maintenance_message(bot, msg, p):
+                    return
                 return await bot.process_commands(msg)
             break
 
@@ -177,6 +185,11 @@ async def handle_message(bot, msg: discord.Message):
         return
 
     if not is_ai_command and is_command_request:
+        return
+
+    # The AI answers names, pings, replies, and `!ai` without ever reaching a
+    # command, so a paused AI cog is checked here rather than in the command gate.
+    if await check_maintenance_feature(bot, msg, "cogs.ai"):
         return
 
     if await check_message_blacklist(msg):

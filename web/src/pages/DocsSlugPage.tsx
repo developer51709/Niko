@@ -6,6 +6,7 @@ import { PublicHeader } from "../components/PublicHeader";
 import { DocFilters } from "../components/DocFilters";
 import { useDocSearch } from "../hooks/useDocSearch";
 import { DOC_SECTIONS, getDocBySlug } from "../data/docs";
+import { useStrings } from "../i18n";
 import type { DocCategory } from "../types";
 import { navigate } from "../router";
 
@@ -14,6 +15,7 @@ interface DocsSlugPageProps {
 }
 
 export function DocsSlugPage({ slug }: DocsSlugPageProps) {
+  const { t } = useStrings("docs");
   const { setCategory, results, clearFilters } = useDocSearch();
 
   useEffect(() => {
@@ -32,11 +34,11 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
         <main className="shell page-main docs-page">
           <div className="docs-not-found">
             <Icon name="doc" size={48} className="not-found-icon" />
-            <h1>Page Not Found</h1>
-            <p>We couldn't find documentation for "{slug}".</p>
+            <h1>{t("detail.notFoundTitle")}</h1>
+            <p>{t("detail.notFoundBody", { slug })}</p>
             <div className="not-found-actions">
               <button onClick={() => navigate("/docs")}>
-                Browse all documentation
+                {t("detail.browseAll")}
               </button>
               <button
                 onClick={() => {
@@ -308,7 +310,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
           <aside className="doc-toc">
             <div className="toc-title">
               <Icon name="book" size={14} />
-              <span>On this page</span>
+              <span>{t("detail.onThisPage")}</span>
             </div>
             <nav className="toc-nav">
               {tocItems.map((item) => (
@@ -324,7 +326,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
         <footer className="doc-article-footer">
           <div className="doc-nav-container">
             <div className="doc-nav-col">
-              <span className="doc-nav-label">Category</span>
+              <span className="doc-nav-label">{t("detail.category")}</span>
               <button
                 className="doc-nav-link"
                 onClick={() => {

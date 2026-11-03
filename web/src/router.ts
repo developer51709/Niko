@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "staff-email" | "staff-email-reports" | "email-report" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "status" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "staff-email" | "staff-email-reports" | "email-report" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "render-lab";
 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
@@ -18,6 +18,7 @@ export function pageFromPath(pathname = window.location.pathname): Page {
   if (path === RENDER_LAB_PATH) return "render-lab";
   if (path === "/appeals/blacklist") return "appeal";
   if (path === "/commands") return "commands";
+  if (path === "/status") return "status";
   if (path === "/leaderboard") return "leaderboard";
   if (path.startsWith("/levels/")) return "guild-leaderboard";
   if (path === "/docs") return "docs";

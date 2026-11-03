@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { PublicHeader } from "../components/PublicHeader";
+import { useStrings } from "../i18n";
 
 /**
  * Legacy donation link.
@@ -9,6 +10,8 @@ import { PublicHeader } from "../components/PublicHeader";
  * the `/donate` command land on `/billing` with the signed token intact.
  */
 export function DonatePage() {
+  const { t } = useStrings("donate");
+
   useEffect(() => {
     // A real navigation, not the SPA helper: this page's effect runs before the
     // app's popstate listener exists, so a pushState here would be swallowed.
@@ -21,8 +24,8 @@ export function DonatePage() {
       <main className="page-main">
         <div className="shell">
           <div className="docs-footer-note" role="status">
-            <strong>Opening checkout</strong>
-            <p>Taking you to the secure payment page…</p>
+            <strong>{t("opening")}</strong>
+            <p>{t("body")}</p>
           </div>
         </div>
       </main>

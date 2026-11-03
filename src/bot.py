@@ -20,6 +20,7 @@ from utils.proxy_manager import WebshareProxyManager
 from utils.discord_proxy import DiscordProxyManager
 from utils import analytics, logging
 from utils.i18n import get_lang
+from utils.maintenance import check_interaction as check_maintenance_interaction
 from events.on_ready import handle_ready
 from events.on_message import handle_message
 import database
@@ -65,8 +66,16 @@ if WEBSHARE_API_KEY and bot.proxy_manager.attach(bot):
 
 
 # ── Slash-command blacklist gate ─────────────────────────────────────────────
-async def _slash_blacklist_check(interaction: discord.Interaction) -> bool:
+async def _slash_gate(interaction: discord.Interaction) -> bool:
+    """Blacklist, owner maintenance, then abuse: cheapest answers first.
+
+    A command the owner paused is answered with the maintenance notice and never
+    counted as a command attempt, so a paused cog does not push ordinary members
+    toward the abuse limit.
+    """
     if not await check_interaction_blacklist(interaction):
+        return False
+    if not await check_maintenance_interaction(interaction):
         return False
     abuse = await record_request(interaction.user.id, reason="spamming commands")
     if abuse.get("abuse"):
@@ -81,7 +90,7 @@ async def _slash_blacklist_check(interaction: discord.Interaction) -> bool:
 # CommandTree.interaction_check is an override hook, not a decorator. Assign
 # the bound-instance callback explicitly so every application command passes
 # through the blacklist gate.
-bot.tree.interaction_check = _slash_blacklist_check
+bot.tree.interaction_check = _slash_gate
 
 
 # ── Events ───────────────────────────────────────────────────────────────────

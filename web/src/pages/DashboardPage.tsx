@@ -12,25 +12,27 @@ import { EconomyView } from "../components/dashboard/EconomyView";
 import { AuthBackLink, AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { useLiveResource } from "../hooks/useLiveResource";
+import { useStrings } from "../i18n";
 import type { PublicConfig } from "../types";
 import { dashboardPath, dashboardRoute, dashboardServersPath, dashboardUserPath, navigate, type DashboardView, type DashSection, type UserTab } from "../router";
 import type { AchievementsResponse, AuthStatus, BotStats, BoosterSettings, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, ReferralSummary, User, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
 
 function AuthCard({ auth }: { auth: AuthStatus }) {
+  const { t } = useStrings("dashboard");
   const config = useBotConfig();
   return <AuthScreen
-    eyebrow="Private workspace"
-    title={<>Settle in, <em>admin.</em></>}
-    description="Sign in with Discord to see your Niko profile and manage the servers you look after."
-    back={{ label: "Return to public site", href: "/", onClick: () => navigate("/") }}
+    eyebrow={t("auth.eyebrow")}
+    title={<>{t("auth.titleBefore")} <em>{t("auth.titleEmphasis")}</em></>}
+    description={t("auth.description")}
+    back={{ label: t("auth.back"), href: "/", onClick: () => navigate("/") }}
   >
     <DiscordSignIn
       next="/dashboard"
       available={auth.oauth_available}
-      unavailableNotice={<>Discord login is not configured yet. Add <code>DISCORD_CLIENT_SECRET</code> to the environment and restart the bot.</>}
+      unavailableNotice={<>{t("auth.notConfiguredBefore")} <code>DISCORD_CLIENT_SECRET</code> {t("auth.notConfiguredAfter")}</>}
     />
-    {!config && <p className="form-hint">The public bot configuration is still loading.</p>}
+    {!config && <p className="form-hint">{t("auth.configLoading")}</p>}
   </AuthScreen>;
 }
 
@@ -40,6 +42,7 @@ const OVERVIEW_POLL_MS = 10_000;
 const PERSONAL_POLL_MS = 10_000;
 
 function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { section: DashSection; guild: Guild; stats: BotStats | null; csrfToken?: string; refreshToken: number }) {
+  const { t } = useStrings("dashboard");
   const [overview, setOverview] = useState<GuildOverview | null>(null);
   const [levels, setLevels] = useState<LevelRow[]>([]);
   const [config, setConfig] = useState<GuildConfig | null>(null);
@@ -74,7 +77,7 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
           if (!active) return;
           // A failed refresh keeps the last snapshot on screen; only the first
           // load replaces the page with an error.
-          if (!background || !overviewRef.current) setError(reason instanceof Error ? reason.message : "This server could not be loaded.");
+          if (!background || !overviewRef.current) setError(reason instanceof Error ? reason.message : t("load.server"));
         } finally {
           inFlight = false;
           if (active) setLoading(false);
@@ -121,7 +124,8 @@ function DashboardSection({ section, guild, stats, csrfToken, refreshToken }: { 
 }
 
 function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <div className="inline-error" role="alert"><strong>Couldn’t load this page.</strong><span>{message}</span><button className="button button-muted" type="button" onClick={onRetry}>Try again</button></div>;
+  const { t } = useStrings("dashboard");
+  return <div className="inline-error" role="alert"><strong>{t("sectionError.title")}</strong><span>{message}</span><button className="button button-muted" type="button" onClick={onRetry}>{t("sectionError.retry")}</button></div>;
 }
 
 /**
@@ -164,6 +168,7 @@ function UserSection({ tab, user, overview, guilds, guildsUnavailable, csrfToken
 }
 
 function BlacklistAppealScreen({ scope, reason, guildId, guildName, supportUrl, embedded = false }: { scope: "user" | "guild"; reason?: string | null; guildId?: string; guildName?: string; supportUrl?: string | null; embedded?: boolean }) {
+  const { t } = useStrings("dashboard");
   const safeSupportUrl = supportUrl?.trim();
   const [appealable, setAppealable] = useState<boolean | null>(scope !== "guild");
   useEffect(() => {
@@ -182,22 +187,23 @@ function BlacklistAppealScreen({ scope, reason, guildId, guildName, supportUrl, 
     role="alert"
     mark={<Icon name="lock" />}
     markClassName="blacklist-appeal-mark"
-    eyebrow="Dashboard access restricted"
-    title={scope === "guild" ? "This server is blacklisted." : "This account is blacklisted."}
-    description={scope === "guild" ? `${guildName || "This server"} can’t use Niko’s dashboard or bot features right now.` : "This Discord account can’t access Niko’s dashboard or bot features right now."}
+    eyebrow={t("auth.restrictedEyebrow")}
+    title={scope === "guild" ? t("auth.guildBlacklisted") : t("auth.accountBlacklisted")}
+    description={scope === "guild" ? t("auth.guildBlacklistedText", { server: guildName || t("auth.thisServer") }) : t("auth.accountBlacklistedText")}
   >
-    <div className="blacklist-appeal-reason"><span className="panel-kicker">Reason for the restriction</span><p>{reason?.trim() || "No reason was recorded. Contact the support team for clarification."}</p></div>
-    <p className="blacklist-appeal-note">If you believe this restriction was made in error, submit an appeal directly to the Niko team. You don’t need to join the support server.</p>
-    {scope === "user" ? <a className="button button-primary full-width" href="/appeals/blacklist">Appeal this blacklist <Icon name="arrow" /></a> : appealable ? <a className="button button-primary full-width" href={`/appeals/blacklist?guild_id=${encodeURIComponent(guildId || "")}`}>Appeal this server blacklist <Icon name="arrow" /></a> : <button type="button" className="button button-muted full-width" disabled>{appealable === null ? "Checking appeal eligibility…" : "This guild blacklist cannot be appealed"}</button>}
-    {safeSupportUrl && <AuthBackLink label={<>Or visit the support server <Icon name="external" /></>} href={safeSupportUrl} external />}
-    {!embedded && <AuthBackLink label="Return to the public site" href="/" onClick={() => navigate("/")} />}
+    <div className="blacklist-appeal-reason"><span className="panel-kicker">{t("auth.reasonKicker")}</span><p>{reason?.trim() || t("auth.noReason")}</p></div>
+    <p className="blacklist-appeal-note">{t("auth.appealNote")}</p>
+    {scope === "user" ? <a className="button button-primary full-width" href="/appeals/blacklist">{t("auth.appealUser")} <Icon name="arrow" /></a> : appealable ? <a className="button button-primary full-width" href={`/appeals/blacklist?guild_id=${encodeURIComponent(guildId || "")}`}>{t("auth.appealGuild")} <Icon name="arrow" /></a> : <button type="button" className="button button-muted full-width" disabled>{t(appealable === null ? "auth.checkingEligibility" : "auth.notAppealable")}</button>}
+    {safeSupportUrl && <AuthBackLink label={<>{t("auth.orSupport")} <Icon name="external" /></>} href={safeSupportUrl} external />}
+    {!embedded && <AuthBackLink label={t("auth.backPublic")} href="/" onClick={() => navigate("/")} />}
   </AuthScreen>;
 }
 
 function DashboardLoading() {
+  const { t } = useStrings("dashboard");
   return <div className="section-loading section-skeleton dashboard-loading" role="status">
     <div className="skeleton-title" /><div className="skeleton-copy" /><div className="skeleton-grid"><i /><i /><i /></div>
-    <span>Preparing your dashboard...</span>
+    <span>{t("auth.preparing")}</span>
   </div>;
 }
 
@@ -206,12 +212,12 @@ function DashboardLoading() {
  * dashboard down: a failed read keeps the workspace usable and reports itself
  * on the servers view, which is the only place the list is shown in full.
  */
-function loadGuilds(): Promise<{ guilds: Guild[]; error: string; expired: boolean }> {
+function loadGuilds(t: (key: string) => string): Promise<{ guilds: Guild[]; error: string; expired: boolean }> {
   return getGuilds().then(
     (guilds) => ({ guilds, error: "", expired: false }),
     (reason: unknown) => ({
       guilds: [] as Guild[],
-      error: reason instanceof Error ? reason.message : "Your server list could not be loaded.",
+      error: reason instanceof Error ? reason.message : t("load.guilds"),
       // A 401 means Discord rejected the session token and it could not be
       // refreshed: retrying changes nothing until the reader signs in again.
       expired: reason instanceof ApiError && reason.status === 401,
@@ -220,6 +226,7 @@ function loadGuilds(): Promise<{ guilds: Guild[]; error: string; expired: boolea
 }
 
 export function DashboardPage() {
+  const { t } = useStrings("dashboard");
   const config = useBotConfig();
   const [route, setRoute] = useState(dashboardRoute);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
@@ -239,7 +246,7 @@ export function DashboardPage() {
   const personalOverview = useLiveResource<UserOverview>("personal-overview", getUserOverview, {
     enabled: Boolean(auth?.authenticated) && route.view === "overview",
     intervalMs: PERSONAL_POLL_MS,
-    fallbackError: "Your profile could not be loaded.",
+    fallbackError: t("load.profile"),
   });
 
   useEffect(() => {
@@ -258,7 +265,7 @@ export function DashboardPage() {
         return getDashboardAccess().then((access) => {
           setBlacklist(access);
           if (access.blacklisted) return null;
-          return Promise.all([loadGuilds(), getStaffMe().catch(() => null)]).then(([available, staffStatus]) => {
+          return Promise.all([loadGuilds(t), getStaffMe().catch(() => null)]).then(([available, staffStatus]) => {
             setGuilds(available.guilds);
             setGuildsError(available.error);
             setGuildsExpired(available.expired);
@@ -266,7 +273,7 @@ export function DashboardPage() {
           });
         });
       })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Dashboard unavailable"))
+      .catch((reason) => setError(reason instanceof Error ? reason.message : t("load.dashboardFailed")))
       .finally(() => setLoading(false));
   }, []);
 
@@ -284,15 +291,15 @@ export function DashboardPage() {
     }
   }, [guilds, route.guildId, route.view]);
 
-  if (loading || !auth) return <div className="dashboard-state"><div className="loading-ring" /><p>Connecting to Niko…</p></div>;
+  if (loading || !auth) return <div className="dashboard-state"><div className="loading-ring" /><p>{t("auth.connecting")}</p></div>;
   if (error) return <AuthScreen
     mark="!"
-    eyebrow="Connection issue"
-    title={<>Couldn’t load<br /><em>your workspace.</em></>}
+    eyebrow={t("auth.connectionEyebrow")}
+    title={<>{t("auth.connectionTitle")}<br /><em>{t("auth.connectionEmphasis")}</em></>}
     description={error}
-    back={{ label: "Return to public site", href: "/", onClick: () => navigate("/") }}
+    back={{ label: t("auth.back"), href: "/", onClick: () => navigate("/") }}
   >
-    <button className="button button-primary full-width" onClick={() => window.location.reload()}>Try again <Icon name="arrow" /></button>
+    <button className="button button-primary full-width" onClick={() => window.location.reload()}>{t("auth.tryAgain")} <Icon name="arrow" /></button>
   </AuthScreen>;
   if (!auth.authenticated) return <AuthCard auth={auth} />;
   if (blacklist?.blacklisted) {
@@ -327,7 +334,7 @@ export function DashboardPage() {
         const access = await getDashboardAccess();
         setBlacklist(access);
         if (!access.blacklisted) {
-          const [available, staffStatus] = await Promise.all([loadGuilds(), getStaffMe().catch(() => null)]);
+          const [available, staffStatus] = await Promise.all([loadGuilds(t), getStaffMe().catch(() => null)]);
           setGuilds(available.guilds);
           setGuildsError(available.error);
           setGuildsExpired(available.expired);
@@ -338,7 +345,7 @@ export function DashboardPage() {
       setRefreshToken((value) => value + 1);
       setError("");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Dashboard refresh failed");
+      setError(reason instanceof Error ? reason.message : t("load.refreshFailed"));
     } finally {
       setRefreshing(false);
     }

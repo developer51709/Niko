@@ -199,7 +199,10 @@ def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
 
     # The bot's live emoji catalog decides the popup layout, so an app emoji
     # never has to be guessed from its name and never comes from a frozen list.
-    assert "const isApplication = source ? source === \"app\" : isApplicationEmoji(id);" in markdown
+    # There is no caller-supplied override: forcing an app emoji into the server
+    # layout would draw a server row for a server that does not own it.
+    assert "const isApplication = isApplicationEmoji(id);" in markdown
+    assert 'source?: "app" | "server"' not in markdown
     assert "useBotEmojis();" in markdown
     assert "BOT_EMOJIS" not in markdown
     assert 'data-emoji-app={isApplication ? "1" : "0"}' in markdown
@@ -305,7 +308,10 @@ def test_every_markdown_marker_is_a_capture_group():
     pattern = re.search(r"const tokenPattern = /(.+)/g;", source)
     assert pattern, "DiscordMarkdown no longer defines tokenPattern"
 
-    assert _capture_groups(pattern.group(1)) == 13
+    # Thirteen markers plus the bare-URL group at 14, which keeps ``_`` inside a
+    # query string out of the italic marker's reach.
+    assert _capture_groups(pattern.group(1)) == 14
+    assert 'else if (match[14]) tokens.push({ kind: "link", text: match[14], url: match[14] });' in source
     branches = re.findall(
         r'else if \(match\[(\d+)\]\) tokens\.push\(\{ kind: "marker", format: "([A-Za-z]+)" \}\)',
         source,
@@ -354,6 +360,52 @@ def test_the_emoji_icon_script_owns_only_its_own_tables():
         # Discord; one with no config entry can never be sent at all.
         assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), name
         assert get_emoji(name), name
+
+
+def test_the_numbers_are_phosphor_digits_listed_zero_to_nine():
+    """Lucide has no plain digit, so 0-9 come from Phosphor Icons.
+
+    The digits only work as a set: read in any other order a help list or a
+    paginator counts wrong, and art from anything but one icon font would put a
+    thick filled digit next to the thin outline icons around it.
+    """
+    source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
+    config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
+    digits = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+
+    assert 'path.join(ROOT, "node_modules", "@phosphor-icons", "core", "assets")' in source
+    # The weight is part of Phosphor's file name, and bold is the one that
+    # carries a stroke heavy enough to read at Discord's emoji size.
+    assert '"bold", `${icon}-bold.svg`' in source
+    for digit in digits:
+        assert f'["number_{digit}", "number-{digit}"]' in source, digit
+        assert _png_size(ROOT / "src" / "assets" / "emojis" / f"number_{digit}.png") == (128, 128)
+
+    listed = re.findall(r'emoji_name == "number_([a-z]+)"', config)
+    assert listed == list(digits)
+
+
+def test_the_emoji_config_is_grouped_by_category():
+    """One block per kind of emoji, so a new one has an obvious home.
+
+    The lookup used to be one alphabetical run with a few stray blocks appended;
+    numbers sat out of order in the middle of the letters and the log emojis were
+    tacked on at the end.
+    """
+    config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
+
+    for heading in ("Status and feedback", "Moderation and utility", "Navigation and structure",
+                    "People and members", "Content and social", "Media controls",
+                    "Commands and rewards", "Machine stats", "Numbers",
+                    "Discord profile and badges", "Niko role badges", "Server boosting",
+                    "Connect Four", "Server logs", "Platform logos",
+                    "Payments and cryptocurrencies"):
+        assert f"# {heading}" in config, heading
+
+    # A category never restarts halfway down the file.
+    positions = [config.index(f"# {heading}") for heading in (
+        "Status and feedback", "Numbers", "Server logs", "Platform logos")]
+    assert positions == sorted(positions)
 
 
 def test_the_platform_logos_are_drawn_from_simple_icons():
@@ -515,6 +567,11 @@ def test_the_render_lab_tests_emoji_rendering_with_the_bots_own_emojis():
 
     # The lab draws the catalog the API reports, live, and never a copy of it.
     assert "const emojis = useBotEmojis();" in source
+    # The server-emoji popup sample is a real emoji from a guild the bot is in,
+    # never an application emoji forced into the server layout.
+    assert "const serverEmoji = useBotServerEmoji();" in source
+    assert 'guildName={serverEmoji.guild_name}' in source
+    assert 'source="server"' not in source
     assert "emojis.map(botEmojiToken).join" in source
     assert "{emojis.map((emoji) =>" in source
     assert "BOT_EMOJIS" not in source

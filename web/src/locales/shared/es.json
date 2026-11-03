@@ -1,0 +1,23 @@
+{
+  "title": "Niko — compañero de Discord",
+  "nav.home": "Inicio",
+  "nav.commands": "Comandos",
+  "nav.docs": "Docs",
+  "nav.status": "Estado",
+  "nav.team": "Equipo",
+  "nav.changelog": "Novedades",
+  "header.menu": "Menú",
+  "header.navigate": "Navegación",
+  "header.dashboard": "Panel",
+  "header.add": "Añadir a Discord",
+  "header.mainNavigation": "Navegación principal",
+  "header.dashboardNavigation": "Navegación del panel",
+  "header.openDashboardNav": "Abrir la navegación del panel",
+  "header.closeDashboardNav": "Cerrar la navegación del panel",
+  "footer.tagline": "Hecho para comunidades que se preocupan.",
+  "footer.privacy": "Privacidad",
+  "footer.terms": "Términos",
+  "footer.dataRemoval": "Eliminación de datos",
+  "footer.community": "Normas de la comunidad",
+  "footer.support": "Soporte"
+}

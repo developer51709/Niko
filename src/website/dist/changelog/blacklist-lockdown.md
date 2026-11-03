@@ -1,6 +1,7 @@
 # Blacklisting a Server Now Pauses Its Features Instead of Erasing Them
 
 - Date: 2026-10-16
+- Version: 2.19.0
 - Tags: blacklist, moderation, dashboard, starboard, polls, giveaways, added
 
 Blacklisting a server used to be one opaque database write. It is now a reported sequence of steps — save the entry, pause social notifications, disable the starboard, lock open polls and giveaways, notify the owner — each announced as it runs in the staff dashboard, followed by a summary of what was paused, skipped, or could not be switched off. Everything saved comes back untouched if the appeal is approved, and every disabled feature stays disabled across a bot restart.

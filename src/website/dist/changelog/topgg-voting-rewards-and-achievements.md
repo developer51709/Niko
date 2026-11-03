@@ -1,6 +1,7 @@
 # top.gg Voting Rewards & Café Achievements
 
 - Date: 2026-10-14
+- Version: 2.16.0
 - Tags: economy, voting, achievements, dashboard, streaks
 
 Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.

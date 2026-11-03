@@ -1,6 +1,7 @@
 # Economy & Achievements Move to Your Profile
 
 - Date: 2026-10-14
+- Version: 2.16.2
 - Tags: dashboard, economy, achievements, fixed
 
 The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.

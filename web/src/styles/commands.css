@@ -420,7 +420,9 @@
 @media (max-width: 1020px) {
   .site-content .commands-page .public-page-intro { align-items: stretch; flex-direction: column; gap: 18px; }
   .site-content .commands-page .public-page-intro-actions { flex-wrap: wrap; }
-  .site-content .commands-page .public-page-intro-actions .button { flex: 1 1 180px; }
+  /* A width, not a flex-basis: below 640px this container turns into a column,
+     where a 180px basis would be read as a 180px-tall button. */
+  .site-content .commands-page .public-page-intro-actions .button { flex: 1 1 auto; min-width: 180px; }
 }
 
 @media (max-width: 720px) {

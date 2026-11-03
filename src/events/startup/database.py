@@ -1150,6 +1150,19 @@ async def _create_tables(bot):
         )
     """)
 
+    # ── Owner maintenance targets (cogs and single commands) ───────────
+    # ``target`` is "cog:<extension>" or "command:<qualified name>". The rows
+    # live here rather than in a JSON file because production has no persistent
+    # disk: anything outside the database is gone after a restart.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS maintenance_targets (
+            target      TEXT PRIMARY KEY,
+            reason      TEXT,
+            since       REAL,
+            added_by    TEXT
+        )
+    """)
+
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS blacklist_users (
             id         INTEGER PRIMARY KEY,

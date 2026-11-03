@@ -1,6 +1,7 @@
 # The Ticket Panel Now Wears Its Accent Color
 
 - Date: 2026-10-16
+- Version: 2.19.2
 - Tags: tickets, dashboard, fixed
 
 Saved accent color for the ticket panel is applied to the panel itself again. It used to be printed as a `#RRGGBB` code next to the panel title, so a color picked in the dashboard looked like a stray hex code instead of a colored panel.

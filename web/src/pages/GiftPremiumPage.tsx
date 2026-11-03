@@ -4,6 +4,7 @@ import { CryptoIcon } from "../components/CryptoIcon";
 import { Icon } from "../components/Icon";
 import { NetworkIcon } from "../components/NetworkIcon";
 import { PublicHeader } from "../components/PublicHeader";
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
 
 /**
@@ -87,11 +88,12 @@ function formatDate(value?: string | null) {
   return parsed.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
-function monthLabel(months: number) {
-  return `${months} month${months === 1 ? "" : "s"}`;
+function monthLabel(months: number, t: (key: string, values?: Record<string, string | number>) => string) {
+  return t(months === 1 ? "months.one" : "months.many", { count: months });
 }
 
 export function GiftPremiumPage() {
+  const { t } = useStrings("gift");
   const params = new URLSearchParams(window.location.search);
   const guildParam = (params.get("guild") || "").trim();
 
@@ -143,11 +145,11 @@ export function GiftPremiumPage() {
     try {
       setPlan(await api<Plan>("/api/premium/plans"));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Billing is unavailable right now.");
+      setError(reason instanceof Error ? reason.message : t("error.unavailable"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadTargets = useCallback(async () => {
     setTargetsError("");
@@ -163,9 +165,9 @@ export function GiftPremiumPage() {
       if (!guildId && result.guilds.length === 1) setGuildId(result.guilds[0].id);
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) setTargets([]);
-      else setTargetsError(reason instanceof Error ? reason.message : "Your servers could not be loaded.");
+      else setTargetsError(reason instanceof Error ? reason.message : t("error.servers"));
     }
-  }, [guildId]);
+  }, [guildId, t]);
 
   useEffect(() => {
     void loadPlan();
@@ -219,9 +221,9 @@ export function GiftPremiumPage() {
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) {
         setTargets([]);
-        setError("Sign in with Discord to continue.");
+        setError(t("error.signIn"));
       } else {
-        setError(reason instanceof Error ? reason.message : "Checkout could not be started.");
+        setError(reason instanceof Error ? reason.message : t("error.checkout"));
       }
     } finally {
       setBusy(false);
@@ -234,7 +236,7 @@ export function GiftPremiumPage() {
       setCopied(label);
       window.setTimeout(() => setCopied(""), 1800);
     } catch {
-      setError("Copying failed — select the address manually.");
+      setError(t("error.copy"));
     }
   };
 
@@ -249,36 +251,33 @@ export function GiftPremiumPage() {
           <header className="billing-head">
             <span className="billing-eyebrow">
               <span className="billing-dot" aria-hidden="true" />
-              One-off gift
+              {t("head.eyebrow")}
             </span>
-            <h1 id="gift-title">Gift Niko Premium</h1>
-            <p>
-              Send a community premium moderation. You do not need to manage the server —
-              only to be a member of it — and the owner is told who sent it.
-            </p>
+            <h1 id="gift-title">{t("head.title")}</h1>
+            <p>{t("head.body")}</p>
           </header>
 
           {plan && (
             <div className="billing-price">
               <strong>{`$${(totalCents / 100).toFixed(2)}`}</strong>
-              <span>{monthLabel(months)} for one server</span>
+              <span>{t("price.forOneServer", { term: monthLabel(months, t) })}</span>
             </div>
           )}
 
-          {loading && <div className="billing-loading"><span className="loading-ring" /><p>Preparing checkout…</p></div>}
+          {loading && <div className="billing-loading"><span className="loading-ring" /><p>{t("loading")}</p></div>}
 
           {!loading && step === "setup" && (
             <div className="billing-body">
               <div className="billing-field">
-                <span className="billing-label">Server</span>
+                <span className="billing-label">{t("server.label")}</span>
                 {targets === null ? (
                   <div className="billing-skeleton" aria-hidden="true" />
                 ) : targets.length === 0 ? (
                   <p className="billing-hint">
-                    <a href={loginHref}>Sign in with Discord</a> to pick a server you are in.
+                    <a href={loginHref}>{t("server.signIn")}</a> {t("server.signInAfter")}
                   </p>
                 ) : (
-                  <div className="billing-targets" role="radiogroup" aria-label="Server">
+                  <div className="billing-targets" role="radiogroup" aria-label={t("server.label")}>
                     {targets.map((target) => (
                       <button
                         key={target.id}
@@ -295,27 +294,27 @@ export function GiftPremiumPage() {
                           <strong>{target.name}</strong>
                           <small>
                             {target.premium?.active
-                              ? `Premium until ${formatDate(target.premium.expires_at) || "later"}`
-                              : `${target.member_count.toLocaleString()} members`}
+                              ? t("server.premiumUntil", { date: formatDate(target.premium.expires_at) || t("server.later") })
+                              : t("server.members", { count: target.member_count.toLocaleString() })}
                           </small>
                         </span>
-                        {target.premium?.active && <span className="billing-chip">Premium</span>}
+                        {target.premium?.active && <span className="billing-chip">{t("server.chip")}</span>}
                       </button>
                     ))}
                   </div>
                 )}
                 {targetsError && <p className="billing-error" role="alert">{targetsError}</p>}
                 {guildParam && !selectedTarget && targets && targets.length > 0 && (
-                  <p className="billing-hint">You are not a member of that server. Pick another below.</p>
+                  <p className="billing-hint">{t("server.notMember")}</p>
                 )}
                 <p className="billing-hint">
-                  Buying for a server you manage? <a href={`/billing${guildId ? `?guild=${guildId}` : ""}`}>Subscribe instead</a>.
+                  {t("server.subscribeHint")} <a href={`/billing${guildId ? `?guild=${guildId}` : ""}`}>{t("server.subscribeLink")}</a>.
                 </p>
               </div>
 
               <div className="billing-field">
-                <span className="billing-label">Length</span>
-                <div className="billing-presets" role="radiogroup" aria-label="Gift length">
+                <span className="billing-label">{t("length.label")}</span>
+                <div className="billing-presets" role="radiogroup" aria-label={t("length.aria")}>
                   {terms.map((option) => (
                     <button
                       key={option}
@@ -325,14 +324,12 @@ export function GiftPremiumPage() {
                       className={`billing-preset${months === option ? " is-selected" : ""}`}
                       onClick={() => setMonths(option)}
                     >
-                      {option}mo
+                      {t("length.months", { count: option })}
                     </button>
                   ))}
                 </div>
                 {selectedTarget?.premium?.active && (
-                  <p className="billing-hint">
-                    This adds {monthLabel(months)} on top of the current term, so no paid days are lost.
-                  </p>
+                  <p className="billing-hint">{t("length.adds", { term: monthLabel(months, t) })}</p>
                 )}
               </div>
 
@@ -340,15 +337,15 @@ export function GiftPremiumPage() {
                 <ul className="billing-perks">
                   <li>
                     <Icon name="check" />
-                    <span><strong>Same perks as a subscription</strong><small>AI image moderation for the whole server, for the gifted term.</small></span>
+                    <span><strong>{t("perks.sameTitle")}</strong><small>{t("perks.sameBody")}</small></span>
                   </li>
                   <li>
                     <Icon name="check" />
-                    <span><strong>The owner is told</strong><small>They get a DM naming you and the date the new term ends.</small></span>
+                    <span><strong>{t("perks.ownerTitle")}</strong><small>{t("perks.ownerBody")}</small></span>
                   </li>
                   <li>
                     <Icon name="check" />
-                    <span><strong>No renewal, no surprise charge</strong><small>When the gift ends, premium simply pauses.</small></span>
+                    <span><strong>{t("perks.noRenewalTitle")}</strong><small>{t("perks.noRenewalBody")}</small></span>
                   </li>
                 </ul>
               )}
@@ -359,11 +356,11 @@ export function GiftPremiumPage() {
                 onClick={() => setStep("asset")}
                 disabled={!canPay}
               >
-                Continue to payment
+                {t("action.continue")}
                 <Icon name="arrow" />
               </button>
               {!plan?.methods.crypto.enabled && (
-                <p className="billing-error" role="alert">Payments are not configured on this deployment yet.</p>
+                <p className="billing-error" role="alert">{t("methods.unconfigured")}</p>
               )}
               {error && <p className="billing-error" role="alert">{error}</p>}
             </div>
@@ -373,22 +370,22 @@ export function GiftPremiumPage() {
             <div className="billing-body">
               <div className="billing-step-head">
                 <button type="button" className="billing-back" onClick={() => { setStep("setup"); setError(""); }}>
-                  ← Back
+                  ← {t("step.back")}
                 </button>
-                <span className="billing-step-count">Step 2 of 2</span>
+                <span className="billing-step-count">{t("step.count")}</span>
               </div>
               <div className="billing-summary">
                 <div>
-                  <span className="billing-label">Paying</span>
+                  <span className="billing-label">{t("step.paying")}</span>
                   <strong>{`$${(totalCents / 100).toFixed(2)} USD`}</strong>
                 </div>
                 <div>
-                  <span className="billing-label">Gift for</span>
-                  <strong>{selectedTarget?.name || `Server ${guildId}`}</strong>
+                  <span className="billing-label">{t("step.giftFor")}</span>
+                  <strong>{selectedTarget?.name || t("step.serverFallback", { id: guildId })}</strong>
                 </div>
               </div>
-              <span className="billing-label">Choose a currency</span>
-              <div className="billing-assets" role="radiogroup" aria-label="Cryptocurrency">
+              <span className="billing-label">{t("asset.currency")}</span>
+              <div className="billing-assets" role="radiogroup" aria-label={t("asset.currencyAria")}>
                 {(plan?.currencies || Object.keys(CURRENCY_LABELS)).map((code) => {
                   const meta = currencyLabel(code);
                   return (
@@ -414,8 +411,8 @@ export function GiftPremiumPage() {
               </div>
               {networkOptions.length > 0 && (
                 <div className="billing-networks-block">
-                  <span className="billing-label">Choose a network</span>
-                  <div className="billing-networks" role="radiogroup" aria-label="Blockchain network">
+                  <span className="billing-label">{t("asset.network")}</span>
+                  <div className="billing-networks" role="radiogroup" aria-label={t("asset.networkAria")}>
                     {networkOptions.map((option) => (
                       <button
                         key={option.code}
@@ -435,36 +432,32 @@ export function GiftPremiumPage() {
               <p className="billing-network-warning">
                 <Icon name="alert" />
                 <span>
-                  Send <strong>{currency}</strong> only on{" "}
-                  <strong>{activeNetworkLabel || "the network quoted after this step"}</strong>. Funds sent on any
-                  other network are never received and cannot be refunded.
+                  {t("warn.send")} <strong>{currency}</strong> {t("warn.onlyOn")}{" "}
+                  <strong>{activeNetworkLabel || t("warn.quotedAfter")}</strong>{t("warn.otherNetwork")}
                 </span>
               </p>
               {error && <p className="billing-error" role="alert">{error}</p>}
               <button type="button" className="billing-primary" onClick={() => void startCheckout()} disabled={busy}>
-                {busy ? "Quoting…" : `Pay with ${currency}`}
+                {busy ? t("action.quoting") : t("action.payWith", { currency })}
                 <Icon name="arrow" />
               </button>
-              <p className="billing-fineprint">
-                The exact amount and address are quoted in {currency} for 60 minutes. Send the quoted amount only —
-                underpayments are not credited.
-              </p>
+              <p className="billing-fineprint">{t("fineprint.quote", { currency })}</p>
             </div>
           )}
 
           {!loading && step === "pay" && checkout && (
             <div className="billing-body">
               <div className="billing-step-head">
-                <span className="billing-live"><span className="billing-dot" />Waiting for the network</span>
+                <span className="billing-live"><span className="billing-dot" />{t("pay.waiting")}</span>
                 {secondsLeft !== null && (
                   <span className={`billing-countdown${secondsLeft < 300 ? " is-late" : ""}`}>
-                    {formatCountdown(secondsLeft)} left
+                    {t("pay.countdown", { time: formatCountdown(secondsLeft) })}
                   </span>
                 )}
               </div>
               <div className="billing-quote">
                 <div className="billing-quote-amount">
-                  <span className="billing-label">Send exactly</span>
+                  <span className="billing-label">{t("pay.sendExactly")}</span>
                   <strong>
                     <CryptoIcon code={checkout.pay_currency || currency} />
                     {checkout.pay_amount ?? "—"} {checkout.pay_currency || currency}
@@ -475,49 +468,45 @@ export function GiftPremiumPage() {
                   </small>
                 </div>
                 {checkout.qr_code && (
-                  <img className="billing-qr" src={checkout.qr_code} alt={`${checkout.pay_currency || currency} payment QR code`} />
+                  <img className="billing-qr" src={checkout.qr_code} alt={t("pay.qrAlt", { currency: checkout.pay_currency || currency })} />
                 )}
               </div>
               <div className="billing-address">
-                <span className="billing-label">Address</span>
-                <code>{checkout.address || "Address unavailable — reopen checkout."}</code>
+                <span className="billing-label">{t("pay.address")}</span>
+                <code>{checkout.address || t("pay.addressMissing")}</code>
                 {checkout.address && (
                   <button type="button" className="billing-copy" onClick={() => void copy(checkout.address!, "address")}>
-                    {copied === "address" ? "Copied" : "Copy"}
+                    {copied === "address" ? t("pay.copied") : t("pay.copy")}
                   </button>
                 )}
               </div>
               {checkout.memo && (
-                <p className="billing-hint"><strong>Memo required:</strong> {checkout.memo}</p>
+                <p className="billing-hint"><strong>{t("pay.memo")}</strong> {checkout.memo}</p>
               )}
               <p className="billing-network-warning">
                 <Icon name="alert" />
                 <span>
-                  Send <strong>{checkout.pay_currency || currency}</strong> only on{" "}
-                  <strong>{checkout.network || activeNetworkLabel}</strong>. A transfer on any other network is
-                  not received and cannot be refunded.
+                  {t("warn.send")} <strong>{checkout.pay_currency || currency}</strong> {t("warn.onlyOn")}{" "}
+                  <strong>{checkout.network || activeNetworkLabel}</strong>{t("warn.transferOther")}
                 </span>
               </p>
               {error && <p className="billing-error" role="alert">{error}</p>}
               <button type="button" className="billing-primary" onClick={() => void refreshStatus(checkout)}>
-                I've sent it — check now
+                {t("pay.checkNow")}
                 <Icon name="refresh" />
               </button>
-              <p className="billing-fineprint">
-                Stay on this page: status refreshes automatically. The gift starts the moment OxaPay confirms
-                the transaction, and the owner is notified straight away.
-              </p>
+              <p className="billing-fineprint">{t("fineprint.status")}</p>
             </div>
           )}
 
           {!loading && step === "done" && (
             <div className="billing-body billing-done">
               <span className="billing-done-mark" aria-hidden="true"><Icon name="check" /></span>
-              <h2>Gift on its way</h2>
+              <h2>{t("done.title")}</h2>
               <p>
-                {selectedTarget?.name || "The server"} has {monthLabel(giftedMonths)} of premium
-                {giftedUntil ? ` until ${formatDate(giftedUntil)}` : ""}. The owner has been told who sent it,
-                and you got a receipt in your DMs.
+                {giftedUntil && formatDate(giftedUntil)
+                  ? t("done.bodyUntil", { server: selectedTarget?.name || t("done.thisServer"), term: monthLabel(giftedMonths, t), date: formatDate(giftedUntil)! })
+                  : t("done.body", { server: selectedTarget?.name || t("done.thisServer"), term: monthLabel(giftedMonths, t) })}
               </p>
               <div className="billing-done-actions">
                 <button
@@ -528,20 +517,20 @@ export function GiftPremiumPage() {
                     setStep("setup");
                   }}
                 >
-                  Gift another
+                  {t("done.giftAnother")}
                   <Icon name="arrow" />
                 </button>
                 <button type="button" className="billing-ghost" onClick={() => navigate("/")}>
-                  Back to site
+                  {t("done.back")}
                 </button>
               </div>
             </div>
           )}
 
           <footer className="billing-foot">
-            <span>Payments by OxaPay</span>
+            <span>{t("foot.oxapay")}</span>
             <span aria-hidden="true">·</span>
-            <span>AI moderation by fal.ai</span>
+            <span>{t("foot.fal")}</span>
           </footer>
         </section>
       </main>

@@ -1,56 +1,51 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useBotConfig } from "../hooks/useBotConfig";
 import { Footer } from "../components/Footer";
 import { PublicHeader } from "../components/PublicHeader";
 import { Icon } from "../components/Icon";
 import { SupportLink } from "../components/SupportLink";
+import { useStrings } from "../i18n";
 
-const faqItems: { question: string; answer: ReactNode }[] = [
-  {
-    question: "How do I invite Niko to my server?",
-    answer: "Use the Add to Discord button in the site header to start the invite flow. You’ll need permission to add apps to the server.",
-  },
-  {
-    question: "Where can I find setup instructions and command help?",
-    answer: "The documentation library includes setup guides, feature walkthroughs, and a searchable command reference.",
-  },
-  {
-    question: "Why isn’t a command or feature working?",
-    answer: <>Check that Niko is online and has the permissions needed in the channel. If the issue continues, share the command name and a short description in the <SupportLink />.</>,
-  },
-  {
-    question: "How do I report a bug or request a feature?",
-    answer: <>Join the <SupportLink /> and post in the appropriate help or feedback channel. Include steps to reproduce bugs, and never share passwords or private tokens.</>,
-  },
-  {
-    question: "How can I request deletion of my data?",
-    answer: <>Contact the Niko team through the <SupportLink /> and include your Discord user ID so staff can locate the relevant data.</>,
-  },
-];
+// The FAQ is page copy, so it is built from the catalogue. Two answers point at
+// the support server mid-sentence, which is why they are split around the link
+// rather than baked into one string.
+function useFaqItems() {
+  const { t } = useStrings("support");
+
+  return useMemo<{ question: string; answer: ReactNode; docsLink?: boolean }[]>(() => [
+    { question: t("faq.invite.question"), answer: t("faq.invite.answer") },
+    { question: t("faq.setup.question"), answer: t("faq.setup.answer"), docsLink: true },
+    { question: t("faq.broken.question"), answer: <>{t("faq.broken.before")} <SupportLink />.</> },
+    { question: t("faq.bug.question"), answer: <>{t("faq.bug.before")} <SupportLink /> {t("faq.bug.after")}</> },
+    { question: t("faq.data.question"), answer: <>{t("faq.data.before")} <SupportLink /> {t("faq.data.after")}</> },
+  ], [t]);
+}
 
 export function SupportPage() {
   const config = useBotConfig();
+  const { t } = useStrings("support");
   const supportUrl = config?.support_server_url?.trim();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const faqItems = useFaqItems();
 
   return (
     <>
       <PublicHeader page="support" />
       <main className="shell page-main support-page">
         <section className="support-hero">
-          <div className="eyebrow">Niko support</div>
-          <h1>Let’s get you <em>unstuck.</em></h1>
-          <p>Browse quick answers, explore the guides, or talk with the community and Niko team.</p>
+          <div className="eyebrow">{t("hero.eyebrow")}</div>
+          <h1>{t("hero.title")} <em>{t("hero.titleEm")}</em></h1>
+          <p>{t("hero.body")}</p>
           <div className="support-actions">
-            <a className="button button-primary" href="/docs">Browse documentation <Icon name="arrow" /></a>
-            {supportUrl && <a className="button button-muted" href="/discord">Join the support server <Icon name="arrow" /></a>}
+            <a className="button button-primary" href="/docs">{t("hero.docs")} <Icon name="arrow" /></a>
+            {supportUrl && <a className="button button-muted" href="/discord">{t("hero.discord")} <Icon name="arrow" /></a>}
           </div>
         </section>
 
         <section className="support-faq" aria-labelledby="support-faq-title">
           <div className="support-section-heading">
-            <div><div className="eyebrow">Quick answers</div><h2 id="support-faq-title">Frequently asked questions</h2></div>
-            <span className="support-faq-count">{faqItems.length} helpful guides</span>
+            <div><div className="eyebrow">{t("faq.eyebrow")}</div><h2 id="support-faq-title">{t("faq.title")}</h2></div>
+            <span className="support-faq-count">{t("faq.count", { count: faqItems.length })}</span>
           </div>
           <div className="support-faq-list">
             {faqItems.map((item, index) => {
@@ -62,7 +57,7 @@ export function SupportPage() {
                   <span className="support-faq-toggle"><Icon name={expanded ? "minus" : "plus"} /></span>
                 </button></h3>
                 <div id={answerId} className="support-faq-answer" aria-hidden={!expanded}>
-                  <div className="support-faq-answer-inner"><p>{item.answer}{index === 1 && <> <a href="/docs" tabIndex={expanded ? 0 : -1}>Open the docs <span aria-hidden="true">↗</span></a>.</>}</p></div>
+                  <div className="support-faq-answer-inner"><p>{item.answer}{item.docsLink && <> <a href="/docs" tabIndex={expanded ? 0 : -1}>{t("faq.openDocs")} <span aria-hidden="true">↗</span></a>.</>}</p></div>
                 </div>
               </article>; 
             })}
@@ -71,8 +66,8 @@ export function SupportPage() {
 
         <aside className="support-contact-card">
           <div className="support-contact-mark"><Icon name="message" /></div>
-          <div><div className="eyebrow">Need a hand?</div><h2>Find us in the community.</h2><p>Get help from other Niko users and the staff team in the official support server.</p></div>
-          {supportUrl ? <a className="button button-primary" href="/discord">Open support server <Icon name="arrow" /></a> : <p className="support-missing-link" role="status">The support server link isn’t available right now. Please check back later.</p>}
+          <div><div className="eyebrow">{t("contact.eyebrow")}</div><h2>{t("contact.title")}</h2><p>{t("contact.body")}</p></div>
+          {supportUrl ? <a className="button button-primary" href="/discord">{t("contact.open")} <Icon name="arrow" /></a> : <p className="support-missing-link" role="status">{t("contact.missing")}</p>}
         </aside>
       </main>
       <Footer />
@@ -82,14 +77,15 @@ export function SupportPage() {
 
 export function DiscordRedirectPage() {
   const config = useBotConfig();
+  const { t } = useStrings("discord");
   const supportUrl = config?.support_server_url?.trim();
 
   useEffect(() => {
     if (supportUrl) window.location.replace(supportUrl);
   }, [supportUrl]);
 
-  if (!config) return <main className="discord-redirect-state"><div className="loading-ring" /><p>Checking the Niko support link…</p></main>;
-  if (supportUrl) return <main className="discord-redirect-state"><div className="loading-ring" /><p>Taking you to the Niko support server…</p><a href={supportUrl}>Continue if you aren’t redirected</a></main>;
+  if (!config) return <main className="discord-redirect-state"><div className="loading-ring" /><p>{t("checking")}</p></main>;
+  if (supportUrl) return <main className="discord-redirect-state"><div className="loading-ring" /><p>{t("redirecting")}</p><a href={supportUrl}>{t("continue")}</a></main>;
 
-  return <><PublicHeader page="support" /><main className="shell page-main discord-redirect-missing"><div className="eyebrow">Niko support</div><h1>We couldn’t find the support link.</h1><p>The official support server link isn’t configured right now. Please check back later.</p><a className="button button-primary" href="/support">Visit support</a></main><Footer /></>;
+  return <><PublicHeader page="support" /><main className="shell page-main discord-redirect-missing"><div className="eyebrow">{t("missing.eyebrow")}</div><h1>{t("missing.title")}</h1><p>{t("missing.body")}</p><a className="button button-primary" href="/support">{t("missing.action")}</a></main><Footer /></>;
 }

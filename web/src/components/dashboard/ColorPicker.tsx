@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown, Pipette } from "lucide-react";
+import { useStrings } from "../../i18n";
 
 /**
  * Colour picker popover, ported from the 21st.dev colour picker to this
@@ -238,6 +239,7 @@ function SaturationCanvas({
   onChange: (next: { s: number; v: number }) => void;
   disabled?: boolean;
 }) {
+  const { t } = useStrings("dashboard");
   const apply = useCallback(
     (el: HTMLElement, event: { clientX: number; clientY: number }) => {
       const { x, y } = pointerRatio(el, event);
@@ -264,8 +266,8 @@ function SaturationCanvas({
   return (
     <div
       role="slider"
-      aria-label="Saturation and brightness"
-      aria-valuetext={`Saturation ${Math.round(hsva.s)}%, brightness ${Math.round(hsva.v)}%`}
+      aria-label={t("pickers.saturationAria")}
+      aria-valuetext={t("pickers.saturationValue", { saturation: Math.round(hsva.s), brightness: Math.round(hsva.v) })}
       aria-disabled={disabled || undefined}
       data-dragging={dragging || undefined}
       tabIndex={disabled ? -1 : 0}
@@ -427,6 +429,7 @@ function HexField({
   onCommit: (next: string) => void;
   disabled?: boolean;
 }) {
+  const { t } = useStrings("dashboard");
   const [draft, setDraft] = useState<string | null>(null);
   const shown = (draft ?? hex).replace(/^#/, "").toUpperCase();
 
@@ -445,7 +448,7 @@ function HexField({
           autoComplete="off"
           value={shown}
           disabled={disabled}
-          aria-label="Hex color"
+          aria-label={t("pickers.hexColor")}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={(event) => commit(event.target.value)}
           onKeyDown={(event) => {
@@ -457,7 +460,7 @@ function HexField({
           className="color-picker-hex-input"
         />
       </span>
-      <span className="color-picker-field-label">HEX</span>
+      <span className="color-picker-field-label">{t("colorPicker.hex")}</span>
     </label>
   );
 }
@@ -533,6 +536,7 @@ export function ColorPicker({
   swatches = DEFAULT_SWATCHES,
   disabled,
 }: ColorPickerProps) {
+  const { t } = useStrings("dashboard");
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [format, setFormat] = useState<ColorFormat>("hex");
@@ -656,7 +660,7 @@ export function ColorPicker({
                   type="button"
                   onClick={pickFromScreen}
                   disabled={disabled}
-                  aria-label="Pick a color from the screen"
+                  aria-label={t("pickers.eyedropper")}
                   className="color-picker-icon-button"
                 >
                   <Pipette size={15} strokeWidth={1.7} aria-hidden="true" />
@@ -669,10 +673,10 @@ export function ColorPicker({
 
               <div className="color-picker-rails">
                 <Rail
-                  label="Hue"
+                  label={t("pickers.hue")}
                   value={hsva.h}
                   max={360}
-                  valueText={`${Math.round(hsva.h)} degrees`}
+                  valueText={t("pickers.degrees", { value: Math.round(hsva.h) })}
                   disabled={disabled}
                   onChange={(h) => setHsva({ h })}
                   thumbColor={`hsl(${hsva.h} 100% 50%)`}
@@ -683,7 +687,7 @@ export function ColorPicker({
                 />
                 {withAlpha && (
                   <Rail
-                    label="Opacity"
+                    label={t("pickers.opacity")}
                     value={hsva.a * 100}
                     max={100}
                     valueText={`${Math.round(hsva.a * 100)}%`}
@@ -741,7 +745,7 @@ export function ColorPicker({
                 type="button"
                 onClick={cycleFormat}
                 disabled={disabled}
-                aria-label={`Color format: ${format.toUpperCase()}. Switch format`}
+                aria-label={t("pickers.formatAria", { format: format.toUpperCase() })}
                 className="color-picker-icon-button color-picker-format"
               >
                 <ChevronsUpDown size={15} strokeWidth={1.7} aria-hidden="true" />
@@ -791,7 +795,7 @@ export function ColorPicker({
         ref={triggerRef}
         type="button"
         className="color-picker-trigger"
-        aria-label={`${label} color`}
+        aria-label={t("pickers.colorTriggerAria", { label })}
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={disabled}

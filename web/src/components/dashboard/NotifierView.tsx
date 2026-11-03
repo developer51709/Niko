@@ -16,6 +16,9 @@ import type { GuildResources, NotifierFollow, NotifierResponse } from "../../typ
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards } from "./SettingCards";
+import { useStrings } from "../../i18n";
+
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
 type Draft = { channel_id: string; ping_role_id: string; template: string };
@@ -64,17 +67,17 @@ function draftMap(follows: NotifierFollow[]): Record<string, Draft> {
   return next;
 }
 
-function formatChecked(value: string | null) {
-  if (!value) return "Never checked yet";
+function formatChecked(value: string | null, t: Translate) {
+  if (!value) return t("notifier.neverChecked");
   // The API writes UTC timestamps; an unparseable legacy value is shown as-is
   // rather than as “Invalid Date”.
   const parsed = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
-  return Number.isNaN(parsed.getTime()) ? value : `Last checked ${parsed.toLocaleString()}`;
+  return Number.isNaN(parsed.getTime()) ? value : t("notifier.lastChecked", { date: parsed.toLocaleString() });
 }
 
-function channelLabel(resources: GuildResources | null, id: string | null) {
-  if (!id) return "No channel";
-  return resources?.channels.find((channel) => String(channel.id) === String(id))?.name || `Saved channel · ${id}`;
+function channelLabel(resources: GuildResources | null, id: string | null, t: Translate) {
+  if (!id) return t("notifier.noChannel");
+  return resources?.channels.find((channel) => String(channel.id) === String(id))?.name || t("notifier.savedChannel", { id });
 }
 
 /** Keep a saved channel selectable even when the bot cannot list it any more. */
@@ -107,6 +110,7 @@ function detectPlatform(value: string) {
 }
 
 export function NotifierView({ guildId, resources, csrfToken }: Props) {
+  const { t } = useStrings("dashboard");
   const [data, setData] = useState<NotifierResponse | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [loading, setLoading] = useState(true);
@@ -141,7 +145,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     let active = true;
     setLoading(true); setLoadError(""); clearToasts();
     load()
-      .catch((reason) => { if (active) setLoadError(reason instanceof Error ? reason.message : "Social notifications could not be loaded."); })
+      .catch((reason) => { if (active) setLoadError(reason instanceof Error ? reason.message : t("notifier.loadFailed")); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [load, retryAttempt]);
@@ -152,11 +156,11 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     return () => window.clearTimeout(timer);
   }, [confirmRemove]);
 
-  if (loading) return <SectionSkeleton label="social notifications" />;
+  if (loading) return <SectionSkeleton label={t("notifier.skeleton")} />;
   if (loadError || !data) return <div className="inline-error" role="alert">
-    <strong>Couldn’t load social notifications.</strong>
-    <span>{loadError || "This server has no notification data yet."}</span>
-    <button className="button button-muted" type="button" onClick={() => { setLoadError(""); setLoading(true); setRetryAttempt((attempt) => attempt + 1); }}>Try again</button>
+    <strong>{t("notifier.errorTitle")}</strong>
+    <span>{loadError || t("notifier.noData")}</span>
+    <button className="button button-muted" type="button" onClick={() => { setLoadError(""); setLoading(true); setRetryAttempt((attempt) => attempt + 1); }}>{t("notifier.retry")}</button>
   </div>;
 
   const platforms = data.platforms;
@@ -166,15 +170,15 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
   const atGuildLimit = data.follows.length >= data.limits.max_follows;
   const atPlatformLimit = Boolean(form.platform) && countFor(form.platform) >= data.limits.max_follows_per_platform;
   const defaultChannelId = data.config.default_channel_id || "";
-  const defaultChannelLabel = defaultChannelId ? channelLabel(resources, defaultChannelId) : "";
+  const defaultChannelLabel = defaultChannelId ? channelLabel(resources, defaultChannelId, t) : "";
   const addChannelRequired = !defaultChannelId;
   const addBlocked = atGuildLimit || atPlatformLimit || platforms.length === 0;
   const blockedReason = atGuildLimit
-    ? `This server already follows ${data.limits.max_follows} accounts. Remove one before adding another.`
+    ? t("notifier.limitGuild", { count: data.limits.max_follows })
     : atPlatformLimit
-      ? `This server already follows ${data.limits.max_follows_per_platform} ${platformLabel(form.platform)} accounts. Remove one before adding another.`
+      ? t("notifier.limitPlatform", { count: data.limits.max_follows_per_platform, platform: platformLabel(form.platform) })
       : platforms.length === 0
-        ? "The notifier platforms are unavailable right now. Reload the dashboard in a moment."
+        ? t("notifier.platformsUnavailable")
         : "";
 
   const applyFollow = (follow: NotifierFollow) => {
@@ -190,7 +194,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
   const saveServerSettings = (event: FormEvent) => {
     event.preventDefault();
     setSavingConfig(true);
-    notifyLoading("Saving notification settings…", "notifier-config");
+    notifyLoading(t("notifier.savingSettings"), "notifier-config");
     saveNotifierConfig(guildId, {
       enabled: configDraft.enabled,
       default_channel_id: configDraft.default_channel_id,
@@ -198,21 +202,21 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     }, csrfToken)
       .then((result) => {
         setData((current) => current && ({ ...current, config: result.config }));
-        notifySuccess("Notification settings saved for this server.", "notifier-config");
+        notifySuccess(t("notifier.settingsSaved"), "notifier-config");
       })
-      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "Notification settings could not be saved.", "notifier-config"))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : t("notifier.settingsSaveFailed"), "notifier-config"))
       .finally(() => setSavingConfig(false));
   };
 
   const submitAdd = (event: FormEvent) => {
     event.preventDefault();
     if (addBlocked) { notifyError(blockedReason, "notifier-add"); return; }
-    if (!form.platform) { notifyError("Pick the platform you want to follow.", "notifier-add"); return; }
+    if (!form.platform) { notifyError(t("notifier.pickPlatform"), "notifier-add"); return; }
     // A blank picker is fine while the server has a default channel; the API
     // falls back to it. Only a server with no default has to choose here.
-    if (!form.channel_id && addChannelRequired) { notifyError("Pick the channel announcements should go to.", "notifier-add"); return; }
+    if (!form.channel_id && addChannelRequired) { notifyError(t("notifier.pickChannel"), "notifier-add"); return; }
     setAdding(true);
-    notifyLoading("Checking that account…", "notifier-add");
+    notifyLoading(t("notifier.checkingAccount"), "notifier-add");
     addNotifierFollow(guildId, {
       platform: form.platform,
       query: form.query,
@@ -224,16 +228,16 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
         applyFollow(result.follow);
         setForm((current) => ({ ...current, query: "", template: "" }));
         setManualPlatform(false);
-        notifySuccess(result.created ? "Account added. New posts will be announced now." : "That account was already followed, so its settings were updated.", "notifier-add");
+        notifySuccess(t(result.created ? "notifier.accountAdded" : "notifier.accountUpdated"), "notifier-add");
       })
-      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be added.", "notifier-add"))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : t("notifier.addFailed"), "notifier-add"))
       .finally(() => setAdding(false));
   };
 
   const saveFollow = (follow: NotifierFollow) => {
     const key = followKey(follow);
     const draft = drafts[key] || draftFor(follow);
-    if (!draft.channel_id) { notifyError("Pick a channel for that account.", key); return; }
+    if (!draft.channel_id) { notifyError(t("notifier.pickAccountChannel"), key); return; }
     // Only send what actually changed, so two people editing different fields
     // of the same account never overwrite each other.
     const body: { platform: string; username: string; channel_id?: string; ping_role_id?: string; template?: string } = {
@@ -244,38 +248,38 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     if (draft.ping_role_id !== (follow.ping_role_id || "")) body.ping_role_id = draft.ping_role_id;
     if (draft.template !== (follow.template || "")) body.template = draft.template;
     if (body.channel_id === undefined && body.ping_role_id === undefined && body.template === undefined) {
-      notifySuccess("Nothing to save for that account.", key);
+      notifySuccess(t("notifier.nothingToSave"), key);
       return;
     }
     setBusyFollow(key);
-    notifyLoading("Saving…", key);
+    notifyLoading(t("notifier.saving"), key);
     updateNotifierFollow(guildId, body, csrfToken)
       .then((result) => { applyFollow(result.follow); notifySuccess(`${result.follow.display} updated.`, key); })
-      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be updated.", key))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : t("notifier.updateFailed"), key))
       .finally(() => setBusyFollow(""));
   };
 
   const toggleFollow = (follow: NotifierFollow) => {
     const key = followKey(follow);
     setBusyFollow(key);
-    notifyLoading(follow.enabled ? "Pausing…" : "Resuming…", key);
+    notifyLoading(t(follow.enabled ? "notifier.pausing" : "notifier.resuming"), key);
     updateNotifierFollow(guildId, { platform: follow.platform, username: follow.username, enabled: !follow.enabled }, csrfToken)
-      .then((result) => { applyFollow(result.follow); notifySuccess(`${result.follow.display} is ${result.follow.enabled ? "active again" : "paused"}.`, key); })
-      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be updated.", key))
+      .then((result) => { applyFollow(result.follow); notifySuccess(t(result.follow.enabled ? "notifier.resumed" : "notifier.paused", { name: result.follow.display }), key); })
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : t("notifier.updateFailed"), key))
       .finally(() => setBusyFollow(""));
   };
 
   const sendTest = (follow: NotifierFollow) => {
     const key = followKey(follow);
     setBusyFollow(key);
-    notifyLoading("Sending a test notification…", key);
+    notifyLoading(t("notifier.sendingTest"), key);
     testNotifierFollow(guildId, follow.platform, follow.username, csrfToken)
       .then((result) => {
-        const message = result.delivered ? `Test notification posted in #${result.channel}.` : result.message || "Nothing was sent.";
+        const message = result.delivered ? t("notifier.testPosted", { channel: result.channel || "" }) : result.message || t("notifier.nothingSent");
         if (result.delivered) notifySuccess(message, key);
         else notifyError(message, key);
       })
-      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "The test notification could not be sent.", key))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : t("notifier.testFailed"), key))
       .finally(() => setBusyFollow(""));
   };
 
@@ -283,7 +287,7 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
     const key = followKey(follow);
     if (confirmRemove !== key) { setConfirmRemove(key); return; }
     setBusyFollow(key); setConfirmRemove("");
-    notifyLoading("Removing…", key);
+    notifyLoading(t("notifier.removing"), key);
     removeNotifierFollow(guildId, follow.platform, follow.username, csrfToken)
       .then(() => {
         setData((current) => current && ({ ...current, follows: current.follows.filter((item) => followKey(item) !== key) }));
@@ -292,9 +296,9 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
           delete next[key];
           return next;
         });
-        notifySuccess(`Stopped following ${follow.display}.`, key);
+        notifySuccess(t("notifier.unfollowed", { name: follow.display }), key);
       })
-      .catch((reason) => notifyError(reason instanceof Error ? reason.message : "That account could not be removed.", key))
+      .catch((reason) => notifyError(reason instanceof Error ? reason.message : t("notifier.removeFailed"), key))
       .finally(() => setBusyFollow(""));
   };
 
@@ -307,64 +311,64 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
 
   return <>
     <style>{notifierStyles}</style>
-    <DashHeading eyebrow="Community · notifications" title="Never miss a post again." text="Niko watches your favourite creators and posts their new videos, streams and updates straight into a channel you choose." />
+    <DashHeading eyebrow={t("notifier.eyebrow")} title={t("notifier.title")} text={t("notifier.text")} />
     <div className="settings-intro">
       <span className="settings-intro-icon"><Icon name="message" /></span>
       <div>
-        <span className="panel-kicker">Social feed desk</span>
-        <strong>{data.follows.filter((follow) => follow.enabled).length} active · {data.follows.length} of {data.limits.max_follows} slots used</strong>
-        <p>Add an account once, then point each one at its own channel, role ping or custom message.</p>
+        <span className="panel-kicker">{t("notifier.kicker")}</span>
+        <strong>{t("notifier.summary", { active: data.follows.filter((follow) => follow.enabled).length, used: data.follows.length, max: data.limits.max_follows })}</strong>
+        <p>{t("notifier.introText")}</p>
       </div>
-      <span className="settings-intro-state"><span className="status-dot" /> Per server</span>
+      <span className="settings-intro-state"><span className="status-dot" /> {t("settings.perServer")}</span>
     </div>
-    {!data.config.enabled && <div className="notice warning" role="status">Announcements are switched off for this server. Every account below is paused until you re-enable them.</div>}
+    {!data.config.enabled && <div className="notice warning" role="status">{t("notifier.disabledNotice")}</div>}
 
     {/* One shared grid for every card on this tab, exactly like the other
         feature tabs, so the panels are spaced instead of touching. */}
     <div className="settings-stack guild-feature-settings notifier-settings-stack">
     <form className="settings-stack" onSubmit={saveServerSettings}>
       <section className="dash-panel settings-panel">
-        <SectionTitle label="Per server" title="Announcement defaults" detail="Choose where new accounts post and who gets pinged when you do not set that per account." icon="settings" />
+        <SectionTitle label={t("settings.perServer")} title={t("notifier.defaultsTitle")} detail={t("notifier.defaultsDetail")} icon="settings" />
         <div className="form-grid">
-          <Field label="Default channel" hint="Used when an account has no channel of its own.">
+          <Field label={t("notifier.defaultChannel")} hint={t("notifier.defaultChannelHint")}>
             <ChannelSelect
               channels={channelsWithSelected(resources, configDraft.default_channel_id)}
               value={configDraft.default_channel_id}
-              placeholder="No default channel"
-              ariaLabel="Default channel"
+              placeholder={t("notifier.noDefaultChannel")}
+              ariaLabel={t("notifier.defaultChannel")}
               onChange={(value) => setConfigDraft({ ...configDraft, default_channel_id: value })}
             />
           </Field>
-          <Field label="Default ping role" hint="Leave empty for a quiet announcement.">
-            <RolePicker roles={resources?.roles || []} value={configDraft.ping_role_id} placeholder="No ping" ariaLabel="Default ping role" onChange={(value) => setConfigDraft({ ...configDraft, ping_role_id: value })} />
+          <Field label={t("notifier.defaultPingRole")} hint={t("notifier.quietHint")}>
+            <RolePicker roles={resources?.roles || []} value={configDraft.ping_role_id} placeholder={t("notifier.noPing")} ariaLabel={t("notifier.defaultPingRole")} onChange={(value) => setConfigDraft({ ...configDraft, ping_role_id: value })} />
           </Field>
         </div>
         <SettingCards>
           <SettingCard
-            title="Post new content automatically"
-            hint="Turn this off to pause every announcement without removing your accounts"
-            action={<Switch checked={configDraft.enabled} onCheckedChange={(value) => setConfigDraft({ ...configDraft, enabled: value })} aria-label="Post new content automatically" />}
+            title={t("notifier.autopost")}
+            hint={t("notifier.autopostHint")}
+            action={<Switch checked={configDraft.enabled} onCheckedChange={(value) => setConfigDraft({ ...configDraft, enabled: value })} aria-label={t("notifier.autopost")} />}
           />
         </SettingCards>
         <div className="setting-footer">
-          <span role="status">{savingConfig ? "Saving…" : `${data.follows.length} of ${data.limits.max_follows} account slots used`}</span>
-          <button className="button button-primary" type="submit" disabled={savingConfig}>{savingConfig ? "Saving…" : "Save settings"}</button>
+          <span role="status">{savingConfig ? t("notifier.saving") : t("notifier.slotsUsed", { used: data.follows.length, max: data.limits.max_follows })}</span>
+          <button className="button button-primary" type="submit" disabled={savingConfig}>{t(savingConfig ? "notifier.saving" : "notifier.saveSettings")}</button>
         </div>
       </section>
     </form>
 
     <form className="dash-panel settings-panel" onSubmit={submitAdd}>
-      <SectionTitle label="New follow" title="Add an account" detail="Paste a profile link or type the account name — Niko checks it against the platform before saving." icon="plus" />
+      <SectionTitle label={t("notifier.newFollowLabel")} title={t("notifier.addTitle")} detail={t("notifier.addDetail")} icon="plus" />
       <div className="form-grid">
-        <Field label="Platform">
+        <Field label={t("notifier.platform")}>
           <Select
-            placeholder="Choose a platform"
+            placeholder={t("notifier.choosePlatform")}
             options={platforms.map((platform) => ({ value: platform.id, label: platform.label }))}
             value={form.platform}
             onChange={(value) => { setManualPlatform(Boolean(value)); setForm({ ...form, platform: value }); }}
           />
         </Field>
-        <Field label={platformHint?.field_label || "Account"} hint="A profile link is fine too.">
+        <Field label={platformHint?.field_label || t("notifier.account")} hint={t("notifier.accountHint")}>
           <input
             value={form.query}
             maxLength={200}
@@ -373,43 +377,43 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
               const detected = detectPlatform(query);
               setForm((current) => ({ ...current, query, platform: manualPlatform ? current.platform : detected || current.platform }));
             }}
-            placeholder={platformHint?.field_placeholder || "https://twitch.tv/name or @handle"}
+            placeholder={platformHint?.field_placeholder || t("notifier.accountPlaceholder")}
           />
         </Field>
         <Field
-          label={addChannelRequired ? "Announcement channel · required" : "Announcement channel"}
+          label={t(addChannelRequired ? "notifier.channelRequired" : "notifier.channel")}
           hint={addChannelRequired
-            ? "This server has no default channel yet, so pick where announcements should go."
-            : `Optional — leave it on the default channel (#${defaultChannelLabel}) or pick another.`}
+            ? t("notifier.channelRequiredHint")
+            : t("notifier.channelHint", { channel: defaultChannelLabel })}
         >
           <ChannelSelect
             channels={channelsWithSelected(resources, form.channel_id)}
             value={form.channel_id}
-            placeholder={defaultChannelId ? `Use default — #${defaultChannelLabel}` : "Choose a channel"}
-            ariaLabel={addChannelRequired ? "Announcement channel · required" : "Announcement channel"}
+            placeholder={defaultChannelId ? t("notifier.useDefault", { channel: defaultChannelLabel }) : t("pickers.chooseChannel")}
+            ariaLabel={t(addChannelRequired ? "notifier.channelRequired" : "notifier.channel")}
             onChange={(value) => setForm({ ...form, channel_id: value })}
           />
         </Field>
-        <Field label="Ping role" hint="Optional — mentioned with every announcement.">
-          <RolePicker roles={resources?.roles || []} value={form.ping_role_id} placeholder="No ping" ariaLabel="Ping role" onChange={(value) => setForm({ ...form, ping_role_id: value })} />
+        <Field label={t("notifier.pingRole")} hint={t("notifier.pingRoleHint")}>
+          <RolePicker roles={resources?.roles || []} value={form.ping_role_id} placeholder={t("notifier.noPing")} ariaLabel={t("notifier.pingRole")} onChange={(value) => setForm({ ...form, ping_role_id: value })} />
         </Field>
-        <Field label="Custom message" hint={`Optional. Use ${data.limits.template_placeholders.map((name) => `{${name}}`).join(", ")} · up to ${data.limits.max_template_length} characters.`}>
-          <input value={form.template} maxLength={data.limits.max_template_length} onChange={(event) => setForm({ ...form, template: event.target.value })} placeholder="New from {account}: {title}" />
+        <Field label={t("notifier.customMessage")} hint={t("notifier.customMessageHint", { placeholders: data.limits.template_placeholders.map((name) => `{${name}}`).join(", "), max: data.limits.max_template_length })}>
+          <input value={form.template} maxLength={data.limits.max_template_length} onChange={(event) => setForm({ ...form, template: event.target.value })} placeholder={t("notifier.templatePlaceholder")} />
         </Field>
-        <Field label="Capacity" hint="Adding the same account again updates its channel, ping role and message.">
-          <span className="form-hint">{`${countFor(form.platform)} of ${data.limits.max_follows_per_platform} used on this platform · ${data.follows.length} of ${data.limits.max_follows} total`}</span>
+        <Field label={t("notifier.capacity")} hint={t("notifier.capacityHint")}>
+          <span className="form-hint">{t("notifier.capacityLine", { platform: countFor(form.platform), platformMax: data.limits.max_follows_per_platform, total: data.follows.length, max: data.limits.max_follows })}</span>
         </Field>
       </div>
       <div className="setting-footer">
-        <span role="status">{blockedReason || "Niko validates the account live, so this can take a second."}</span>
-        <button className="button button-primary" type="submit" disabled={adding || addBlocked}>{adding ? "Checking that account…" : "Add account"}</button>
+        <span role="status">{blockedReason || t("notifier.validatesLive")}</span>
+        <button className="button button-primary" type="submit" disabled={adding || addBlocked}>{t(adding ? "notifier.checkingAccount" : "notifier.addAccount")}</button>
       </div>
     </form>
 
     <section className="dash-panel settings-panel">
-      <SectionTitle label="Followed accounts" title={`${data.follows.length} account${data.follows.length === 1 ? "" : "s"} watched`} detail="Each account keeps its own channel, ping role and message, and can be paused without losing its history." icon="chart" />
+      <SectionTitle label={t("notifier.followedLabel")} title={t(data.follows.length === 1 ? "notifier.watchedOne" : "notifier.watchedMany", { count: data.follows.length })} detail={t("notifier.followedDetail")} icon="chart" />
       {data.follows.length === 0
-        ? <div className="empty-state">Nothing is being tracked yet. Add your first account above and Niko will start announcing it.</div>
+        ? <div className="empty-state">{t("notifier.empty")}</div>
         : <div className="notifier-list">
           {data.follows.map((follow) => {
             const key = followKey(follow);
@@ -420,37 +424,37 @@ export function NotifierView({ guildId, resources, csrfToken }: Props) {
                 <div>
                   <span className="panel-kicker">{platformLabel(follow.platform)}</span>
                   <h3>{follow.display}</h3>
-                  <small>{follow.username}{draft.channel_id ? ` → #${channelLabel(resources, draft.channel_id)}` : " → pick a channel"}</small>
+                  <small>{follow.username}{draft.channel_id ? ` → #${channelLabel(resources, draft.channel_id, t)}` : t("notifier.pickAChannel")}</small>
                 </div>
                 <div className="notifier-follow-badges">
-                  <span className={`notifier-badge ${follow.enabled ? "is-active" : "is-paused"}`}>{follow.enabled ? "Active" : "Paused"}</span>
-                  {follow.failures > 0 && <span className="notifier-badge is-warning">{follow.failures} failed check{follow.failures === 1 ? "" : "s"}</span>}
+                  <span className={`notifier-badge ${follow.enabled ? "is-active" : "is-paused"}`}>{t(follow.enabled ? "notifier.active" : "notifier.pausedBadge")}</span>
+                  {follow.failures > 0 && <span className="notifier-badge is-warning">{t(follow.failures === 1 ? "notifier.failedOne" : "notifier.failedMany", { count: follow.failures })}</span>}
                 </div>
               </div>
               <div className="form-grid">
-                <Field label="Channel">
+                <Field label={t("notifier.channel")}>
                   <ChannelSelect
                     channels={channelsWithSelected(resources, draft.channel_id)}
                     value={draft.channel_id}
-                    placeholder="Choose a channel"
-                    ariaLabel={`Channel for ${follow.display}`}
+                    placeholder={t("pickers.chooseChannel")}
+                    ariaLabel={t("notifier.channelFor", { name: follow.display })}
                     onChange={(value) => updateDraft(follow, { channel_id: value })}
                   />
                 </Field>
-                <Field label="Ping role" hint="Leave empty for a quiet announcement.">
-                  <RolePicker roles={resources?.roles || []} value={draft.ping_role_id} placeholder="No ping" ariaLabel={`Ping role for ${follow.display}`} onChange={(value) => updateDraft(follow, { ping_role_id: value })} />
+                <Field label={t("notifier.pingRole")} hint={t("notifier.quietHint")}>
+                  <RolePicker roles={resources?.roles || []} value={draft.ping_role_id} placeholder={t("notifier.noPing")} ariaLabel={t("notifier.pingRoleFor", { name: follow.display })} onChange={(value) => updateDraft(follow, { ping_role_id: value })} />
                 </Field>
-                <Field label="Custom message" hint="Sent above the announcement.">
-                  <input value={draft.template} maxLength={data.limits.max_template_length} onChange={(event) => updateDraft(follow, { template: event.target.value })} placeholder="Optional message" />
+                <Field label={t("notifier.customMessage")} hint={t("notifier.customMessageHintShort")}>
+                  <input value={draft.template} maxLength={data.limits.max_template_length} onChange={(event) => updateDraft(follow, { template: event.target.value })} placeholder={t("notifier.optionalMessage")} />
                 </Field>
               </div>
               <div className="setting-footer">
-                <span role="status">{follow.failures > 0 ? `${formatChecked(follow.last_checked_at)} · check the account name` : formatChecked(follow.last_checked_at)}</span>
+                <span role="status">{follow.failures > 0 ? t("notifier.checkedWithWarning", { date: formatChecked(follow.last_checked_at, t) }) : formatChecked(follow.last_checked_at, t)}</span>
                 <div className="notifier-follow-actions">
-                  <button className="button button-muted button-small" type="button" onClick={() => sendTest(follow)} disabled={busy}><Icon name="spark" /> Send test</button>
-                  <button className="button button-muted button-small" type="button" onClick={() => toggleFollow(follow)} disabled={busy}>{follow.enabled ? "Pause" : "Resume"}</button>
-                  <button className={`button button-small ${confirmRemove === key ? "button-primary" : "button-muted"}`} type="button" onClick={() => removeFollow(follow)} disabled={busy}>{confirmRemove === key ? "Confirm remove" : "Remove"}</button>
-                  <button className="button button-primary button-small" type="button" onClick={() => saveFollow(follow)} disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+                  <button className="button button-muted button-small" type="button" onClick={() => sendTest(follow)} disabled={busy}><Icon name="spark" /> {t("notifier.sendTest")}</button>
+                  <button className="button button-muted button-small" type="button" onClick={() => toggleFollow(follow)} disabled={busy}>{t(follow.enabled ? "notifier.pause" : "notifier.resume")}</button>
+                  <button className={`button button-small ${confirmRemove === key ? "button-primary" : "button-muted"}`} type="button" onClick={() => removeFollow(follow)} disabled={busy}>{t(confirmRemove === key ? "notifier.confirmRemove" : "notifier.remove")}</button>
+                  <button className="button button-primary button-small" type="button" onClick={() => saveFollow(follow)} disabled={busy}>{t(busy ? "notifier.saving" : "settings.saveChanges")}</button>
                 </div>
               </div>
             </article>;

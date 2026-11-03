@@ -22,6 +22,9 @@ from cogs.info import _avatars as info  # noqa: E402
 
 SHOP_IDS = {"economy:shop:buy", "economy:shop:sell"}
 
+# discord.HTTPException only reads the status off the aiohttp response it wraps.
+_REST_RESPONSE = SimpleNamespace(status=404, reason="Not Found")
+
 
 class _Response:
     def __init__(self):
@@ -114,8 +117,14 @@ def test_server_avatar_button_resolves_the_member_from_its_custom_id():
 
 def test_user_banner_button_resolves_the_user_from_its_custom_id():
     user = SimpleNamespace(banner=SimpleNamespace(url="https://cdn.example/banner.png"))
+
+    async def fetch_user(user_id):
+        assert user_id == 909
+        return user
+
     interaction = _avatar_interaction(
-        client=SimpleNamespace(get_user=lambda user_id: user if user_id == 909 else None),
+        client=SimpleNamespace(get_user=lambda user_id: user if user_id == 909 else None,
+                               fetch_user=fetch_user),
     )
     match = info._UserBannerButton(909).template.fullmatch("avatar:banner:909")
     item = asyncio.run(info._UserBannerButton.from_custom_id(interaction, None, match))
@@ -123,6 +132,43 @@ def test_user_banner_button_resolves_the_user_from_its_custom_id():
     assert interaction.response.deferred == {"ephemeral": True}
     assert interaction.followup.kwargs["ephemeral"] is True
     assert "https://cdn.example/banner.png" in _components(interaction.followup.kwargs["view"])
+
+
+def test_the_banner_button_does_not_trust_a_cache_without_a_banner():
+    """A bot's cached user carries no banner, so the cache would say "none"."""
+    cached = SimpleNamespace(banner=None, display_name="Niko")
+    fetched = SimpleNamespace(
+        banner=SimpleNamespace(url="https://cdn.example/global.png"), display_name="Niko")
+    reads = []
+
+    async def fetch_user(user_id):
+        reads.append(user_id)
+        return fetched
+
+    interaction = _avatar_interaction(
+        client=SimpleNamespace(get_user=lambda user_id: cached, fetch_user=fetch_user),
+    )
+    match = info._UserBannerButton(321).template.fullmatch("avatar:banner:321")
+    item = asyncio.run(info._UserBannerButton.from_custom_id(interaction, None, match))
+    asyncio.run(item.callback(interaction))
+    assert reads == [321]
+    assert "https://cdn.example/global.png" in _components(interaction.followup.kwargs["view"])
+
+
+def test_a_failed_user_read_falls_back_to_the_cached_banner():
+    cached = SimpleNamespace(
+        banner=SimpleNamespace(url="https://cdn.example/cached.png"), display_name="Niko")
+
+    async def fetch_user(user_id):
+        raise discord.NotFound(_REST_RESPONSE, "Unknown User")
+
+    interaction = _avatar_interaction(
+        client=SimpleNamespace(get_user=lambda user_id: cached, fetch_user=fetch_user),
+    )
+    match = info._UserBannerButton(7).template.fullmatch("avatar:banner:7")
+    item = asyncio.run(info._UserBannerButton.from_custom_id(interaction, None, match))
+    asyncio.run(item.callback(interaction))
+    assert "https://cdn.example/cached.png" in _components(interaction.followup.kwargs["view"])
 
 
 def test_userinfo_buttons_embed_the_target_user_id():

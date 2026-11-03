@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useStrings } from "../../i18n";
 
 export type SettingCardFlag = "premium" | "experimental";
 
@@ -42,13 +43,16 @@ export function SettingCard({
   action: ReactNode;
   className?: string;
 }) {
+  const { t } = useStrings("dashboard");
   return (
     <div className={["setting-card", locked ? "is-locked" : "", className ?? ""].filter(Boolean).join(" ")}>
       <div className="setting-card-copy">
         <div className="setting-card-title">
           <strong>{title}</strong>
           {flags?.map((flag) => (
-            <em key={flag} className={flag === "premium" ? "setting-flag-premium" : "setting-flag-experimental"}>{flag}</em>
+            <em key={flag} className={flag === "premium" ? "setting-flag-premium" : "setting-flag-experimental"}>
+              {t(flag === "premium" ? "settings.flagPremium" : "settings.flagExperimental")}
+            </em>
           ))}
         </div>
         {hint ? <small>{hint}</small> : null}

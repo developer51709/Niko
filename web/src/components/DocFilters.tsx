@@ -1,4 +1,5 @@
 import { Icon } from "./Icon";
+import { useStrings } from "../i18n";
 import type { DocCategory, DocSection } from "../types";
 
 interface DocFiltersProps {
@@ -6,24 +7,27 @@ interface DocFiltersProps {
   onSelectCategory: (category: DocCategory | "") => void;
   sections: DocSection[];
   allCategoriesLabel?: string;
+  ariaLabel?: string;
 }
 
 export function DocFilters({
   selectedCategory,
   onSelectCategory,
   sections,
-  allCategoriesLabel = "All Categories",
+  allCategoriesLabel,
+  ariaLabel,
 }: DocFiltersProps) {
+  const { t } = useStrings("shared");
   return (
     <div className="doc-filters">
-      <div className="filter-tabs" role="tablist" aria-label="Filter by category">
+      <div className="filter-tabs" role="tablist" aria-label={ariaLabel ?? t("docs.filterAria")}>
         <button
           role="tab"
           aria-selected={selectedCategory === ""}
           className={`filter-tab ${selectedCategory === "" ? "active" : ""}`}
           onClick={() => onSelectCategory("")}
         >
-          {allCategoriesLabel}
+          {allCategoriesLabel ?? t("docs.allCategories")}
         </button>
         {sections.map((section) => (
           <button

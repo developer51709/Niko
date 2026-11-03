@@ -1,20 +1,25 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useBotConfig } from "../hooks/useBotConfig";
+import { useStrings } from "../i18n";
 import { navigate, type Page } from "../router";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
 import { PublicHeaderActions } from "./PublicHeaderActions";
 
+// Labels are catalogue keys, not copy: the shared catalogue owns the wording so
+// every navigation surface changes language together.
 const publicLinks = [
-  { label: "Home", path: "/", page: "home" as Page },
-  { label: "Commands", path: "/commands", page: "commands" as Page },
-  { label: "Docs", path: "/docs", page: "docs" as Page },
-  { label: "Team", path: "/team", page: "team" as Page },
-  { label: "Changelog", path: "/changelog", page: "changelog" as Page },
+  { key: "nav.home", path: "/", page: "home" as Page },
+  { key: "nav.commands", path: "/commands", page: "commands" as Page },
+  { key: "nav.docs", path: "/docs", page: "docs" as Page },
+  { key: "nav.status", path: "/status", page: "status" as Page },
+  { key: "nav.team", path: "/team", page: "team" as Page },
+  { key: "nav.changelog", path: "/changelog", page: "changelog" as Page },
 ];
 
 export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { page: Page; sidebarOpen?: boolean; onSidebarToggle?: () => void }) {
   const config = useBotConfig();
+  const { t } = useStrings("shared");
   const isDashboard = page === "dashboard";
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -57,7 +62,7 @@ export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { p
         <button
           className="dashboard-sidebar-toggle"
           type="button"
-          aria-label={sidebarOpen ? "Close dashboard navigation" : "Open dashboard navigation"}
+          aria-label={t(sidebarOpen ? "header.closeDashboardNav" : "header.openDashboardNav")}
           aria-expanded={sidebarOpen}
           aria-controls="dashboard-sidebar"
           onClick={onSidebarToggle}
@@ -67,7 +72,7 @@ export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { p
       )}
       <Brand onNavigate={() => setMenuOpen(false)} />
       {!isDashboard && (
-        <nav className="site-nav" aria-label="Main navigation">
+        <nav className="site-nav" aria-label={t("header.mainNavigation")}>
           {publicLinks.map((link) => (
             <a
               key={link.path}
@@ -76,7 +81,7 @@ export function PublicHeader({ page, sidebarOpen = false, onSidebarToggle }: { p
               href={link.path}
               onClick={goTo(link.path)}
             >
-              {link.label}
+              {t(link.key)}
             </a>
           ))}
         </nav>

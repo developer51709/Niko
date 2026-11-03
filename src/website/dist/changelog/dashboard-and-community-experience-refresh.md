@@ -1,6 +1,7 @@
 # Dashboard & Community Experience Refresh
 
 - Date: 2026-10-10
+- Version: 2.14.0
 - Tags: dashboard, website, transcripts, moderation, staff, accessibility
 
 A substantial platform update across Niko’s dashboard, public website, Discord integrations, and core bot systems. Guild admins get a redesigned server-profile editor and clearer analytics, while communities benefit from richer Discord-aware transcripts, expanded staff tools, and reliability improvements throughout moderation and data handling.

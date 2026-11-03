@@ -4,6 +4,7 @@ import { CryptoIcon } from "../components/CryptoIcon";
 import { Icon } from "../components/Icon";
 import { NetworkIcon } from "../components/NetworkIcon";
 import { PublicHeader } from "../components/PublicHeader";
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
 
 type Perk = { key: string; title: string; description: string };
@@ -105,6 +106,7 @@ function formatDate(value?: string | null) {
 }
 
 export function BillingPage() {
+  const { t } = useStrings("billing");
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token") || "";
   const guildParam = (params.get("guild") || "").trim();
@@ -167,11 +169,11 @@ export function BillingPage() {
     try {
       setPlan(await api<Plan>("/api/premium/plans"));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Billing is unavailable right now.");
+      setError(reason instanceof Error ? reason.message : t("error.unavailable"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadTargets = useCallback(async () => {
     setTargetsError("");
@@ -189,9 +191,9 @@ export function BillingPage() {
       if (!guildId && result.guilds.length === 1) setGuildId(result.guilds[0].id);
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) setTargets([]);
-      else setTargetsError(reason instanceof Error ? reason.message : "Your servers could not be loaded.");
+      else setTargetsError(reason instanceof Error ? reason.message : t("error.servers"));
     }
-  }, [guildId]);
+  }, [guildId, t]);
 
   const loadMeta = useCallback(async () => {
     if (!isDonation) return;
@@ -273,9 +275,9 @@ export function BillingPage() {
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) {
         setTargets([]);
-        setError("Sign in with Discord to continue.");
+        setError(t("error.signIn"));
       } else {
-        setError(reason instanceof Error ? reason.message : "Checkout could not be started.");
+        setError(reason instanceof Error ? reason.message : t("error.checkout"));
       }
     } finally {
       setBusy(false);
@@ -288,7 +290,7 @@ export function BillingPage() {
       setCopied(label);
       window.setTimeout(() => setCopied(""), 1800);
     } catch {
-      setError("Copying failed — select the address manually.");
+      setError(t("error.copy"));
     }
   };
 
@@ -296,7 +298,7 @@ export function BillingPage() {
     ? Number.parseFloat(amount) >= (meta?.min_amount ?? 1)
     : Boolean(guildId);
 
-  const heading = isDonation ? "Support Niko" : "Niko Premium";
+  const heading = isDonation ? t("head.titleDonation") : t("head.titlePremium");
 
   if (legacyGift) return null;
 
@@ -309,38 +311,36 @@ export function BillingPage() {
           <header className="billing-head">
             <span className="billing-eyebrow">
               <span className="billing-dot" aria-hidden="true" />
-              {isDonation ? "One-off donation" : "Monthly subscription"}
+              {isDonation ? t("head.eyebrowDonation") : t("head.eyebrowSubscription")}
             </span>
             <h1 id="billing-title">{heading}</h1>
             <p>
-              {isDonation
-                ? "Every dollar covers hosting, the AI moderation API, and the new niko.sryze.cc domain."
-                : "AI image moderation for your community, billed monthly. Cancel by simply not renewing."}
+              {isDonation ? t("head.donationBody") : t("head.subscriptionBody")}
             </p>
           </header>
 
           {!isDonation && plan && (
             <div className="billing-price">
               <strong>{plan.price_label}</strong>
-              <span>per server / month</span>
+              <span>{t("price.perMonth")}</span>
             </div>
           )}
 
-          {loading && <div className="billing-loading"><span className="loading-ring" /><p>Preparing checkout…</p></div>}
+          {loading && <div className="billing-loading"><span className="loading-ring" /><p>{t("loading")}</p></div>}
 
           {!loading && step === "method" && (
             <div className="billing-body">
               {!isDonation && (
                 <div className="billing-field">
-                  <span className="billing-label">Server</span>
+                  <span className="billing-label">{t("server.label")}</span>
                   {targets === null ? (
                     <div className="billing-skeleton" aria-hidden="true" />
                   ) : targets.length === 0 ? (
                     <p className="billing-hint">
-                      <a href={loginHref}>Sign in with Discord</a> to choose a server.
+                      <a href={loginHref}>{t("server.signIn")}</a> {t("server.signInAfter")}
                     </p>
                   ) : (
-                    <div className="billing-targets" role="radiogroup" aria-label="Server">
+                    <div className="billing-targets" role="radiogroup" aria-label={t("server.label")}>
                       {targets.map((target) => (
                         <button
                           key={target.id}
@@ -357,23 +357,23 @@ export function BillingPage() {
                             <strong>{target.name}</strong>
                             <small>
                               {target.premium?.active
-                                ? `Premium until ${formatDate(target.premium.expires_at) || "later"}`
-                                : `${target.member_count.toLocaleString()} members`}
+                                ? t("server.premiumUntil", { date: formatDate(target.premium.expires_at) || t("server.later") })
+                                : t("server.members", { count: target.member_count.toLocaleString() })}
                             </small>
                           </span>
-                          {target.premium?.active && <span className="billing-chip">Premium</span>}
+                          {target.premium?.active && <span className="billing-chip">{t("server.chip")}</span>}
                         </button>
                       ))}
                     </div>
                   )}
                   {targetsError && <p className="billing-error" role="alert">{targetsError}</p>}
                   {guildParam && !selectedTarget && targets && targets.length > 0 && (
-                    <p className="billing-hint">That server is not one you can manage. Pick another below.</p>
+                    <p className="billing-hint">{t("server.unmanageable")}</p>
                   )}
                   {targets && targets.length > 0 && (
                     <p className="billing-hint">
-                      Buying for a community you are in but do not manage?{" "}
-                      <a href={`/billing/gift${guildId ? `?guild=${guildId}` : ""}`}>Gift premium instead</a>.
+                      {t("server.giftHint")}{" "}
+                      <a href={`/billing/gift${guildId ? `?guild=${guildId}` : ""}`}>{t("server.giftLink")}</a>.
                     </p>
                   )}
                 </div>
@@ -381,8 +381,8 @@ export function BillingPage() {
 
               {isDonation && (
                 <div className="billing-field">
-                  <span className="billing-label">Amount (USD)</span>
-                  <div className="billing-presets" role="group" aria-label="Suggested amounts">
+                  <span className="billing-label">{t("donate.amountLabel")}</span>
+                  <div className="billing-presets" role="group" aria-label={t("donate.presetsAria")}>
                     {(meta?.presets || [3, 5, 10, 25, 50]).map((preset) => (
                       <button
                         key={preset}
@@ -404,18 +404,18 @@ export function BillingPage() {
                       step="1"
                       value={amount}
                       onChange={(event) => setAmount(event.target.value)}
-                      aria-label="Donation amount in USD"
+                      aria-label={t("donate.amountAria")}
                     />
                   </div>
-                  <p className="billing-hint">
-                    Minimum ${meta?.min_amount ?? 1}. A receipt and Supporter badge arrive after the network confirms.
-                  </p>
+                  <p className="billing-hint">{t("donate.minimum", { amount: meta?.min_amount ?? 1 })}</p>
                   {meta && meta.totals.donation_count > 0 && (
                     <div className="billing-supporter-totals">
                       <p>
-                        <strong>{formatUsd(meta.totals.total_cents)}</strong> raised by{" "}
-                        {meta.totals.donor_count.toLocaleString()} supporter{meta.totals.donor_count === 1 ? "" : "s"}{" "}
-                        across {meta.totals.donation_count.toLocaleString()} donation{meta.totals.donation_count === 1 ? "" : "s"}.
+                        {t("donate.raised", {
+                          total: formatUsd(meta.totals.total_cents),
+                          donors: `${meta.totals.donor_count.toLocaleString()} ${t(meta.totals.donor_count === 1 ? "donate.supporterOne" : "donate.supporterMany")}`,
+                          count: `${meta.totals.donation_count.toLocaleString()} ${t(meta.totals.donation_count === 1 ? "donate.donationOne" : "donate.donationMany")}`,
+                        })}
                       </p>
                       {meta.goal_cents > 0 && (
                         <div
@@ -424,13 +424,13 @@ export function BillingPage() {
                           aria-valuemin={0}
                           aria-valuemax={meta.goal_cents}
                           aria-valuenow={Math.min(meta.totals.total_cents, meta.goal_cents)}
-                          aria-label="Donation goal"
+                          aria-label={t("donate.goalAria")}
                         >
                           <i style={{ width: `${Math.min(100, Math.round((meta.progress || 0) * 100))}%` }} />
                         </div>
                       )}
                       {meta.your_total_cents > 0 && (
-                        <p className="billing-hint">You have donated {formatUsd(meta.your_total_cents)} so far. Thank you!</p>
+                        <p className="billing-hint">{t("donate.thanks", { amount: formatUsd(meta.your_total_cents) })}</p>
                       )}
                     </div>
                   )}
@@ -447,16 +447,16 @@ export function BillingPage() {
                   ))}
                   <li>
                     <Icon name="check" />
-                    <span><strong>Renewal reminder</strong><small>We DM the owner {plan.renewal_notice_days} days before the term ends.</small></span>
+                    <span><strong>{t("perks.renewalTitle")}</strong><small>{t("perks.renewalText", { days: plan.renewal_notice_days })}</small></span>
                   </li>
                 </ul>
               )}
 
-              <div className="billing-methods" role="radiogroup" aria-label="Payment method">
+              <div className="billing-methods" role="radiogroup" aria-label={t("methods.aria")}>
                 <button type="button" className="billing-method" disabled aria-disabled="true">
                   <span className="billing-method-icon"><Icon name="lock" /></span>
-                  <span><strong>Card</strong><small>Visa, Mastercard, Amex</small></span>
-                  <span className="billing-chip">Coming soon</span>
+                  <span><strong>{t("methods.card")}</strong><small>{t("methods.cardNetworks")}</small></span>
+                  <span className="billing-chip">{t("methods.soon")}</span>
                 </button>
                 <button
                   type="button"
@@ -471,12 +471,12 @@ export function BillingPage() {
                     <CryptoIcon code="BTC" />
                     <CryptoIcon code="ETH" />
                   </span>
-                  <span><strong>Crypto</strong><small>USDT, Bitcoin, Ethereum and more</small></span>
+                  <span><strong>{t("methods.crypto")}</strong><small>{t("methods.cryptoNetworks")}</small></span>
                   <Icon name="arrow" />
                 </button>
               </div>
               {!plan?.methods.crypto.enabled && !isDonation && (
-                <p className="billing-error" role="alert">Payments are not configured on this deployment yet.</p>
+                <p className="billing-error" role="alert">{t("methods.unconfigured")}</p>
               )}
               {error && <p className="billing-error" role="alert">{error}</p>}
             </div>
@@ -486,22 +486,22 @@ export function BillingPage() {
             <div className="billing-body">
               <div className="billing-step-head">
                 <button type="button" className="billing-back" onClick={() => { setStep("method"); setError(""); }}>
-                  ← Back
+                  ← {t("step.back")}
                 </button>
-                <span className="billing-step-count">Step 2 of 2</span>
+                <span className="billing-step-count">{t("step.count")}</span>
               </div>
               <div className="billing-summary">
                 <div>
-                  <span className="billing-label">Paying</span>
+                  <span className="billing-label">{t("step.paying")}</span>
                   <strong>{isDonation ? `$${Number.parseFloat(amount).toFixed(2)} USD` : plan?.price_label}</strong>
                 </div>
                 <div>
-                  <span className="billing-label">{isDonation ? "To" : "Server"}</span>
-                  <strong>{isDonation ? "Niko" : selectedTarget?.name || `Server ${guildId}`}</strong>
+                  <span className="billing-label">{isDonation ? t("step.to") : t("server.label")}</span>
+                  <strong>{isDonation ? t("step.niko") : selectedTarget?.name || t("step.serverFallback", { id: guildId })}</strong>
                 </div>
               </div>
-              <span className="billing-label">Choose a currency</span>
-              <div className="billing-assets" role="radiogroup" aria-label="Cryptocurrency">
+              <span className="billing-label">{t("asset.currency")}</span>
+              <div className="billing-assets" role="radiogroup" aria-label={t("asset.currencyAria")}>
                 {(plan?.currencies || Object.keys(CURRENCY_LABELS)).map((code) => {
                   const meta = currencyLabel(code);
                   return (
@@ -527,8 +527,8 @@ export function BillingPage() {
               </div>
               {networkOptions.length > 0 && (
                 <div className="billing-networks-block">
-                  <span className="billing-label">Choose a network</span>
-                  <div className="billing-networks" role="radiogroup" aria-label="Blockchain network">
+                  <span className="billing-label">{t("asset.network")}</span>
+                  <div className="billing-networks" role="radiogroup" aria-label={t("asset.networkAria")}>
                     {networkOptions.map((option) => (
                       <button
                         key={option.code}
@@ -548,36 +548,32 @@ export function BillingPage() {
               <p className="billing-network-warning">
                 <Icon name="alert" />
                 <span>
-                  Send <strong>{currency}</strong> only on{" "}
-                  <strong>{activeNetworkLabel || "the network quoted after this step"}</strong>. Funds sent on any
-                  other network are never received and cannot be refunded.
+                  {t("warn.send")} <strong>{currency}</strong> {t("warn.onlyOn")}{" "}
+                  <strong>{activeNetworkLabel || t("warn.quotedAfter")}</strong>{t("warn.otherNetwork")}
                 </span>
               </p>
               {error && <p className="billing-error" role="alert">{error}</p>}
               <button type="button" className="billing-primary" onClick={() => void startCheckout()} disabled={busy}>
-                {busy ? "Quoting…" : `Pay with ${currency}`}
+                {busy ? t("action.quoting") : t("action.payWith", { currency })}
                 <Icon name="arrow" />
               </button>
-              <p className="billing-fineprint">
-                The exact amount and address are quoted in {currency} for 60 minutes. Send the quoted amount only —
-                underpayments are not credited.
-              </p>
+              <p className="billing-fineprint">{t("fineprint.quote", { currency })}</p>
             </div>
           )}
 
           {!loading && step === "pay" && checkout && (
             <div className="billing-body">
               <div className="billing-step-head">
-                <span className="billing-live"><span className="billing-dot" />Waiting for the network</span>
+                <span className="billing-live"><span className="billing-dot" />{t("pay.waiting")}</span>
                 {secondsLeft !== null && (
                   <span className={`billing-countdown${secondsLeft < 300 ? " is-late" : ""}`}>
-                    {formatCountdown(secondsLeft)} left
+                    {t("pay.countdown", { time: formatCountdown(secondsLeft) })}
                   </span>
                 )}
               </div>
               <div className="billing-quote">
                 <div className="billing-quote-amount">
-                  <span className="billing-label">Send exactly</span>
+                  <span className="billing-label">{t("pay.sendExactly")}</span>
                   <strong>
                     <CryptoIcon code={checkout.pay_currency || currency} />
                     {checkout.pay_amount ?? "—"} {checkout.pay_currency || currency}
@@ -588,84 +584,82 @@ export function BillingPage() {
                   </small>
                 </div>
                 {checkout.qr_code && (
-                  <img className="billing-qr" src={checkout.qr_code} alt={`${checkout.pay_currency || currency} payment QR code`} />
+                  <img className="billing-qr" src={checkout.qr_code} alt={t("pay.qrAlt", { currency: checkout.pay_currency || currency })} />
                 )}
               </div>
               <div className="billing-address">
-                <span className="billing-label">Address</span>
-                <code>{checkout.address || "Address unavailable — reopen checkout."}</code>
+                <span className="billing-label">{t("pay.address")}</span>
+                <code>{checkout.address || t("pay.addressMissing")}</code>
                 {checkout.address && (
                   <button type="button" className="billing-copy" onClick={() => void copy(checkout.address!, "address")}>
-                    {copied === "address" ? "Copied" : "Copy"}
+                    {copied === "address" ? t("pay.copied") : t("pay.copy")}
                   </button>
                 )}
               </div>
               {checkout.memo && (
-                <p className="billing-hint"><strong>Memo required:</strong> {checkout.memo}</p>
+                <p className="billing-hint"><strong>{t("pay.memo")}</strong> {checkout.memo}</p>
               )}
               <p className="billing-network-warning">
                 <Icon name="alert" />
                 <span>
-                  Send <strong>{checkout.pay_currency || currency}</strong> only on{" "}
-                  <strong>{checkout.network || activeNetworkLabel}</strong>. A transfer on any other network is
-                  not received and cannot be refunded.
+                  {t("warn.send")} <strong>{checkout.pay_currency || currency}</strong> {t("warn.onlyOn")}{" "}
+                  <strong>{checkout.network || activeNetworkLabel}</strong>{t("warn.transferOther")}
                 </span>
               </p>
               {error && <p className="billing-error" role="alert">{error}</p>}
               <button type="button" className="billing-primary" onClick={() => void refreshStatus(checkout)}>
-                I've sent it — check now
+                {t("pay.checkNow")}
                 <Icon name="refresh" />
               </button>
-              <p className="billing-fineprint">
-                Stay on this page: status refreshes automatically. Premium activates the moment OxaPay
-                confirms the transaction, and a receipt lands in your DMs.
-              </p>
+              <p className="billing-fineprint">{t("fineprint.status")}</p>
             </div>
           )}
 
           {!loading && step === "done" && (
             <div className="billing-body billing-done">
               <span className="billing-done-mark" aria-hidden="true"><Icon name="check" /></span>
-              <h2>{isDonation ? "Thank you for supporting Niko" : "Premium is active"}</h2>
+              <h2>{isDonation ? t("done.donationTitle") : t("done.premiumTitle")}</h2>
               <p>
                 {isDonation
-                  ? "Your donation is confirmed. The Supporter badge is applied in the support server."
-                  : `AI image moderation is unlocked${paidUntil ? ` until ${formatDate(paidUntil)}` : ""}. Turn it on under Moderation in the dashboard.`}
+                  ? t("done.donationBody")
+                  : paidUntil && formatDate(paidUntil)
+                    ? t("done.premiumBodyUntil", { date: formatDate(paidUntil)! })
+                    : t("done.premiumBody")}
               </p>
               {isDonation && checkout && (
                 <div className="billing-receipt">
                   <div>
-                    <span className="billing-label">Amount</span>
+                    <span className="billing-label">{t("done.amount")}</span>
                     <strong>{checkout.amount_label}</strong>
                   </div>
                   <div>
-                    <span className="billing-label">Track ID</span>
+                    <span className="billing-label">{t("done.trackId")}</span>
                     <code>{checkout.track_id || checkout.order_id}</code>
                   </div>
                   <p className="billing-hint">
-                    Keep the track ID for <code>/donationstatus</code>. A receipt is waiting in your DMs.
+                    {t("done.keepTrackBefore")} <code>/donationstatus</code>{t("done.keepTrackAfter")}
                   </p>
                 </div>
               )}
               <div className="billing-done-actions">
                 <button type="button" className="billing-primary" onClick={() => navigate(isDonation ? "/" : `/dashboard/${guildId}/moderation`)}>
-                  {isDonation ? "Back to site" : "Open moderation"}
+                  {isDonation ? t("done.back") : t("done.openModeration")}
                   <Icon name="arrow" />
                 </button>
                 {!isDonation && (
                   <button type="button" className="billing-ghost" onClick={() => navigate("/dashboard")}>
-                    Go to dashboard
+                    {t("done.dashboard")}
                   </button>
                 )}
               </div>
-              {paid && <span className="billing-sr" role="status">Payment confirmed</span>}
+              {paid && <span className="billing-sr" role="status">{t("done.confirmed")}</span>}
             </div>
           )}
 
           <footer className="billing-foot">
-            <span>Payments by OxaPay</span>
+            <span>{t("foot.oxapay")}</span>
             <span aria-hidden="true">·</span>
-            <span>AI moderation by fal.ai</span>
+            <span>{t("foot.fal")}</span>
           </footer>
         </section>
       </main>

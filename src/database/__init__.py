@@ -173,6 +173,7 @@ PRIMARY_KEYS: dict = {
     "birthday_guilds": "guild_id",
     "birthday_state": "key",
     "sync_state": "key",
+    "maintenance_targets": "target",
     "afk_users": "user_id",
     "warns": "id",
     "mutes": "id",

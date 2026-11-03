@@ -4,6 +4,9 @@ import { addStaffProxyWorker, getStaffProxyWorkers, removeStaffProxyWorker, setS
 import type { ProxyWorker, ProxyWorkerLatencyPoint, ProxyWorkersResponse } from "../../types";
 import { Icon } from "../Icon";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
+import { useStrings } from "../../i18n";
+
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 function formatMs(value: number | undefined | null) {
   if (value === undefined || value === null || !Number.isFinite(value)) return "—";
@@ -34,14 +37,14 @@ function formatClock(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-function relativeTime(timestamp: number | undefined | null) {
+function relativeTime(timestamp: number | undefined | null, t: Translate) {
   if (!timestamp) return "—";
   const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
-  if (seconds < 3) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3) return t("proxy.justNow");
+  if (seconds < 60) return t("proxy.secondsAgo", { count: seconds });
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+  if (minutes < 60) return t("proxy.minutesAgo", { count: minutes });
+  return t("proxy.hoursAgo", { count: Math.floor(minutes / 60) });
 }
 
 function errorRate(requests: number, errors: number) {
@@ -56,6 +59,7 @@ function statusTone(status: number | undefined) {
 }
 
 function LatencyChart({ points, compact = false, title }: { points: ProxyWorkerLatencyPoint[]; compact?: boolean; title: string }) {
+  const { t } = useStrings("dashboard");
   const width = compact ? 520 : 760;
   const height = compact ? 112 : 176;
   const padding = compact ? 12 : 18;
@@ -74,11 +78,11 @@ function LatencyChart({ points, compact = false, title }: { points: ProxyWorkerL
     return <rect key={point.t} x={padding + index * step - 2} y={height - padding - barHeight} width={4} height={barHeight} rx={2} className="proxy-chart-error" />;
   });
   if (!visible.length) {
-    return <div className="proxy-chart-empty"><Icon name="chart" /><span>Waiting for the first proxied request…</span></div>;
+    return <div className="proxy-chart-empty"><Icon name="chart" /><span>{t("proxy.waitingFirst")}</span></div>;
   }
   return (
     <figure className={`proxy-chart${compact ? " compact" : ""}`}>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title}: average and p95 latency over the last 15 minutes`} preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("proxy.chartAria", { title })} preserveAspectRatio="none">
         <title>{title}</title>
         {[0.25, 0.5, 0.75].map((fraction) => (
           <line key={fraction} x1={padding} x2={width - padding} y1={padding + (height - padding * 2) * fraction} y2={padding + (height - padding * 2) * fraction} className="proxy-chart-grid" />
@@ -90,9 +94,9 @@ function LatencyChart({ points, compact = false, title }: { points: ProxyWorkerL
         <circle cx={padding + (visible.length - 1) * step} cy={y(visible[visible.length - 1].avg)} r={compact ? 3 : 4} className="proxy-chart-point" />
       </svg>
       <figcaption>
-        <span><i className="proxy-legend-average" />Average {formatMs(visible[visible.length - 1]?.avg)}</span>
-        <span><i className="proxy-legend-p95" />p95 {formatMs(visible[visible.length - 1]?.p95)}</span>
-        <span><i className="proxy-legend-error" />Errors</span>
+        <span><i className="proxy-legend-average" />{t("proxy.average")} {formatMs(visible[visible.length - 1]?.avg)}</span>
+        <span><i className="proxy-legend-p95" />{t("proxy.p95")} {formatMs(visible[visible.length - 1]?.p95)}</span>
+        <span><i className="proxy-legend-error" />{t("proxy.errors")}</span>
         <span className="proxy-chart-window">{formatClock(visible[0].t)} – {formatClock(visible[visible.length - 1].t)}</span>
       </figcaption>
     </figure>
@@ -106,6 +110,7 @@ function WorkerCard({ worker, expanded, onToggle, onRemove, busy }: {
   onRemove: () => void;
   busy: boolean;
 }) {
+  const { t } = useStrings("dashboard");
   const stats = worker.stats;
   const totals = stats?.totals;
   const requests = totals?.requests || 0;
@@ -118,7 +123,7 @@ function WorkerCard({ worker, expanded, onToggle, onRemove, busy }: {
           <small>{worker.url}</small>
         </span>
         <span className={`proxy-worker-status${worker.health === "online" ? " is-online" : " is-offline"}`}>
-          <i />{worker.health === "online" ? "Online" : "Offline"}
+          <i />{t(worker.health === "online" ? "proxy.online" : "proxy.offline")}
         </span>
         <span className="proxy-worker-latency">{requests ? formatMs(totals?.p95_latency_ms) : "—"}</span>
         <Icon name={expanded ? "close" : "arrow"} className="proxy-worker-chevron" />
@@ -127,15 +132,15 @@ function WorkerCard({ worker, expanded, onToggle, onRemove, busy }: {
         <div className="proxy-worker-details">
           {stats?.stats_error && <div className="notice warning" role="status">{stats.stats_error}</div>}
           <div className="proxy-worker-metrics">
-            <div><span className="panel-kicker">Requests</span><strong>{requests.toLocaleString()}</strong><small>{errorRate(requests, totals?.errors || 0)} errors</small></div>
-            <div><span className="panel-kicker">Average</span><strong>{requests ? formatMs(totals?.avg_latency_ms) : "—"}</strong><small>p95 {requests ? formatMs(totals?.p95_latency_ms) : "—"}</small></div>
-            <div><span className="panel-kicker">Uptime</span><strong>{formatUptime(stats?.uptime_seconds)}</strong><small>{stats?.version ? `v${stats.version}` : "worker"}</small></div>
-            <div><span className="panel-kicker">Bandwidth</span><strong>{formatBytes((totals?.bytes_in || 0) + (totals?.bytes_out || 0))}</strong><small>{formatBytes(totals?.bytes_in)} in · {formatBytes(totals?.bytes_out)} out</small></div>
+            <div><span className="panel-kicker">{t("proxy.requests")}</span><strong>{requests.toLocaleString()}</strong><small>{t("proxy.errorsCount", { rate: errorRate(requests, totals?.errors || 0) })}</small></div>
+            <div><span className="panel-kicker">{t("proxy.average")}</span><strong>{requests ? formatMs(totals?.avg_latency_ms) : "—"}</strong><small>{t("proxy.p95")} {requests ? formatMs(totals?.p95_latency_ms) : "—"}</small></div>
+            <div><span className="panel-kicker">{t("proxy.uptime")}</span><strong>{formatUptime(stats?.uptime_seconds)}</strong><small>{stats?.version ? `v${stats.version}` : t("proxy.worker")}</small></div>
+            <div><span className="panel-kicker">{t("proxy.bandwidth")}</span><strong>{formatBytes((totals?.bytes_in || 0) + (totals?.bytes_out || 0))}</strong><small>{t("proxy.bandwidthSplit", { inbound: formatBytes(totals?.bytes_in), outbound: formatBytes(totals?.bytes_out) })}</small></div>
           </div>
-          <LatencyChart points={stats?.latency || []} compact title={`${worker.name} latency`} />
+          <LatencyChart points={stats?.latency || []} compact title={t("proxy.workerLatency", { name: worker.name })} />
           <div className="proxy-worker-footer">
-            <span>{stats?.ready === false ? "Worker is missing its AUTH_TOKEN secret." : `Checked ${relativeTime(stats?.checked_at)}`}</span>
-            <button type="button" className="button button-danger button-small" disabled={busy} onClick={onRemove}>Remove worker</button>
+            <span>{stats?.ready === false ? t("proxy.missingToken") : t("proxy.checkedAt", { time: relativeTime(stats?.checked_at, t) })}</span>
+            <button type="button" className="button button-danger button-small" disabled={busy} onClick={onRemove}>{t("proxy.removeWorker")}</button>
           </div>
         </div>
       )}
@@ -144,6 +149,7 @@ function WorkerCard({ worker, expanded, onToggle, onRemove, busy }: {
 }
 
 export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
+  const { t } = useStrings("dashboard");
   const [data, setData] = useState<ProxyWorkersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -163,7 +169,7 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
       setLoadError("");
       setRefreshedAt(Date.now());
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "Proxy worker telemetry unavailable.";
+      const message = reason instanceof Error ? reason.message : t("proxy.telemetryUnavailable");
       if (!silent) setLoadError(message);
     } finally {
       refreshing.current = false;
@@ -199,30 +205,30 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
-    notifyLoading("Verifying the proxy worker…", "proxy-workers");
+    notifyLoading(t("proxy.verifying"), "proxy-workers");
     try {
       await addStaffProxyWorker(name.trim(), url.trim(), csrfToken);
       setName("");
       setUrl("");
       await refresh(true);
-      notifySuccess("Proxy worker verified and registered.", "proxy-workers");
+      notifySuccess(t("proxy.verified"), "proxy-workers");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The proxy worker could not be verified.", "proxy-workers");
+      notifyError(reason instanceof Error ? reason.message : t("proxy.verifyFailed"), "proxy-workers");
     } finally {
       setBusy(false);
     }
   };
 
   const removeWorker = async (worker: ProxyWorker) => {
-    if (busy || !window.confirm(`Remove ${worker.name} from Discord proxy routing?`)) return;
+    if (busy || !window.confirm(t("proxy.removeConfirm", { name: worker.name }))) return;
     setBusy(true);
-    notifyLoading("Removing the proxy worker…", "proxy-workers");
+    notifyLoading(t("proxy.removing"), "proxy-workers");
     try {
       await removeStaffProxyWorker(worker.id, csrfToken);
       await refresh(true);
-      notifySuccess(`${worker.name} was removed.`, "proxy-workers");
+      notifySuccess(t("proxy.removed", { name: worker.name }), "proxy-workers");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The proxy worker could not be removed.", "proxy-workers");
+      notifyError(reason instanceof Error ? reason.message : t("proxy.removeFailed"), "proxy-workers");
     } finally {
       setBusy(false);
     }
@@ -232,13 +238,13 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
     if (busy || !routing) return;
     setBusy(true);
     const enabled = !routing.enabled;
-    notifyLoading(enabled ? "Enabling proxy worker routing…" : "Returning to direct Discord egress…", "proxy-workers");
+    notifyLoading(t(enabled ? "proxy.enablingRouting" : "proxy.returningDirect"), "proxy-workers");
     try {
       await setStaffProxyWorkerRouting(enabled, csrfToken);
       await refresh(true);
-      notifySuccess(enabled ? "Discord REST traffic now routes through the workers." : "Proxy worker routing is off; normal egress is restored.", "proxy-workers");
+      notifySuccess(t(enabled ? "proxy.routingOn" : "proxy.routingOff"), "proxy-workers");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "Routing could not be changed.", "proxy-workers");
+      notifyError(reason instanceof Error ? reason.message : t("proxy.routingFailed"), "proxy-workers");
     } finally {
       setBusy(false);
     }
@@ -248,48 +254,48 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
     <div className="proxy-workers-view">
       <header className="staff-guilds-heading">
         <div>
-          <span className="panel-kicker">Owner-only · Cloudflare egress</span>
-          <h2>Discord proxy workers</h2>
-          <p>Optional Cloudflare workers relay Discord REST requests from Cloudflare's Worker egress instead of this host's shared IP. Health, latency, failures and a live request feed update every few seconds. Registering a worker never changes routing until you enable it.</p>
+          <span className="panel-kicker">{t("proxy.kicker")}</span>
+          <h2>{t("proxy.title")}</h2>
+          <p>{t("proxy.text")}</p>
         </div>
         <div className={`proxy-routing-badge${routing?.enabled ? " is-on" : ""}`}>
           <i />
-          <span><small>Routing</small><strong>{routing?.enabled ? "Workers active" : "Direct"}</strong></span>
+          <span><small>{t("proxy.routing")}</small><strong>{t(routing?.enabled ? "proxy.workersActive" : "proxy.direct")}</strong></span>
         </div>
       </header>
 
       {loadError && <div className="notice warning" role="status">{loadError}</div>}
       {!routing?.token_configured && !loading && (
         <div className="notice warning" role="status">
-          Set <code>PROXY_WORKER_TOKEN</code> on the bot and the same <code>AUTH_TOKEN</code> secret on each worker before registering one.
+          {t("proxy.tokenMissingBefore")} <code>PROXY_WORKER_TOKEN</code> {t("proxy.tokenMissingMiddle")} <code>AUTH_TOKEN</code> {t("proxy.tokenMissingAfter")}
         </div>
       )}
 
       <div className="proxy-toolbar">
-        <span className="proxy-live-label"><i />{routing?.enabled ? "Live" : "Idle"} · {refreshedAt ? `updated ${new Date(refreshedAt).toLocaleTimeString()}` : "connecting…"}</span>
+        <span className="proxy-live-label"><i />{t(routing?.enabled ? "proxy.live" : "proxy.idle")} · {refreshedAt ? t("proxy.updatedAt", { time: new Date(refreshedAt).toLocaleTimeString() }) : t("proxy.connecting")}</span>
         <div className="proxy-toolbar-actions">
           <button type="button" className={`button button-small ${routing?.enabled ? "button-danger" : "button-primary"}`} disabled={busy || loading || !routing || (!routing.enabled && workers.length === 0)} onClick={() => void toggleRouting()}>
-            <Icon name="spark" />{routing?.enabled ? "Disable worker routing" : "Route Discord through workers"}
+            <Icon name="spark" />{t(routing?.enabled ? "proxy.disableRouting" : "proxy.enableRouting")}
           </button>
-          <button type="button" className="button button-small button-muted" disabled={loading} onClick={() => void refresh(false)}><Icon name="refresh" />Refresh now</button>
+          <button type="button" className="button button-small button-muted" disabled={loading} onClick={() => void refresh(false)}><Icon name="refresh" />{t("proxy.refreshNow")}</button>
         </div>
       </div>
 
       <div className="proxy-overview">
-        <div><span className="panel-kicker">Workers</span><strong>{online} / {workers.length} online</strong><small>{routing?.enabled ? "Serving Discord REST" : "Registered, not routing"}</small></div>
-        <div><span className="panel-kicker">Requests</span><strong>{totalRequests.toLocaleString()}</strong><small>{errorRate(totalRequests, usage?.errors || 0)} worker errors</small></div>
-        <div><span className="panel-kicker">Average latency</span><strong>{totalRequests ? formatMs(usage?.avg_latency_ms) : "—"}</strong><small>p95 {totalRequests ? formatMs(usage?.p95_latency_ms) : "—"}</small></div>
-        <div><span className="panel-kicker">Local relay failures</span><strong>{routing?.total_failures ?? 0}</strong><small>{routing?.last_error ? "See recent errors" : "No relay failures"}</small></div>
+        <div><span className="panel-kicker">{t("proxy.workers")}</span><strong>{t("proxy.onlineOf", { online, total: workers.length })}</strong><small>{t(routing?.enabled ? "proxy.servingRest" : "proxy.registeredNotRouting")}</small></div>
+        <div><span className="panel-kicker">{t("proxy.requests")}</span><strong>{totalRequests.toLocaleString()}</strong><small>{t("proxy.workerErrors", { rate: errorRate(totalRequests, usage?.errors || 0) })}</small></div>
+        <div><span className="panel-kicker">{t("proxy.averageLatency")}</span><strong>{totalRequests ? formatMs(usage?.avg_latency_ms) : "—"}</strong><small>{t("proxy.p95")} {totalRequests ? formatMs(usage?.p95_latency_ms) : "—"}</small></div>
+        <div><span className="panel-kicker">{t("proxy.localFailures")}</span><strong>{routing?.total_failures ?? 0}</strong><small>{t(routing?.last_error ? "proxy.seeRecentErrors" : "proxy.noRelayFailures")}</small></div>
       </div>
 
       <section className="proxy-graph-card" aria-labelledby="proxy-latency-heading">
         <div className="proxy-section-heading">
-          <div><span className="panel-kicker">Last 15 minutes</span><h3 id="proxy-latency-heading">Discord API latency</h3></div>
-          <span className="proxy-graph-note">5-second buckets · p95 and errors across every online worker</span>
+          <div><span className="panel-kicker">{t("proxy.last15")}</span><h3 id="proxy-latency-heading">{t("proxy.latencyTitle")}</h3></div>
+          <span className="proxy-graph-note">{t("proxy.latencyNote")}</span>
         </div>
-        <LatencyChart points={data?.latency || []} title="Aggregate Discord API latency" />
+        <LatencyChart points={data?.latency || []} title={t("proxy.aggregateLatency")} />
         {statusEntries.length > 0 && (
-          <div className="proxy-status-strip" aria-label="Response code counts">
+          <div className="proxy-status-strip" aria-label={t("proxy.statusAria")}>
             {statusEntries.map(([status, count]) => (
               <span key={status} className={Number(status) >= 500 ? "is-error" : Number(status) >= 400 ? "is-warn" : "is-ok"}>
                 <b>{status}</b>{Number(count).toLocaleString()}
@@ -300,16 +306,16 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
       </section>
 
       <form className="proxy-add-form" onSubmit={(event) => void addWorker(event)}>
-        <label className="form-field"><span className="form-label">Worker label</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={60} placeholder="EU edge / secondary" required /></label>
-        <label className="form-field"><span className="form-label">Worker HTTPS origin</span><input value={url} onChange={(event) => setUrl(event.target.value)} type="url" placeholder="https://niko-discord-proxy.example.workers.dev" required /></label>
-        <button type="submit" className="button button-primary" disabled={busy || !routing?.token_configured}>{busy ? "Verifying…" : "Verify & add worker"}</button>
+        <label className="form-field"><span className="form-label">{t("proxy.workerLabel")}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={60} placeholder={t("proxy.workerLabelPlaceholder")} required /></label>
+        <label className="form-field"><span className="form-label">{t("proxy.workerOrigin")}</span><input value={url} onChange={(event) => setUrl(event.target.value)} type="url" placeholder="https://niko-discord-proxy.example.workers.dev" required /></label>
+        <button type="submit" className="button button-primary" disabled={busy || !routing?.token_configured}>{t(busy ? "proxy.verifyingShort" : "proxy.verifyAndAdd")}</button>
       </form>
 
       <div className="proxy-worker-list">
-        {loading && !data ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading proxy workers…</p></div> : workers.length === 0 ? (
+        {loading && !data ? <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("proxy.loading")}</p></div> : workers.length === 0 ? (
           <div className="staff-guild-empty">
             <Icon name="shield" />
-            <span>No proxy workers registered yet. Deploy <code>proxy-worker/</code>, set its <code>AUTH_TOKEN</code>, then add its URL above.</span>
+            <span>{t("proxy.noneBefore")} <code>proxy-worker/</code>{t("proxy.noneMiddle")} <code>AUTH_TOKEN</code>{t("proxy.noneAfter")}</span>
           </div>
         ) : workers.map((worker) => (
           <WorkerCard
@@ -326,10 +332,10 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
       <div className="proxy-live-grid">
         <section className="proxy-live-card" aria-labelledby="proxy-feed-heading">
           <div className="proxy-section-heading">
-            <div><span className="panel-kicker">Live feed</span><h3 id="proxy-feed-heading">Requests to Discord</h3></div>
-            <span className="proxy-graph-note">Response code · latency</span>
+            <div><span className="panel-kicker">{t("proxy.feedKicker")}</span><h3 id="proxy-feed-heading">{t("proxy.feedTitle")}</h3></div>
+            <span className="proxy-graph-note">{t("proxy.feedNote")}</span>
           </div>
-          {feed.length === 0 ? <div className="proxy-empty-feed">No proxied requests yet. Enable routing and Niko's next Discord REST call appears here.</div> : (
+          {feed.length === 0 ? <div className="proxy-empty-feed">{t("proxy.feedEmpty")}</div> : (
             <ol className="proxy-feed">
               {feed.slice(0, 18).map((item, index) => (
                 <li key={`${item.at}-${index}`}>
@@ -346,15 +352,15 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
 
         <section className="proxy-live-card" aria-labelledby="proxy-errors-heading">
           <div className="proxy-section-heading">
-            <div><span className="panel-kicker">Diagnostics</span><h3 id="proxy-errors-heading">Recent proxy errors</h3></div>
-            <span className="proxy-graph-note">Newest first</span>
+            <div><span className="panel-kicker">{t("proxy.errorsKicker")}</span><h3 id="proxy-errors-heading">{t("proxy.errorsTitle")}</h3></div>
+            <span className="proxy-graph-note">{t("proxy.newestFirst")}</span>
           </div>
-          {errors.length === 0 ? <div className="proxy-empty-feed">No proxy errors recorded. Workers and local relays are answering normally.</div> : (
+          {errors.length === 0 ? <div className="proxy-empty-feed">{t("proxy.errorsEmpty")}</div> : (
             <ol className="proxy-error-list">
               {errors.slice(0, 10).map((item, index) => (
                 <li key={`${item.at}-${index}`}>
                   <span className={`proxy-feed-code ${statusTone(item.status)}`}>{item.status || "ERR"}</span>
-                  <div><strong>{item.message || "Discord API request failed."}</strong><small>{item.worker_name || "local relay"} · {item.method} {item.path} · {formatClock(item.at)}</small></div>
+                  <div><strong>{item.message || t("proxy.requestFailed")}</strong><small>{item.worker_name || t("proxy.localRelay")} · {item.method} {item.path} · {formatClock(item.at)}</small></div>
                 </li>
               ))}
             </ol>

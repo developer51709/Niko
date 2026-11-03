@@ -12,9 +12,10 @@
 
 import { useEffect, useState } from "react";
 import { getBotEmojis } from "../api";
-import type { BotEmoji } from "../types";
+import type { BotEmoji, ServerEmoji } from "../types";
 
 let catalog: BotEmoji[] = [];
+let serverSample: ServerEmoji | null = null;
 let applicationIds: ReadonlySet<string> = new Set();
 let failed = false;
 let pending: Promise<BotEmoji[]> | null = null;
@@ -49,6 +50,7 @@ function ensureBotEmojis(): Promise<BotEmoji[]> {
     pending = getBotEmojis()
       .then((response) => {
         catalog = response.emojis;
+        serverSample = response.server_emoji ?? null;
         applicationIds = new Set(catalog.map((emoji) => emoji.id));
         failed = false;
         listeners.forEach((listener) => listener());
@@ -66,6 +68,11 @@ function ensureBotEmojis(): Promise<BotEmoji[]> {
   return pending;
 }
 
+/** A real server emoji with its guild, once the catalog has loaded. */
+export function botServerEmoji(): ServerEmoji | null {
+  return serverSample;
+}
+
 /** The bot's emojis for a component, re-rendering once they arrive. */
 export function useBotEmojis(): BotEmoji[] {
   const [emojis, setEmojis] = useState<BotEmoji[]>(() => botEmojis());
@@ -79,4 +86,19 @@ export function useBotEmojis(): BotEmoji[] {
   }, []);
 
   return emojis;
+}
+
+/** The lab's server-emoji sample, re-rendering once the catalog arrives. */
+export function useBotServerEmoji(): ServerEmoji | null {
+  const [sample, setSample] = useState<ServerEmoji | null>(() => botServerEmoji());
+
+  useEffect(() => {
+    const listener = () => setSample(botServerEmoji());
+    listeners.add(listener);
+    void ensureBotEmojis();
+    setSample(botServerEmoji());
+    return () => { listeners.delete(listener); };
+  }, []);
+
+  return sample;
 }

@@ -7,6 +7,7 @@ import { DocSearchBar } from "../components/DocSearchBar";
 import { DocFilters } from "../components/DocFilters";
 import { DocCard } from "../components/DocCard";
 import { useDocSearch, useTagCloud } from "../hooks/useDocSearch";
+import { useStrings } from "../i18n";
 import { DOC_SECTIONS, DOCS } from "../data/docs";
 import type { DocCategory } from "../types";
 import { navigate } from "../router";
@@ -14,6 +15,7 @@ import { navigate } from "../router";
 export { DocsSlugPage } from "./DocsSlugPage";
 
 export function DocsPage() {
+  const { t } = useStrings("docs");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedSection, setSelectedSection] = useState<string>("");
   const [showResults, setShowResults] = useState(false);
@@ -90,9 +92,9 @@ export function DocsPage() {
       <PublicHeader page="docs" />
       <main className="shell page-main docs-page">
         <PublicPageIntro
-          eyebrow="Documentation center"
-          title={<>Niko, <em>explained.</em></>}
-          description="Quick guides and clear answers for setting up and getting more from your Discord bot."
+          eyebrow={t("intro.eyebrow")}
+          title={<>{t("intro.title")} <em>{t("intro.titleEm")}</em></>}
+          description={t("intro.description")}
         />
 
         {/* Search Section */}
@@ -104,7 +106,9 @@ export function DocsPage() {
                 setQuery(value);
                 setShowResults(true);
               }}
-              placeholder="Search documentation, commands, guides..."
+              placeholder={t("search.placeholder")}
+              ariaLabel={t("search.aria")}
+              clearLabel={t("search.clear")}
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
               onEnter={() => setShowResults(false)}
@@ -115,7 +119,7 @@ export function DocsPage() {
               <div className="search-results-dropdown">
                 <div className="search-results-header">
                   <span className="results-count">
-                    {resultCount} {resultCount === 1 ? "result" : "results"}
+                    {resultCount} {t(resultCount === 1 ? "count.result" : "count.results")}
                   </span>
                   <button
                     className="clear-search-btn"
@@ -125,7 +129,7 @@ export function DocsPage() {
               setSelectedSection("");
                     }}
                   >
-                    Clear
+                    {t("search.clear")}
                   </button>
                 </div>
                 <div className="search-results-list">
@@ -155,7 +159,7 @@ export function DocsPage() {
                 {results.length > 8 && (
                   <div className="search-results-footer">
                     <span>
-                      Showing 8 of {results.length} results. Browse all docs below.
+                      {t("search.showing", { count: results.length })}
                     </span>
                   </div>
                 )}
@@ -169,7 +173,7 @@ export function DocsPage() {
           <button
             className="mobile-menu-toggle"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle documentation menu"
+            aria-label={t("menu.toggle")}
             aria-expanded={mobileMenuOpen}
           >
             <Icon name={mobileMenuOpen ? "close" : "menu"} size={20} />
@@ -177,11 +181,11 @@ export function DocsPage() {
           {mobileMenuOpen && (
             <div className="mobile-nav-panel">
               <div className="mobile-nav-header">
-                <h3>Documentation</h3>
+                <h3>{t("menu.title")}</h3>
                 <button
                   className="close-menu-btn"
                   onClick={() => setMobileMenuOpen(false)}
-                  aria-label="Close menu"
+                  aria-label={t("menu.close")}
                 >
                   <Icon name="close" size={15} />
                 </button>
@@ -215,7 +219,7 @@ export function DocsPage() {
           <div className="docs-tags-cloud">
             <div className="tags-cloud-title">
               <Icon name="spark" size={14} />
-              <span>Popular topics</span>
+              <span>{t("topics.title")}</span>
             </div>
             <div className="tags-cloud-list">
               {tagCloud.slice(0, 15).map(({ tag, count }) => (
@@ -238,6 +242,8 @@ export function DocsPage() {
             selectedCategory={filters.category}
             onSelectCategory={handleCategoryChange}
             sections={DOC_SECTIONS}
+            allCategoriesLabel={t("filters.all")}
+            ariaLabel={t("filters.aria")}
           />
         </div>
 
@@ -246,11 +252,11 @@ export function DocsPage() {
           <div className="docs-results-header">
             <div className="results-info">
               <span className="results-count-large">
-                {resultCount} {resultCount === 1 ? "article" : "articles"}
+                {resultCount} {t(resultCount === 1 ? "count.article" : "count.articles")}
               </span>
               {filters.query && (
                 <span className="search-query-display">
-                  for "<strong>{filters.query}</strong>"
+                  {t("results.for")} "<strong>{filters.query}</strong>"
                 </span>
               )}
             </div>
@@ -263,7 +269,7 @@ export function DocsPage() {
               disabled={!hasActiveFilters}
             >
               <Icon name="close" size={13} />
-              Clear all filters
+              {t("results.clearAll")}
             </button>
           </div>
         )}
@@ -274,10 +280,10 @@ export function DocsPage() {
             !results.length ? (
               <div className="docs-empty">
                 <span className="docs-empty-icon" aria-hidden="true"><Icon name="search" size={16} /></span>
-                <strong>No articles match {filters.query ? `“${filters.query}”` : "these filters"}</strong>
-                <p>Try a broader search term, or clear the filters to browse every guide.</p>
+                <strong>{t("empty.title")} {filters.query ? `“${filters.query}”` : t("empty.filters")}</strong>
+                <p>{t("empty.body")}</p>
                 <button className="button button-muted button-small" type="button" onClick={() => { clearFilters(); setSelectedSection(""); }}>
-                  Clear filters
+                  {t("empty.clear")}
                 </button>
               </div>
             ) : (
@@ -359,14 +365,13 @@ export function DocsPage() {
         <div className="docs-footer-note">
           <Icon name="book" size={20} />
           <div>
-            <strong>Want more detail?</strong>
+            <strong>{t("footer.title")}</strong>
             <p>
-              The repository includes setup, maintenance, intent verification,
-              provider compatibility, and API documentation in the{" "}
+              {t("footer.bodyBefore")}{" "}
               <a href="https://github.com/developer51709/Niko" target="_blank" rel="noreferrer">
                 docs/
               </a>{" "}
-              folder.
+              {t("footer.bodyAfter")}
             </p>
           </div>
         </div>
