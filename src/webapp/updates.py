@@ -82,7 +82,48 @@ SKIPPED_SUFFIXES = {".pyc", ".pyo", ".swp", ".tmp"}
 _MANIFEST_TTL = 10.0
 _manifest_cache: dict = {"at": 0.0, "document": None, "error": None}
 _lock = threading.Lock()
-_running = {"active": False, "areas": [], "started_at": None}
+_running = {
+    "active": False,
+    "areas": [],
+    "started_at": None,
+    "area": None,
+    "index": 0,
+    "total": 0,
+    "done": [],
+    "phase": "",
+}
+
+
+def _set_progress(**changes) -> None:
+    """Record where the run in flight has got to, for the page's live bar."""
+    _running.update(changes)
+
+
+def _progress_reset() -> None:
+    _running.update({
+        "active": False,
+        "areas": [],
+        "started_at": None,
+        "area": None,
+        "index": 0,
+        "total": 0,
+        "done": [],
+        "phase": "",
+    })
+
+
+def progress() -> dict:
+    """A snapshot of the update currently running, or an idle record."""
+    return {
+        "active": _running["active"],
+        "areas": list(_running["areas"]),
+        "area": _running["area"],
+        "index": _running["index"],
+        "total": _running["total"],
+        "done": list(_running["done"]),
+        "phase": _running["phase"],
+        "started_at": _running["started_at"],
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -474,25 +515,39 @@ def apply(areas, bot=None) -> dict:
     if _running["active"]:
         return {**current, "ok": False, "error": "An update is already being applied."}
 
-    _running.update({"active": True, "areas": chosen, "started_at": int(time.time())})
+    _running.update({
+        "active": True,
+        "areas": list(chosen),
+        "started_at": int(time.time()),
+        "area": chosen[0] if chosen else None,
+        "index": 0,
+        "total": len(chosen),
+        "done": [],
+        "phase": "starting",
+    })
     run_id = time.strftime("%Y%m%d-%H%M%S")
     started = int(time.time())
     results: dict[str, dict] = {}
     handoff_needed = False
 
     try:
-        for name in chosen:
+        for index, name in enumerate(chosen):
+            _set_progress(area=name, index=index, phase="pulling")
             changes = (current["areas"].get(name) or {}).get("changed", 0)
             if not changes:
                 results[name] = {"changed": 0, "strategy": "nothing to do"}
+                _running["done"].append(name)
+                _set_progress(phase="skipped")
                 continue
             try:
                 staged = _stage_area(name, current["areas"][name]["files"], run_id)
             except Exception as exc:
                 results[name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}", "rolled_back": True}
+                _set_progress(phase="failed")
                 _record({"id": run_id, "started_at": started, "finished_at": int(time.time()), "areas": results})
                 return {**current, "ok": False, "run": run_id, "areas": results, "last": last_run()}
 
+            _set_progress(phase="applying")
             outcome = {"ok": True, "changed": changes, **staged}
             try:
                 if name == "cogs":
@@ -525,9 +580,12 @@ def apply(areas, bot=None) -> dict:
                 _restore_area(name, current["areas"][name]["files"], run_id)
                 outcome = {"ok": False, "error": f"{type(exc).__name__}: {exc}", "rolled_back": True}
                 _rebuild_after_rollback(name, bot)
+                _set_progress(phase="failed")
             results[name] = outcome
+            _running["done"].append(name)
+            _set_progress(phase="applied")
     finally:
-        _running.update({"active": False, "areas": [], "started_at": None})
+        _progress_reset()
 
     run = {
         "id": run_id,

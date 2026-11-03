@@ -1,0 +1,21 @@
+{
+  "roster.loadFailed": "Die Staff-Liste konnte nicht geladen werden.",
+  "roster.updating": "Staff-Zugang wird aktualisiert…",
+  "roster.assignSuspended": "{name} hat die Rolle {role} gespeichert, aber die Sperre bleibt aktiv. Hebe sie auf, wenn die Untersuchung endet.",
+  "roster.assignDone": "{name} hat jetzt die Rolle {role}. Die gespeicherten Einstellungen des öffentlichen Profils wurden beibehalten.",
+  "roster.suspended": "{name} ist gesperrt. Die Discord-Staff-Rollen und jeder Staff-Zugang wurden entfernt; die gespeicherte Rolle und das öffentliche Profil bleiben erhalten.",
+  "roster.lifted": "Die Sperre von {name} wurde aufgehoben und die Discord-Staff-Rollen wiederhergestellt.",
+  "roster.demoted": "{name} wurde herabgestuft. Das öffentliche Profil bleibt erhalten, wird aber verborgen, falls die Person zurückkehrt.",
+  "roster.updateFailed": "Die Staff-Änderung konnte nicht abgeschlossen werden.",
+  "roster.chooseRole": "Wähle zuerst eine Staff-Rolle.",
+  "roster.confirmAssign": "{name} die Rolle {role} geben?",
+  "roster.suspendPrompt": "Warum wird {name} gesperrt?\n\nDas wird in der Staff-Liste erfasst. Die gespeicherte Rolle und das öffentliche Profil bleiben erhalten, aber jeder Staff-Zugang wird entfernt, bis du die Sperre aufhebst.",
+  "roster.reasonTooShort": "Gib einen kurzen Grund für die Sperre an.",
+  "roster.confirmSuspend": "{name} jetzt sperren und den Staff-Zugang entfernen?",
+  "roster.confirmDemote": "{name} herabstufen? Das öffentliche Profil bleibt erhalten, wird aber verborgen, falls die Person zurückkehrt.",
+  "roster.demoteReason": "Grund für die Herabstufung (optional)",
+  "roster.confirmLift": "Die Sperre von {name} aufheben und die Staff-Rollen wiederherstellen?",
+  "roster.enterId": "Gib eine Discord-Nutzer-ID ein und wähle eine Staff-Rolle.",
+  "roster.confirmAdd": "Nutzer {id} die Rolle {role} geben?",
+  "roster.userName": "Nutzer {id}"
+}

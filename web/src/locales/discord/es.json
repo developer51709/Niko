@@ -1,0 +1,10 @@
+{
+  "title": "Servidor de soporte — Niko",
+  "checking": "Comprobando el enlace de soporte de Niko…",
+  "redirecting": "Llevándote al servidor de soporte de Niko…",
+  "continue": "Continúa si no se te redirige",
+  "missing.eyebrow": "Soporte de Niko",
+  "missing.title": "No encontramos el enlace de soporte.",
+  "missing.body": "El enlace del servidor de soporte oficial no está configurado ahora mismo. Vuelve a comprobarlo más tarde.",
+  "missing.action": "Visitar soporte"
+}

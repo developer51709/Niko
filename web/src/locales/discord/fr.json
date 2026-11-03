@@ -1,0 +1,10 @@
+{
+  "title": "Serveur d’assistance — Niko",
+  "checking": "Vérification du lien d’assistance Niko…",
+  "redirecting": "Redirection vers le serveur d’assistance Niko…",
+  "continue": "Continue si tu n’es pas redirigé",
+  "missing.eyebrow": "Assistance Niko",
+  "missing.title": "Nous n’avons pas trouvé le lien d’assistance.",
+  "missing.body": "Le lien du serveur d’assistance officiel n’est pas configuré pour le moment. Reviens plus tard.",
+  "missing.action": "Aller à l’assistance"
+}

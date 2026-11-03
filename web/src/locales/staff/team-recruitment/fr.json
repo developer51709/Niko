@@ -1,0 +1,14 @@
+{
+  "applications.unavailable": "Page des candidatures de l’équipe indisponible.",
+  "applications.changing": "Modification de ce poste…",
+  "applications.statusFailed": "Le statut du poste n’a pas pu être modifié.",
+  "applications.revokeConfirm": "Annuler l’approbation de {name} et retirer le rôle {role} ?",
+  "applications.teamRole": "d’équipe",
+  "applications.savingDecision": "Enregistrement de cette décision…",
+  "applications.alreadyRecorded": "Cette décision est déjà enregistrée pour {name}. Rien n’a été renvoyé ni modifié.",
+  "applications.approvedNoDm": "{name} a été accepté et le rôle d’équipe attribué, mais le message privé de décision n’a pas pu être délivré.",
+  "applications.approved": "{name} a été accepté, le rôle d’équipe attribué et le message privé de décision envoyé.",
+  "applications.declinedRoleRemoved": "{name} a été refusé et le rôle d’équipe précédemment accordé a été retiré.",
+  "applications.declined": "{name} a été refusé.",
+  "applications.saveFailed": "La décision de candidature n’a pas pu être enregistrée."
+}

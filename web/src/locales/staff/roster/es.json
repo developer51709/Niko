@@ -1,0 +1,21 @@
+{
+  "roster.loadFailed": "No se pudo cargar la plantilla del staff.",
+  "roster.updating": "Actualizando el acceso del staff…",
+  "roster.assignSuspended": "{name} tiene el rol {role} guardado, pero su suspensión sigue activa. Levántala cuando termine la investigación.",
+  "roster.assignDone": "{name} tiene ahora el rol {role}. Se conservaron los ajustes de su perfil público.",
+  "roster.suspended": "{name} está suspendido. Se retiraron sus roles de staff en Discord y todo su acceso al staff; se conservan el rol guardado y el perfil público.",
+  "roster.lifted": "Se levantó la suspensión de {name} y se restauraron sus roles de staff en Discord.",
+  "roster.demoted": "{name} fue degradado. Su perfil público se conserva, pero queda oculto por si vuelve.",
+  "roster.updateFailed": "No se pudo completar la actualización del staff.",
+  "roster.chooseRole": "Elige primero un rol de staff.",
+  "roster.confirmAssign": "¿Dar a {name} el rol {role}?",
+  "roster.suspendPrompt": "¿Por qué se suspende a {name}?\n\nEsto se registra en la plantilla del staff. Se conservan su rol guardado y su perfil público, pero se retira todo su acceso al staff hasta que levantes la suspensión.",
+  "roster.reasonTooShort": "Añade un motivo breve para la suspensión.",
+  "roster.confirmSuspend": "¿Suspender a {name} y retirar su acceso al staff ahora?",
+  "roster.confirmDemote": "¿Degradar a {name}? Su perfil público se conservará, pero oculto por si vuelve.",
+  "roster.demoteReason": "Motivo de la degradación (opcional)",
+  "roster.confirmLift": "¿Levantar la suspensión de {name} y restaurar sus roles de staff?",
+  "roster.enterId": "Introduce un ID de usuario de Discord y elige un rol de staff.",
+  "roster.confirmAdd": "¿Dar al usuario {id} el rol {role}?",
+  "roster.userName": "Usuario {id}"
+}

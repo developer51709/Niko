@@ -1,0 +1,14 @@
+{
+  "applications.unavailable": "Team Applications page unavailable.",
+  "applications.changing": "Changing that opening…",
+  "applications.statusFailed": "Opening status could not be changed.",
+  "applications.revokeConfirm": "Reverse {name}'s approval and remove the {role} role?",
+  "applications.teamRole": "team",
+  "applications.savingDecision": "Saving that decision…",
+  "applications.alreadyRecorded": "{name} already has that decision recorded. Nothing was re-sent or changed.",
+  "applications.approvedNoDm": "{name} was approved and the team role was assigned, but the decision DM could not be delivered.",
+  "applications.approved": "{name} was approved, the team role was assigned, and the decision DM was sent.",
+  "applications.declinedRoleRemoved": "{name} was declined and the previously granted team role was removed.",
+  "applications.declined": "{name} was declined.",
+  "applications.saveFailed": "The application decision could not be saved."
+}

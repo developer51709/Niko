@@ -29,12 +29,20 @@ French filled in from English for any key a translation has not caught up with
 yet, so a new English string never crashes a guild that speaks another language. Keys may map
 to a string or to a list of strings (roleplay keeps its sentence variants in
 lists).
+
+A translation written on the beta instance does not have to wait for a deploy.
+:mod:`webapp.locale_feed` fetches beta's catalogues and calls
+:func:`apply_overlay`; the tables returned here read through that overlay, so a
+cog that captured its ``MESSAGES`` at import time serves the new wording on its
+next reply. The files on disk remain the fallback and the source of the key
+list, so an overlay can never add a key the code does not know about.
 """
 
 from __future__ import annotations
 
 import json
 import sys
+import threading
 from importlib import util as importlib_util
 from pathlib import Path
 from typing import Any, Iterator
@@ -50,6 +58,16 @@ LOCALES_DIRNAME = "locales"
 #: the folder rather than the package name so two checkouts (or a test package
 #: with the same name) cannot share a stale entry.
 _CACHE: dict[str, tuple[tuple[float, ...], dict[str, dict[str, Any]]]] = {}
+
+#: Live catalogues pulled from the beta instance: ``package → language → table``.
+#: Replaced wholesale so a reader never sees a half-applied set of files.
+_OVERLAY: dict[str, dict[str, dict[str, Any]]] = {}
+_OVERLAY_REVISION = 0
+_OVERLAY_LOCK = threading.Lock()
+
+#: Resolved tables, keyed by everything that can change one: package, namespace,
+#: language, overlay revision, and the mtimes of the files on disk.
+_RESOLVED: dict[tuple[str, str | None, str, int, tuple[float, ...]], dict[str, Any]] = {}
 
 
 class LocaleError(RuntimeError):
@@ -91,14 +109,20 @@ def _load_language(package: str, lang: str) -> dict[str, Any]:
     return data
 
 
+def _signature(package: str) -> tuple[float, ...]:
+    """The mtimes of a package's catalogue files, or ``-1`` when one is absent."""
+    folder = locales_path(package)
+    return tuple(
+        (folder / f"{lang}.json").stat().st_mtime if (folder / f"{lang}.json").is_file() else -1.0
+        for lang in SUPPORTED_LANGUAGES
+    )
+
+
 def _catalogues(package: str) -> dict[str, dict[str, Any]]:
     """Every language catalogue for ``package``, cached on file mtimes."""
     folder = locales_path(package)
     key = str(folder)
-    mtimes = tuple(
-        (folder / f"{lang}.json").stat().st_mtime if (folder / f"{lang}.json").is_file() else -1.0
-        for lang in SUPPORTED_LANGUAGES
-    )
+    mtimes = _signature(package)
     cached = _CACHE.get(key)
     if cached and cached[0] == mtimes:
         return cached[1]
@@ -136,6 +160,141 @@ def _validate(package: str, raw: dict[str, dict[str, Any]]) -> None:
         check(lang, raw[lang])
 
 
+def apply_overlay(catalogues: dict[str, dict[str, dict[str, Any]]] | None) -> int:
+    """Replace the live overlay with catalogues fetched from beta.
+
+    ``catalogues`` is ``{package: {language: catalogue}}`` — the shape the feed
+    publishes. Anything malformed is dropped rather than trusted, and a package
+    without an English table is skipped because English is the key list every
+    other language falls back to. Returns the new revision, which is what the
+    resolved-table cache keys on.
+
+    Call it with ``{}`` (or ``None``) to drop the overlay and go back to the
+    files this deployment shipped.
+    """
+    global _OVERLAY, _OVERLAY_REVISION
+    clean: dict[str, dict[str, dict[str, Any]]] = {}
+    for package, sections in (catalogues or {}).items():
+        if not isinstance(package, str) or not isinstance(sections, dict):
+            continue
+        languages = {
+            lang: table
+            for lang, table in sections.items()
+            if lang in SUPPORTED_LANGUAGES and isinstance(table, dict) and table
+        }
+        if not languages.get(FALLBACK_LANGUAGE):
+            continue
+        try:
+            # A catalogue from another machine must look like one of ours before
+            # any cog is allowed to read it.
+            _validate(package, {lang: languages.get(lang, {}) for lang in SUPPORTED_LANGUAGES})
+        except LocaleError:
+            continue
+        clean[package] = languages
+    with _OVERLAY_LOCK:
+        _OVERLAY = clean
+        _OVERLAY_REVISION += 1
+        _RESOLVED.clear()
+        return _OVERLAY_REVISION
+
+
+def overlay_revision() -> int:
+    """How many times the live overlay has been replaced in this process."""
+    return _OVERLAY_REVISION
+
+
+def _raw_language(package: str, lang: str) -> dict[str, Any]:
+    """One language's catalogue: beta's copy when the overlay has it, else disk."""
+    overlay = _OVERLAY.get(package)
+    if overlay and lang in overlay:
+        return overlay[lang]
+    return _catalogues(package)[lang]
+
+
+def _section(catalogue: dict[str, Any], namespace: str | None) -> dict[str, Any]:
+    """The namespace slice of a catalogue, or the whole table for a flat one."""
+    if namespace is None:
+        return catalogue
+    section = catalogue.get(namespace, {})
+    return section if isinstance(section, dict) else {}
+
+
+def _resolve(package: str, namespace: str | None, lang: str) -> dict[str, Any]:
+    """One language's table, English-filled, from whichever copy is current."""
+    key = (package, namespace, lang, _OVERLAY_REVISION, _signature(package))
+    cached = _RESOLVED.get(key)
+    if cached is not None:
+        return cached
+    table = dict(_section(_raw_language(package, FALLBACK_LANGUAGE), namespace))
+    table.update(_section(_raw_language(package, lang), namespace))
+    if len(_RESOLVED) > 2048:
+        _RESOLVED.clear()
+    _RESOLVED[key] = table
+    return table
+
+
+class LocaleTable(dict):
+    """One language's strings, re-resolved when beta's overlay changes.
+
+    A cog captures the table returned by :func:`load_locales` when it is
+    imported. Making that table read through to the current overlay is what lets
+    a translation land in a running bot: ``MESSAGES[lang][key]`` and
+    ``MESSAGES.get(lang, {}).get(key)`` both see the new wording without the cog
+    being reloaded. When nothing has changed, a lookup costs one integer compare.
+
+    The reads resolve against a private table that is replaced whole, never
+    mutated, so a reply being built on the bot's event loop can never see a
+    half-applied catalogue while the feed swaps one in from its own thread.
+    """
+
+    __slots__ = ("_package", "_namespace", "_lang", "_revision", "_table")
+
+    def __init__(self, package: str, namespace: str | None, lang: str) -> None:
+        table = _resolve(package, namespace, lang)
+        super().__init__(table)
+        self._package = package
+        self._namespace = namespace
+        self._lang = lang
+        self._revision = _OVERLAY_REVISION
+        self._table = table
+
+    def _current(self) -> dict[str, Any]:
+        revision = _OVERLAY_REVISION
+        if revision != self._revision:
+            try:
+                self._table = _resolve(self._package, self._namespace, self._lang)
+                self._revision = revision
+            except LocaleError:
+                # The files moved under us; keep the last good table rather
+                # than failing a reply that is already being built.
+                pass
+        return self._table
+
+    def __getitem__(self, key: str) -> Any:
+        return self._current()[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._current().get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._current()
+
+    def items(self):
+        return self._current().items()
+
+    def keys(self):
+        return self._current().keys()
+
+    def values(self):
+        return self._current().values()
+
+    def __iter__(self):
+        return iter(self._current())
+
+    def __len__(self) -> int:
+        return len(self._current())
+
+
 def available_namespaces(package: str) -> tuple[str, ...]:
     """Namespace names present in ``en.json``; empty for a single-table cog."""
     raw = _catalogues(package)
@@ -167,17 +326,9 @@ def load_locales(package: str, namespace: str | None = None) -> dict[str, dict[s
             "pass one to load_locales()"
         )
 
-    table: dict[str, dict[str, Any]] = {}
-    for lang in SUPPORTED_LANGUAGES:
-        section = raw[lang]
-        if namespace is not None:
-            section = section.get(namespace, {})
-            if not isinstance(section, dict):
-                section = {}
-        merged = dict(english)
-        merged.update(section)
-        table[lang] = merged
-    return table
+    # Each table resolves lazily, so a catalogue fetched from beta while the
+    # process is running is picked up without the caller reloading anything.
+    return {lang: LocaleTable(package, namespace, lang) for lang in SUPPORTED_LANGUAGES}
 
 
 def missing_translations(package: str) -> dict[str, list[str]]:
@@ -186,33 +337,44 @@ def missing_translations(package: str) -> dict[str, list[str]]:
     Namespaced cogs report ``"namespace.key"`` so a report points at the exact
     line a translator has to fill in.
     """
-    raw = _catalogues(package)
-    english = raw[FALLBACK_LANGUAGE]
+    _catalogues(package)  # validates the files even when the overlay is current
+    english = _raw_language(package, FALLBACK_LANGUAGE)
     missing: dict[str, list[str]] = {}
 
     for lang in SUPPORTED_LANGUAGES:
         if lang == FALLBACK_LANGUAGE:
             continue
+        translated_language = _raw_language(package, lang)
         gaps: list[str] = []
         for key, value in english.items():
-            translated = raw[lang].get(key)
+            translated = translated_language.get(key)
             if isinstance(value, dict):
                 translated = translated if isinstance(translated, dict) else {}
                 for sub_key in value:
                     if sub_key not in translated:
                         gaps.append(f"{key}.{sub_key}")
-            elif key not in raw[lang]:
+            elif key not in translated_language:
                 gaps.append(key)
         missing[lang] = gaps
     return missing
 
 
 def reload_locales(package: str | None = None) -> None:
-    """Drop cached catalogues (tests, and tools that edit JSON at runtime)."""
+    """Drop cached catalogues (tests, and tools that edit JSON at runtime).
+
+    The overlay is left in place on purpose: an update area may rewrite a cog's
+    files, and any language the overlay already holds should keep being served
+    until the feed replaces it. Bumping the revision makes every live table pick
+    the new files up on its next read.
+    """
+    global _OVERLAY_REVISION
     if package is None:
         _CACHE.clear()
     else:
         _CACHE.pop(str(locales_path(package)), None)
+    with _OVERLAY_LOCK:
+        _OVERLAY_REVISION += 1
+        _RESOLVED.clear()
 
 
 def catalogue_packages() -> Iterator[Path]:

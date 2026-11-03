@@ -7,6 +7,11 @@
  * translation is missing simply falls back to English, so a half-translated
  * site never shows raw keys or blank text.
  *
+ * A page with many sub pages — the dashboard, the staff area — puts each one's
+ * copy in a subfolder (`<page>/<sub>/en.json`) and keeps only the page chrome in
+ * its own file, so the files stay small enough to work in. Both levels are
+ * merged into the single catalogue `useStrings("<page>")` reads.
+ *
  * The bundled catalogues are only the *base*, though: while a translation pass
  * is being written on the beta instance, the live site reads the newer files
  * from `/api/locales/index.json` and `/api/locales/<page>/<lang>.json` (see
@@ -51,13 +56,15 @@ export const LANGUAGES: LanguageOption[] = [
 /** Where the devtools override lives; only this browser sees it. */
 const STORAGE_KEY = "niko.site.language";
 
-/** `../locales/status/en.json` → `CATALOGUES.status.en`.
+/** `../locales/status/en.json` and `../locales/dashboard/leveling/en.json` both
+ * land in the same place: `CATALOGUES.status.en`, `CATALOGUES.dashboard.en`.
  *
  * Catalogues are read as raw text and parsed here, the same way the docs
  * pipeline reads its MDX: it keeps the file contents visible to a bad-catalogue
  * error instead of failing inside the bundler, and a typo names the file.
  */
-const catalogueModules = import.meta.glob<string>("../locales/*/*.json", {
+// `**` covers both the page's own file and any subfolder below it.
+const catalogueModules = import.meta.glob<string>("../locales/*/**/*.json", {
   eager: true,
   query: "?raw",
   import: "default",
@@ -65,17 +72,30 @@ const catalogueModules = import.meta.glob<string>("../locales/*/*.json", {
 
 type Catalogue = Record<string, string>;
 
+/** Page-level files before subfolders, then alphabetically.
+ *
+ * The merge order has to be fixed rather than whatever order the glob returns:
+ * a key defined twice resolves the same way in every build, and the page file
+ * wins over a subfolder.
+ */
+const cataloguePaths = Object.keys(catalogueModules).sort(
+  (left, right) => left.split("/").length - right.split("/").length || left.localeCompare(right),
+);
+
 const CATALOGUES: Record<string, Partial<Record<LanguageCode, Catalogue>>> = {};
-for (const [path, source] of Object.entries(catalogueModules)) {
-  const match = /locales\/([^/]+)\/([^/]+)\.json$/.exec(path);
+for (const path of cataloguePaths) {
+  const match = /locales\/([^/]+)\/(?:[^/]+\/)?([^/]+)\.json$/.exec(path);
   if (!match) continue;
   let strings: Catalogue;
   try {
-    strings = JSON.parse(source) as Catalogue;
+    strings = JSON.parse(catalogueModules[path]) as Catalogue;
   } catch (error) {
     throw new Error(`Invalid locale catalogue ${path}: ${(error as Error).message}`);
   }
-  CATALOGUES[match[1]] = { ...(CATALOGUES[match[1]] ?? {}), [match[2]]: strings };
+  const page = match[1];
+  const language = match[2];
+  const target = CATALOGUES[page] ?? (CATALOGUES[page] = {});
+  target[language] = { ...(target[language] ?? {}), ...strings };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -361,19 +381,25 @@ export function useLanguage(): LanguageContextValue {
  * English fallback of each; an unknown key returns the key itself, which makes a
  * missing string obvious in development instead of silently empty.
  *
- * The catalogue starts as the bundled one and is replaced by the feed's newer
- * file the moment it arrives, so a translation written on beta shows up on the
- * next navigation without a deploy.
+ * The catalogue starts as the bundled one and the feed's newer file is laid over
+ * it the moment it arrives, so a translation written on beta shows up on the
+ * next navigation without a deploy — and a feed that answers with only part of
+ * a page can never make the rest of it fall back to raw keys.
  */
 export function useStrings(page: string) {
   const { language, revision } = useCatalogue(page);
 
   return useMemo(() => {
     const key = `${page}:${language}`;
-    const own = remote[key] ?? CATALOGUES[page]?.[language] ?? {};
-    const ownEnglish = remote[`${page}:en`] ?? CATALOGUES[page]?.en ?? {};
-    const shared = page === "shared" ? {} : remote[`shared:${language}`] ?? CATALOGUES.shared?.[language] ?? {};
-    const sharedEnglish = page === "shared" ? {} : remote["shared:en"] ?? CATALOGUES.shared?.en ?? {};
+    // Overlay, never replace: the feed is allowed to be newer, but it is served
+    // by another machine and may be a partial file — a page split across locale
+    // subfolders is merged server-side, and an older server answers with only
+    // the page's own chrome. Keys the feed does not carry keep their bundled
+    // copy, so the worst case is yesterday's wording instead of raw keys.
+    const own = { ...(CATALOGUES[page]?.[language] ?? {}), ...(remote[key] ?? {}) };
+    const ownEnglish = { ...(CATALOGUES[page]?.en ?? {}), ...(remote[`${page}:en`] ?? {}) };
+    const shared = page === "shared" ? {} : { ...(CATALOGUES.shared?.[language] ?? {}), ...(remote[`shared:${language}`] ?? {}) };
+    const sharedEnglish = page === "shared" ? {} : { ...(CATALOGUES.shared?.en ?? {}), ...(remote["shared:en"] ?? {}) };
 
     const t = (key: string, values?: Record<string, string | number>) => {
       const template = own[key] ?? shared[key] ?? ownEnglish[key] ?? sharedEnglish[key] ?? key;

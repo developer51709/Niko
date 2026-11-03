@@ -1,0 +1,13 @@
+{
+  "global.saving": "Guardando el perfil del bot…",
+  "global.saved": "Se actualizó el perfil global de Niko.",
+  "global.saveFailed": "No se pudo actualizar el perfil global.",
+  "global.kicker": "Dirección gráfica",
+  "global.title": "Perfil global de Niko",
+  "global.body": "Reservado para diseñadores gráficos, Head Admins y propietarios. Pega URL de imágenes accesibles públicamente.",
+  "global.avatarLabel": "URL del avatar del bot",
+  "global.bannerLabel": "URL del banner del bot",
+  "global.footer": "Actualiza el perfil de Discord de todo el bot.",
+  "global.updating": "Actualizando…",
+  "global.update": "Actualizar el perfil global"
+}

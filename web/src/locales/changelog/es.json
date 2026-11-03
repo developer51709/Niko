@@ -1,0 +1,16 @@
+{
+  "title": "Novedades — Niko",
+  "detail.notFoundTitle": "Entrada no encontrada",
+  "detail.notFoundBody": "No encontramos ninguna entrada de novedades para «{slug}».",
+  "detail.viewAll": "Ver todas las entradas de novedades",
+  "detail.highlights": "Lo más destacado",
+  "detail.allChanges": "Todos los cambios",
+  "detail.commits": "Commits",
+  "intro.eyebrow": "Lo nuevo",
+  "intro.title": "Novedades",
+  "intro.titleEm": "y actualizaciones.",
+  "intro.description": "Un registro de cada mejora, corrección y función nueva añadida a Niko, agrupado por versión para que sea más claro.",
+  "filters.all": "Todo",
+  "entry.readMore": "Leer las notas completas",
+  "empty": "Ninguna entrada coincide con este filtro."
+}

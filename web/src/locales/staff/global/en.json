@@ -1,0 +1,13 @@
+{
+  "global.saving": "Saving the bot profile…",
+  "global.saved": "Niko's global profile was updated.",
+  "global.saveFailed": "Could not update global profile.",
+  "global.kicker": "Graphic direction",
+  "global.title": "Global Niko profile",
+  "global.body": "Reserved for Graphic Designers, Head Admins, and owners. Paste publicly reachable image URLs.",
+  "global.avatarLabel": "Bot avatar URL",
+  "global.bannerLabel": "Bot banner URL",
+  "global.footer": "Updates the bot-wide Discord profile.",
+  "global.updating": "Updating…",
+  "global.update": "Update global profile"
+}

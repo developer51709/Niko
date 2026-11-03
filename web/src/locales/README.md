@@ -13,7 +13,22 @@ locales/
     en.json
   home/          the landing page
     en.json
+  dashboard/     the dashboard, split by sub page
+    en.json      the page chrome only
+    moderation/  one subfolder per dashboard section
+      en.json
+    leveling/
+      en.json
 ```
+
+A page with many sub pages keeps only its chrome — title, auth gate, shell,
+shared pickers — in the folder's own `en.json`, and gives each sub page a
+subfolder with the same `<lang>.json` files. The dashboard and the staff area are
+split that way, so the moderation tab's strings are a small file instead of a
+1,400-key one. Nothing changes for the code that reads them: the loaders merge
+the page file and its subfolders into the one catalogue `useStrings("<page>")`
+returns, page file first. That merge is also what the hashes, the `/status`
+coverage and the live feed count, so a page still appears as one page.
 
 `en.json` is the source copy and holds every string the page renders itself:
 headings, buttons, empty states, error text, form labels, and screen-reader
@@ -70,13 +85,36 @@ that page, so new strings and new languages appear as they are written. `/status
 reports the merged coverage and says where it came from — a **Live from beta**
 chip, or **From this build** when the feed is off or unreachable.
 
-Three endpoints make this work, all served by every instance:
+Four endpoints make this work, all served by every instance:
 
 | Endpoint | Who reads it | What it returns |
 | --- | --- | --- |
-| `/api/locales/source.json` | the other instance's feed | this instance's own files: page key counts, a hash per language file, and the bot's coverage |
-| `/api/locales/index.json` | the browser | the merged manifest: languages, pages, hashes used to cache each file |
-| `/api/locales/<page>/<lang>.json` | the browser | one catalogue, beta's copy first, with an `ETag` |
+| `/api/locales/source.json` | the other instance's feed | this instance's own files: page key counts, a hash per language file, plus the bot's catalogues and coverage |
+| `/api/locales/index.json` | the browser | the merged manifest: languages, pages, bot catalogues, hashes used to cache each file |
+| `/api/locales/<page>/<lang>.json` | the browser | one page catalogue, beta's copy first, with an `ETag` |
+| `/api/locales/bot/<package>/<lang>.json` | production's bot overlay | one bot catalogue (`cogs.music`), from the instance answering |
+
+## Bot wording without a restart
+
+The bot keeps its strings next to each cog (`src/cogs/<name>/locales`,
+`src/utils/<name>/locales`) and `utils/locales.py` caches them. Waiting for a
+deploy to change a single reply is the wrong shape for a translation pass, so
+the feed carries those catalogues too:
+
+- `status.bot_catalogues()` lists every bot catalogue with its English key count
+  and a hash per language, and `source.json` publishes it as `bot_pages`.
+- A production instance fetches the files whose hash it has not seen from
+  `/api/locales/bot/<package>/<lang>.json` and hands the whole set to
+  `utils.locales.apply_overlay()`. The tables `load_locales()` returned at import
+  time read through that overlay, so a cog that captured `MESSAGES` still serves
+  the new wording on its next reply — no reload, no restart.
+- A daemon poller (`locale_feed.start_sync_loop()`) refreshes it every
+  `LOCALE_FEED_TTL`, whether or not anyone has the dashboard open, and **Sync
+  now** on the staff locale page forces the same pass synchronously.
+- A catalogue beta cannot serve keeps the copy already in use, so a dropped
+  request never rolls a live server back to English. Command descriptions
+  registered with Discord at startup are the exception: those need a command
+  re-sync, which is a different mechanism.
 
 What the feed will not do:
 
@@ -86,8 +124,10 @@ What the feed will not do:
 - **It cannot blank a page.** A catalogue that fails validation, a timeout, or a
   broken beta response falls back to the files in this deployment.
 - **It cannot slow a page down.** Only the first read after a process starts
-  waits for beta; later reads refresh on a background thread. A beta that goes
-  away leaves the last good manifest in place, marked stale on `/status`.
+  waits for beta; later reads refresh on a background thread, and the bot's
+  catalogues are downloaded on a thread of their own. A beta that goes away
+  leaves the last good manifest — and the last good bot overlay — in place,
+  marked stale on `/status`.
 
 When beta is not configured, everything behaves exactly as before: the bundled
 catalogues and the local scan.

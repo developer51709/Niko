@@ -16,6 +16,7 @@
 @import "./styles/status.css";
 @import "./styles/maintenance.css";
 @import "./styles/owner.css";
+@import "./styles/updates.css";
 
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;

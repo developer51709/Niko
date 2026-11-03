@@ -129,6 +129,40 @@
   background: linear-gradient(90deg, #8bd5b1, #cfe9dc);
 }
 
+/* The catalogue card folds the bot's catalogues apart from the site's: the two
+   families are counted the same way but a translation pass rarely touches both. */
+.owner-fold { margin-top: 14px; border: 1px solid var(--line-soft); border-radius: 12px; background: rgba(255, 255, 255, .02); }
+.owner-fold > summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: inherit;
+}
+.owner-fold > summary::-webkit-details-marker { display: none; }
+.owner-fold > summary::before {
+  content: "\25B8";
+  flex: none;
+  color: var(--dim);
+  font-size: 11px;
+  transition: transform .18s ease;
+}
+.owner-fold[open] > summary::before { transform: rotate(90deg); }
+.owner-fold-title { flex: 1; color: var(--ink); font-size: 12.5px; }
+.owner-fold-meta {
+  color: var(--dim);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.owner-fold-body { padding: 0 14px 14px; }
+.owner-fold-note { margin: 0; color: var(--dim); font-size: 11px; line-height: 1.6; }
+.owner-fold .owner-table { margin-top: 10px; }
+
 .owner-table { margin-top: 16px; border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
 .owner-table-head,
 .owner-table-row {
