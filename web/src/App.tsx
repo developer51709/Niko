@@ -3,6 +3,7 @@ import { CommandsPage } from "./pages/CommandsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
+import { StatusPage } from "./pages/StatusPage";
 import { GuildLeaderboardPage } from "./pages/GuildLeaderboardPage";
 import { HomePage } from "./pages/HomePage";
 import { DonatePage } from "./pages/DonatePage";
@@ -28,9 +29,13 @@ import { ToastHost } from "./components/ToastHost";
 import { OwnerDevtools } from "./components/OwnerDevtools";
 import { ShaderBackground } from "./components/ShaderBackground";
 import { pageFromPath, type Page } from "./router";
+import { usePageTitle } from "./i18n";
 
 export function App() {
   const [page, setPage] = useState<Page>(pageFromPath);
+  // Client-side navigation never asks the server for a new document, so the tab
+  // title is re-stamped here from the page's catalogue in the chosen language.
+  usePageTitle(page);
   useEffect(() => {
     const handle = () => setPage(pageFromPath());
     window.addEventListener("popstate", handle);
@@ -39,6 +44,7 @@ export function App() {
 
   let pageContent;
   if (page === "commands") pageContent = <CommandsPage />;
+  else if (page === "status") pageContent = <StatusPage />;
   else if (page === "leaderboard") pageContent = <LeaderboardPage />;
   else if (page === "guild-leaderboard") {
     const pathParts = window.location.pathname.split("/").filter(Boolean);

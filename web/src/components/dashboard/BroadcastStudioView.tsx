@@ -15,18 +15,20 @@ import { Icon } from "../Icon";
 import { ColorPicker } from "./ColorPicker";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import type { StaffBroadcast, StaffBroadcastStatus } from "../../types";
+import { useStrings } from "../../i18n";
 
 const MAX_MEDIA = 10;
 const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const ACCENT_PRESETS = ["C8A882", "5865F2", "57F287", "FEE75C", "EB459E", "ED4245", "9B59B6", "3498DB"];
 
+// Catalogue keys rather than text: each badge is translated where it renders.
 const STATUS_LABELS: Record<StaffBroadcastStatus, string> = {
-  draft: "Draft",
-  sending: "Sending",
-  sent: "Delivered",
-  syncing: "Updating copies",
-  failed: "Needs attention",
+  draft: "broadcast.statusDraft",
+  sending: "broadcast.statusSending",
+  sent: "broadcast.statusSent",
+  syncing: "broadcast.statusSyncing",
+  failed: "broadcast.statusFailed",
 };
 
 type BroadcastStudioProps = {
@@ -55,6 +57,7 @@ function formatBytes(bytes: number) {
  * from the counters the job writes after every copy.
  */
 export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
+  const { t } = useStrings("dashboard");
   const [broadcasts, setBroadcasts] = useState<StaffBroadcast[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -120,7 +123,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
         }
         setError("");
       } catch (reason) {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "The broadcast studio could not be loaded.");
+        if (!cancelled) setError(reason instanceof Error ? reason.message : t("broadcast.loadFailed"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -155,12 +158,12 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
           if (broadcast.status === "sent") {
             notifySuccess(
               broadcast.status === "sent" && broadcast.edited_count > 0
-                ? `Every delivered copy was updated (${broadcast.edited_count} message${broadcast.edited_count === 1 ? "" : "s"}).`
-                : `Broadcast delivered to ${broadcast.sent_count} of ${broadcast.target_count} servers.`,
+                ? t(broadcast.edited_count === 1 ? "broadcast.updatedOne" : "broadcast.updatedMany", { count: broadcast.edited_count })
+                : t("broadcast.deliveredTo", { sent: broadcast.sent_count, total: broadcast.target_count }),
               "staff-broadcast",
             );
           } else {
-            notifyError(broadcast.last_error || "The broadcast finished with an error.", "staff-broadcast");
+            notifyError(broadcast.last_error || t("broadcast.finishedWithError"), "staff-broadcast");
           }
         }
       } catch {
@@ -182,19 +185,19 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
   const save = async (): Promise<StaffBroadcast | null> => {
     if (!selected || busy) return null;
     setBusy("saving");
-    notifyLoading("Saving the broadcast…", "staff-broadcast");
+    notifyLoading(t("broadcast.saving"), "staff-broadcast");
     try {
       const result = await updateStaffBroadcast(selected.id, { title, body, accent, footer }, csrfToken);
       const stored = applySaved(result.broadcast, result.syncing);
       loadFields(stored);
       if (result.syncing) {
-        notifySuccess("Saved. Every delivered copy is being updated now.", "staff-broadcast");
+        notifySuccess(t("broadcast.savedSyncing"), "staff-broadcast");
       } else {
-        notifySuccess("Broadcast saved as a draft.", "staff-broadcast");
+        notifySuccess(t("broadcast.savedDraft"), "staff-broadcast");
       }
       return stored;
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The broadcast could not be saved.", "staff-broadcast");
+      notifyError(reason instanceof Error ? reason.message : t("broadcast.saveFailed"), "staff-broadcast");
       return null;
     } finally {
       setBusy("");
@@ -204,10 +207,10 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
   const send = async () => {
     if (!selected || busy) return;
     if (!title.trim() || !body.trim()) {
-      notifyError("Add a title and a message before sending.", "staff-broadcast");
+      notifyError(t("broadcast.needTitleAndBody"), "staff-broadcast");
       return;
     }
-    if (!window.confirm(`Send this broadcast to every configured Niko announcement channel?\n\nBlacklisted servers are skipped automatically.`)) return;
+    if (!window.confirm(t("broadcast.sendConfirm"))) return;
     setBusy("sending");
     try {
       let current = selected;
@@ -216,13 +219,13 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
         current = saved.broadcast;
         applyBroadcast(current);
       }
-      notifyLoading("Preparing the delivery queue…", "staff-broadcast");
+      notifyLoading(t("broadcast.preparingQueue"), "staff-broadcast");
       const { broadcast } = await sendStaffBroadcast(current.id, csrfToken);
       applyBroadcast(broadcast);
       loadFields(broadcast);
-      notifySuccess("Broadcast queued. Delivery progress is live below.", "staff-broadcast");
+      notifySuccess(t("broadcast.queued"), "staff-broadcast");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The broadcast could not be sent.", "staff-broadcast");
+      notifyError(reason instanceof Error ? reason.message : t("broadcast.sendFailed"), "staff-broadcast");
     } finally {
       setBusy("");
     }
@@ -236,9 +239,9 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
       applyBroadcast(broadcast);
       loadedFor.current = null;
       setSelectedId(broadcast.id);
-      notifySuccess("New draft ready.", "staff-broadcast");
+      notifySuccess(t("broadcast.draftReady"), "staff-broadcast");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "A new draft could not be created.", "staff-broadcast");
+      notifyError(reason instanceof Error ? reason.message : t("broadcast.draftFailed"), "staff-broadcast");
     } finally {
       setBusy("");
     }
@@ -246,7 +249,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
 
   const removeBroadcast = async () => {
     if (!selected || busy) return;
-    if (!window.confirm("Delete this draft? Its text and uploaded images are removed.")) return;
+    if (!window.confirm(t("broadcast.deleteConfirm"))) return;
     setBusy("deleting");
     try {
       await deleteStaffBroadcast(selected.id, csrfToken);
@@ -259,9 +262,9 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
         setBroadcasts([broadcast]);
         setSelectedId(broadcast.id);
       }
-      notifySuccess("Draft deleted.", "staff-broadcast");
+      notifySuccess(t("broadcast.draftDeleted"), "staff-broadcast");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The draft could not be deleted.", "staff-broadcast");
+      notifyError(reason instanceof Error ? reason.message : t("broadcast.deleteFailed"), "staff-broadcast");
     } finally {
       setBusy("");
     }
@@ -273,7 +276,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     if (!selected || files.length === 0 || busy) return;
     const room = MAX_MEDIA - selected.media.length;
     if (room <= 0) {
-      notifyError(`A broadcast can carry up to ${MAX_MEDIA} images. Remove one first.`, "staff-broadcast");
+      notifyError(t("broadcast.tooManyImages", { max: MAX_MEDIA }), "staff-broadcast");
       return;
     }
     setBusy("uploading");
@@ -282,15 +285,15 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     try {
       for (const file of files.slice(0, room)) {
         if (!IMAGE_TYPES.has(file.type)) {
-          notifyError(`${file.name} is not a PNG, JPEG, GIF, or WebP image.`, "staff-broadcast");
+          notifyError(t("broadcast.badImageType", { name: file.name }), "staff-broadcast");
           continue;
         }
         if (file.size > MAX_MEDIA_BYTES) {
-          notifyError(`${file.name} is larger than 8 MB.`, "staff-broadcast");
+          notifyError(t("broadcast.imageTooLarge", { name: file.name }), "staff-broadcast");
           continue;
         }
         if (attachedBytes + file.size > 20 * 1024 * 1024) {
-          notifyError("Images can total 20 MB per broadcast so Discord accepts every copy.", "staff-broadcast");
+          notifyError(t("broadcast.imagesTotalTooLarge"), "staff-broadcast");
           continue;
         }
         try {
@@ -299,12 +302,12 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
           attachedBytes += file.size;
           uploaded += 1;
         } catch (reason) {
-          notifyError(reason instanceof Error ? reason.message : `${file.name} could not be uploaded.`, "staff-broadcast");
+          notifyError(reason instanceof Error ? reason.message : t("broadcast.uploadFailed", { name: file.name }), "staff-broadcast");
         }
       }
       if (uploaded > 0) {
         notifySuccess(
-          `${uploaded} image${uploaded === 1 ? "" : "s"} attached. ${selected.status === "sent" ? "Delivered copies will be updated." : "They will be uploaded with the message."}`,
+          t(uploaded === 1 ? "broadcast.attachedOne" : "broadcast.attachedMany", { count: uploaded }) + " " + t(selected.status === "sent" ? "broadcast.copiesWillUpdate" : "broadcast.uploadedWithMessage"),
           "staff-broadcast",
         );
       }
@@ -320,29 +323,29 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
       const result = await deleteStaffBroadcastMedia(selected.id, mediaId, csrfToken);
       applySaved(result.broadcast, result.syncing);
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "The image could not be removed.", "staff-broadcast");
+      notifyError(reason instanceof Error ? reason.message : t("broadcast.removeImageFailed"), "staff-broadcast");
     } finally {
       setBusy("");
     }
   };
 
   if (loading) {
-    return <div className="broadcast-studio-state"><div className="loading-ring" /><p>Opening the broadcast studio…</p></div>;
+    return <div className="broadcast-studio-state"><div className="loading-ring" /><p>{t("broadcast.opening")}</p></div>;
   }
   if (error) {
     return (
       <div className="broadcast-studio-state" role="alert">
         <Icon name="alert" />
         <p>{error}</p>
-        <button type="button" className="button button-muted" onClick={() => window.location.reload()}>Try again</button>
+        <button type="button" className="button button-muted" onClick={() => window.location.reload()}>{t("broadcast.retry")}</button>
       </div>
     );
   }
   if (!selected) {
     return (
       <div className="broadcast-studio-state">
-        <p>No broadcast is selected.</p>
-        <button type="button" className="button button-primary" onClick={() => void newBroadcast()}>Create a broadcast</button>
+        <p>{t("broadcast.noneSelected")}</p>
+        <button type="button" className="button button-primary" onClick={() => void newBroadcast()}>{t("broadcast.createBroadcast")}</button>
       </div>
     );
   }
@@ -354,18 +357,18 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     : selected.sent_count + selected.failed_count + selected.skipped_count;
   const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   const delivered = selected.sent_count > 0;
-  const previewFooter = footer.trim() || selected.footer || "Official Niko staff announcement";
+  const previewFooter = footer.trim() || selected.footer || t("broadcast.defaultFooter");
 
   return (
     <div className="broadcast-studio">
       <header className="broadcast-studio-heading">
         <div>
-          <span className="panel-kicker">Owner-only · official announcements</span>
-          <h2>Broadcast studio</h2>
-          <p>Compose once, deliver to every configured server, and update every copy later without reposting.</p>
+          <span className="panel-kicker">{t("broadcast.kicker")}</span>
+          <h2>{t("broadcast.title")}</h2>
+          <p>{t("broadcast.text")}</p>
         </div>
         <button type="button" className="button button-muted broadcast-new" onClick={() => void newBroadcast()} disabled={!!busy}>
-          <Icon name="plus" /> New broadcast
+          <Icon name="plus" /> {t("broadcast.newBroadcast")}
         </button>
       </header>
 
@@ -373,13 +376,13 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
         <section className="broadcast-progress-panel" aria-live="polite">
           <div className="broadcast-progress-heading">
             <div>
-              <span className="panel-kicker">{selected.status === "syncing" ? "Updating delivered copies" : "Sending broadcast"}</span>
+              <span className="panel-kicker">{t(selected.status === "syncing" ? "broadcast.updatingCopies" : "broadcast.sendingBroadcast")}</span>
               <strong>
                 {selected.status === "syncing"
-                  ? `${selected.edited_count} of ${total || "…"} messages updated`
+                  ? t("broadcast.updatedOf", { edited: selected.edited_count, total: total || "…" })
                   : total
-                    ? `${done} of ${total} servers processed`
-                    : "Preparing the delivery queue…"}
+                    ? t("broadcast.processedOf", { done, total })
+                    : t("broadcast.preparingQueue")}
               </strong>
             </div>
             <span className="broadcast-progress-percent">{total ? `${percent}%` : "…"}</span>
@@ -390,63 +393,63 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={total ? percent : undefined}
-            aria-label={selected.status === "syncing" ? "Updating delivered copies" : "Sending broadcast"}
+            aria-label={t(selected.status === "syncing" ? "broadcast.updatingCopies" : "broadcast.sendingBroadcast")}
           >
             <span className="broadcast-progress-fill" style={total ? { width: `${percent}%` } : undefined} />
           </div>
           <div className="broadcast-progress-counts">
-            <span><i className="is-sent" /> Delivered <b>{selected.sent_count}</b></span>
-            <span><i className="is-failed" /> Failed <b>{selected.failed_count}</b></span>
-            <span><i className="is-skipped" /> Skipped <b>{selected.skipped_count}</b></span>
-            <small>Requests are paced to stay inside Discord's rate limits.</small>
+            <span><i className="is-sent" /> {t("broadcast.delivered")} <b>{selected.sent_count}</b></span>
+            <span><i className="is-failed" /> {t("broadcast.failed")} <b>{selected.failed_count}</b></span>
+            <span><i className="is-skipped" /> {t("broadcast.skipped")} <b>{selected.skipped_count}</b></span>
+            <small>{t("broadcast.rateLimitNote")}</small>
           </div>
         </section>
       )}
 
       <div className="broadcast-studio-grid">
-        <section className="broadcast-composer" aria-label="Broadcast editor">
+        <section className="broadcast-composer" aria-label={t("broadcast.editorAria")}>
           <label className="broadcast-field" htmlFor="broadcast-title">
-            <span className="form-label">Title</span>
+            <span className="form-label">{t("broadcast.titleLabel")}</span>
             <input
               id="broadcast-title"
               value={title}
               maxLength={160}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="A short, clear headline"
+              placeholder={t("broadcast.titlePlaceholder")}
               disabled={locked}
             />
           </label>
 
           <label className="broadcast-field" htmlFor="broadcast-body">
-            <span className="form-label">Message</span>
+            <span className="form-label">{t("broadcast.messageLabel")}</span>
             <textarea
               id="broadcast-body"
               value={body}
               maxLength={3800}
               rows={9}
               onChange={(event) => setBody(event.target.value)}
-              placeholder="Write the announcement. Discord markdown is supported."
+              placeholder={t("broadcast.messagePlaceholder")}
               disabled={locked}
             />
-            <small>{body.length}/3800 characters · markdown supported</small>
+            <small>{t("broadcast.messageCount", { count: body.length })}</small>
           </label>
 
           <div className="broadcast-field-row">
             <label className="broadcast-field" htmlFor="broadcast-footer">
-              <span className="form-label">Footer</span>
+              <span className="form-label">{t("broadcast.footerLabel")}</span>
               <input
                 id="broadcast-footer"
                 value={footer}
                 maxLength={120}
                 onChange={(event) => setFooter(event.target.value)}
-                placeholder="Official Niko staff announcement"
+                placeholder={t("broadcast.footerPlaceholder")}
                 disabled={locked}
               />
             </label>
             <div className="broadcast-field broadcast-accent-field">
-              <span className="form-label">Accent</span>
+              <span className="form-label">{t("broadcast.accentLabel")}</span>
               <div className="broadcast-accent-controls">
-                <div className="broadcast-swatches" role="group" aria-label="Accent presets">
+                <div className="broadcast-swatches" role="group" aria-label={t("broadcast.accentPresets")}>
                   {ACCENT_PRESETS.map((preset) => (
                     <button
                       key={preset}
@@ -461,7 +464,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
                   ))}
                 </div>
                 <ColorPicker
-                  label="Broadcast accent color"
+                  label={t("broadcast.accentPicker")}
                   value={`#${accent}`}
                   onChange={(hex) => setAccent(hex.replace(/^#/, "").toUpperCase())}
                 />
@@ -469,11 +472,11 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
             </div>
           </div>
 
-          <section className="broadcast-media" aria-label="Broadcast images">
+          <section className="broadcast-media" aria-label={t("broadcast.imagesAria")}>
             <div className="broadcast-media-heading">
               <div>
-                <span className="form-label">Images</span>
-                <small>Uploaded with every message as attachments — copies never depend on an expiring link.</small>
+                <span className="form-label">{t("broadcast.imagesLabel")}</span>
+                <small>{t("broadcast.imagesHint")}</small>
               </div>
               <span className="broadcast-media-count">{selected.media.length}/{MAX_MEDIA}</span>
             </div>
@@ -491,7 +494,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
                       className="broadcast-media-remove"
                       onClick={() => void removeMedia(item.id)}
                       disabled={!!busy || locked}
-                      aria-label={`Remove ${item.filename}`}
+                      aria-label={t("broadcast.removeImageAria", { name: item.filename })}
                     >
                       <Icon name="close" />
                     </button>
@@ -515,15 +518,15 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
               disabled={!!busy || locked || selected.media.length >= MAX_MEDIA}
             >
               <Icon name="plus" />
-              <span>{busy === "uploading" ? "Uploading…" : "Add images"}</span>
-              <small>PNG, JPEG, GIF or WebP · 8 MB each · 20 MB total</small>
+              <span>{t(busy === "uploading" ? "broadcast.uploading" : "broadcast.addImages")}</span>
+              <small>{t("broadcast.imageLimits")}</small>
             </button>
           </section>
 
           <footer className="broadcast-composer-actions">
             <div className="broadcast-composer-meta">
-              <span className={`broadcast-status is-${selected.status}`}><i />{STATUS_LABELS[selected.status]}</span>
-              <small>{dirty ? "Unsaved changes" : `Saved ${formatWhen(selected.updated_at)}`}</small>
+              <span className={`broadcast-status is-${selected.status}`}><i />{t(STATUS_LABELS[selected.status])}</span>
+              <small>{dirty ? t("broadcast.unsaved") : t("broadcast.savedAt", { when: formatWhen(selected.updated_at) })}</small>
             </div>
             <div className="broadcast-composer-buttons">
               <button
@@ -532,7 +535,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
                 onClick={() => void save()}
                 disabled={!!busy || !dirty || locked}
               >
-                {busy === "saving" ? "Saving…" : delivered ? "Save & update copies" : "Save draft"}
+                {t(busy === "saving" ? "notifier.saving" : delivered ? "broadcast.saveAndUpdate" : "broadcast.saveDraft")}
               </button>
               {!delivered && (
                 <button
@@ -541,7 +544,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
                   onClick={() => void send()}
                   disabled={!!busy || !title.trim() || !body.trim() || locked}
                 >
-                  {busy === "sending" ? "Sending…" : "Send broadcast"}
+                  {t(busy === "sending" ? "broadcast.sending" : "broadcast.sendBroadcast")}
                 </button>
               )}
               {!delivered && (
@@ -551,24 +554,24 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
                   onClick={() => void removeBroadcast()}
                   disabled={!!busy}
                 >
-                  {busy === "deleting" ? "Deleting…" : "Delete"}
+                  {t(busy === "deleting" ? "broadcast.deleting" : "broadcast.delete")}
                 </button>
               )}
             </div>
           </footer>
         </section>
 
-        <aside className="broadcast-preview-panel" aria-label="Live Discord preview">
+        <aside className="broadcast-preview-panel" aria-label={t("broadcast.previewAria")}>
           <div className="broadcast-preview-heading">
-            <span className="panel-kicker">Live preview</span>
-            <span>Discord · Components v2</span>
+            <span className="panel-kicker">{t("broadcast.previewKicker")}</span>
+            <span>{t("broadcast.previewSurface")}</span>
           </div>
           <div className="broadcast-preview-surface">
             <article className="broadcast-preview-card" style={{ borderLeftColor: `#${accent}` }}>
-              <h3 className="broadcast-preview-title">{title.trim() || "Your broadcast title"}</h3>
+              <h3 className="broadcast-preview-title">{title.trim() || t("broadcast.previewTitle")}</h3>
               <span className="broadcast-preview-separator" />
               <DiscordMarkdown
-                text={body.trim() || "Your message appears here with Discord markdown, mentions, and emoji."}
+                text={body.trim() || t("broadcast.previewBody")}
                 className="broadcast-preview-body"
               />
               {selected.media.length > 0 && (
@@ -582,18 +585,18 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
             </article>
           </div>
           <p className="broadcast-preview-note">
-            Images are re-uploaded with each message, so the preview is the exact copy servers receive.
+            {t("broadcast.previewNote")}
           </p>
         </aside>
       </div>
 
-      <section className="broadcast-history" aria-label="Broadcast history">
+      <section className="broadcast-history" aria-label={t("broadcast.historyAria")}>
         <div className="broadcast-history-heading">
           <div>
-            <span className="panel-kicker">History</span>
-            <h3>Recent broadcasts</h3>
+            <span className="panel-kicker">{t("broadcast.historyKicker")}</span>
+            <h3>{t("broadcast.historyTitle")}</h3>
           </div>
-          <span>{broadcasts.length} saved</span>
+          <span>{t("broadcast.savedCount", { count: broadcasts.length })}</span>
         </div>
         <div className="broadcast-history-list">
           {broadcasts.map((item) => {
@@ -606,20 +609,20 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
             return (
               <article className={`broadcast-history-item${item.id === selected.id ? " is-selected" : ""}`} key={item.id}>
                 <button type="button" className="broadcast-history-open" onClick={() => setSelectedId(item.id)}>
-                  <span className={`broadcast-status is-${item.status}`}><i />{STATUS_LABELS[item.status]}</span>
+                  <span className={`broadcast-status is-${item.status}`}><i />{t(STATUS_LABELS[item.status])}</span>
                   <span className="broadcast-history-copy">
-                    <strong>{item.title.trim() || "Untitled broadcast"}</strong>
+                    <strong>{item.title.trim() || t("broadcast.untitled")}</strong>
                     <small>
                       {formatWhen(item.updated_at)}
-                      {item.sent_count > 0 ? ` · ${item.sent_count} delivered` : ""}
-                      {item.failed_count > 0 ? ` · ${item.failed_count} failed` : ""}
-                      {item.media.length > 0 ? ` · ${item.media.length} image${item.media.length === 1 ? "" : "s"}` : ""}
+                      {item.sent_count > 0 ? t("broadcast.historyDelivered", { count: item.sent_count }) : ""}
+                      {item.failed_count > 0 ? t("broadcast.historyFailed", { count: item.failed_count }) : ""}
+                      {item.media.length > 0 ? t(item.media.length === 1 ? "broadcast.historyImageOne" : "broadcast.historyImageMany", { count: item.media.length }) : ""}
                     </small>
                   </span>
-                  <span className="broadcast-history-open-label">{item.id === selected.id ? "Editing" : "Open"}</span>
+                  <span className="broadcast-history-open-label">{t(item.id === selected.id ? "broadcast.editing" : "broadcast.open")}</span>
                 </button>
                 {running && (
-                  <div className="broadcast-history-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={itemPercent} aria-label={`${STATUS_LABELS[item.status]} progress`}>
+                  <div className="broadcast-history-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={itemPercent} aria-label={t("broadcast.progressAria", { status: t(STATUS_LABELS[item.status]) })}>
                     <span style={{ width: `${itemPercent}%` }} />
                   </div>
                 )}

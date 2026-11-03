@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
+import { useStrings } from "../i18n";
 
-const STATUS_NAMES: Record<string, string> = {
-  online: "Online",
-  idle: "Idle",
-  dnd: "Do Not Disturb",
-  offline: "Offline",
-  streaming: "Streaming",
+//: Discord's own presence words, as catalogue keys.
+const STATUS_KEYS: Record<string, string> = {
+  online: "status.online",
+  idle: "status.idle",
+  dnd: "status.dnd",
+  offline: "status.offline",
+  streaming: "status.streaming",
 };
 
 export function DiscordStatusAvatar({ status, className, children, label }: {
@@ -14,8 +16,9 @@ export function DiscordStatusAvatar({ status, className, children, label }: {
   children: ReactNode;
   label?: string;
 }) {
-  const normalizedStatus = status && Object.prototype.hasOwnProperty.call(STATUS_NAMES, status) ? status : "offline";
-  const statusName = STATUS_NAMES[normalizedStatus];
+  const { t } = useStrings("shared");
+  const normalizedStatus = status && Object.prototype.hasOwnProperty.call(STATUS_KEYS, status) ? status : "offline";
+  const statusName = t(STATUS_KEYS[normalizedStatus]);
   return <span className={`discord-status-avatar ${className}-status-wrap`}>
     {children}
     <img className="discord-status-icon" src={`/assets/discord-status/status_${normalizedStatus}.png`} alt={label || statusName} title={label || statusName} />

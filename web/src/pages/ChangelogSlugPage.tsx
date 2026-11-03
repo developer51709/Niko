@@ -2,13 +2,16 @@ import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { getChangelogBySlug, type ChangelogChart, type ChangelogEntry } from "../data/changelog";
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
+import { renderChangelogMarkdown } from "./ChangelogPage";
 
 interface ChangelogSlugPageProps {
   slug: string;
 }
 
 export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
+  const { t } = useStrings("changelog");
   const entry = getChangelogBySlug(slug);
 
   if (!entry) {
@@ -18,10 +21,10 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
         <main className="shell page-main changelog-page">
           <div className="changelog-not-found">
             <Icon name="doc" size={48} />
-            <h1>Entry Not Found</h1>
-            <p>We couldn't find a changelog entry for "{slug}".</p>
+            <h1>{t("detail.notFoundTitle")}</h1>
+            <p>{t("detail.notFoundBody", { slug })}</p>
             <button onClick={() => navigate("/changelog")}>
-              View all changelog entries
+              {t("detail.viewAll")}
             </button>
           </div>
         </main>
@@ -55,7 +58,7 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
             {entry.version && <span className="changelog-version">v{entry.version}</span>}
           </div>
           <h1>{entry.title}</h1>
-          <p className="changelog-detail-summary">{entry.summary}</p>
+          <p className="changelog-detail-summary">{renderChangelogMarkdown(entry.summary)}</p>
           <div className="changelog-detail-tags">
             {entry.tags.map((tag) => (
               <span key={tag} className="changelog-tag">{tag}</span>
@@ -65,7 +68,7 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
 
         {/* Highlights */}
         <section className="changelog-highlights-section">
-          <h2 className="changelog-section-heading">Highlights</h2>
+          <h2 className="changelog-section-heading">{t("detail.highlights")}</h2>
           <div className="changelog-highlights-grid">
             {entry.highlights.map((h) => (
               <div key={h.title} className="changelog-highlight-card">
@@ -85,7 +88,7 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
                   />
                 </span>
                 <h3>{h.title}</h3>
-                <p>{h.description}</p>
+                <p>{renderChangelogMarkdown(h.description)}</p>
               </div>
             ))}
           </div>
@@ -96,7 +99,7 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
 
         {/* Changes */}
         <section className="changelog-changes-section">
-          <h2 className="changelog-section-heading">All Changes</h2>
+          <h2 className="changelog-section-heading">{t("detail.allChanges")}</h2>
           <div className="changelog-changes-grid">
             {entry.changes.map((group) => (
               <div key={group.category} className={`changelog-change-group changelog-change-${group.category}`}>
@@ -107,7 +110,7 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
                 </h3>
                 <ul>
                   {group.items.map((item, i) => (
-                    <li key={i}>{item}</li>
+                    <li key={i}>{renderChangelogMarkdown(item)}</li>
                   ))}
                 </ul>
               </div>
@@ -118,14 +121,14 @@ export function ChangelogSlugPage({ slug }: ChangelogSlugPageProps) {
         {/* Commits */}
         {entry.commits.length > 0 && (
           <section className="changelog-commits-section">
-            <h2 className="changelog-section-heading">Commits</h2>
+            <h2 className="changelog-section-heading">{t("detail.commits")}</h2>
             <div className="changelog-commits-list">
               {entry.commits.map((c) => {
                 const [hash, ...rest] = c.split(" ");
                 return (
                   <div key={hash} className="changelog-commit">
                     <code className="commit-hash">{hash.slice(0, 7)}</code>
-                    <span className="commit-msg">{rest.join(" ")}</span>
+                    <span className="commit-msg">{renderChangelogMarkdown(rest.join(" "))}</span>
                   </div>
                 );
               })}

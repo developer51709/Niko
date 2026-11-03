@@ -29,6 +29,13 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/team/apply.png"
     },
+    "/status": {
+      "title": "Status — Niko",
+      "description": "Live uptime, latency, shard and cog health, hosting figures, and translation coverage for Niko.",
+      "section": "Live status",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/status.png"
+    },
     "/leaderboard": {
       "title": "Global Economy Leaderboard — Niko",
       "description": "See the global Niko economy standings and discover who has earned the most coins.",
@@ -255,7 +262,7 @@
     },
     "/docs/language-support": {
       "title": "Languages & Localization — Niko docs",
-      "description": "Niko speaks English, German, and Spanish — in Discord's command UI, in the bot's own wording, and on the website.",
+      "description": "Niko speaks English, German, Spanish, and French — in Discord's command UI, in the bot's own wording, and on the website.",
       "section": "Documentation",
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/language-support.png"
@@ -449,143 +456,171 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/welcome.png"
     },
+    "/changelog/website-localization-status-and-maintenance": {
+      "title": "The Site Learns Languages — Niko changelog",
+      "description": "Every public page and every dashboard screen now draws its copy from a per-page locale catalogue, so translating the site is a translation job instead of a search through components. This is the first and largest part of that pass — 28 catalogues and 2,955 strings are in place, with the German, Spanish and French files following page by page. Alongside it: a public `/status` page, and an owner-only maintenance mode that pauses cogs and single commands from the dashboard.",
+      "section": "Changelog · v2.27.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/website-localization-status-and-maintenance.png"
+    },
+    "/changelog/website-and-dashboard-redesign": {
+      "title": "A New Website and Dashboard — Niko changelog",
+      "description": "The site has been rebuilt around Niko's own interface: a new landing page, one graphite, steel and sage theme carried through every public page, and a dashboard whose pickers, selectors and settings panels were rebuilt to match it.",
+      "section": "Changelog · v2.26.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/website-and-dashboard-redesign.png"
+    },
+    "/changelog/music-playback-fixes": {
+      "title": "Music Playback Fixes — Niko changelog",
+      "description": "Three playback failures are fixed: autoplay no longer stops when Last.fm has nothing to suggest, Spotify links resolve even without API credentials, and the node pool keeps the healthy Lavalink nodes instead of quietly collapsing onto one host.",
+      "section": "Changelog · v2.25.1",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/music-playback-fixes.png"
+    },
+    "/changelog/french-language-support": {
+      "title": "Niko Speaks French — Niko changelog",
+      "description": "French is Niko's fourth language. Command help lines, replies, panels, error messages, the help menu and Discord's own slash command descriptions are translated across every cog, so a French server stops reading English. The wording lives in the same `locales` folder as the other three, which kept this a translation job rather than a refactor.",
+      "section": "Changelog · v2.25.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/french-language-support.png"
+    },
     "/changelog/multi-language-everywhere": {
       "title": "Niko Now Speaks German and Spanish — Everywhere — Niko changelog",
       "description": "Niko is trilingual. Command help lines, replies, the help menu, and the website's command reference now exist in English, German, and Spanish, and Discord itself receives translated slash command and option descriptions so each member sees the `/` picker in their own language. Every cog keeps its wording in a `locales` folder next to the code, which makes adding the next language a translation job rather than a refactor.",
-      "section": "Changelog",
+      "section": "Changelog · v2.24.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/multi-language-everywhere.png"
     },
     "/changelog/loading-cards-live-leaderboards-voice-xp": {
       "title": "Faster Cards, Live Server Leaderboards & Voice XP — Niko changelog",
       "description": "Image cards no longer leave you staring at a spinner: economy, leveling, and Spotify commands open with an animated card-shaped placeholder and edit it into the finished render. The leveling leaderboard moved to a live page at /levels/<server id>, servers can exclude channels from XP and opt into passive voice XP, and the support server got clearer panels and a rules page that prints all twenty rules in one message.",
-      "section": "Changelog",
+      "section": "Changelog · v2.23.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/loading-cards-live-leaderboards-voice-xp.png"
     },
     "/changelog/booster-roles-and-notifications": {
       "title": "Booster Roles and Boost Announcements — Niko changelog",
       "description": "Server admins can now customize boost and unboost announcements in the dashboard and enable personal roles for active boosters. Boosters can rename, recolor, add an eligible role icon, choose gradient colors when Discord unlocks them, and share or unshare their role.",
-      "section": "Changelog",
+      "section": "Changelog · v2.22.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/booster-roles-and-notifications.png"
     },
     "/changelog/premium-subscriptions": {
       "title": "Niko Premium Is Here — Real AI Image Moderation, Plus a Legal Update — Niko changelog",
       "description": "Some things are worth doing properly. Niko Premium is a $15/month server subscription that puts every image posted in your server in front of fal.ai's NSFW model and deletes the ones that should never have been posted. Everything else — the scam image filter, bot profile customization, economy, leveling, tickets, giveaways, and the rest — stays free, exactly as it is today. This same release ships a legal update: a stricter, owner-verified data-removal process, protected moderation records, and a formal route for court-ordered requests.",
-      "section": "Changelog",
+      "section": "Changelog · v2.21.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/premium-subscriptions.png"
     },
     "/changelog/giveaway-bans": {
       "title": "Giveaway Bans Keep Ban-Dodgers Out of Your Giveaways — Niko changelog",
       "description": "Servers can now ban a member from their giveaways with `.giveaway ban`, and lift it with `.giveaway unban`. A ban is per server, clears the entries the member already holds, and is enforced at the draw as well as on the Join button, so a banned member cannot win by entering before the ban or during a giveaway's final seconds.",
-      "section": "Changelog",
+      "section": "Changelog · v2.20.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/giveaway-bans.png"
     },
     "/changelog/notifier-health-and-defaults": {
       "title": "The Notifier Keeps Quiet Channels and Uses Your Default Channel — Niko changelog",
       "description": "Quiet channels are no longer mistaken for broken ones: a YouTube channel with no uploads, an offline Twitch channel with no VODs and an empty subreddit all stay healthy, and a successful check clears the failed-check count. Adding an account also no longer demands a channel when the server has a default channel saved — leave the picker on the default and the follow posts there, and the picker only becomes required again once that default is cleared.",
-      "section": "Changelog",
+      "section": "Changelog · v2.19.4",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/notifier-health-and-defaults.png"
     },
     "/changelog/seasonal-badges-in-season": {
       "title": "Seasonal Badges Only Progress Inside Their Season — Niko changelog",
       "description": "Seasonal badges are now measured inside their own event window. A spending spree in July or a career level reached in March no longer counts toward the Halloween and New Year badges, and an out-of-season badge shows no progress at all.",
-      "section": "Changelog",
+      "section": "Changelog · v2.19.3",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/seasonal-badges-in-season.png"
     },
     "/changelog/ticket-panel-accent-color": {
       "title": "The Ticket Panel Now Wears Its Accent Color — Niko changelog",
       "description": "Saved accent color for the ticket panel is applied to the panel itself again. It used to be printed as a `#RRGGBB` code next to the panel title, so a color picked in the dashboard looked like a stray hex code instead of a colored panel.",
-      "section": "Changelog",
+      "section": "Changelog · v2.19.2",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/ticket-panel-accent-color.png"
     },
     "/changelog/guild-settings-tidy-up": {
       "title": "Server Settings Hand Tickets and Onboarding to Their Own Tabs — Niko changelog",
       "description": "The ticket and onboarding settings are gone from the dashboard's Server tab now that both own a tab of their own, the ticket cards finally line up with every other settings page, and the Customization tab previews Niko's global avatar and banner for a server that has not set its own.",
-      "section": "Changelog",
+      "section": "Changelog · v2.19.1",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/guild-settings-tidy-up.png"
     },
     "/changelog/blacklist-lockdown": {
       "title": "Blacklisting a Server Now Pauses Its Features Instead of Erasing Them — Niko changelog",
       "description": "Blacklisting a server used to be one opaque database write. It is now a reported sequence of steps — save the entry, pause social notifications, disable the starboard, lock open polls and giveaways, notify the owner — each announced as it runs in the staff dashboard, followed by a summary of what was paused, skipped, or could not be switched off. Everything saved comes back untouched if the appeal is approved, and every disabled feature stays disabled across a bot restart.",
-      "section": "Changelog",
+      "section": "Changelog · v2.19.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/blacklist-lockdown.png"
     },
     "/changelog/notifier-dashboard-tab": {
       "title": "Twitch Live Alerts and a Dashboard Tab for Social Notifications — Niko changelog",
       "description": "Twitch joins the social notifier, so a stream going live is announced in your channel through the same application credentials the team profile cards use — and every server now has a Notifications tab in the dashboard, where an account can be added by pasting a profile link, pointed at its own channel, ping role and custom message, tested, paused or resumed. The poll loop behind it got cheaper and more honest too: one request per creator no matter how many servers follow them, and an account that keeps failing is paused automatically instead of being retried forever.",
-      "section": "Changelog",
+      "section": "Changelog · v2.18.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/notifier-dashboard-tab.png"
     },
     "/changelog/team-profile-cards": {
       "title": "Team Profiles Get Platform Cards and a Spotify Progress Bar — Niko changelog",
       "description": "Staff profiles now draw a real profile card for every supported platform instead of a bare link — GitHub, Bluesky, Twitch, YouTube, Reddit and X — the Spotify status keeps the custom-status card layout with a live track progress bar, and Twitch joins the notifier using the same application credentials those cards use, so the credentials earn their keep twice.",
-      "section": "Changelog",
+      "section": "Changelog · v2.17.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/team-profile-cards.png"
     },
     "/changelog/personal-economy-tabs": {
       "title": "Economy & Achievements Move to Your Profile — Niko changelog",
       "description": "The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.",
-      "section": "Changelog",
+      "section": "Changelog · v2.16.2",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/personal-economy-tabs.png"
     },
     "/changelog/economy-card-theme-refresh": {
       "title": "Economy & Leveling Cards Match the Website Theme — Niko changelog",
       "description": "Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.",
-      "section": "Changelog",
+      "section": "Changelog · v2.16.1",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/economy-card-theme-refresh.png"
     },
     "/changelog/topgg-voting-rewards-and-achievements": {
       "title": "top.gg Voting Rewards & Café Achievements — Niko changelog",
       "description": "Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.",
-      "section": "Changelog",
+      "section": "Changelog · v2.16.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/topgg-voting-rewards-and-achievements.png"
     },
     "/changelog/global-economy-leaderboard-privacy": {
       "title": "Global Economy Leaderboard & Privacy — Niko changelog",
       "description": "The public economy leaderboard is now a paginated global ranking, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.",
-      "section": "Changelog",
+      "section": "Changelog · v2.15.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/global-economy-leaderboard-privacy.png"
     },
     "/changelog/dashboard-and-community-experience-refresh": {
       "title": "Dashboard & Community Experience Refresh — Niko changelog",
       "description": "A substantial platform update across Niko’s dashboard, public website, Discord integrations, and core bot systems. Guild admins get a redesigned server-profile editor and clearer analytics, while communities benefit from richer Discord-aware transcripts, expanded staff tools, and reliability improvements throughout moderation and data handling.",
-      "section": "Changelog",
+      "section": "Changelog · v2.14.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/dashboard-and-community-experience-refresh.png"
     },
     "/changelog/scam-image-filter": {
       "title": "Scam Image Filter (Experimental) — Niko changelog",
       "description": "A community-driven image filter that catches known MrBeast scam images: members report suspicious messages, Niko staff verify them, and confirmed images are then detected and removed automatically — with a feedback loop that lets servers flag false positives to improve accuracy. The feature is still in early testing and may have some reliability issues.",
-      "section": "Changelog",
+      "section": "Changelog · v2.13.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/scam-image-filter.png"
     },
     "/changelog/staff-applications": {
       "title": "Staff Applications — Niko changelog",
       "description": "Guild dashboards can now manage multiple staff role openings with shareable web forms, Discord membership and eligibility checks, and reusable application links.",
-      "section": "Changelog",
+      "section": "Changelog · v2.12.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/staff-applications.png"
     },
     "/changelog/server-logging-onboarding-updates": {
       "title": "Logging Reliability & Onboarding Rules — Niko changelog",
       "description": "Server event logs are less likely to be delayed during busy periods, and onboarding now gives communities more room to share their rules with new members.",
-      "section": "Changelog",
+      "section": "Changelog · v2.11.1",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/server-logging-onboarding-updates.png"
     },
@@ -599,7 +634,7 @@
     "/changelog/guild-server-pulse-stats": {
       "title": "Guild Server Pulse Stats — Niko changelog",
       "description": "Guild settings now include a Server pulse analytics card with an at-a-glance view of server size and recent community activity.",
-      "section": "Changelog",
+      "section": "Changelog · v2.10.1",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/guild-server-pulse-stats.png"
     },

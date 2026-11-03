@@ -1,6 +1,7 @@
 # Twitch Live Alerts and a Dashboard Tab for Social Notifications
 
 - Date: 2026-10-16
+- Version: 2.18.0
 - Tags: dashboard, notifier, social, twitch, added
 
 Twitch joins the social notifier, so a stream going live is announced in your channel through the same application credentials the team profile cards use — and every server now has a Notifications tab in the dashboard, where an account can be added by pasting a profile link, pointed at its own channel, ping role and custom message, tested, paused or resumed. The poll loop behind it got cheaper and more honest too: one request per creator no matter how many servers follow them, and an account that keeps failing is paused automatically instead of being retried forever.

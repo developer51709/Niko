@@ -5,15 +5,17 @@ import { useLiveResource } from "../../hooks/useLiveResource";
 import type { StaffAnalytics, StaffAnalyticsDay } from "../../types";
 import { formatNumber } from "../../utils/format";
 import { Icon } from "../Icon";
+import { useStrings } from "../../i18n";
 
 /** The API always returns the long window; the toggle slices it client-side. */
 const WINDOWS = [7, 14, 30] as const;
 const FETCH_DAYS = 30;
 
+// Labels stay catalogue keys and are translated where the mix is rendered.
 const KIND_ROWS = [
-  { key: "slash", label: "Slash", color: "#aab1ba" },
-  { key: "prefix", label: "Prefix", color: "#7f9db8" },
-  { key: "context", label: "Context", color: "#c8a882" },
+  { key: "slash", label: "analytics.kindSlash", color: "#aab1ba" },
+  { key: "prefix", label: "analytics.kindPrefix", color: "#7f9db8" },
+  { key: "context", label: "analytics.kindContext", color: "#c8a882" },
 ] as const;
 
 function dayLabel(date: string) {
@@ -75,6 +77,7 @@ function UsageChart({ days, windowDays, onWindowChange }: {
   windowDays: number;
   onWindowChange: (days: number) => void;
 }) {
+  const { t } = useStrings("dashboard");
   const values = days.map((day) => day.total);
   const total = values.reduce((sum, value) => sum + value, 0);
   const busiest = days.length ? days.reduce((best, day) => (day.total > best.total ? day : best)) : null;
@@ -112,8 +115,8 @@ function UsageChart({ days, windowDays, onWindowChange }: {
 
   return <div className="bot-analytics-chart">
     <div className="bot-analytics-chart-head">
-      <div className="bot-analytics-chart-total"><span>Commands per day</span><strong>{formatNumber(total)}</strong></div>
-      <div className="bot-analytics-range" role="group" aria-label="Chart window">
+      <div className="bot-analytics-chart-total"><span>{t("analytics.commandsPerDay")}</span><strong>{formatNumber(total)}</strong></div>
+      <div className="bot-analytics-range" role="group" aria-label={t("analytics.chartWindow")}>
         {WINDOWS.map((value) => <button
           type="button"
           key={value}
@@ -124,19 +127,19 @@ function UsageChart({ days, windowDays, onWindowChange }: {
       </div>
     </div>
     <div className="bot-analytics-chart-insights">
-      <span>Daily average <strong>{formatNumber(days.length ? Math.round(total / days.length) : 0)}</strong></span>
-      <span>Busiest day <strong>{busiest?.total ? `${formatNumber(busiest.total)} · ${dayLabel(busiest.date)}` : "No data"}</strong></span>
+      <span>{t("stats.dailyAverage")} <strong>{formatNumber(days.length ? Math.round(total / days.length) : 0)}</strong></span>
+      <span>{t("stats.busiestDay")} <strong>{busiest?.total ? `${formatNumber(busiest.total)} · ${dayLabel(busiest.date)}` : t("stats.noData")}</strong></span>
     </div>
     <div className={`bot-analytics-readout${activeDay ? " is-active" : ""}`} aria-live="polite" aria-atomic="true">
       {activeDay
-        ? <><strong>{dayLabel(activeDay.date)}</strong><span>{formatNumber(activeDay.total)} commands · {activeDay.slash} slash · {activeDay.prefix} prefix · {activeDay.context} context · {activeDay.guilds} guilds</span></>
-        : <span>Hover, tap, or use the arrow keys to inspect a day.</span>}
+        ? <><strong>{dayLabel(activeDay.date)}</strong><span>{t("analytics.dayReadout", { total: formatNumber(activeDay.total), slash: activeDay.slash, prefix: activeDay.prefix, context: activeDay.context, guilds: activeDay.guilds })}</span></>
+        : <span>{t("analytics.inspectDay")}</span>}
     </div>
     <div
       className="bot-analytics-plot"
       role="group"
       tabIndex={0}
-      aria-label="Daily command counts. Tap, hover, or use the arrow keys to inspect a day."
+      aria-label={t("analytics.chartAria")}
       onKeyDown={(event) => handleDayKeyDown(event, move)}
     >
       <svg
@@ -181,6 +184,7 @@ function UsageChart({ days, windowDays, onWindowChange }: {
 }
 
 function CommandMix({ byKind }: { byKind: StaffAnalytics["usage"]["by_kind"] }) {
+  const { t } = useStrings("dashboard");
   const sum = byKind.slash + byKind.prefix + byKind.context;
   const total = Math.max(1, sum);
   let cursor = 0;
@@ -192,12 +196,12 @@ function CommandMix({ byKind }: { byKind: StaffAnalytics["usage"]["by_kind"] }) 
 
   return <div className="bot-analytics-mix">
     <div className="bot-analytics-donut" style={{ background: sum ? `conic-gradient(${stops})` : "var(--surface-muted)" }} aria-hidden="true">
-      <span><strong>{formatNumber(sum)}</strong><small>all time</small></span>
+      <span><strong>{formatNumber(sum)}</strong><small>{t("analytics.allTimeShort")}</small></span>
     </div>
     <ul className="bot-analytics-legend">
       {KIND_ROWS.map((row) => <li key={row.key}>
         <i style={{ background: row.color }} />
-        <span>{row.label}</span>
+        <span>{t(row.label)}</span>
         <strong>{formatNumber(byKind[row.key])}</strong>
         <small>{shareLabel((byKind[row.key] || 0) / total)}</small>
       </li>)}
@@ -206,22 +210,23 @@ function CommandMix({ byKind }: { byKind: StaffAnalytics["usage"]["by_kind"] }) 
 }
 
 export function BotAnalyticsView() {
+  const { t } = useStrings("dashboard");
   const [range, setRange] = useState<number>(FETCH_DAYS);
   const { data, loading, error, stale, syncedAt, refresh } = useLiveResource<StaffAnalytics>(
     "staff-analytics",
     () => getStaffAnalytics(FETCH_DAYS),
-    { intervalMs: 15_000, fallbackError: "Bot analytics are temporarily unavailable." },
+    { intervalMs: 15_000, fallbackError: t("analytics.unavailable") },
   );
 
   const days = useMemo(() => (data ? data.usage.days.slice(-range) : []), [data, range]);
   if (loading && !data) {
-    return <div className="bot-analytics bot-analytics-state"><div className="loading-ring" /><p>Gathering bot-wide analytics…</p></div>;
+    return <div className="bot-analytics bot-analytics-state"><div className="loading-ring" /><p>{t("analytics.loading")}</p></div>;
   }
   if (!data) {
     return <div className="bot-analytics bot-analytics-state">
       <Icon name="alert" />
-      <p>{error || "Bot analytics are temporarily unavailable."}</p>
-      <button type="button" className="button button-muted" onClick={refresh}>Try again</button>
+      <p>{error || t("analytics.unavailable")}</p>
+      <button type="button" className="button button-muted" onClick={refresh}>{t("analytics.retry")}</button>
     </div>;
   }
 
@@ -240,59 +245,59 @@ export function BotAnalyticsView() {
   return <div className="bot-analytics">
     <header className="bot-analytics-heading">
       <div>
-        <span className="panel-kicker">Bot-wide · live telemetry</span>
-        <h2>Analytics</h2>
-        <p>Command traffic, invocation mix, language reach and economy usage across every server Niko serves. Figures update every 15 seconds from the running bot.</p>
+        <span className="panel-kicker">{t("analytics.kicker")}</span>
+        <h2>{t("analytics.title")}</h2>
+        <p>{t("analytics.text")}</p>
       </div>
       <div className="bot-analytics-live">
         <span className={`bot-analytics-live-dot${bot.online ? " is-online" : ""}`} />
         <div>
-          <strong>{bot.online ? "Live" : "Snapshot"}</strong>
-          <small>{stale ? "Refresh failed · showing last good data" : syncedAt ? `Updated ${new Date(syncedAt).toLocaleTimeString()}` : "Waiting for the first poll"}</small>
+          <strong>{t(bot.online ? "analytics.live" : "analytics.snapshot")}</strong>
+          <small>{stale ? t("analytics.refreshFailed") : syncedAt ? t("analytics.updated", { time: new Date(syncedAt).toLocaleTimeString() }) : t("analytics.waiting")}</small>
         </div>
-        <button type="button" className="button button-muted button-small" onClick={refresh}><Icon name="spark" />Refresh</button>
+        <button type="button" className="button button-muted button-small" onClick={refresh}><Icon name="spark" />{t("analytics.refresh")}</button>
       </div>
     </header>
 
     <div className="bot-analytics-kpis">
       <article className="bot-analytics-kpi">
-        <span>Guilds</span><strong>{formatNumber(bot.guilds)}</strong>
-        <small>{bot.online ? "Connected right now" : "From the startup snapshot"}{guildDelta !== null ? ` · ${guildDelta > 0 ? "+" : ""}${guildDelta} this window` : ""}</small>
+        <span>{t("analytics.guilds")}</span><strong>{formatNumber(bot.guilds)}</strong>
+        <small>{t(bot.online ? "analytics.connectedNow" : "analytics.startupSnapshot")}{guildDelta !== null ? t("analytics.guildDelta", { delta: `${guildDelta > 0 ? "+" : ""}${guildDelta}` }) : ""}</small>
       </article>
       <article className="bot-analytics-kpi">
-        <span>Members</span><strong>{formatNumber(bot.members)}</strong>
-        <small>Across every connected guild</small>
+        <span>{t("stats.members")}</span><strong>{formatNumber(bot.members)}</strong>
+        <small>{t("analytics.acrossGuilds")}</small>
       </article>
       <article className="bot-analytics-kpi">
-        <span>Commands today</span><strong>{formatNumber(usage.today.total)}</strong>
-        <small>{formatNumber(usage.today.guilds)} guilds active · {formatNumber(usage.today.slash)} slash</small>
+        <span>{t("analytics.commandsToday")}</span><strong>{formatNumber(usage.today.total)}</strong>
+        <small>{t("analytics.todayDetail", { guilds: formatNumber(usage.today.guilds), slash: formatNumber(usage.today.slash) })}</small>
       </article>
       <article className="bot-analytics-kpi">
-        <span>Last 7 days</span><strong>{formatNumber(usage.totals.last_7_days)}</strong>
-        <small>{formatNumber(usage.totals.last_30_days)} in the last 30</small>
+        <span>{t("analytics.last7Days")}</span><strong>{formatNumber(usage.totals.last_7_days)}</strong>
+        <small>{t("analytics.inLast30", { count: formatNumber(usage.totals.last_30_days) })}</small>
       </article>
       <article className="bot-analytics-kpi">
-        <span>All-time commands</span>        <strong>{formatNumber(usage.totals.lifetime)}</strong>
-        <small>Recorded since analytics was enabled</small>
+        <span>{t("analytics.allTimeCommands")}</span>        <strong>{formatNumber(usage.totals.lifetime)}</strong>
+        <small>{t("analytics.sinceEnabled")}</small>
       </article>
       <article className="bot-analytics-kpi">
-        <span>Gateway latency</span><strong>{bot.latency_ms === null ? "—" : `${bot.latency_ms} ms`}</strong>
-        <small>{bot.shard_count ? `${bot.shard_count} shard${bot.shard_count === 1 ? "" : "s"}` : "Single connection"}</small>
+        <span>{t("analytics.gatewayLatency")}</span><strong>{bot.latency_ms === null ? "—" : `${bot.latency_ms} ms`}</strong>
+        <small>{bot.shard_count ? t(bot.shard_count === 1 ? "analytics.shardOne" : "analytics.shardMany", { count: bot.shard_count }) : t("analytics.singleConnection")}</small>
       </article>
       <article className="bot-analytics-kpi">
-        <span>Uptime</span><strong>{uptimeLabel(bot.uptime_seconds)}</strong>
-        <small>Since this process started</small>
+        <span>{t("analytics.uptime")}</span><strong>{uptimeLabel(bot.uptime_seconds)}</strong>
+        <small>{t("analytics.sinceStart")}</small>
       </article>
       <article className="bot-analytics-kpi">
-        <span>Economy profiles</span><strong>{economy ? formatNumber(economy.profiles) : "—"}</strong>
-        <small>{economy ? `${formatNumber(economy.circulating)} coins in wallets` : "Economy data unavailable"}</small>
+        <span>{t("analytics.economyProfiles")}</span><strong>{economy ? formatNumber(economy.profiles) : "—"}</strong>
+        <small>{economy ? t("analytics.coinsInWallets", { count: formatNumber(economy.circulating) }) : t("analytics.economyUnavailable")}</small>
       </article>
     </div>
 
     <div className="bot-analytics-grid">
       <section className="bot-analytics-card is-wide">
         <div className="bot-analytics-card-heading">
-          <div><span className="panel-kicker">Command traffic</span><h3>Daily command usage</h3></div>
+          <div><span className="panel-kicker">{t("analytics.trafficKicker")}</span><h3>{t("analytics.trafficTitle")}</h3></div>
           <Icon name="chart" />
         </div>
         <UsageChart days={days} windowDays={range} onWindowChange={setRange} />
@@ -300,18 +305,18 @@ export function BotAnalyticsView() {
 
       <section className="bot-analytics-card">
         <div className="bot-analytics-card-heading">
-          <div><span className="panel-kicker">How commands arrive</span><h3>Invocation mix</h3></div>
+          <div><span className="panel-kicker">{t("analytics.mixKicker")}</span><h3>{t("analytics.mixTitle")}</h3></div>
         </div>
         <CommandMix byKind={usage.by_kind} />
       </section>
 
       <section className="bot-analytics-card">
         <div className="bot-analytics-card-heading">
-          <div><span className="panel-kicker">All-time</span><h3>Top commands</h3></div>
+          <div><span className="panel-kicker">{t("analytics.allTimeKicker")}</span><h3>{t("analytics.topCommands")}</h3></div>
           <span className="bot-analytics-card-tag">{usage.top_commands.length}</span>
         </div>
         {usage.top_commands.length === 0
-          ? <p className="bot-analytics-empty">No commands have been recorded yet. Usage counts begin with the next command.</p>
+          ? <p className="bot-analytics-empty">{t("analytics.noCommands")}</p>
           : <ol className="bot-analytics-bars">
             {usage.top_commands.map((row, index) => <li key={row.name}>
               <span className="bot-analytics-bar-rank">{index + 1}</span>
@@ -326,46 +331,46 @@ export function BotAnalyticsView() {
 
       <section className="bot-analytics-card">
         <div className="bot-analytics-card-heading">
-          <div><span className="panel-kicker">Localisation reach</span><h3>Languages across guilds</h3></div>
-          <span className="bot-analytics-card-tag is-accent">{shareLabel(supportedShare)} live</span>
+          <div><span className="panel-kicker">{t("analytics.languageKicker")}</span><h3>{t("analytics.languageTitle")}</h3></div>
+          <span className="bot-analytics-card-tag is-accent">{t("analytics.liveShare", { share: shareLabel(supportedShare) })}</span>
         </div>
         {topLanguages.length === 0
-          ? <p className="bot-analytics-empty">No guild languages available yet.</p>
+          ? <p className="bot-analytics-empty">{t("analytics.noLanguages")}</p>
           : <div className="bot-analytics-languages">
             {topLanguages.map((row) => <div className="bot-analytics-language" key={row.code}>
               <div className="bot-analytics-language-head">
                 <strong>{row.label}</strong>
                 <code>{row.code.toUpperCase()}</code>
-                <span className={`bot-analytics-pill${row.supported ? " is-supported" : ""}`}>{row.supported ? "Live" : "Rollout next"}</span>
+                <span className={`bot-analytics-pill${row.supported ? " is-supported" : ""}`}>{t(row.supported ? "analytics.live" : "analytics.rolloutNext")}</span>
               </div>
               <div className="bot-analytics-bar"><i style={{ width: `${(row.guilds / maxGuilds) * 100}%` }} /></div>
-              <small>{formatNumber(row.guilds)} guilds · {formatNumber(row.members)} members</small>
+              <small>{t("analytics.languageCounts", { guilds: formatNumber(row.guilds), members: formatNumber(row.members) })}</small>
             </div>)}
           </div>}
         {usage.by_language.length > 0 && <p className="bot-analytics-note">
-          Command runs by language: {usage.by_language.slice(0, 3).map((row) => `${row.code.toUpperCase()} ${shareLabel(row.share)}`).join(" · ")}
+          {t("analytics.byLanguage")} {usage.by_language.slice(0, 3).map((row) => `${row.code.toUpperCase()} ${shareLabel(row.share)}`).join(" · ")}
         </p>}
       </section>
 
       <section className="bot-analytics-card">
         <div className="bot-analytics-card-heading">
-          <div><span className="panel-kicker">Economy</span><h3>Usage &amp; wealth</h3></div>
+          <div><span className="panel-kicker">{t("analytics.economyKicker")}</span><h3>{t("analytics.economyTitle")}</h3></div>
           <Icon name="guild_economy" />
         </div>
         {!economy
-          ? <p className="bot-analytics-empty">Economy data is unavailable while the database is reconnecting.</p>
+          ? <p className="bot-analytics-empty">{t("analytics.economyReconnecting")}</p>
           : <>
             <div className="bot-analytics-stats">
-              <div><span>In wallets</span><strong>{formatNumber(economy.circulating)}</strong></div>
-              <div><span>In banks</span><strong>{formatNumber(economy.banked)}</strong></div>
-              <div><span>Median worth</span><strong>{formatNumber(economy.median)}</strong></div>
-              <div><span>Average worth</span><strong>{formatNumber(economy.average)}</strong></div>
-              <div><span>Average level</span><strong>{economy.average_level}</strong></div>
-              <div><span>Daily streaks</span><strong>{formatNumber(economy.active_streaks)}</strong></div>
+              <div><span>{t("analytics.inWallets")}</span><strong>{formatNumber(economy.circulating)}</strong></div>
+              <div><span>{t("analytics.inBanks")}</span><strong>{formatNumber(economy.banked)}</strong></div>
+              <div><span>{t("analytics.medianWorth")}</span><strong>{formatNumber(economy.median)}</strong></div>
+              <div><span>{t("analytics.averageWorth")}</span><strong>{formatNumber(economy.average)}</strong></div>
+              <div><span>{t("analytics.averageLevel")}</span><strong>{economy.average_level}</strong></div>
+              <div><span>{t("analytics.dailyStreaks")}</span><strong>{formatNumber(economy.active_streaks)}</strong></div>
             </div>
-            <span className="bot-analytics-subheading">Most common jobs</span>
+            <span className="bot-analytics-subheading">{t("analytics.topJobs")}</span>
             {economy.top_jobs.length === 0
-              ? <p className="bot-analytics-empty">No jobs have been chosen yet.</p>
+              ? <p className="bot-analytics-empty">{t("analytics.noJobs")}</p>
               : <div className="bot-analytics-jobs">
                 {economy.top_jobs.map((job) => <div className="bot-analytics-job" key={job.id}>
                   <span className="bot-analytics-job-name">{job.emoji} {job.name}</span>

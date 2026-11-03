@@ -4,6 +4,7 @@ import { api } from "../api";
 import { PublicHeader } from "../components/PublicHeader";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
+import { useStrings } from "../i18n";
 import { formatNumber } from "../utils/format";
 import { rankChanges, rankMap } from "../utils/leaderboard";
 
@@ -25,6 +26,7 @@ const POLL_MS = 6_000;
 const MOVE_MS = 4_500;
 
 export function LeaderboardPage() {
+  const { t } = useStrings("leaderboard");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PageData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +76,7 @@ export function LeaderboardPage() {
         // A failed poll keeps the standings already on screen and lets the next
         // one catch up; only a first load that never landed is an error.
         if (!hasDataRef.current) {
-          setError(reason instanceof Error ? reason.message : "The leaderboard could not be loaded.");
+          setError(reason instanceof Error ? reason.message : "state.error");
         }
       } finally {
         inFlight = false;
@@ -101,19 +103,19 @@ export function LeaderboardPage() {
     <PublicHeader page="leaderboard" />
     <main className="shell page-main economy-leaderboard-page">
       <section className="leaderboard-hero">
-        <span className="eyebrow">Niko · global economy standings</span>
-        <h1>Global economy leaderboard</h1>
-        <p>Every coin counts. See how your earnings stack up across the whole bot.</p>
+        <span className="eyebrow">{t("hero.eyebrow")}</span>
+        <h1>{t("hero.title")}</h1>
+        <p>{t("hero.body")}</p>
       </section>
-      <section className="leaderboard-panel" aria-label="Global economy leaderboard">
+      <section className="leaderboard-panel" aria-label={t("panel.aria")}>
         <div className="leaderboard-panel-heading">
           <div>
-            <span className="panel-kicker">Global economy leaderboard</span>
-            <h2>Rankings</h2>
-            <p>{data ? `${formatNumber(data.total)} members ordered by net worth` : "The latest economy standings"}</p>
+            <span className="panel-kicker">{t("panel.kicker")}</span>
+            <h2>{t("panel.title")}</h2>
+            <p>{data ? t("panel.bodyCount", { count: formatNumber(data.total) }) : t("panel.bodyLatest")}</p>
           </div>
         </div>
-        {loading ? <div className="leaderboard-state" role="status"><span className="loading-ring" />Loading standings…</div> : error ? <div className="leaderboard-state leaderboard-error" role="alert">{error}</div> : !data?.entries.length ? <div className="leaderboard-state">The board is quiet for now — check back after a few coins are earned.</div> : <div className="leaderboard-list">
+        {loading ? <div className="leaderboard-state" role="status"><span className="loading-ring" />{t("state.loading")}</div> : error ? <div className="leaderboard-state leaderboard-error" role="alert">{error.startsWith("state.") ? t(error) : error}</div> : !data?.entries.length ? <div className="leaderboard-state">{t("state.empty")}</div> : <div className="leaderboard-list">
           <AnimatePresence initial={false} mode="popLayout">
             {data.entries.map((entry) => {
               const hidden = entry.private && !entry.display_name;
@@ -132,7 +134,7 @@ export function LeaderboardPage() {
                     {move !== 0 && <motion.span
                       key={`${entry.key}-move`}
                       className={`leaderboard-move ${move > 0 ? "leaderboard-move-up" : "leaderboard-move-down"}`}
-                      aria-label={move > 0 ? `Up ${move} places` : `Down ${Math.abs(move)} places`}
+                      aria-label={move > 0 ? t("move.up", { count: move }) : t("move.down", { count: Math.abs(move) })}
                       initial={{ opacity: 0, y: move > 0 ? 5 : -5 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: move > 0 ? -5 : 5 }}
@@ -143,7 +145,7 @@ export function LeaderboardPage() {
                   </AnimatePresence>
                 </span>
                 {hidden ? <span className="leaderboard-avatar leaderboard-avatar-hidden"><Icon name="lock" /></span> : <span className="leaderboard-avatar">{entry.avatar_url ? <img src={entry.avatar_url} alt="" /> : (entry.display_name || "?").slice(0, 1).toUpperCase()}</span>}
-                <span className="leaderboard-identity"><strong>{hidden ? "Private member" : entry.display_name || entry.username || "Niko member"}</strong>{hidden ? <small>Identity hidden · still in the rankings</small> : entry.username && entry.display_name ? <small>@{entry.username}</small> : null}</span>
+                <span className="leaderboard-identity"><strong>{hidden ? t("row.private") : entry.display_name || entry.username || t("row.member")}</strong>{hidden ? <small>{t("row.hidden")}</small> : entry.username && entry.display_name ? <small>@{entry.username}</small> : null}</span>
                 <motion.strong
                   className="leaderboard-worth"
                   key={`${entry.key}-${entry.net_worth}`}
@@ -151,19 +153,19 @@ export function LeaderboardPage() {
                   animate={{ opacity: 1 }}
                   transition={{ duration: reduceMotion ? 0 : 0.45 }}
                 >
-                  {formatNumber(entry.net_worth)} <small>coins</small>
+                  {formatNumber(entry.net_worth)} <small>{t("row.coins")}</small>
                 </motion.strong>
               </motion.article>;
             })}
           </AnimatePresence>
         </div>}
-        {data && data.pages > 1 && <nav className="leaderboard-pagination" aria-label="Leaderboard pages">
-          <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}><Icon name="arrow" /> Previous</button>
-          <span>Page <strong>{page}</strong> of {data.pages}</span>
-          <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.min(data.pages, current + 1))} disabled={page >= data.pages}>Next <Icon name="arrow" /></button>
+        {data && data.pages > 1 && <nav className="leaderboard-pagination" aria-label={t("pagination.aria")}>
+          <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}><Icon name="arrow" /> {t("pagination.previous")}</button>
+          <span>{t("pagination.page", { page, pages: data.pages })}</span>
+          <button className="button button-muted button-small" type="button" onClick={() => setPage((current) => Math.min(data.pages, current + 1))} disabled={page >= data.pages}>{t("pagination.next")} <Icon name="arrow" /></button>
         </nav>}
       </section>
-      <aside className="leaderboard-privacy-note"><Icon name="shield" /><p><strong>Your identity, your call.</strong> Set your economy profile to private in <a href="/dashboard">your dashboard</a>. You’ll stay on the list; only you, official Niko staff, and people who share a guild with you can see your identity.</p></aside>
+      <aside className="leaderboard-privacy-note"><Icon name="shield" /><p><strong>{t("privacy.title")}</strong> {t("privacy.before")} <a href="/dashboard">{t("privacy.link")}</a>. {t("privacy.after")}</p></aside>
     </main>
     <Footer />
   </>;

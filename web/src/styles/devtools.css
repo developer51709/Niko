@@ -1,30 +1,32 @@
-/* Owner-only devtools: a corner button and its panel.
+/* Owner-only devtools: a corner button and the panel it opens.
    Rendered beside `.site-content`, not inside it, so nothing here depends on
-   the page's own theme rules — only the root tokens. */
+   the page's own theme rules — only the root tokens.
+
+   The panel is absolutely positioned above the button rather than laid out
+   beneath it in a column: a column anchored to the bottom of the screen would
+   push the button up as soon as the panel appeared, moving the control the
+   pointer just clicked. Out of flow, the button never shifts. */
 
 .owner-devtools {
   position: fixed;
   bottom: 16px;
   left: 16px;
   z-index: 4000;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 9px;
 }
 
 .owner-devtools-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 11px;
+  min-height: 34px;
+  padding: 8px 12px;
   color: var(--muted);
   background: rgba(9, 10, 12, .86);
   border: 1px solid var(--line);
   border-radius: 9px;
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
-  font: 700 9px "Space Mono", monospace;
+  font: 700 10px "Space Mono", monospace;
   letter-spacing: .14em;
   text-transform: uppercase;
   transition: color .16s ease, border-color .16s ease, transform .16s ease;
@@ -37,42 +39,54 @@
 }
 
 .owner-devtools-toggle:active { transform: translateY(1px); }
-.owner-devtools-toggle svg { width: 13px; height: 13px; }
+.owner-devtools-toggle svg { width: 14px; height: 14px; }
+
+/* One visible focus ring for every control in here: the browser default is
+   near-invisible on this near-black surface. */
+.owner-devtools button:focus-visible,
+.owner-devtools a:focus-visible,
+.owner-devtools-view:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
+}
 
 .owner-devtools-panel {
-  width: min(330px, calc(100vw - 32px));
-  max-height: min(74vh, 540px);
-  overflow-y: auto;
-  padding: 15px;
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(70vh, 560px);
   color: var(--muted);
   background: #0b0c0e;
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: var(--shadow);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
 .owner-devtools-head {
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line-soft);
+  padding: 14px 15px 12px;
 }
 
 .owner-devtools-head div { display: grid; gap: 2px; min-width: 0; }
-.owner-devtools-kicker { color: var(--dim); font: 9px "Space Mono", monospace; letter-spacing: .16em; }
-.owner-devtools-head strong { color: var(--ink); font-size: 13px; letter-spacing: -.01em; }
-.owner-devtools-head small { color: var(--dim); font: 9px "Space Mono", monospace; overflow-wrap: anywhere; }
+.owner-devtools-kicker { color: var(--dim); font: 9.5px "Space Mono", monospace; letter-spacing: .16em; }
+.owner-devtools-head strong { color: var(--ink); font-size: 14px; letter-spacing: -.01em; }
+.owner-devtools-head small { color: var(--dim); font: 10px "Space Mono", monospace; overflow-wrap: anywhere; }
 
 .owner-devtools-icon-button {
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   color: var(--muted);
   background: rgba(255, 255, 255, .04);
   border: 1px solid var(--line);
@@ -80,78 +94,125 @@
 }
 
 .owner-devtools-icon-button:hover { color: var(--ink); border-color: var(--sage); }
-.owner-devtools-icon-button svg { width: 13px; height: 13px; }
+.owner-devtools-icon-button svg { width: 14px; height: 14px; }
 
-.owner-devtools-section { margin-top: 13px; }
-.owner-devtools-section h3 {
-  margin: 0 0 7px;
+/* The tab strip sits on the header's rule, and the selected tab paints over it
+   with the accent colour so the current view is readable without relying on
+   colour alone (the tab is also bolder and underlined). */
+.owner-devtools-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.owner-devtools-tab {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 34px;
+  padding: 8px 10px;
   color: var(--dim);
-  font: 9px "Space Mono", monospace;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font: 700 10.5px "Space Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transition: color .16s ease, border-color .16s ease;
+}
+
+.owner-devtools-tab:hover { color: var(--ink); }
+
+.owner-devtools-tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--sage);
+}
+
+.owner-devtools-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 13px 15px 15px;
+}
+
+.owner-devtools-view { display: grid; gap: 2px; border-radius: 8px; }
+
+.owner-devtools-view h3 {
+  margin: 0 0 6px;
+  color: var(--dim);
+  font: 9.5px "Space Mono", monospace;
   letter-spacing: .16em;
   text-transform: uppercase;
 }
+
+.owner-devtools-view h3 + * { margin-top: 0; }
+.owner-devtools-view > * + h3 { margin-top: 16px; }
 
 .owner-devtools-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 3px 0;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .04);
 }
 
 .owner-devtools-row > span:first-child { color: var(--dim); white-space: nowrap; }
-.owner-devtools-value { color: var(--ink); font: 10px "Space Mono", monospace; text-align: right; overflow-wrap: anywhere; }
+.owner-devtools-value { color: var(--ink); font: 11px "Space Mono", monospace; text-align: right; overflow-wrap: anywhere; }
 
 .owner-devtools-ua {
-  margin: 7px 0 0;
-  padding: 7px 8px;
-  max-height: 62px;
+  margin: 10px 0 0;
+  padding: 8px 9px;
+  max-height: 64px;
   overflow-y: auto;
   color: var(--dim);
   background: rgba(255, 255, 255, .03);
   border: 1px solid var(--line-soft);
   border-radius: 7px;
-  font: 9px "Space Mono", monospace;
+  font: 10px "Space Mono", monospace;
   overflow-wrap: anywhere;
 }
 
 .owner-devtools-link {
   display: inline-flex;
   align-items: center;
+  align-self: start;
   gap: 5px;
-  margin-top: 6px;
+  margin-top: 10px;
   color: var(--sage);
-  font: 700 10px "Space Mono", monospace;
+  font: 700 11px "Space Mono", monospace;
 }
 
 .owner-devtools-link:hover { color: var(--ink); }
-.owner-devtools-link svg { width: 11px; height: 11px; }
+.owner-devtools-link svg { width: 12px; height: 12px; }
 
 .owner-devtools-tool {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 9px;
-  padding: 9px 10px;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 11px;
   background: rgba(139, 213, 177, .05);
   border: 1px solid rgba(139, 213, 177, .18);
   border-radius: 8px;
 }
 
-.owner-devtools-tool div { display: grid; gap: 2px; min-width: 0; }
-.owner-devtools-tool strong { color: var(--ink); font-size: 11px; }
-.owner-devtools-tool small { color: var(--dim); font-size: 9.5px; line-height: 1.5; }
+.owner-devtools-tool div { display: grid; gap: 3px; min-width: 0; }
+.owner-devtools-tool strong { color: var(--ink); font-size: 12px; }
+.owner-devtools-tool small { color: var(--dim); font-size: 10.5px; line-height: 1.5; }
 
 .owner-devtools-switch {
   flex: 0 0 auto;
-  min-width: 42px;
-  padding: 5px 9px;
+  min-width: 52px;
+  min-height: 28px;
+  padding: 5px 10px;
   color: var(--muted);
   background: rgba(255, 255, 255, .05);
   border: 1px solid var(--line);
   border-radius: 999px;
-  font: 700 9px "Space Mono", monospace;
+  font: 700 10px "Space Mono", monospace;
   letter-spacing: .1em;
   text-transform: uppercase;
 }
@@ -162,24 +223,56 @@
   border-color: var(--sage);
 }
 
-.owner-devtools-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.owner-devtools-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 
 .owner-devtools-actions button {
-  padding: 6px 9px;
+  min-height: 30px;
+  padding: 7px 10px;
   color: var(--muted);
   background: rgba(255, 255, 255, .04);
   border: 1px solid var(--line);
   border-radius: 7px;
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.2;
   transition: color .16s ease, border-color .16s ease, background .16s ease;
 }
 
-.owner-devtools-actions button:hover {
+.owner-devtools-actions button:hover,
+.owner-devtools-actions button[aria-pressed="true"] {
   color: var(--ink);
   background: rgba(255, 255, 255, .07);
   border-color: var(--sage);
 }
+
+/* Site language picker (devtools → Page) */
+.owner-devtools-locale { align-items: flex-start; }
+.owner-devtools-locale > div { flex: 1 1 auto; }
+
+.owner-devtools-select {
+  flex: 0 0 auto;
+  max-width: 128px;
+  min-height: 28px;
+  padding: 4px 6px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: 11px "Plus Jakarta Sans", sans-serif;
+}
+.owner-devtools-select:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+.owner-devtools-select option { color: #f4f5f7; background: #121418; }
+
+.owner-devtools-reset {
+  justify-self: start;
+  margin-top: 8px;
+  padding: 0;
+  color: var(--sage);
+  background: none;
+  border: 0;
+  text-align: left;
+  font: 700 10.5px "Space Mono", monospace;
+}
+.owner-devtools-reset:hover { color: var(--ink); }
 
 /* Debug overlay: every element on the page, one thin outline each. */
 html.owner-devtools-outline body * {
@@ -187,7 +280,16 @@ html.owner-devtools-outline body * {
   outline-offset: -1px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .owner-devtools-toggle,
+  .owner-devtools-tab,
+  .owner-devtools-actions button { transition: none; }
+}
+
 @media (max-width: 640px) {
   .owner-devtools { bottom: 12px; left: 12px; }
-  .owner-devtools-panel { max-height: min(68vh, 460px); }
+  .owner-devtools-panel {
+    width: min(360px, calc(100vw - 24px));
+    max-height: min(64vh, 480px);
+  }
 }

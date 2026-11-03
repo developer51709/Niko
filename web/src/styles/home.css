@@ -1,5 +1,8 @@
-/* The landing page: plain rules and no glass; the only motion behind it is the
-   site-wide shader canvas.
+/* The landing page: mostly plain rules and hairlines, with glass kept for the
+   two surfaces that end the page — the four systems and the closing card. Those
+   use the same blurred pane as glass-landing.css, just without its gradient
+   flourish, so they read as part of the same site without turning the page into
+   a stack of floating cards.
    The bot's own panel is the only "art" on the page, and it sits in the
    features section rather than the hero. */
 
@@ -82,21 +85,37 @@
 .home-inside {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
+  /* The pane hugs its four rows instead of stretching to the heading column. */
+  align-items: start;
   gap: 72px;
   padding: 64px 0 8px;
 }
 .home-inside-head h2 { margin: 0 0 12px; font-size: 30px; line-height: 1.12; letter-spacing: -.04em; }
 .home-inside-head > p:last-child { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.8; }
-.home-rows { display: grid; align-content: start; }
+/* The same pane as glass-landing.css: a blurred near-black surface, one hairline
+   and one inset highlight along the top edge. Both panels on this page share it,
+   so the page closes on the site's own material instead of two unrelated cards. */
+.home-rows,
+.shell.home-cta {
+  position: relative;
+  background: rgba(9, 10, 12, .72);
+  border: 1px solid rgba(226, 234, 246, .18);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .09);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+
+.home-rows { display: grid; align-content: start; padding: 2px 22px; }
 .home-row {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: start;
   gap: 18px;
-  padding: 20px 12px 20px 0;
-  border-top: 1px solid var(--line-soft);
+  padding: 18px 0;
+  border-top: 1px solid rgba(226, 234, 246, .1);
 }
-.home-row:last-child { border-bottom: 1px solid var(--line-soft); }
+.home-row:first-child { border-top: 0; }
 .home-row-index { padding-top: 2px; color: var(--dim); font: 11px "Space Mono", monospace; }
 .home-row-copy h3 { margin: 0 0 7px; font-size: 16px; letter-spacing: -.015em; }
 .home-row-copy p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
@@ -105,26 +124,48 @@
 .home-row > a .icon { width: 13px; height: 13px; }
 .home-row > a:hover { color: var(--accent-dark); }
 
-/* The closing card borrows the panel's card language without the glass. */
-.home-cta {
+/* The closing card: the statement on the left, the two ways in stacked on the
+   right. One glass pane, no ornament.
+
+   The spacing is set on `.shell.home-cta`, not on `.home-cta`: `.shell` in
+   styles.css resets `margin: 0 auto` and, because the imported sheets are
+   placed before the importing one, it won the tie at equal specificity — which
+   is what left the card flush against the footer. */
+.shell.home-cta {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 28px;
-  margin: 56px auto 78px;
-  padding: 26px 28px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  gap: 30px 48px;
+  margin: 64px auto 104px;
+  padding: 30px 32px;
 }
-.home-cta-identity { display: flex; align-items: center; gap: 18px; }
-.home-cta-avatar { flex: 0 0 auto; display: grid; place-items: center; width: 48px; height: 48px; overflow: hidden; color: #fff; background: #5865f2; border-radius: 50%; font-weight: 700; }
-.home-cta-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.home-cta h2 { margin: 0 0 7px; font-size: 23px; letter-spacing: -.035em; }
-.home-cta p:not(.home-kicker) { max-width: 460px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
-.home-cta .home-kicker { margin-bottom: 10px; }
-.home-cta-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.home-cta-copy { min-width: 0; }
+.home-cta .home-kicker { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; }
+.home-cta-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  overflow: hidden;
+  color: #f4f5f7;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(226, 234, 246, .18);
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.home-cta-mark img { width: 100%; height: 100%; object-fit: cover; }
+.home-cta-copy h2 { margin: 0 0 10px; font-size: clamp(24px, 3vw, 32px); line-height: 1.14; letter-spacing: -.045em; }
+.home-cta-copy > p:not(.home-kicker) { max-width: 48ch; margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.75; }
+
+.home-cta-actions { display: grid; flex: 0 0 auto; gap: 8px; min-width: 194px; }
+.home-cta-actions .button { min-height: 42px; border-radius: 10px; }
+.home-cta-actions .button-muted { color: #f4f5f7; background: rgba(255, 255, 255, .06); border-color: rgba(226, 234, 246, .18); }
+.home-cta-actions .button-muted:hover { background: rgba(255, 255, 255, .1); border-color: rgba(226, 234, 246, .3); }
+.home-cta-actions .button-primary { color: #17191d; }
 
 /* The shared dropdown: one trigger and a listbox of buttons. */
 .select-menu { position: relative; }
@@ -196,11 +237,42 @@
   .home-features-head h2 { font-size: 26px; }
   .home-examples { gap: 14px; }
   .home-inside-head h2 { font-size: 26px; }
-  .home-row { grid-template-columns: 26px minmax(0, 1fr); row-gap: 10px; padding-right: 0; }
+  .home-row { grid-template-columns: 26px minmax(0, 1fr); row-gap: 10px; }
   .home-row > a { grid-column: 2; }
   .home-stats-note { margin-left: 0; }
-  .home-cta { padding: 22px 20px; margin-bottom: 56px; }
-  .home-cta-identity { align-items: flex-start; }
+  .home-rows { padding: 2px 16px; }
+  .shell.home-cta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
+    margin: 48px auto 76px;
+    padding: 24px 20px;
+  }
+  .home-cta-actions { min-width: 0; }
+  .home-cta-actions .button { width: 100%; }
+  .home-cta-copy h2 { font-size: 26px; }
+  .home-cta-copy > p:not(.home-kicker) { max-width: none; font-size: 13px; }
+}
+
+/* Without a blur the pane has to carry its own contrast, and a visitor who has
+   asked for less transparency gets the same solid surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .home-rows,
+  .shell.home-cta { background: rgba(5, 6, 7, .94); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .home-rows,
+  .shell.home-cta {
+    background: rgba(5, 6, 7, .96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .home-rows,
+  .shell.home-cta { border-radius: 14px; }
 }
 
 @media (max-width: 560px) {
@@ -209,12 +281,11 @@
   .home-stat strong { font-size: 22px; }
   .home-stats-note { grid-column: 1 / -1; }
   .home-inside { padding-top: 40px; }
-  .home-cta { border-radius: 8px; }
 }
 
 @media (max-width: 480px) {
-  .home-actions, .home-cta-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .home-actions .button, .home-cta-actions .button { width: 100%; }
+  .home-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .home-actions .button { width: 100%; }
   .home-hero h1 { font-size: clamp(33px, 10vw, 44px); }
   .home-inside-head h2 { font-size: 24px; }
 }

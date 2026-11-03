@@ -147,6 +147,7 @@ const PAGE_METADATA: PageMetadata[] = [
   { path: "/commands", title: "Commands — Niko", description: "Browse every slash, prefix, hybrid, and context command available in Niko.", section: "Command reference", landing: true },
   { path: "/team", title: "Team — Niko", description: "Meet the owners, developers, moderators, support staff, and creatives behind Niko.", section: "Niko team" },
   { path: "/team/apply", title: "Join the Niko Team — Staff Applications", description: "Explore open staff roles and apply to help build a safer, friendlier Niko community.", section: "Staff applications" },
+  { path: "/status", title: "Status — Niko", description: "Live uptime, latency, shard and cog health, hosting figures, and translation coverage for Niko.", section: "Live status" },
   { path: "/leaderboard", title: "Global Economy Leaderboard — Niko", description: "See the global Niko economy standings and discover who has earned the most coins.", section: "Global leaderboard" },
   // The base copy for a server's own board, `/levels/<id>`. The backend
   // renders that page from the server it belongs to (guild name, icon,

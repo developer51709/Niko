@@ -1,0 +1,10 @@
+{
+  "title": "Transcript — Niko",
+  "sticker": "Discord sticker",
+  "contentUnavailable": "Message content unavailable",
+  "notFound": "Transcript not found",
+  "loadFailed": "Failed to load transcript",
+  "loading": "Loading transcript…",
+  "missing": "This transcript doesn't exist or has been deleted.",
+  "empty": "No messages in this transcript."
+}

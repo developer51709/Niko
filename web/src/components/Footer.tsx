@@ -1,17 +1,34 @@
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
 import { Brand } from "./Brand";
 
+// Labels are catalogue keys, not copy: the shared catalogue owns the wording so
+// the footer changes language with the navigation above it.
+const policies = [
+  { key: "footer.privacy", path: "/privacy" },
+  { key: "footer.terms", path: "/terms" },
+  { key: "footer.dataRemoval", path: "/data-removal" },
+  { key: "footer.community", path: "/community" },
+  { key: "footer.support", path: "/support" },
+];
+
 export function Footer() {
+  const { t } = useStrings("shared");
+
   return (
     <footer className="site-footer">
       <Brand />
-      <span>Built for communities that care.</span>
+      <span>{t("footer.tagline")}</span>
       <div>
-        <a href="/privacy" onClick={(e) => { e.preventDefault(); navigate("/privacy"); }}>Privacy</a>
-        <a href="/terms" onClick={(e) => { e.preventDefault(); navigate("/terms"); }}>Terms</a>
-        <a href="/data-removal" onClick={(e) => { e.preventDefault(); navigate("/data-removal"); }}>Data removal</a>
-        <a href="/community" onClick={(e) => { e.preventDefault(); navigate("/community"); }}>Community Policy</a>
-        <a href="/support" onClick={(e) => { e.preventDefault(); navigate("/support"); }}>Support</a>
+        {policies.map((policy) => (
+          <a
+            key={policy.path}
+            href={policy.path}
+            onClick={(e) => { e.preventDefault(); navigate(policy.path); }}
+          >
+            {t(policy.key)}
+          </a>
+        ))}
       </div>
     </footer>
   );

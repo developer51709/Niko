@@ -7,6 +7,95 @@ export type BotStats = {
   economy_users: number;
 };
 
+/** `/api/status` — what the public status page polls while it is open. */
+export type StatusState = "operational" | "degraded" | "maintenance" | "starting" | "offline";
+export type CogState = "loaded" | "disabled" | "maintenance" | "failed";
+
+export type StatusCog = {
+  name: string;
+  label: string;
+  state: CogState;
+  reason: string | null;
+  commands: number;
+};
+
+export type StatusShard = {
+  id: number;
+  /** Null when the shard has not answered yet, which is not the same as 0 ms. */
+  latency_ms: number | null;
+  connected: boolean;
+  /** Connected but still syncing: the page says so instead of calling it slow. */
+  starting?: boolean;
+  guilds: number;
+  members: number;
+  ratelimited: boolean;
+};
+
+export type StatusCoverage = {
+  code: string;
+  label: string;
+  translated: number;
+  total: number;
+  missing: number;
+  percent: number;
+  /** Bot rows: how many locale catalogues were walked. */
+  catalogues?: number;
+  /** Website rows: how many page catalogue folders were walked. */
+  pages?: number;
+  /** Website rows: how many of those pages this language has finished. */
+  complete_pages?: number;
+};
+
+export type StatusHost = {
+  platform: string;
+  python: string;
+  pid: number;
+  cores: number | null;
+  cpu_percent?: number;
+  load?: number[];
+  memory?: { used_gb: number; total_gb: number; percent: number };
+  disk?: { used_gb: number; total_gb: number; percent: number };
+  process?: {
+    cpu_percent: number;
+    memory_mb: number;
+    threads: number;
+    started_at: number;
+    connections: number;
+  };
+};
+
+export type StatusPayload = {
+  online: boolean;
+  state: StatusState;
+  reason?: string | null;
+  bot: {
+    name: string;
+    id: string | null;
+    avatar_url: string | null;
+    ready: boolean;
+    latency_ms: number | null;
+    guild_count: number;
+    user_count: number;
+    command_count: number;
+    voice_clients: number;
+    uptime_seconds: number | null;
+    started_at: number | null;
+    version: string | null;
+  } | null;
+  shards: StatusShard[];
+  shard_count: number;
+  cogs: StatusCog[];
+  cog_counts: Record<CogState, number>;
+  host: StatusHost;
+  locales: {
+    languages: string[];
+    bot: StatusCoverage[];
+    website: StatusCoverage[];
+    scanned_at: number;
+  };
+  generated_at: number;
+};
+
 /** One day of bot-wide command usage; the API zero-fills the window. */
 export type StaffAnalyticsDay = {
   date: string;
@@ -107,8 +196,19 @@ export type BotEmoji = {
   placeholder: boolean;
 };
 
+/** A real server emoji from a guild the bot is in, for the rendering lab. */
+export type ServerEmoji = {
+  name: string;
+  id: string;
+  animated: boolean;
+  guild_name: string;
+  guild_icon_url: string | null;
+};
+
 export type BotEmojisResponse = {
   emojis: BotEmoji[];
+  /** The lab's server-emoji popup sample; null when no guild has an emoji. */
+  server_emoji?: ServerEmoji | null;
 };
 
 export type CommandType = "slash" | "prefix" | "hybrid" | "context";
@@ -903,6 +1003,38 @@ export type StaffManagementResponse = {
   members: StaffMember[];
   roles: StaffRosterRole[];
   count: number;
+};
+
+/** A cog as the maintenance tab sees it: what it is and whether it is paused. */
+export type StaffMaintenanceCog = {
+  name: string;
+  label: string;
+  state: "loaded" | "disabled" | "maintenance" | "failed";
+  reason: string | null;
+  /** Set by the cog's source (`MAINTENANCE`/`DNL`), which the dashboard cannot override. */
+  declared: boolean;
+  commands: number;
+  maintenance: boolean;
+  since: number | null;
+  by: string | null;
+};
+
+export type StaffMaintenanceCommand = {
+  name: string;
+  cog: string | null;
+  cog_label: string | null;
+  maintenance: boolean;
+  /** The entry that actually blocks this command: its own, or its cog. */
+  blocked_by: string | null;
+  reason: string | null;
+  since: number | null;
+  by: string | null;
+};
+
+export type StaffMaintenanceResponse = {
+  cogs: StaffMaintenanceCog[];
+  commands: StaffMaintenanceCommand[];
+  updated_at: number;
 };
 
 export type StaffEmoji = {

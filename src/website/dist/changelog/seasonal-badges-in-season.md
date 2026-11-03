@@ -1,6 +1,7 @@
 # Seasonal Badges Only Progress Inside Their Season
 
 - Date: 2026-10-16
+- Version: 2.19.3
 - Tags: economy, achievements, events, fixed
 
 Seasonal badges are now measured inside their own event window. A spending spree in July or a career level reached in March no longer counts toward the Halloween and New Year badges, and an out-of-season badge shows no progress at all.

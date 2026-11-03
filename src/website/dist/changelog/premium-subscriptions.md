@@ -1,6 +1,7 @@
 # Niko Premium Is Here — Real AI Image Moderation, Plus a Legal Update
 
 - Date: 2026-10-20
+- Version: 2.21.0
 - Tags: premium, moderation, billing, dashboard, legal, added
 
 Some things are worth doing properly. Niko Premium is a $15/month server subscription that puts every image posted in your server in front of fal.ai's NSFW model and deletes the ones that should never have been posted. Everything else — the scam image filter, bot profile customization, economy, leveling, tickets, giveaways, and the rest — stays free, exactly as it is today. This same release ships a legal update: a stricter, owner-verified data-removal process, protected moderation records, and a formal route for court-ordered requests.

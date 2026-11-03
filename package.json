@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@mdx-js/rollup": "^3.1.1",
+    "@phosphor-icons/core": "^2.1.1",
     "@web3icons/core": "^4.0.58",
     "remark-frontmatter": "^5.0.0",
     "sharp": "^0.35.5",

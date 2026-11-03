@@ -1,0 +1,23 @@
+{
+  "title": "Niko — Discord-Begleiter",
+  "nav.home": "Start",
+  "nav.commands": "Befehle",
+  "nav.docs": "Doku",
+  "nav.status": "Status",
+  "nav.team": "Team",
+  "nav.changelog": "Änderungen",
+  "header.menu": "Menü",
+  "header.navigate": "Navigation",
+  "header.dashboard": "Dashboard",
+  "header.add": "Zu Discord hinzufügen",
+  "header.mainNavigation": "Hauptnavigation",
+  "header.dashboardNavigation": "Dashboard-Navigation",
+  "header.openDashboardNav": "Dashboard-Navigation öffnen",
+  "header.closeDashboardNav": "Dashboard-Navigation schließen",
+  "footer.tagline": "Für Communities, die es ernst meinen.",
+  "footer.privacy": "Datenschutz",
+  "footer.terms": "Nutzungsbedingungen",
+  "footer.dataRemoval": "Datenlöschung",
+  "footer.community": "Community-Richtlinie",
+  "footer.support": "Support"
+}

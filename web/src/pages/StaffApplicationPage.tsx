@@ -3,10 +3,12 @@ import { getAuth, getPublicOpenings, getPublicStaffApplication, submitStaffAppli
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { useBotConfig } from "../hooks/useBotConfig";
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
 import type { AuthStatus, PublicStaffApplication } from "../types";
 
 export function StaffApplicationPage() {
+  const { t } = useStrings("application");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [application, setApplication] = useState<PublicStaffApplication | null>(null);
   const [openings, setOpenings] = useState<PublicStaffApplication[]>([]);
@@ -38,10 +40,10 @@ export function StaffApplicationPage() {
         setOpenings(result.openings);
       });
     }).catch((reason) => {
-      if (active) setError(reason instanceof Error ? reason.message : "The application could not be loaded.");
+      if (active) setError(reason instanceof Error ? reason.message : t("error.load"));
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [guildId, applicationId, config?.support_server_url]);
+  }, [guildId, applicationId, config?.support_server_url, t]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -52,50 +54,50 @@ export function StaffApplicationPage() {
       return Array.isArray(answer) ? answer.length === 0 : !answer?.trim();
     });
     if (unanswered) {
-      setError(`Please answer: ${unanswered.prompt}`);
+      setError(t("error.answer", { prompt: unanswered.prompt }));
       return;
     }
     setSending(true); setError("");
-    submitStaffApplication(guildId, application.id, answers, auth?.csrf_token).then(() => setSubmitted(true)).catch((reason) => setError(reason instanceof Error ? reason.message : "Your application could not be submitted.")).finally(() => setSending(false));
+    submitStaffApplication(guildId, application.id, answers, auth?.csrf_token).then(() => setSubmitted(true)).catch((reason) => setError(reason instanceof Error ? reason.message : t("error.submit"))).finally(() => setSending(false));
   };
 
   const loginUrl = `/auth/login?next=${encodeURIComponent(returnPath)}`;
-  const serverName = application?.guild_name || "the server";
+  const serverName = application?.guild_name || t("serverFallback");
 
   return <><PublicHeader page="dashboard" /><main className="application-public-page"><div className="application-public-shell">
-    <a className="application-back-link" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>← Back to Niko</a>
-    <div className="application-public-brand"><span className="application-public-mark">n</span><span>TEAM APPLICATIONS <small>POWERED BY NIKO</small></span></div>
+    <a className="application-back-link" href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }}>{t("back")}</a>
+    <div className="application-public-brand"><span className="application-public-mark">n</span><span>{t("brand")} <small>{t("brand.small")}</small></span></div>
     <div className="application-public-card">
-      {loading ? <div className="application-public-state"><div className="loading-ring" /><p>Checking your sign-in and server access…</p></div>
-        : !auth?.authenticated ? <div className="application-public-state"><div className="application-public-symbol"><Icon name="lock" /></div><span className="panel-kicker">A safe, verified application</span><h1>Sign in to continue.</h1><p>Use your Discord account to confirm that you’re a member of this server and eligible for its openings.</p>{auth?.oauth_available ? <a className="button button-primary" href={loginUrl}>Continue with Discord <Icon name="arrow" /></a> : <p className="form-error">Discord sign-in isn’t available right now.</p>}</div>
-        : submitted ? <div className="application-public-state"><div className="application-success-mark">✓</div><span className="panel-kicker">Application received</span><h1>Thanks for stepping up.</h1><p>Your answers were sent to {serverName}. You can only apply once to this opening.</p><a className="button button-muted" href={`/apply/${guildId}`}>View other openings <Icon name="arrow" /></a></div>
-        : error && !application && openings.length === 0 ? <div className="application-public-state"><div className="application-public-symbol"><Icon name="shield" /></div><span className="panel-kicker">Access check</span><h1>We couldn’t open this application.</h1><p>{error}</p><a className="button button-muted" href="/">Return home</a></div>
-        : application?.already_submitted ? <div className="application-public-state"><div className="application-success-mark">✓</div><span className="panel-kicker">Already submitted</span><h1>Your application is on file.</h1><p>You’ve already submitted an application for {application.title}. Reopening it later won’t allow a second submission.</p><a className="button button-muted" href={`/apply/${guildId}`}>View other openings <Icon name="arrow" /></a></div>
+      {loading ? <div className="application-public-state"><div className="loading-ring" /><p>{t("loading")}</p></div>
+        : !auth?.authenticated ? <div className="application-public-state"><div className="application-public-symbol"><Icon name="lock" /></div><span className="panel-kicker">{t("signin.kicker")}</span><h1>{t("signin.title")}</h1><p>{t("signin.body")}</p>{auth?.oauth_available ? <a className="button button-primary" href={loginUrl}>{t("signin.cta")} <Icon name="arrow" /></a> : <p className="form-error">{t("signin.unavailable")}</p>}</div>
+        : submitted ? <div className="application-public-state"><div className="application-success-mark">✓</div><span className="panel-kicker">{t("done.kicker")}</span><h1>{t("done.title")}</h1><p>{t("done.body", { server: serverName })}</p><a className="button button-muted" href={`/apply/${guildId}`}>{t("done.cta")} <Icon name="arrow" /></a></div>
+        : error && !application && openings.length === 0 ? <div className="application-public-state"><div className="application-public-symbol"><Icon name="shield" /></div><span className="panel-kicker">{t("fail.kicker")}</span><h1>{t("fail.title")}</h1><p>{error}</p><a className="button button-muted" href="/">{t("fail.cta")}</a></div>
+        : application?.already_submitted ? <div className="application-public-state"><div className="application-success-mark">✓</div><span className="panel-kicker">{t("submitted.kicker")}</span><h1>{t("submitted.title")}</h1><p>{t("submitted.body", { title: application.title })}</p><a className="button button-muted" href={`/apply/${guildId}`}>{t("done.cta")} <Icon name="arrow" /></a></div>
         : application ? <>
-          <div className="application-public-topline"><span className="application-status open">Accepting applications</span><span className="application-server-tag">{serverName}</span></div>
-          <div className="application-public-heading"><span className="panel-kicker">STAFF APPLICATION · {application.role_name || "ROLE OPENING"}</span><h1>{application.title}</h1><p>{application.description || "Complete the questions below to apply for this opening."}</p></div>
-          <div className="application-verified"><span className="application-verified-icon"><Icon name="shield" /></span><span><strong>Membership verified</strong><small>Signed in as {auth.user?.global_name || auth.user?.username || "your Discord account"}. Niko checked your server roles.</small></span><a href="/auth/logout">Switch account</a></div>
+          <div className="application-public-topline"><span className="application-status open">{t("topline.open")}</span><span className="application-server-tag">{serverName}</span></div>
+          <div className="application-public-heading"><span className="panel-kicker">{t("heading.kicker", { role: application.role_name || t("heading.roleFallback") })}</span><h1>{application.title}</h1><p>{application.description || t("heading.body")}</p></div>
+          <div className="application-verified"><span className="application-verified-icon"><Icon name="shield" /></span><span><strong>{t("verified.title")}</strong><small>{t("verified.body", { user: auth.user?.global_name || auth.user?.username || t("verified.fallback") })}</small></span><a href="/auth/logout">{t("verified.switch")}</a></div>
           <form className="application-public-form" onSubmit={submit}>
             {application.questions.map((question, index) => {
               const type = question.type || "paragraph";
               const value = answers[question.id] ?? (type === "multi_choice" ? [] : "");
               const setValue = (next: string | string[]) => setAnswers((current) => ({ ...current, [question.id]: next }));
-              return <fieldset className="form-field application-answer-field" key={question.id}><legend><span className="application-question-count">{String(index + 1).padStart(2, "0")}</span><span className="form-label">{question.prompt}{question.required && <i>Required</i>}</span></legend>
-                {type === "short_text" ? <input type="text" required={question.required} maxLength={200} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} placeholder="Your answer" />
+              return <fieldset className="form-field application-answer-field" key={question.id}><legend><span className="application-question-count">{String(index + 1).padStart(2, "0")}</span><span className="form-label">{question.prompt}{question.required && <i>{t("form.required")}</i>}</span></legend>
+                {type === "short_text" ? <input type="text" required={question.required} maxLength={200} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} placeholder={t("form.answer")} />
                   : type === "single_choice" ? <div className="application-choice-list application-single-choice">{(question.options || []).map((option) => <label className={value === option ? "is-selected" : ""} key={option}><input type="radio" name={question.id} required={question.required && !value} checked={value === option} onChange={() => setValue(option)} /><span>{option}</span></label>)}</div>
                   : type === "multi_choice" ? <div className="application-choice-list application-multi-choice">{(question.options || []).map((option) => <label className={Array.isArray(value) && value.includes(option) ? "is-selected" : ""} key={option}><input type="checkbox" checked={Array.isArray(value) && value.includes(option)} onChange={(event) => setValue(event.target.checked ? [...(Array.isArray(value) ? value : []), option] : (Array.isArray(value) ? value : []).filter((item) => item !== option))} /><span>{option}</span></label>)}</div>
-                  : type === "yes_no" ? <div className="application-choice-list application-yes-no">{["yes", "no"].map((option) => <label className={value === option ? "is-selected" : ""} key={option}><input type="radio" name={question.id} required={question.required && !value} checked={value === option} onChange={() => setValue(option)} /><span>{option === "yes" ? "Yes" : "No"}</span></label>)}</div>
+                  : type === "yes_no" ? <div className="application-choice-list application-yes-no">{["yes", "no"].map((option) => <label className={value === option ? "is-selected" : ""} key={option}><input type="radio" name={question.id} required={question.required && !value} checked={value === option} onChange={() => setValue(option)} /><span>{option === "yes" ? t("form.yes") : t("form.no")}</span></label>)}</div>
                   : type === "date" ? <input type="date" required={question.required} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} />
-                  : <><textarea required={question.required} maxLength={4000} rows={4} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} placeholder="Write your answer here…" /><small>{(typeof value === "string" ? value : "").length}/4000 characters</small></>}
+                  : <><textarea required={question.required} maxLength={4000} rows={4} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(event.target.value)} placeholder={t("form.placeholder")} /><small>{t("form.chars", { count: (typeof value === "string" ? value : "").length })}</small></>}
               </fieldset>;
             })}
             {error && <div className="notice warning" role="alert">{error}</div>}
-            <div className="application-submit-footer"><span>Your submission is private to this server’s application managers.</span><button type="submit" className="button button-primary" disabled={sending}>{sending ? "Sending…" : "Submit application"} <Icon name="arrow" /></button></div>
+            <div className="application-submit-footer"><span>{t("form.privacy")}</span><button type="submit" className="button button-primary" disabled={sending}>{t(sending ? "form.sending" : "form.submit")} <Icon name="arrow" /></button></div>
           </form>
         </>
-        : openings.length > 0 ? <div className="application-public-state application-opening-state"><span className="panel-kicker">{serverName} · open roles</span><h1>Choose your opening.</h1><p>Select an eligible team role to start your application.</p><div className="public-opening-list">{openings.map((opening) => <article className="public-opening-card" key={opening.id}><div><span className={`application-status ${opening.already_submitted ? "closed" : opening.eligible ? "open" : "closed"}`}>{opening.already_submitted ? "Already applied" : opening.eligible ? "Eligible" : "Role required"}</span><h2>{opening.title}</h2><p>{opening.description || `Apply for ${opening.role_name || "this role"}.`}</p></div>{opening.eligible && !opening.already_submitted && <a className="button button-primary" href={`/apply/${guildId}/${opening.id}`}>Apply <Icon name="arrow" /></a>}</article>)}</div></div>
-        : <div className="application-public-state"><div className="application-public-symbol"><Icon name="users" /></div><span className="panel-kicker">Nothing open just yet</span><h1>No openings available.</h1><p>{error || "This server doesn’t have any open staff applications right now."}</p><a className="button button-muted" href="/">Return home</a></div>}
+        : openings.length > 0 ? <div className="application-public-state application-opening-state"><span className="panel-kicker">{t("opening.kicker", { server: serverName })}</span><h1>{t("opening.title")}</h1><p>{t("opening.body")}</p><div className="public-opening-list">{openings.map((opening) => <article className="public-opening-card" key={opening.id}><div><span className={`application-status ${opening.already_submitted ? "closed" : opening.eligible ? "open" : "closed"}`}>{t(opening.already_submitted ? "opening.applied" : opening.eligible ? "opening.eligible" : "opening.roleRequired")}</span><h2>{opening.title}</h2><p>{opening.description || t("opening.description", { role: opening.role_name || t("heading.roleFallback") })}</p></div>{opening.eligible && !opening.already_submitted && <a className="button button-primary" href={`/apply/${guildId}/${opening.id}`}>{t("opening.apply")} <Icon name="arrow" /></a>}</article>)}</div></div>
+        : <div className="application-public-state"><div className="application-public-symbol"><Icon name="users" /></div><span className="panel-kicker">{t("empty.kicker")}</span><h1>{t("empty.title")}</h1><p>{error || t("empty.body")}</p><a className="button button-muted" href="/">{t("empty.cta")}</a></div>}
     </div>
-    <footer className="application-public-footer"><span>Identity and server roles verified by Discord.</span>{config?.bot_avatar_url && <img src={config.bot_avatar_url} alt="Niko" />}</footer>
+    <footer className="application-public-footer"><span>{t("footer")}</span>{config?.bot_avatar_url && <img src={config.bot_avatar_url} alt="Niko" />}</footer>
   </div></main></>;
 }

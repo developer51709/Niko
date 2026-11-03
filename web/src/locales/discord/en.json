@@ -1,0 +1,10 @@
+{
+  "title": "Support server — Niko",
+  "checking": "Checking the Niko support link…",
+  "redirecting": "Taking you to the Niko support server…",
+  "continue": "Continue if you aren’t redirected",
+  "missing.eyebrow": "Niko support",
+  "missing.title": "We couldn’t find the support link.",
+  "missing.body": "The official support server link isn’t configured right now. Please check back later.",
+  "missing.action": "Visit support"
+}

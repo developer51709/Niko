@@ -1,6 +1,7 @@
 import { type CSSProperties } from "react";
 import { Select, type SelectOption } from "./Select";
 import type { GuildResources } from "../../types";
+import { useStrings } from "../../i18n";
 
 type Channel = GuildResources["channels"][number];
 
@@ -39,7 +40,9 @@ function ChannelGlyph({ channel, empty }: { channel?: Channel; empty?: boolean }
 }
 
 /** A channel picker: the shared `Select`, with Discord's channel icons as glyphs. */
-export function ChannelSelect({ channels, value, onChange, placeholder = "Choose a channel", ariaLabel, disabled, id }: Props) {
+export function ChannelSelect({ channels, value, onChange, placeholder, ariaLabel, disabled, id }: Props) {
+  const { t } = useStrings("dashboard");
+  const resolvedPlaceholder = placeholder === undefined ? t("pickers.chooseChannel") : placeholder;
   const options: SelectOption[] = channels.map((channel) => ({
     value: String(channel.id),
     label: `#${channel.name}`,
@@ -50,9 +53,9 @@ export function ChannelSelect({ channels, value, onChange, placeholder = "Choose
     options={options}
     value={value}
     onChange={onChange}
-    placeholder={placeholder}
-    placeholderGlyph={placeholder === null ? undefined : <ChannelGlyph empty />}
-    unknownOption={(saved) => ({ value: saved, label: `Saved channel · ${saved}`, glyph: <ChannelGlyph empty /> })}
+    placeholder={resolvedPlaceholder}
+    placeholderGlyph={resolvedPlaceholder === null ? undefined : <ChannelGlyph empty />}
+    unknownOption={(saved) => ({ value: saved, label: t("pickers.savedChannel", { id: saved }), glyph: <ChannelGlyph empty /> })}
     ariaLabel={ariaLabel}
     disabled={disabled}
     id={id}

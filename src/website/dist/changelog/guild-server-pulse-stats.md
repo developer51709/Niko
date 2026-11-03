@@ -1,6 +1,7 @@
 # Guild Server Pulse Stats
 
 - Date: 2026-09-24
+- Version: 2.10.1
 - Tags: dashboard, guild, analytics, stats
 
 Guild settings now include a Server pulse analytics card with an at-a-glance view of server size and recent community activity.

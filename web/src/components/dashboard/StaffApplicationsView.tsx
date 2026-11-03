@@ -4,16 +4,19 @@ import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import { DiscordMarkdown } from "../DiscordMarkdown";
 import { RoleSelect } from "./RoleSelect";
-import { Select, selectOptions } from "./Select";
+import { Select, localizeOptions, selectOptions } from "./Select";
 import type { StaffApplicationQuestionType, GuildResources, StaffApplication, StaffApplicationSubmission } from "../../types";
 import { DashHeading } from "./DashboardViews";
+import { useStrings } from "../../i18n";
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
 type QuestionDraft = { id: string; prompt: string; required: boolean; type: StaffApplicationQuestionType; options: string[] };
 const newQuestion = (): QuestionDraft => ({ id: crypto.randomUUID(), prompt: "", required: true, type: "paragraph", options: ["", ""] });
-const ANSWER_TYPES = selectOptions([["short_text", "Short text"], ["paragraph", "Long answer"], ["single_choice", "Choose one"], ["multi_choice", "Choose many"], ["yes_no", "Yes / no"], ["date", "Date"]]);
+// Answer types store catalogue keys; the dropdown translates them at render.
+const ANSWER_TYPES = selectOptions([["short_text", "applications.typeShort"], ["paragraph", "applications.typeLong"], ["single_choice", "applications.typeOne"], ["multi_choice", "applications.typeMany"], ["yes_no", "applications.typeYesNo"], ["date", "applications.typeDate"]]);
 
 export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) {
+  const { t } = useStrings("dashboard");
   const [applications, setApplications] = useState<StaffApplication[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -31,7 +34,7 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
   const refresh = useCallback(() => getStaffApplications(guildId).then(setApplications), [guildId]);
   useEffect(() => {
     setLoading(true);
-    refresh().catch((reason) => notifyError(reason instanceof Error ? reason.message : "Applications could not be loaded.", "applications-editor")).finally(() => setLoading(false));
+    refresh().catch((reason) => notifyError(reason instanceof Error ? reason.message : t("applications.loadFailed"), "applications-editor")).finally(() => setLoading(false));
   }, [refresh]);
 
   const resetEditor = () => {
@@ -51,12 +54,12 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!roleId) { notifyError("Choose the Discord role this opening is hiring for.", "applications-editor"); return; }
+    if (!roleId) { notifyError(t("applications.roleRequired"), "applications-editor"); return; }
     const invalidChoices = questions.some((question) => ["single_choice", "multi_choice"].includes(question.type)
       && (question.options.filter((option) => option.trim()).length < 2 || question.options.some((option) => !option.trim())));
-    if (invalidChoices) { notifyError("Each choice question needs at least two non-empty options.", "applications-editor"); return; }
+    if (invalidChoices) { notifyError(t("applications.invalidChoices"), "applications-editor"); return; }
     setSaving(true);
-    notifyLoading("Saving opening…", "applications-editor");
+    notifyLoading(t("applications.saving"), "applications-editor");
     const body = {
       title, description, role_id: roleId, eligible_role_ids: eligibleRoles,
       questions: questions.map(({ id, prompt, required, type, options }) => ({ id, prompt, required, type, options: options.map((option) => option.trim()).filter(Boolean) })),
@@ -69,51 +72,51 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
         ? current.map((item) => item.id === application.id ? application : item)
         : [application, ...current]);
       resetEditor();
-      notifySuccess(editingId ? "Application updated. Its link and saved responses are unchanged." : "Application created. Its link is ready to share.", "applications-editor");
-    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Application could not be saved.", "applications-editor")).finally(() => setSaving(false));
+      notifySuccess(t(editingId ? "applications.savedEdit" : "applications.savedNew"), "applications-editor");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : t("applications.saveFailed"), "applications-editor")).finally(() => setSaving(false));
   };
 
   const deleteApplication = (application: StaffApplication) => {
-    if (!window.confirm(`Delete “${application.title}” and permanently remove its ${application.submission_count} response${application.submission_count === 1 ? "" : "s"}? This cannot be undone.`)) return;
-    notifyLoading("Deleting opening…", "applications-editor");
+    if (!window.confirm(t(application.submission_count === 1 ? "applications.deleteConfirmOne" : "applications.deleteConfirmMany", { title: application.title, count: application.submission_count }))) return;
+    notifyLoading(t("applications.deleting"), "applications-editor");
     deleteStaffApplication(guildId, application.id, csrfToken).then(() => {
       setApplications((current) => current.filter((item) => item.id !== application.id));
       if (selectedSubmissions === application.id) setSelectedSubmissions(null);
-      notifySuccess("Application and its responses deleted.", "applications-editor");
-    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Application could not be deleted.", "applications-editor"));
+      notifySuccess(t("applications.deleted"), "applications-editor");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : t("applications.deleteFailed"), "applications-editor"));
   };
 
   const toggleStatus = (application: StaffApplication) => {
     const status = application.status === "open" ? "closed" : "open";
-    notifyLoading(status === "open" ? "Reopening…" : "Closing…", "applications-editor");
+    notifyLoading(t(status === "open" ? "applications.reopening" : "applications.closing"), "applications-editor");
     setStaffApplicationStatus(guildId, application.id, status, csrfToken).then(() => {
       setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status } : item));
-      notifySuccess(status === "open" ? "Opening reopened. The same link is active again." : "Opening closed. Its link and responses are preserved.", "applications-editor");
-    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Application status could not be changed.", "applications-editor"));
+      notifySuccess(t(status === "open" ? "applications.reopened" : "applications.closed"), "applications-editor");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : t("applications.statusFailed"), "applications-editor"));
   };
 
   const openSubmissions = (application: StaffApplication) => {
     if (selectedSubmissions === application.id) { setSelectedSubmissions(null); return; }
     setSelectedSubmissions(application.id);
     setSubmissions([]);
-    getStaffSubmissions(guildId, application.id).then((result) => setSubmissions(result.submissions)).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Responses could not be loaded.", "applications-review"));
+    getStaffSubmissions(guildId, application.id).then((result) => setSubmissions(result.submissions)).catch((reason) => notifyError(reason instanceof Error ? reason.message : t("applications.responsesFailed"), "applications-review"));
   };
 
   const reviewSubmission = (applicationId: string, submission: StaffApplicationSubmission, status: "approved" | "denied") => {
     if (reviewingUserId) return;
     const wasReviewed = submission.review_status !== "pending";
     setReviewingUserId(submission.user_id);
-    notifyLoading("Saving decision…", "applications-review");
+    notifyLoading(t("applications.savingDecision"), "applications-review");
     reviewStaffSubmission(guildId, applicationId, submission.user_id, status, csrfToken).then((result) => {
       setSubmissions((current) => current.map((item) => item.user_id === submission.user_id
         ? { ...item, review_status: result.review_status, reviewed_by: result.reviewed_by, reviewed_at: result.reviewed_at }
         : item));
       notifySuccess(result.unchanged
-        ? "That decision was already recorded. Nothing was changed."
+        ? t("applications.decisionUnchanged")
         : wasReviewed
-          ? `Decision revised to ${status}.`
-          : `Response ${status}.`, "applications-review");
-    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : "Response review could not be saved.", "applications-review")).finally(() => setReviewingUserId(null));
+          ? t("applications.decisionRevised", { status })
+          : t("applications.decisionRecorded", { status }), "applications-review");
+    }).catch((reason) => notifyError(reason instanceof Error ? reason.message : t("applications.reviewFailed"), "applications-review")).finally(() => setReviewingUserId(null));
   };
 
   const copyLink = async (application: StaffApplication) => {
@@ -122,38 +125,38 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
       await navigator.clipboard.writeText(link);
       setCopiedId(application.id); window.setTimeout(() => setCopiedId(""), 1800);
     } catch {
-      notifyError("Could not copy the link. Open it in a new tab and copy the address instead.", "applications-editor");
+      notifyError(t("applications.copyFailed"), "applications-editor");
     }
   };
 
   return <>
-    <DashHeading eyebrow="People · applications" title="Build your next team." text="Keep separate role openings active at once. Close an opening when hiring pauses, then reopen the same link next time—past responses and one-time submissions stay attached." />
-    <div className="applications-intro"><span className="applications-intro-icon"><Icon name="users" /></span><div><span className="panel-kicker">Hiring desk</span><strong>{applications.filter((item) => item.status === "open").length} open · {applications.length} saved openings</strong><p>Each opening has its own stable public link and response archive.</p></div><a href={`/apply/${guildId}`} target="_blank" rel="noreferrer" className="button button-muted button-small">Preview server link <Icon name="arrow" /></a></div>
+    <DashHeading eyebrow={t("applications.eyebrow")} title={t("applications.title")} text={t("applications.text")} />
+    <div className="applications-intro"><span className="applications-intro-icon"><Icon name="users" /></span><div><span className="panel-kicker">{t("applications.kicker")}</span><strong>{t("applications.summary", { open: applications.filter((item) => item.status === "open").length, total: applications.length })}</strong><p>{t("applications.introText")}</p></div><a href={`/apply/${guildId}`} target="_blank" rel="noreferrer" className="button button-muted button-small">{t("applications.previewLink")} <Icon name="arrow" /></a></div>
     <section className="applications-layout">
       <form className="dash-panel applications-editor" onSubmit={submit}>
-        <div className="panel-heading"><div><span className="panel-kicker">{editingId ? "Edit opening" : "New opening"}</span><h3>{editingId ? "Update role application" : "Create a role application"}</h3><p>{editingId ? "Changes apply to the existing link. Previously submitted answers remain attached." : "One saved opening per role and hiring round. Reopen it later to reuse its URL."}</p></div><span className="panel-icon"><Icon name={editingId ? "settings" : "plus"} /></span></div>
+        <div className="panel-heading"><div><span className="panel-kicker">{t(editingId ? "applications.editOpening" : "applications.newOpening")}</span><h3>{t(editingId ? "applications.updateTitle" : "applications.createTitle")}</h3><p>{t(editingId ? "applications.updateDetail" : "applications.createDetail")}</p></div><span className="panel-icon"><Icon name={editingId ? "settings" : "plus"} /></span></div>
         <div className="form-grid applications-fields">
-          <label className="form-field"><span className="form-label">Opening title</span><input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Community moderator" /></label>
-          <div className="form-field"><span className="form-label">Discord role</span><RoleSelect roles={resources?.roles || []} value={roleId} placeholder="Choose the role you’re hiring for" ariaLabel="Discord role" onChange={(value) => setRoleId(String(value))} /></div>
-          <label className="form-field application-description"><span className="form-label">About this opening</span><textarea rows={3} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Share what the role involves and who you’re looking for." />{description.trim() && <DiscordMarkdown text={description} className="role-select-preview" interactiveUsers={false} />}</label>
-          <label className="form-field application-role-gates"><span className="form-label">Eligibility role gates</span><RoleSelect roles={resources?.roles || []} value={eligibleRoles} multiple ariaLabel="Eligibility role gates" onChange={(value) => setEligibleRoles(Array.isArray(value) ? value : [])} /><small>Applicants need at least one selected role. Leave empty to allow any server member.</small></label>
+          <label className="form-field"><span className="form-label">{t("applications.openingTitle")}</span><input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("applications.titlePlaceholder")} /></label>
+          <div className="form-field"><span className="form-label">{t("applications.discordRole")}</span><RoleSelect roles={resources?.roles || []} value={roleId} placeholder={t("applications.rolePlaceholder")} ariaLabel={t("applications.discordRole")} onChange={(value) => setRoleId(String(value))} /></div>
+          <label className="form-field application-description"><span className="form-label">{t("applications.aboutOpening")}</span><textarea rows={3} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t("applications.descriptionPlaceholder")} />{description.trim() && <DiscordMarkdown text={description} className="role-select-preview" interactiveUsers={false} />}</label>
+          <label className="form-field application-role-gates"><span className="form-label">{t("applications.eligibility")}</span><RoleSelect roles={resources?.roles || []} value={eligibleRoles} multiple ariaLabel={t("applications.eligibility")} onChange={(value) => setEligibleRoles(Array.isArray(value) ? value : [])} /><small>{t("applications.eligibilityHint")}</small></label>
         </div>
-        <div className="application-question-heading"><div><span className="form-label">Application questions</span><small>Ask up to 12 questions. Required answers must be completed.</small></div><button type="button" className="button button-muted button-small" onClick={() => setQuestions((current) => current.length < 12 ? [...current, newQuestion()] : current)} disabled={questions.length >= 12}>＋ Add question</button></div>
+        <div className="application-question-heading"><div><span className="form-label">{t("applications.questionsLabel")}</span><small>{t("applications.questionsHint")}</small></div><button type="button" className="button button-muted button-small" onClick={() => setQuestions((current) => current.length < 12 ? [...current, newQuestion()] : current)} disabled={questions.length >= 12}>＋ {t("applications.addQuestion")}</button></div>
         <div className="application-question-list">{questions.map((question, index) => <div className="application-question" key={question.id}>
-          <label className="form-field"><span className="form-label">Question {index + 1}</span><input required maxLength={240} value={question.prompt} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, prompt: event.target.value } : item))} placeholder="Why would you be a good fit?" /></label>
-          <div className="form-field application-type-field"><span className="form-label">Answer type</span><Select ariaLabel="Answer type" placeholder={null} options={ANSWER_TYPES} value={question.type} onChange={(value) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, type: value as StaffApplicationQuestionType } : item))} /></div>
-          {["single_choice", "multi_choice"].includes(question.type) && <div className="application-options-field"><span className="form-label">Options <small>At least two choices</small></span><div className="application-option-list">{question.options.map((option, optionIndex) => <div className="application-option-row" key={`${question.id}-${optionIndex}`}><input required maxLength={100} aria-label={`Question ${index + 1}, option ${optionIndex + 1}`} value={option} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, options: item.options.map((value, i) => i === optionIndex ? event.target.value : value) } : item))} placeholder={`Option ${optionIndex + 1}`} /><button type="button" className="application-option-remove" onClick={() => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, options: item.options.filter((_, i) => i !== optionIndex) } : item))} disabled={question.options.length <= 2} aria-label={`Remove option ${optionIndex + 1}`}>Remove</button></div>)}</div><button type="button" className="button button-muted button-small application-option-add" onClick={() => setQuestions((current) => current.map((item) => item.id === question.id && item.options.length < 20 ? { ...item, options: [...item.options, ""] } : item))} disabled={question.options.length >= 20}>＋ Add option</button></div>}
-          <label className="application-required"><input type="checkbox" checked={question.required} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, required: event.target.checked } : item))} /> Required</label>{questions.length > 1 && <button type="button" className="application-remove-question" onClick={() => setQuestions((current) => current.filter((item) => item.id !== question.id))} aria-label={`Remove question ${index + 1}`}>×</button>}
+          <label className="form-field"><span className="form-label">{t("applications.questionIndex", { count: index + 1 })}</span><input required maxLength={240} value={question.prompt} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, prompt: event.target.value } : item))} placeholder={t("applications.questionPlaceholder")} /></label>
+          <div className="form-field application-type-field"><span className="form-label">{t("applications.answerType")}</span><Select ariaLabel={t("applications.answerType")} placeholder={null} options={localizeOptions(ANSWER_TYPES, t)} value={question.type} onChange={(value) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, type: value as StaffApplicationQuestionType } : item))} /></div>
+          {["single_choice", "multi_choice"].includes(question.type) && <div className="application-options-field"><span className="form-label">{t("applications.optionsLabel")} <small>{t("applications.optionsHint")}</small></span><div className="application-option-list">{question.options.map((option, optionIndex) => <div className="application-option-row" key={`${question.id}-${optionIndex}`}><input required maxLength={100} aria-label={t("applications.optionAria", { question: index + 1, option: optionIndex + 1 })} value={option} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, options: item.options.map((value, i) => i === optionIndex ? event.target.value : value) } : item))} placeholder={t("applications.optionPlaceholder", { count: optionIndex + 1 })} /><button type="button" className="application-option-remove" onClick={() => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, options: item.options.filter((_, i) => i !== optionIndex) } : item))} disabled={question.options.length <= 2} aria-label={t("applications.removeOptionAria", { count: optionIndex + 1 })}>{t("applications.remove")}</button></div>)}</div><button type="button" className="button button-muted button-small application-option-add" onClick={() => setQuestions((current) => current.map((item) => item.id === question.id && item.options.length < 20 ? { ...item, options: [...item.options, ""] } : item))} disabled={question.options.length >= 20}>＋ {t("applications.addOption")}</button></div>}
+          <label className="application-required"><input type="checkbox" checked={question.required} onChange={(event) => setQuestions((current) => current.map((item) => item.id === question.id ? { ...item, required: event.target.checked } : item))} /> {t("applications.required")}</label>{questions.length > 1 && <button type="button" className="application-remove-question" onClick={() => setQuestions((current) => current.filter((item) => item.id !== question.id))} aria-label={t("applications.removeQuestionAria", { count: index + 1 })}>×</button>}
         </div>)}</div>
-        <div className="setting-footer"><span>{editingId ? "The share link and existing responses are kept." : "Your public application link requires Discord sign-in and server membership."}</span><div className="application-editor-actions">{editingId && <button className="button button-muted" type="button" onClick={resetEditor} disabled={saving}>Cancel edit</button>}<button className="button button-primary" type="submit" disabled={saving || !resources?.roles.length}>{saving ? "Saving…" : editingId ? "Save changes" : "Create opening"}</button></div></div>
+        <div className="setting-footer"><span>{t(editingId ? "applications.footerKeep" : "applications.footerNew")}</span><div className="application-editor-actions">{editingId && <button className="button button-muted" type="button" onClick={resetEditor} disabled={saving}>{t("applications.cancelEdit")}</button>}<button className="button button-primary" type="submit" disabled={saving || !resources?.roles.length}>{t(saving ? "applications.savingShort" : editingId ? "applications.saveChanges" : "applications.createOpening")}</button></div></div>
       </form>
-      <aside className="applications-aside dash-panel"><span className="panel-kicker">Applicant checks</span><h3>Fair, verified submissions.</h3><p>Niko confirms membership directly with Discord before showing or submitting a form. Selected role gates are checked against the applicant’s current server roles.</p><div className="applications-check"><span>01</span><div><strong>Discord identity</strong><small>One verified account per response</small></div></div><div className="applications-check"><span>02</span><div><strong>Server membership</strong><small>Bot-verified at form load and submit</small></div></div><div className="applications-check"><span>03</span><div><strong>One application per opening</strong><small>Reopening never clears old submissions</small></div></div></aside>
+      <aside className="applications-aside dash-panel"><span className="panel-kicker">{t("applications.asideKicker")}</span><h3>{t("applications.asideTitle")}</h3><p>{t("applications.asideText")}</p><div className="applications-check"><span>01</span><div><strong>{t("applications.check1Title")}</strong><small>{t("applications.check1Hint")}</small></div></div><div className="applications-check"><span>02</span><div><strong>{t("applications.check2Title")}</strong><small>{t("applications.check2Hint")}</small></div></div><div className="applications-check"><span>03</span><div><strong>{t("applications.check3Title")}</strong><small>{t("applications.check3Hint")}</small></div></div></aside>
     </section>
-    <section className="applications-list-section"><div className="section-heading-row"><div><span className="panel-kicker">Opening library</span><h3>Applications & responses</h3></div><span className="section-count">{applications.length} total</span></div>
-      {loading ? <div className="empty-state">Loading saved applications…</div> : applications.length === 0 ? <div className="empty-state">No applications yet. Create your first role opening above.</div> : <div className="applications-list">{applications.map((application) => <article className="application-card dash-panel" key={application.id}>
-        <div className="application-card-main"><div className={`application-status ${application.status}`}>{application.status === "open" ? "Open" : "Closed"}</div><h4>{application.title}</h4><div className="application-description-preview">{application.description ? <DiscordMarkdown text={application.description} interactiveUsers={false} /> : "A role application for this server."}</div><div className="application-meta"><span>{resources?.roles.find((role) => role.id === application.role_id)?.name || `Role ${application.role_id}`}</span><span>{application.submission_count} {application.submission_count === 1 ? "response" : "responses"}</span><span>{application.eligible_role_ids.length ? `${application.eligible_role_ids.length} eligibility role${application.eligible_role_ids.length === 1 ? "" : "s"}` : "Open to all members"}</span></div></div>
-        <div className="application-card-actions"><button className="button button-muted button-small" onClick={() => void copyLink(application)}><Icon name="link" /> {copiedId === application.id ? "Copied" : "Copy link"}</button><button className="button button-muted button-small" onClick={() => openSubmissions(application)}><Icon name="book" /> {selectedSubmissions === application.id ? "Hide responses" : "Responses"}</button><button className="button button-muted button-small" onClick={() => editApplication(application)}>Edit</button><button className={`button button-small ${application.status === "open" ? "button-muted" : "button-primary"}`} onClick={() => toggleStatus(application)}>{application.status === "open" ? "Close opening" : "Reopen"}</button><button className="button button-small application-delete-button" onClick={() => deleteApplication(application)}>Delete</button></div>
-        {selectedSubmissions === application.id && <div className="application-response-list">{submissions.length === 0 ? <div className="empty-state compact">No responses yet, or loading…</div> : submissions.map((submission) => <details className="application-response" key={submission.user_id}><summary><span className="application-response-identity">{submission.avatar_url && <img src={submission.avatar_url} alt="" />}<strong>{submission.display_name}</strong></span><time>{submission.submitted_at ? new Date(`${submission.submitted_at}Z`).toLocaleString() : "Submitted"}</time></summary><div className="application-answers">{submission.answers.map((answer) => <div key={answer.question_id}><strong>{answer.prompt}</strong><p>{Array.isArray(answer.answer) ? answer.answer.join(", ") || "No answer provided." : answer.answer || "No answer provided."}</p></div>)}</div><footer className="application-review-footer"><span className={`application-review-status ${submission.review_status}`} role="status">{submission.review_status === "pending" ? "Awaiting review" : submission.review_status === "approved" ? "Approved" : "Denied"}</span>{submission.reviewed_at && <small className="application-review-meta">Reviewed {new Date(`${submission.reviewed_at}Z`).toLocaleString()}{submission.reviewed_by ? ` · Staff ID ${submission.reviewed_by}` : ""}</small>}<div className="application-review-actions"><button type="button" className={`button button-small application-review-approve${submission.review_status === "approved" ? " is-selected" : ""}`} onClick={() => reviewSubmission(application.id, submission, "approved")} disabled={reviewingUserId !== null} aria-pressed={submission.review_status === "approved"}>Approve</button><button type="button" className={`button button-small application-review-deny${submission.review_status === "denied" ? " is-selected" : ""}`} onClick={() => reviewSubmission(application.id, submission, "denied")} disabled={reviewingUserId !== null} aria-pressed={submission.review_status === "denied"}>Deny</button></div></footer></details>)}</div>}
+    <section className="applications-list-section"><div className="section-heading-row"><div><span className="panel-kicker">{t("applications.libraryKicker")}</span><h3>{t("applications.libraryTitle")}</h3></div><span className="section-count">{t("applications.totalCount", { count: applications.length })}</span></div>
+      {loading ? <div className="empty-state">{t("applications.loading")}</div> : applications.length === 0 ? <div className="empty-state">{t("applications.none")}</div> : <div className="applications-list">{applications.map((application) => <article className="application-card dash-panel" key={application.id}>
+        <div className="application-card-main"><div className={`application-status ${application.status}`}>{t(application.status === "open" ? "applications.statusOpen" : "applications.statusClosed")}</div><h4>{application.title}</h4><div className="application-description-preview">{application.description ? <DiscordMarkdown text={application.description} interactiveUsers={false} /> : t("applications.fallbackDescription")}</div><div className="application-meta"><span>{resources?.roles.find((role) => role.id === application.role_id)?.name || t("applications.roleFallback", { id: application.role_id })}</span><span>{t(application.submission_count === 1 ? "applications.responsesOne" : "applications.responsesMany", { count: application.submission_count })}</span><span>{application.eligible_role_ids.length ? t(application.eligible_role_ids.length === 1 ? "applications.eligibilityOne" : "applications.eligibilityMany", { count: application.eligible_role_ids.length }) : t("applications.openToAll")}</span></div></div>
+        <div className="application-card-actions"><button className="button button-muted button-small" onClick={() => void copyLink(application)}><Icon name="link" /> {t(copiedId === application.id ? "applications.copied" : "applications.copyLink")}</button><button className="button button-muted button-small" onClick={() => openSubmissions(application)}><Icon name="book" /> {t(selectedSubmissions === application.id ? "applications.hideResponses" : "applications.responses")}</button><button className="button button-muted button-small" onClick={() => editApplication(application)}>{t("applications.edit")}</button><button className={`button button-small ${application.status === "open" ? "button-muted" : "button-primary"}`} onClick={() => toggleStatus(application)}>{t(application.status === "open" ? "applications.closeOpening" : "applications.reopen")}</button><button className="button button-small application-delete-button" onClick={() => deleteApplication(application)}>{t("applications.delete")}</button></div>
+        {selectedSubmissions === application.id && <div className="application-response-list">{submissions.length === 0 ? <div className="empty-state compact">{t("applications.noResponses")}</div> : submissions.map((submission) => <details className="application-response" key={submission.user_id}><summary><span className="application-response-identity">{submission.avatar_url && <img src={submission.avatar_url} alt="" />}<strong>{submission.display_name}</strong></span><time>{submission.submitted_at ? new Date(`${submission.submitted_at}Z`).toLocaleString() : t("applications.submitted")}</time></summary><div className="application-answers">{submission.answers.map((answer) => <div key={answer.question_id}><strong>{answer.prompt}</strong><p>{Array.isArray(answer.answer) ? answer.answer.join(", ") || t("applications.noAnswer") : answer.answer || t("applications.noAnswer")}</p></div>)}</div><footer className="application-review-footer"><span className={`application-review-status ${submission.review_status}`} role="status">{t(submission.review_status === "pending" ? "applications.awaiting" : submission.review_status === "approved" ? "applications.approved" : "applications.denied")}</span>{submission.reviewed_at && <small className="application-review-meta">{t("applications.reviewedAt", { date: new Date(`${submission.reviewed_at}Z`).toLocaleString() })}{submission.reviewed_by ? t("applications.staffId", { id: submission.reviewed_by }) : ""}</small>}<div className="application-review-actions"><button type="button" className={`button button-small application-review-approve${submission.review_status === "approved" ? " is-selected" : ""}`} onClick={() => reviewSubmission(application.id, submission, "approved")} disabled={reviewingUserId !== null} aria-pressed={submission.review_status === "approved"}>{t("applications.approve")}</button><button type="button" className={`button button-small application-review-deny${submission.review_status === "denied" ? " is-selected" : ""}`} onClick={() => reviewSubmission(application.id, submission, "denied")} disabled={reviewingUserId !== null} aria-pressed={submission.review_status === "denied"}>{t("applications.deny")}</button></div></footer></details>)}</div>}
       </article>)}</div>}
     </section>
   </>;

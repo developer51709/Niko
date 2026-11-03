@@ -27,6 +27,7 @@ src/cogs/social/
         en.json
         de.json
         es.json
+        fr.json
 ```
 
 A module that sends text loads its slice of the catalogue:
@@ -41,11 +42,11 @@ msg = make_flat_msg(MESSAGES)
 await ctx.send(msg(ctx, "birthday_saved"))
 ```
 
-`load_locales` returns `{lang: {key: text}}` and fills a missing German or Spanish key from English, so a new English string is never a `KeyError` in another language. Values may be a string or a list of strings (roleplay keeps its sentence variants in lists).
+`load_locales` returns `{lang: {key: text}}` and fills a missing German, Spanish or French key from English, so a new English string is never a `KeyError` in another language. Values may be a string or a list of strings (roleplay keeps its sentence variants in lists).
 
 ### Namespaces
 
-A cog with one table stores its keys at the root of `en.json` and can call `load_locales(__package__)`. A cog whose modules each keep their own table groups them by module name in the same three files:
+A cog with one table stores its keys at the root of `en.json` and can call `load_locales(__package__)`. A cog whose modules each keep their own table groups them by module name in the same four files:
 
 ```json
 {
@@ -58,7 +59,7 @@ Each module then asks for its own namespace. Several cogs (`fun`, `social`, `uti
 
 ### Editing strings
 
-- **Add or change a key**: edit all three files of the cog. `tests/test_cog_locales.py` fails when a language is missing a key, has a different namespace, or stores a different shape (a list where English has a string).
+- **Add or change a key**: edit all four files of the cog. `tests/test_cog_locales.py` fails when a language is missing a key, has a different namespace, or stores a different shape (a list where English has a string).
 - **Add a language**: add its file to every `locales` folder and extend `SUPPORTED_LANGUAGES` in `src/utils/locales.py`; the tests then require it everywhere.
 - **Shared wording**: a utility that is not a cog gets the same treatment by being a package — `src/utils/guild_lockdown/` holds the blacklist lockdown reply in its own `locales/` folder.
 - **Music**: the strings live in `cogs/music/locales/`; `src/utils/music/messages.py` only exposes `msg` so the playback helpers do not depend on the command layer.
@@ -76,7 +77,7 @@ Messages that need per-call values take them as keyword arguments (`msg(ctx, "ba
 
 ### Command wording
 
-Command help lines, short descriptions and argument text are catalogue entries too, in a `commands` namespace inside the same three files. Catalogue tables are flat, so a key carries the command path (the same path Discord shows) and the kind of text:
+Command help lines, short descriptions and argument text are catalogue entries too, in a `commands` namespace inside the same four files. Catalogue tables are flat, so a key carries the command path (the same path Discord shows) and the kind of text:
 
 ```json
 {
@@ -106,12 +107,12 @@ async def slots(...):
     ...
 ```
 
-- `CMDS.help(key)` serialises all three translations into the `{ 'en': … }` map the help menu reads; `CMDS.text`/`CMDS.arg` give Discord the English wording, since a decorator only takes one string.
+- `CMDS.help(key)` serialises all four translations into the `{ 'en': … }` map the help menu reads; `CMDS.text`/`CMDS.arg` give Discord the English wording, since a decorator only takes one string.
 - `utils.command_locales` resolves the package from the module (`cogs.economy.commands` finds `cogs.economy/locales`) and reads the key from the live command path, so a subcommand's entries sit under its parent's prefix.
 - The startup registry (`src/events/startup/writers.py`) writes the whole language map for a command's description and for each documented argument into `data/commands.json`, which is what `/api/commands` and the website's commands page render in the visitor's language.
 - Commands that declare no text at all (a docstring only, or nothing) stay plain English in Python; give them a `commands` entry and a `help=` when you touch them.
 
-Adding a command means adding its keys to all three files, exactly like any other string. `tests/test_cog_locales.py` checks the catalogues; `CMDS.help`/`CMDS.text` return an empty string for a key that does not exist, so a missing entry shows up as an empty line rather than a crash.
+Adding a command means adding its keys to all four files, exactly like any other string. `tests/test_cog_locales.py` checks the catalogues; `CMDS.help`/`CMDS.text` return an empty string for a key that does not exist, so a missing entry shows up as an empty line rather than a crash.
 
 ### Localised commands inside Discord
 

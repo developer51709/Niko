@@ -1,11 +1,13 @@
 /**
  * Draws Niko's emojis from icon-font artwork: Lucide outlines for the generic
- * icons, Simple Icons marks for the platform logos, Web3 Icons marks for the
- * cryptocurrencies.
+ * icons, Phosphor marks for the digits, Simple Icons marks for the platform
+ * logos, Web3 Icons marks for the cryptocurrencies.
  *
  *   1. Reads the icon outline from the installed `lucide-react` package — or,
  *      for a glyph Lucide has no icon for, from CUSTOM_GLYPHS below, which is
- *      drawn in the same 24-unit box and stroke as a Lucide outline — the brand
+ *      drawn in the same 24-unit box and stroke as a Lucide outline — the
+ *      digits from `@phosphor-icons/core` (phosphoricons.com), which is the
+ *      one family that ships plain 0-9 marks — the brand
  *      marks from the installed `simple-icons` package (simpleicons.org), and
  *      the coin marks from `@web3icons/core` (web3icons.io)
  *   2. Rasterises it with sharp into the PNG emoji art in src/assets/emojis/,
@@ -21,8 +23,8 @@
  *
  * Run from the repository root:  node scripts/build-emoji-icons.mjs
  *
- * Only the emojis named in MAIN_EMOJIS, LOG_EMOJIS, LOGO_EMOJIS and
- * CRYPTO_EMOJIS below are written. The badge art
+ * Only the emojis named in MAIN_EMOJIS, LOG_EMOJIS, LOGO_EMOJIS, CRYPTO_EMOJIS
+ * and NUMBER_EMOJIS below are written. The badge art
  * (scripts/build-badge-art.mjs), the Connect Four pieces, Niko's own logo and
  * the loading spinners are never generated here, and `assertWritable` refuses a
  * name from any of those families outright — so a mistyped table entry fails the
@@ -51,6 +53,7 @@ const EMOJI_ASSETS = path.join(ROOT, "src", "assets", "emojis");
 const EMOJI_CONFIG = path.join(ROOT, "src", "config", "emojis.py");
 const LUCIDE_ICONS = path.join(ROOT, "node_modules", "lucide-react", "dist", "esm", "icons");
 const SIMPLE_ICONS = path.join(ROOT, "node_modules", "simple-icons", "icons");
+const PHOSPHOR_ICONS = path.join(ROOT, "node_modules", "@phosphor-icons", "core", "assets");
 const EMOJI_PX = 128;
 // How much of the tile the icon's 24-unit box spans. A Lucide outline keeps a
 // little padding of its own, so 0.78 fills roughly the same square the unicode
@@ -64,6 +67,11 @@ const LOGO_RATIO = 0.72;
 // ink), so at the logo scale it would read a quarter smaller than the icons next
 // to it. 0.95 brings the coin's ink onto the same ~92px.
 const CRYPTO_RATIO = 0.95;
+// A Phosphor digit sits in a wide 256-unit box with room to spare around it, so
+// its ink is only about three quarters of the box. Drawn at 1.0 its cap height
+// lands on the ~92px the Lucide outlines occupy, which is what makes a row of
+// "1 2 3" read at the same size as the icons on either side.
+const NUMBER_RATIO = 1;
 
 // ── Palette ───────────────────────────────────
 // One colour per meaning, and one neutral for everything that has none, so a
@@ -353,6 +361,30 @@ const CRYPTO_EMOJIS = [
 ];
 
 /**
+ * The number emojis, by Phosphor Icons' file name (phosphoricons.com).
+ *
+ * Lucide ships no plain digit at all — only `list-ordered`, which is a paragraph
+ * mark — and the digits these replace were hand-exported 40px artwork from the
+ * old set, so they were both smaller and a different design from everything
+ * around them. Phosphor publishes 0-9 on the same 24-unit grid as the other
+ * icon fonts here; the `bold` weight is the one that carries a stroke heavy
+ * enough to read at the ~20px Discord draws an emoji at, and the `fill` weight
+ * is solid and would be the only heavy mark in the set.
+ */
+const NUMBER_EMOJIS = [
+  ["number_zero", "number-zero"],
+  ["number_one", "number-one"],
+  ["number_two", "number-two"],
+  ["number_three", "number-three"],
+  ["number_four", "number-four"],
+  ["number_five", "number-five"],
+  ["number_six", "number-six"],
+  ["number_seven", "number-seven"],
+  ["number_eight", "number-eight"],
+  ["number_nine", "number-nine"],
+];
+
+/**
  * Families this script must never write.
  *
  * badge art belongs to scripts/build-badge-art.mjs, the Connect Four pieces are
@@ -366,9 +398,7 @@ const PROTECTED = [
   ["loading spinner", /loading/i],
 ];
 
-// The numeric emoji art (number_zero … number_nine) never comes from an icon
-// font, and the Discord presence dots are Discord's own badges.
-const NUMERIC = /^number_/;
+// The Discord presence dots are Discord's own badges, not icon artwork.
 const PRESENCE = /^status_/;
 
 function assertWritable(name) {
@@ -377,7 +407,7 @@ function assertWritable(name) {
       throw new Error(`Refusing to generate ${name}: it belongs to the ${family} emojis.`);
     }
   }
-  if (NUMERIC.test(name) || PRESENCE.test(name)) {
+  if (PRESENCE.test(name)) {
     throw new Error(`Refusing to generate ${name}: it is not an icon-font emoji.`);
   }
 }
@@ -556,6 +586,50 @@ function cryptoSvg(source, color) {
   ].join("\n");
 }
 
+/**
+ * A digit, from the installed `@phosphor-icons/core` package.
+ *
+ * The weight is part of the file name (`number-four-bold.svg`, while the
+ * regular weight is `number-four.svg`), so the bold file is the one asked for
+ * explicitly and a missing digit throws instead of writing blank art.
+ */
+async function loadNumber(icon) {
+  try {
+    return await readFile(path.join(PHOSPHOR_ICONS, "bold", `${icon}-bold.svg`), "utf-8");
+  } catch {
+    throw new Error(`Phosphor Icons has no number named "${icon}".`);
+  }
+}
+
+/**
+ * The digit as SVG: Phosphor's shapes in the family ink, with nothing behind it.
+ *
+ * The source tile is stripped so the 256-unit box can be redrawn at the scale
+ * the other emojis use. Phosphor paints its digits by leaving the `fill` off the
+ * path and setting `currentColor` on the root `<svg>` — the element this
+ * function strips — so the paths came out unfilled and rasterised black. The
+ * ink is therefore set on the wrapping `<g>`, which every digit path inherits,
+ * rather than only renamed inside the markup.
+ */
+function numberSvg(source, color) {
+  const inner = source
+    .replace(/^\s*<svg[^>]*>/, "")
+    .replace(/<\/svg>\s*$/, "")
+    .replaceAll("currentColor", color)
+    .trim();
+  const glyph = (EMOJI_PX * NUMBER_RATIO).toFixed(4);
+  const scale = (glyph / 256).toFixed(6);
+  const offset = ((EMOJI_PX - glyph) / 2).toFixed(4);
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${EMOJI_PX}" height="${EMOJI_PX}" viewBox="0 0 ${EMOJI_PX} ${EMOJI_PX}">`,
+    `  <g transform="translate(${offset} ${offset}) scale(${scale})" fill="${color}">`,
+    ...inner.split("\n").map((line) => `    ${line.trim()}`),
+    "  </g>",
+    "</svg>",
+    "",
+  ].join("\n");
+}
+
 /** Render the SVG on the same high density the other asset scripts use. */
 function renderPng(svg) {
   return sharp(Buffer.from(svg), { density: 384 })
@@ -573,8 +647,9 @@ async function configuredNames() {
 const emojis = [...MAIN_EMOJIS, ...LOG_EMOJIS];
 const logos = LOGO_EMOJIS;
 const cryptos = CRYPTO_EMOJIS;
+const numbers = NUMBER_EMOJIS;
 const names = new Set();
-for (const [name] of [...emojis, ...logos, ...cryptos]) {
+for (const [name] of [...emojis, ...logos, ...cryptos, ...numbers]) {
   assertWritable(name);
   if (names.has(name)) {
     throw new Error(`"${name}" is listed twice.`);
@@ -609,10 +684,16 @@ for (const [name, symbol, color] of cryptos) {
   bytes += png.length;
   console.log(`  ${name.padEnd(24)} ${symbol.padEnd(20)} ${color}  ${png.length} bytes`);
 }
+for (const [name, icon] of numbers) {
+  const png = await renderPng(numberSvg(await loadNumber(icon), NEUTRAL));
+  await writeFile(path.join(EMOJI_ASSETS, `${name}.png`), png);
+  bytes += png.length;
+  console.log(`  ${name.padEnd(24)} ${icon.padEnd(20)} ${NEUTRAL}  ${png.length} bytes`);
+}
 
 console.log(
-  `Wrote ${emojis.length + logos.length + cryptos.length} emoji PNGs to ` +
+  `Wrote ${emojis.length + logos.length + cryptos.length + numbers.length} emoji PNGs to ` +
     `${path.relative(ROOT, EMOJI_ASSETS)} (${MAIN_EMOJIS.length} main, ${LOG_EMOJIS.length} log, ` +
-    `${logos.length} logo, ${cryptos.length} crypto) — ${(bytes / 1024).toFixed(0)} KiB.`,
+    `${logos.length} logo, ${cryptos.length} crypto, ${numbers.length} number) — ${(bytes / 1024).toFixed(0)} KiB.`,
 );
 console.log("Left untouched: badge art, Connect Four, and the loading emojis.");

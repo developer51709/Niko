@@ -1,6 +1,7 @@
 # Server Settings Hand Tickets and Onboarding to Their Own Tabs
 
 - Date: 2026-10-16
+- Version: 2.19.1
 - Tags: dashboard, tickets, onboarding, customization, fixed
 
 The ticket and onboarding settings are gone from the dashboard's Server tab now that both own a tab of their own, the ticket cards finally line up with every other settings page, and the Customization tab previews Niko's global avatar and banner for a server that has not set its own.

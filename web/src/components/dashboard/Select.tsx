@@ -1,6 +1,7 @@
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { useStrings } from "../../i18n";
 
 export type SelectOption = {
   value: string;
@@ -12,6 +13,13 @@ export type SelectOption = {
 /** Builds options from a plain `[value, label]` list. */
 export const selectOptions = (pairs: [string, string][]): SelectOption[] =>
   pairs.map(([value, label]) => ({ value, label }));
+
+/**
+ * Resolves a key-labelled option list into display text. Enum lists keep
+ * catalogue keys, so a dropdown stays translated whenever it is rendered.
+ */
+export const localizeOptions = (options: SelectOption[], t: (key: string) => string): SelectOption[] =>
+  options.map((option) => ({ ...option, label: t(option.label) }));
 
 type Props = {
   options: SelectOption[];
@@ -44,7 +52,9 @@ type Props = {
  * backdrop-filter, which makes each card its own stacking context, so a list
  * drawn inside a card would paint underneath the card below it.
  */
-export function Select({ options, value, onChange, placeholder = "Choose an option", placeholderGlyph, unknownOption, ariaLabel, disabled, id }: Props) {
+export function Select({ options, value, onChange, placeholder, placeholderGlyph, unknownOption, ariaLabel, disabled, id }: Props) {
+  const { t } = useStrings("dashboard");
+  const resolvedPlaceholder = placeholder === undefined ? t("pickers.chooseOption") : placeholder;
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
   const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -54,7 +64,7 @@ export function Select({ options, value, onChange, placeholder = "Choose an opti
 
   const known = options.some((option) => option.value === value);
   const entries = [
-    ...(placeholder === null ? [] : [{ value: "", label: placeholder, glyph: placeholderGlyph }]),
+    ...(resolvedPlaceholder === null ? [] : [{ value: "", label: resolvedPlaceholder, glyph: placeholderGlyph }]),
     ...(value && !known && unknownOption ? [unknownOption(value)] : []),
     ...options,
   ];

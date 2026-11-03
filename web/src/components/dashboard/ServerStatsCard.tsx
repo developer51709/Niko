@@ -6,20 +6,17 @@ import type { ServerStats } from "../../types";
 import { formatNumber } from "../../utils/format";
 import { useFreshSignal } from "../../hooks/useLiveSync";
 import { useCountUp } from "../../hooks/useCountUp";
+import { useStrings } from "../../i18n";
 
 type Props = { stats: ServerStats };
-const tabItems: TabItem[] = [
-  { value: "messages", label: "Messages" },
-  { value: "members", label: "Members" },
-  { value: "layout", label: "Server layout" },
-];
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 function dayLabel(date: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(`${date}T12:00:00`));
 }
 
-function reportingWindow(activity: ServerStats["activity"]) {
-  if (!activity.length) return "No reporting dates yet";
+function reportingWindow(activity: ServerStats["activity"], t: Translate) {
+  if (!activity.length) return t("stats.noDates");
   const start = dayLabel(activity[0].date);
   const end = dayLabel(activity[activity.length - 1].date);
   return start === end ? start : `${start} – ${end}`;
@@ -35,29 +32,30 @@ type Trend = { direction: "up" | "down" | "flat"; text: string };
  * reads correctly when the previous week was empty (there is no percentage
  * change from zero) or when the totals did not move at all.
  */
-function trendOf(current: number, previous: number): Trend {
+function trendOf(current: number, previous: number, t: Translate): Trend {
   if (!previous) {
     return current
-      ? { direction: "up", text: "new this week" }
-      : { direction: "flat", text: "no activity in 7 days" };
+      ? { direction: "up", text: t("stats.trendNew") }
+      : { direction: "flat", text: t("stats.trendIdle") };
   }
   const change = Math.round(((current - previous) / previous) * 100);
-  if (!change) return { direction: "flat", text: "level with last week" };
-  return { direction: change > 0 ? "up" : "down", text: `${Math.abs(change)}% ${change > 0 ? "up" : "down"} on last week` };
+  if (!change) return { direction: "flat", text: t("stats.trendLevel") };
+  return { direction: change > 0 ? "up" : "down", text: t(change > 0 ? "stats.trendUp" : "stats.trendDown", { percent: Math.abs(change) }) };
 }
 
 /** Week-over-week movement for the three tiles fed by daily activity. */
-function weeklyTrend(activity: ServerStats["activity"]) {
+function weeklyTrend(activity: ServerStats["activity"], t: Translate) {
   const count = (rows: typeof activity, key: "messages" | "joins" | "leaves") =>
     rows.reduce((sum, row) => sum + row[key], 0);
   const current = activity.slice(-TREND_DAYS);
   const previous = activity.slice(-TREND_DAYS * 2, -TREND_DAYS);
   return {
-    messages: trendOf(count(current, "messages"), count(previous, "messages")),
-    joins: trendOf(count(current, "joins"), count(previous, "joins")),
+    messages: trendOf(count(current, "messages"), count(previous, "messages"), t),
+    joins: trendOf(count(current, "joins"), count(previous, "joins"), t),
     net: trendOf(
       count(current, "joins") - count(current, "leaves"),
       count(previous, "joins") - count(previous, "leaves"),
+      t,
     ),
   };
 }
@@ -105,6 +103,7 @@ function handleDayKeyDown(event: ReactKeyboardEvent<HTMLElement>, move: (delta: 
 }
 
 function MessageChart({ stats }: Props) {
+  const { t } = useStrings("dashboard");
   const values = stats.activity.map((day) => day.messages);
   const total = values.reduce((sum, value) => sum + value, 0);
   const busiest = stats.activity.reduce((best, day) => day.messages > best.messages ? day : best, stats.activity[0] || { date: "", messages: 0, joins: 0, leaves: 0 });
@@ -140,19 +139,19 @@ function MessageChart({ stats }: Props) {
   };
 
   return <div className="server-chart-wrap">
-    <div className="server-chart-heading"><div><span>Messages across the period</span><strong>{formatNumber(total)}</strong></div><small>{reportingWindow(stats.activity)}</small></div>
-    <div className="server-chart-insights"><span>Daily average <strong>{formatNumber(stats.activity.length ? Math.round(total / stats.activity.length) : 0)}</strong></span><span>Busiest day <strong>{busiest.date ? `${formatNumber(busiest.messages)} · ${dayLabel(busiest.date)}` : "No data"}</strong></span></div>
+    <div className="server-chart-heading"><div><span>{t("stats.messagesAcrossPeriod")}</span><strong>{formatNumber(total)}</strong></div><small>{reportingWindow(stats.activity, t)}</small></div>
+    <div className="server-chart-insights"><span>{t("stats.dailyAverage")} <strong>{formatNumber(stats.activity.length ? Math.round(total / stats.activity.length) : 0)}</strong></span><span>{t("stats.busiestDay")} <strong>{busiest.date ? `${formatNumber(busiest.messages)} · ${dayLabel(busiest.date)}` : t("stats.noData")}</strong></span></div>
     {total > 0 ? <>
       <div className={`server-chart-readout${selectedDay ? " is-active" : ""}`} aria-live="polite" aria-atomic="true">
         {selectedDay
-          ? <><strong>{dayLabel(selectedDay.date)}</strong><span>{formatNumber(selectedDay.messages)} messages</span></>
-          : <span>Tap or hover a day for exact counts</span>}
+          ? <><strong>{dayLabel(selectedDay.date)}</strong><span>{t("stats.messageCount", { count: formatNumber(selectedDay.messages) })}</span></>
+          : <span>{t("stats.tapForCounts")}</span>}
       </div>
       <div
         className="server-chart-interactive"
         role="group"
         tabIndex={0}
-        aria-label="Daily message counts. Tap, hover, or use the arrow keys to inspect a day."
+        aria-label={t("stats.messageChartAria")}
         onKeyDown={(event) => handleDayKeyDown(event, move)}
       >
         <svg
@@ -173,11 +172,12 @@ function MessageChart({ stats }: Props) {
         </svg>
       </div>
       <div className="server-chart-days">{stats.activity.filter((_, index) => index % 2 === 0 || index === stats.activity.length - 1).map((day) => <span key={day.date}>{dayLabel(day.date)}</span>)}</div>
-    </> : <div className="server-chart-empty">No messages were recorded in this period. Activity history starts when tracking is enabled.</div>}
+    </> : <div className="server-chart-empty">{t("stats.noMessages")}</div>}
   </div>;
 }
 
 function MemberChart({ stats }: Props) {
+  const { t } = useStrings("dashboard");
   const joined = stats.activity.reduce((sum, day) => sum + day.joins, 0);
   const left = stats.activity.reduce((sum, day) => sum + day.leaves, 0);
   const net = joined - left;
@@ -195,14 +195,14 @@ function MemberChart({ stats }: Props) {
   };
 
   return <div className="server-chart-wrap">
-    <div className="server-chart-heading"><div><span>Member movement</span><strong>{net > 0 ? "+" : ""}{formatNumber(net)} net members</strong></div><small>{reportingWindow(stats.activity)}</small></div>
-    <p className="server-chart-description">Each date compares joins with departures; bar height shares one scale across all days.</p>
+    <div className="server-chart-heading"><div><span>{t("stats.memberMovement")}</span><strong>{net > 0 ? "+" : ""}{formatNumber(net)} {t("stats.netMembers")}</strong></div><small>{reportingWindow(stats.activity, t)}</small></div>
+    <p className="server-chart-description">{t("stats.memberChartDescription")}</p>
     {(joined || left) ? <>
-      <div className="server-chart-insights"><span>Daily average <strong>{net > 0 ? "+" : ""}{formatNumber(Math.round(net / stats.activity.length))}</strong></span><span>Most joins <strong>{formatNumber(busiestJoin.joins)} · {dayLabel(busiestJoin.date)}</strong></span></div>
+      <div className="server-chart-insights"><span>{t("stats.dailyAverage")} <strong>{net > 0 ? "+" : ""}{formatNumber(Math.round(net / stats.activity.length))}</strong></span><span>{t("stats.mostJoins")} <strong>{formatNumber(busiestJoin.joins)} · {dayLabel(busiestJoin.date)}</strong></span></div>
       <div className={`server-chart-readout${selectedDay ? " is-active" : ""}`} aria-live="polite" aria-atomic="true">
         {selectedDay
-          ? <><strong>{dayLabel(selectedDay.date)}</strong><span>{formatNumber(selectedDay.joins)} joined</span><span>{formatNumber(selectedDay.leaves)} left</span></>
-          : <span>Tap or hover a day for exact counts</span>}
+          ? <><strong>{dayLabel(selectedDay.date)}</strong><span>{t("stats.joinedCount", { count: formatNumber(selectedDay.joins) })}</span><span>{t("stats.leftCount", { count: formatNumber(selectedDay.leaves) })}</span></>
+          : <span>{t("stats.tapForCounts")}</span>}
       </div>
       <div
         ref={chartRef}
@@ -210,7 +210,7 @@ function MemberChart({ stats }: Props) {
         style={{ gridTemplateColumns: `repeat(${Math.max(1, stats.activity.length)}, minmax(0, 1fr))` }}
         role="group"
         tabIndex={0}
-        aria-label="Daily member joins and departures. Tap, hover, or use the arrow keys to inspect a day."
+        aria-label={t("stats.memberChartAria")}
         onKeyDown={(event) => handleDayKeyDown(event, move)}
         onPointerDown={(event) => { capturePointer(event); pick(event.clientX); }}
         onPointerMove={(event) => { if (event.pointerType === "mouse" || event.buttons) pick(event.clientX); }}
@@ -222,35 +222,36 @@ function MemberChart({ stats }: Props) {
           className={`server-member-day${index === selected ? " is-selected" : ""}`}
           key={day.date}
           onClick={() => select(index)}
-          aria-label={`${dayLabel(day.date)}: ${formatNumber(day.joins)} joined, ${formatNumber(day.leaves)} left`}
+          aria-label={t("stats.dayAria", { date: dayLabel(day.date), joined: formatNumber(day.joins), left: formatNumber(day.leaves) })}
         >
           <div className="server-member-bars" aria-hidden="true"><i className="join-bar" style={{ height: `${Math.max(day.joins ? 5 : 0, (day.joins / max) * 76)}%` }} /><i className="leave-bar" style={{ height: `${Math.max(day.leaves ? 5 : 0, (day.leaves / max) * 76)}%` }} /></div>
           <span aria-hidden="true">{index % 3 === 0 || index === stats.activity.length - 1 || index === selected ? dayLabel(day.date) : ""}</span>
         </button>)}
       </div>
-      <div className="server-chart-legend"><span><i className="join-key" /> Joined <b>{formatNumber(joined)}</b></span><span><i className="leave-key" /> Left <b>{formatNumber(left)}</b></span></div>
-    </> : <div className="server-chart-empty">No member changes were recorded in this period. Current membership is shown in Server layout.</div>}
+      <div className="server-chart-legend"><span><i className="join-key" /> {t("stats.joined")} <b>{formatNumber(joined)}</b></span><span><i className="leave-key" /> {t("stats.left")} <b>{formatNumber(left)}</b></span></div>
+    </> : <div className="server-chart-empty">{t("stats.noMembers")}</div>}
   </div>;
 }
 
-function serverAge(createdAt: string | null) {
-  if (!createdAt) return "Creation date unavailable";
+function serverAge(createdAt: string | null, t: Translate) {
+  if (!createdAt) return t("stats.ageUnknown");
   const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
-  if (days >= 730) return `About ${Math.floor(days / 365)} years old`;
-  if (days >= 60) return `About ${Math.floor(days / 30)} months old`;
-  return `${days} days old`;
+  if (days >= 730) return t("stats.ageYears", { count: Math.floor(days / 365) });
+  if (days >= 60) return t("stats.ageMonths", { count: Math.floor(days / 30) });
+  return t("stats.ageDays", { count: days });
 }
 
 function LayoutChart({ stats }: Props) {
+  const { t } = useStrings("dashboard");
   const max = Math.max(stats.member_count, stats.channel_count, stats.role_count, 1);
   const items = [
-    { label: "Members", value: stats.member_count, color: "members" },
-    { label: "Channels", value: stats.channel_count, color: "channels" },
-    { label: "Roles", value: stats.role_count, color: "roles" },
+    { label: t("stats.members"), value: stats.member_count, color: "members" },
+    { label: t("stats.channels"), value: stats.channel_count, color: "channels" },
+    { label: t("stats.roles"), value: stats.role_count, color: "roles" },
   ];
   return <div className="server-layout-chart">
-    <div className="server-layout-total"><span>Community size</span><strong>{formatNumber(stats.member_count)}</strong><small>members currently in this server</small><small>{serverAge(stats.created_at)}</small></div>
-    <div className="server-layout-bars"><p className="server-chart-description">Bar lengths share a scale; the longest is the largest count.</p>{items.map((item) => <div className="server-layout-row" key={item.label}>
+    <div className="server-layout-total"><span>{t("stats.communitySize")}</span><strong>{formatNumber(stats.member_count)}</strong><small>{t("stats.membersCurrently")}</small><small>{serverAge(stats.created_at, t)}</small></div>
+    <div className="server-layout-bars"><p className="server-chart-description">{t("stats.barScaleNote")}</p>{items.map((item) => <div className="server-layout-row" key={item.label}>
       <div><span>{item.label}</span><strong>{formatNumber(item.value)}</strong></div>
       <div className="server-layout-track"><i className={`layout-${item.color}`} style={{ width: `${Math.max(item.value ? 4 : 0, (item.value / max) * 100)}%` }} /></div>
     </div>)}</div>
@@ -276,6 +277,12 @@ function LiveMetric({ icon, label, value, note, signed = false, trend }: { icon:
 }
 
 export function ServerStatsCard({ stats }: Props) {
+  const { t } = useStrings("dashboard");
+  const tabItems = useMemo<TabItem[]>(() => [
+    { value: "messages", label: t("stats.tabMessages") },
+    { value: "members", label: t("stats.tabMembers") },
+    { value: "layout", label: t("stats.tabLayout") },
+  ], [t]);
   const [tab, setTab] = useState("messages");
   const reduceMotion = useReducedMotion();
   const totals = useMemo(() => ({
@@ -284,7 +291,7 @@ export function ServerStatsCard({ stats }: Props) {
     leaves: stats.activity.reduce((sum, day) => sum + day.leaves, 0),
   }), [stats.activity]);
   const net = totals.joins - totals.leaves;
-  const trend = useMemo(() => weeklyTrend(stats.activity), [stats.activity]);
+  const trend = useMemo(() => weeklyTrend(stats.activity, t), [stats.activity, t]);
   // Only a refresh that actually moved the numbers brightens the chart.
   const chartFresh = useFreshSignal(
     `${totals.messages}|${totals.joins}|${totals.leaves}|${stats.member_count}|${stats.channel_count}|${stats.role_count}`,
@@ -292,17 +299,17 @@ export function ServerStatsCard({ stats }: Props) {
   ) && !reduceMotion;
   const panel = tab === "members" ? <MemberChart stats={stats} /> : tab === "layout" ? <LayoutChart stats={stats} /> : <MessageChart stats={stats} />;
 
-  return <section className="dash-panel server-stats-card" aria-label="Server statistics">
-    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">Community analytics</span><h3>Server pulse</h3><p>Daily totals for {reportingWindow(stats.activity)}. The tiles compare the last 7 days with the week before; history starts when activity tracking is enabled.</p></div><span className="panel-icon"><Activity /></span></div>
+  return <section className="dash-panel server-stats-card" aria-label={t("stats.cardAria")}>
+    <div className="panel-heading server-stats-heading"><div><span className="panel-kicker">{t("stats.kicker")}</span><h3>{t("stats.title")}</h3><p>{t("stats.subtitle", { window: reportingWindow(stats.activity, t) })}</p></div><span className="panel-icon"><Activity /></span></div>
     <div className="server-stat-metrics">
-      <LiveMetric icon={<Users />} label="Members now" value={stats.member_count} note="Current server size" />
-      <LiveMetric icon={<BarChart3 />} label="Messages" value={totals.messages} note="Across this period" trend={trend.messages} />
-      <LiveMetric icon={<Hash />} label="Joined" value={totals.joins} note="Across this period" trend={trend.joins} />
-      <LiveMetric icon={<Users />} label="Net members" value={net} note="Joined minus left" signed trend={trend.net} />
+      <LiveMetric icon={<Users />} label={t("stats.membersNow")} value={stats.member_count} note={t("stats.membersNowNote")} />
+      <LiveMetric icon={<BarChart3 />} label={t("stats.messages")} value={totals.messages} note={t("stats.acrossPeriod")} trend={trend.messages} />
+      <LiveMetric icon={<Hash />} label={t("stats.joined")} value={totals.joins} note={t("stats.acrossPeriod")} trend={trend.joins} />
+      <LiveMetric icon={<Users />} label={t("stats.netMembersLabel")} value={net} note={t("stats.joinedMinusLeft")} signed trend={trend.net} />
     </div>
     <div className={chartFresh ? "server-live-panel is-fresh" : "server-live-panel"}>
-      <Tabs items={tabItems} value={tab} onValueChange={setTab} label="Server statistics" renderPanel={() => panel} />
+      <Tabs items={tabItems} value={tab} onValueChange={setTab} label={t("stats.cardAria")} renderPanel={() => panel} />
     </div>
-    <div className="server-stats-footnote">Counts are daily aggregates; no message content or member identities are shown. Days before tracking began may have no recorded activity.</div>
+    <div className="server-stats-footnote">{t("stats.footnote")}</div>
   </section>;
 }

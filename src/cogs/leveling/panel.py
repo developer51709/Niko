@@ -24,9 +24,32 @@ MAX_SELECT_OPTIONS = 25
 MESSAGES = load_locales("cogs.leveling", "panel")
 
 
+# One glyph per section, used by the heading in the message table and by the
+# matching navigation option, so a section never looks like two different things
+# depending on where it is drawn.
+SECTION_EMOJI = {
+    "overview":      get_emoji("general"),
+    "xp":            get_emoji("stats"),
+    "channels":      get_emoji("message"),
+    "announcements": get_emoji("megaphone"),
+    "level_roles":   get_emoji("trophy"),
+    "card_style":    get_emoji("paint"),
+}
+
 msg = make_flat_msg(MESSAGES, {
     "tick": get_emoji("tick"),
     "cross": get_emoji("cross"),
+    # Section glyphs the message table carries as ``{tokens}``, plus the minus
+    # its body uses to point at the Remove Role button. Buttons take their own
+    # glyph through ``emoji=`` and never carry one in the label text.
+    # ``{message}`` and ``{channel}`` are taken by the level-up wording, so the
+    # channels glyph is ``{channels}``.
+    "stats": SECTION_EMOJI["xp"],
+    "channels": SECTION_EMOJI["channels"],
+    "megaphone": SECTION_EMOJI["announcements"],
+    "trophy": SECTION_EMOJI["level_roles"],
+    "paint": SECTION_EMOJI["card_style"],
+    "minus": get_emoji("minus"),
 })
 
 
@@ -251,27 +274,33 @@ class _LvSectionSelect(discord.ui.Select):
         self._guild_id = guild_id
         options = [
             discord.SelectOption(
-                label=msg(ctx, "panel_nav_overview"), value="overview", emoji="📋",
+                label=msg(ctx, "panel_nav_overview"), value="overview",
+                emoji=SECTION_EMOJI["overview"],
                 description=msg(ctx, "panel_nav_overview_description"),
                 default=(current == "overview")),
             discord.SelectOption(
-                label=msg(ctx, "panel_nav_xp"), value="xp", emoji="📊",
+                label=msg(ctx, "panel_nav_xp"), value="xp",
+                emoji=SECTION_EMOJI["xp"],
                 description=msg(ctx, "panel_nav_xp_description"),
                 default=(current == "xp")),
             discord.SelectOption(
-                label=msg(ctx, "panel_nav_channels"), value="channels", emoji="📡",
+                label=msg(ctx, "panel_nav_channels"), value="channels",
+                emoji=SECTION_EMOJI["channels"],
                 description=msg(ctx, "panel_nav_channels_description"),
                 default=(current == "channels")),
             discord.SelectOption(
-                label=msg(ctx, "panel_nav_announcements"), value="announcements", emoji="📣",
+                label=msg(ctx, "panel_nav_announcements"), value="announcements",
+                emoji=SECTION_EMOJI["announcements"],
                 description=msg(ctx, "panel_nav_announcements_description"),
                 default=(current == "announcements")),
             discord.SelectOption(
-                label=msg(ctx, "panel_nav_roles"), value="level_roles", emoji="🎖️",
+                label=msg(ctx, "panel_nav_roles"), value="level_roles",
+                emoji=SECTION_EMOJI["level_roles"],
                 description=msg(ctx, "panel_nav_roles_description"),
                 default=(current == "level_roles")),
             discord.SelectOption(
-                label=msg(ctx, "panel_nav_card"), value="card_style", emoji="🎨",
+                label=msg(ctx, "panel_nav_card"), value="card_style",
+                emoji=SECTION_EMOJI["card_style"],
                 description=msg(ctx, "panel_nav_card_description"),
                 default=(current == "card_style")),
         ]
@@ -415,7 +444,8 @@ class _LvRemoveExcludedBtn(discord.ui.Button):
         self._guild_id = guild_id
         super().__init__(
             label=msg(ctx, "panel_btn_remove_exclusion"),
-            style=discord.ButtonStyle.red, disabled=not has_excluded)
+            style=discord.ButtonStyle.red, emoji=get_emoji("minus"),
+            disabled=not has_excluded)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -468,7 +498,8 @@ class _LvClearExcludedBtn(discord.ui.Button):
         self._guild_id = guild_id
         super().__init__(
             label=msg(ctx, "panel_btn_clear_exclusions"),
-            style=discord.ButtonStyle.red, disabled=not has_excluded)
+            style=discord.ButtonStyle.red, emoji=get_emoji("trash"),
+            disabled=not has_excluded)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -504,7 +535,8 @@ class _LvClearChannelBtn(discord.ui.Button):
         self._cog      = cog
         self._guild_id = guild_id
         super().__init__(
-            label=msg(ctx, "panel_btn_clear_channel"), style=discord.ButtonStyle.red)
+            label=msg(ctx, "panel_btn_clear_channel"), style=discord.ButtonStyle.red,
+            emoji=get_emoji("cross"))
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -518,7 +550,9 @@ class _LvSetChannelBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label=msg(ctx, "panel_btn_set_channel"), style=discord.ButtonStyle.blurple)
+        super().__init__(
+            label=msg(ctx, "panel_btn_set_channel"), style=discord.ButtonStyle.blurple,
+            emoji=SECTION_EMOJI["channels"])
 
     async def callback(self, interaction: discord.Interaction):
         view = discord.ui.View(timeout=60)
@@ -560,7 +594,9 @@ class _LvEditMessageBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label=msg(ctx, "panel_btn_edit_message"), style=discord.ButtonStyle.blurple)
+        super().__init__(
+            label=msg(ctx, "panel_btn_edit_message"), style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("edit"))
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -574,7 +610,8 @@ class _LvResetMessageBtn(discord.ui.Button):
         self._guild_id = guild_id
         super().__init__(
             label=msg(ctx, "panel_btn_reset_message"),
-            style=discord.ButtonStyle.red, disabled=not has_custom)
+            style=discord.ButtonStyle.red, emoji=get_emoji("refresh"),
+            disabled=not has_custom)
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)
@@ -716,7 +753,8 @@ class _LvRemoveRoleBtn(discord.ui.Button):
         self._guild_id = guild_id
         super().__init__(
             label=msg(ctx, "panel_btn_remove_role"),
-            style=discord.ButtonStyle.red, disabled=not has_roles)
+            style=discord.ButtonStyle.red, emoji=get_emoji("minus"),
+            disabled=not has_roles)
 
     async def callback(self, interaction: discord.Interaction):
         cfg   = await self._cog._guild_cfg(self._guild_id)
@@ -837,7 +875,9 @@ class _LvEditAccentBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label=msg(ctx, "panel_btn_accent"), style=discord.ButtonStyle.blurple)
+        super().__init__(
+            label=msg(ctx, "panel_btn_accent"), style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("paint"))
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
@@ -848,7 +888,9 @@ class _LvEditBgTopBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label=msg(ctx, "panel_btn_bg_top"), style=discord.ButtonStyle.blurple)
+        super().__init__(
+            label=msg(ctx, "panel_btn_bg_top"), style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("image"))
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
@@ -859,7 +901,9 @@ class _LvEditBgBottomBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label=msg(ctx, "panel_btn_bg_bottom"), style=discord.ButtonStyle.blurple)
+        super().__init__(
+            label=msg(ctx, "panel_btn_bg_bottom"), style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("image"))
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(
@@ -870,7 +914,9 @@ class _LvResetColoursBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, ctx):
         self._cog      = cog
         self._guild_id = guild_id
-        super().__init__(label=msg(ctx, "panel_btn_reset_colours"), style=discord.ButtonStyle.red)
+        super().__init__(
+            label=msg(ctx, "panel_btn_reset_colours"), style=discord.ButtonStyle.red,
+            emoji=get_emoji("refresh"))
 
     async def callback(self, interaction: discord.Interaction):
         cfg = await self._cog._guild_cfg(self._guild_id)

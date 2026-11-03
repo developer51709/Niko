@@ -4,17 +4,19 @@ import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { SupportLink } from "../components/SupportLink";
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
 import type { DataRemovalOverview, DataRemovalRequest } from "../types";
 
 /** The owner's own-domain mailbox, which is where legal requests are read. */
 const OWNER_EMAIL = "owner@niko.sryze.cc";
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Awaiting review",
-  completed: "Completed",
-  denied: "Not approved",
-  withdrawn: "Withdrawn",
+// Catalogue keys: a request status is interface copy, not server data.
+const STATUS_KEYS: Record<string, string> = {
+  pending: "status.pending",
+  completed: "status.completed",
+  denied: "status.denied",
+  withdrawn: "status.withdrawn",
 };
 
 function formatDate(value?: number | null) {
@@ -26,6 +28,7 @@ function formatDate(value?: number | null) {
 }
 
 export function DataRemovalPage() {
+  const { t } = useStrings("data-removal");
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [csrf, setCsrf] = useState("");
@@ -52,12 +55,12 @@ export function DataRemovalPage() {
         setOverview(null);
         setAuthenticated(false);
       } else {
-        setError(reason instanceof Error ? reason.message : "Your data requests could not be loaded.");
+        setError(reason instanceof Error ? reason.message : t("error.load"));
       }
     } finally {
       setLoadingRequests(false);
     }
-  }, [guildId]);
+  }, [guildId, t]);
 
   useEffect(() => {
     let active = true;
@@ -69,7 +72,7 @@ export function DataRemovalPage() {
         setCsrf(auth.csrf_token || "");
         if (auth.authenticated) await load();
       } catch {
-        if (active) setError("Sign-in status could not be checked. Refresh the page to try again.");
+        if (active) setError(t("error.auth"));
       } finally {
         if (active) setAuthChecked(true);
       }
@@ -113,14 +116,14 @@ export function DataRemovalPage() {
       setUnderstood(false);
       await load();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The request could not be submitted.");
+      setError(reason instanceof Error ? reason.message : t("error.submit"));
     } finally {
       setBusy(false);
     }
   };
 
   const withdraw = async (request: DataRemovalRequest) => {
-    if (!window.confirm("Withdraw this request? You can submit a new one later.")) return;
+    if (!window.confirm(t("confirm.withdraw"))) return;
     setError("");
     setSuccess("");
     try {
@@ -128,10 +131,10 @@ export function DataRemovalPage() {
         method: "DELETE",
         headers: { "X-CSRF-Token": csrf },
       });
-      setSuccess("Request withdrawn. Nothing was deleted.");
+      setSuccess(t("success.withdrawn"));
       await load();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The request could not be withdrawn.");
+      setError(reason instanceof Error ? reason.message : t("error.withdraw"));
     }
   };
 
@@ -140,128 +143,93 @@ export function DataRemovalPage() {
       <PublicHeader page="data-removal" />
       <main className="shell page-main data-removal-page">
         <div className="page-heading data-removal-heading">
-          <div className="eyebrow">Privacy · data removal</div>
-          <h1>Your data.<br />Your decision.</h1>
-          <p>
-            Request deletion of account data or a server's data. Every request is reviewed and
-            ownership is verified first. Safety and moderation records are protected on purpose —
-            so this process can never be used to erase a ban, warning, or investigation.
-          </p>
+          <div className="eyebrow">{t("heading.eyebrow")}</div>
+          <h1>{t("heading.titleA")}<br />{t("heading.titleB")}</h1>
+          <p>{t("heading.body")}</p>
           <div className="data-removal-badges">
-            <span><Icon name="lock" /> Discord sign-in required</span>
-            <span><Icon name="shield" /> Ownership verified</span>
-            <span><Icon name="users" /> Reviewed by the bot owner</span>
+            <span><Icon name="lock" /> {t("badge.signin")}</span>
+            <span><Icon name="shield" /> {t("badge.ownership")}</span>
+            <span><Icon name="users" /> {t("badge.owner")}</span>
           </div>
         </div>
 
         <div className="data-removal-layout">
           <section className="data-removal-policy" aria-labelledby="data-removal-policy-title">
-            <span className="panel-kicker">The policy</span>
-            <h2 id="data-removal-policy-title">What this process can and cannot delete</h2>
+            <span className="panel-kicker">{t("policy.kicker")}</span>
+            <h2 id="data-removal-policy-title">{t("policy.title")}</h2>
 
             <article>
-              <h3>Account data</h3>
-              <p>
-                Deletes the personal data attached to your Discord account: economy balances,
-                leveling XP, birthdays, reminders, AFK state, music library, giveaway entries,
-                poll votes, roleplay preferences, AI conversation memory, staff application
-                submissions, and any public
-                staff profile (bio, banner, and links). Your name is also removed from suggestions
-                and giveaway hosts where it was attached to server content.
-              </p>
+              <h3>{t("policy.account.title")}</h3>
+              <p>{t("policy.account.body")}</p>
             </article>
 
             <article>
-              <h3>Server data</h3>
-              <p>
-                Deletes a server's Niko configuration and content: AutoMod and logging settings,
-                AI settings and conversation memory, leveling data, tickets configuration,
-                giveaways, polls, starboard entries,
-                social notifier follows, voicemaster settings, profiles, and related settings.
-                The server's deletion stays available after Niko is removed, as long as you were
-                the owner when it left.
-              </p>
+              <h3>{t("policy.server.title")}</h3>
+              <p>{t("policy.server.body")}</p>
             </article>
 
             <article>
-              <h3>Which instances this covers</h3>
+              <h3>{t("policy.instances.title")}</h3>
               <p>
-                This form covers the official public Niko instances only, where all user data is
-                stored in a private MongoDB database that the Niko team controls. Private, beta,
-                and self-hosted instances are run by other people and are outside our control:
-                they may use the deprecated SQLite storage or another database, and we cannot
-                access, correct, or delete their data. We cannot handle data-removal, access, or
-                support requests about those instances — send them to the operator of that
-                instance. The <a href="/privacy" onClick={(event) => { event.preventDefault(); navigate("/privacy"); }}>privacy policy</a> also publishes the full retention schedule.
+                {t("policy.instances.bodyBefore")}{" "}
+                <a href="/privacy" onClick={(event) => { event.preventDefault(); navigate("/privacy"); }}>{t("policy.instances.link")}</a>{" "}
+                {t("policy.instances.bodyAfter")}
               </p>
             </article>
 
             <article className="data-removal-preserved">
-              <h3>What is always preserved</h3>
+              <h3>{t("policy.preserved.title")}</h3>
               <p>
-                Moderation and safety records are <strong>not</strong> deleted by an account or
-                server request. This includes bot-level blacklists, warnings, mutes, moderation
-                cases, logs and ticket transcripts, giveaway bans, abuse strikes, and scam-image
-                reports. Deleting everything else does not lift a restriction, restore access, or
-                remove evidence of abuse.
+                {t("policy.preserved.bodyBefore")} <strong>{t("policy.preserved.not")}</strong> {t("policy.preserved.bodyAfter")}
               </p>
             </article>
 
             <article>
-              <h3>Legal or court-ordered deletion</h3>
+              <h3>{t("policy.legal.title")}</h3>
               <p>
-                If a law requires deletion of a preserved moderation or safety record, do not use
-                this form. Send a formal legal request directly to the bot owner by email at{" "}
-                <a href={`mailto:${OWNER_EMAIL}`}>{OWNER_EMAIL}</a>.
-                It must include a court record or a signed legal document and the contact details
-                of an official legal representative so authenticity can be verified. These
-                requests are handled personally and confidentially. Ordinary requests never
-                receive special treatment, and the strict review protects the community from
-                people trying to erase the consequences of abuse.
+                {t("policy.legal.bodyBefore")}{" "}
+                <a href={`mailto:${OWNER_EMAIL}`}>{OWNER_EMAIL}</a>{" "}
+                {t("policy.legal.bodyAfter")}
               </p>
             </article>
 
             <article>
-              <h3>How review works</h3>
+              <h3>{t("policy.review.title")}</h3>
               <ul>
-                <li>Requests are accepted only from the signed-in Discord account they belong to.</li>
-                <li>A server request must match the recorded owner, or the current owner if Niko is still in the server.</li>
-                <li>One open request is allowed per account or server, with a small daily limit.</li>
-                <li>The bot owner reviews every request. Withdraw a pending request at any time.</li>
-                <li>Deletion is irreversible. Financial records required for accounting, fraud prevention, and refunds are retained.</li>
+                <li>{t("policy.review.account")}</li>
+                <li>{t("policy.review.owner")}</li>
+                <li>{t("policy.review.limit")}</li>
+                <li>{t("policy.review.ownerReview")}</li>
+                <li>{t("policy.review.irreversible")}</li>
               </ul>
             </article>
 
             <p className="data-removal-contact">
-              Questions about a request? Open a private ticket in the <SupportLink /> and quote your
-              request ID. Do not post identity documents in a public channel.
+              {t("policy.contact.before")} <SupportLink>{t("policy.contact.link")}</SupportLink> {t("policy.contact.after")}
             </p>
           </section>
 
           <section className="data-removal-form" aria-labelledby="data-removal-form-title">
-            <span className="panel-kicker">Request form</span>
-            <h2 id="data-removal-form-title">Start a deletion request</h2>
+            <span className="panel-kicker">{t("form.kicker")}</span>
+            <h2 id="data-removal-form-title">{t("form.title")}</h2>
 
             {!authChecked ? (
-              <div className="data-removal-loading"><span className="loading-ring" /><p>Checking your session…</p></div>
+              <div className="data-removal-loading"><span className="loading-ring" /><p>{t("loading")}</p></div>
             ) : !authenticated ? (
               <div className="data-removal-signin">
                 <span className="data-removal-signin-icon"><Icon name="lock" /></span>
-                <h3>Sign in to verify ownership</h3>
-                <p>
-                  Deletion requests are tied to the Discord account that owns the data or server.
-                  Signing in is how that ownership is confirmed.
-                </p>
+                <h3>{t("signin.title")}</h3>
+                <p>{t("signin.body")}</p>
                 <a
                   className="button button-primary"
                   href={`/auth/login?next=${encodeURIComponent("/data-removal")}`}
                 >
-                  Sign in with Discord <Icon name="arrow" />
+                  {t("signin.cta")} <Icon name="arrow" />
                 </a>
               </div>
             ) : (
               <>
-                <div className="data-removal-scope" role="tablist" aria-label="Deletion target">
+                <div className="data-removal-scope" role="tablist" aria-label={t("scope.aria")}>
                   <button
                     type="button"
                     role="tab"
@@ -270,7 +238,7 @@ export function DataRemovalPage() {
                     onClick={() => { setScope("account"); setConfirmation(""); }}
                   >
                     <Icon name="users" />
-                    <span><strong>My account</strong><small>Personal data only</small></span>
+                    <span><strong>{t("scope.account")}</strong><small>{t("scope.accountDetail")}</small></span>
                   </button>
                   <button
                     type="button"
@@ -280,17 +248,17 @@ export function DataRemovalPage() {
                     onClick={() => { setScope("server"); setConfirmation(""); }}
                   >
                     <Icon name="shield" />
-                    <span><strong>A server</strong><small>Owner-verified</small></span>
+                    <span><strong>{t("scope.server")}</strong><small>{t("scope.serverDetail")}</small></span>
                   </button>
                 </div>
 
                 {scope === "server" && (
                   <div className="data-removal-field">
-                    <span className="data-removal-label">Server</span>
+                    <span className="data-removal-label">{t("server.label")}</span>
                     {loadingRequests && !overview ? (
                       <div className="data-removal-skeleton" />
                     ) : overview && overview.servers.length > 0 ? (
-                      <div className="data-removal-servers" role="radiogroup" aria-label="Server">
+                      <div className="data-removal-servers" role="radiogroup" aria-label={t("server.label")}>
                         {overview.servers.map((server) => (
                           <button
                             key={server.id}
@@ -307,93 +275,82 @@ export function DataRemovalPage() {
                             <span className="data-removal-server-text">
                               <strong>{server.name}</strong>
                               <small>
-                                {server.pending
-                                  ? "Request pending"
+                                {t(server.pending
+                                  ? "server.pending"
                                   : server.bot_present
-                                    ? "Niko is in this server · you are the owner"
-                                    : "Niko was removed · owner at removal recorded"}
+                                    ? "server.present"
+                                    : "server.removed")}
                               </small>
                             </span>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <p className="data-removal-hint">
-                        No owner-verified servers were found. Only the member who owns the server,
-                        or owned it when Niko was removed, can request its deletion.
-                      </p>
+                      <p className="data-removal-hint">{t("server.empty")}</p>
                     )}
                     {overview && overview.servers.length === 0 && (
-                      <p className="data-removal-hint">
-                        If you removed Niko before this ownership record existed, contact the bot
-                        owner through the support server with proof that you owned the server.
-                      </p>
+                      <p className="data-removal-hint">{t("server.emptyLegacy")}</p>
                     )}
                   </div>
                 )}
 
                 <label className="data-removal-field">
-                  <span className="data-removal-label">Why are you requesting this?</span>
+                  <span className="data-removal-label">{t("reason.label")}</span>
                   <textarea
                     rows={4}
                     maxLength={2000}
                     value={reason}
                     onChange={(event) => setReason(event.target.value)}
-                    placeholder="Required. A short, honest explanation helps the review go quickly."
+                    placeholder={t("reason.placeholder")}
                   />
-                  <small>{reason.trim().length}/2000 · minimum {overview?.confirmations.min_reason_length || 20} characters</small>
+                  <small>{t("reason.count", { count: reason.trim().length, min: overview?.confirmations.min_reason_length || 20 })}</small>
                 </label>
 
                 <label className="data-removal-field">
                   <span className="data-removal-label">
-                    Type {scope === "server" ? "the server name" : <code>{overview?.confirmations.account}</code>} to confirm
+                    {scope === "server" ? t("confirm.labelServer") : t("confirm.labelAccount", { account: overview?.confirmations.account ?? "" })}
                   </span>
                   <input
                     value={confirmation}
                     onChange={(event) => setConfirmation(event.target.value)}
-                    placeholder={expectedConfirmation || "Select a server first"}
+                    placeholder={expectedConfirmation || t("confirm.placeholder")}
                     autoComplete="off"
                   />
                 </label>
 
                 <label className="data-removal-check">
                   <input type="checkbox" checked={understood} onChange={(event) => setUnderstood(event.target.checked)} />
-                  <span>
-                    I understand that moderation and safety records are preserved, that this does
-                    not lift any restriction, and that deletion cannot be undone.
-                  </span>
+                  <span>{t("understood")}</span>
                 </label>
 
                 {error && <p className="data-removal-error" role="alert">{error}</p>}
                 {success && <p className="data-removal-success" role="status">{success}</p>}
 
                 <button type="button" className="data-removal-submit" onClick={() => void submit()} disabled={!canSubmit}>
-                  {busy ? "Submitting…" : "Submit for review"} <Icon name="arrow" />
+                  {t(busy ? "submitting" : "submit")} <Icon name="arrow" />
                 </button>
-                <p className="data-removal-fineprint">
-                  Submitting does not delete anything immediately. A pending request can be withdrawn.
-                </p>
+                <p className="data-removal-fineprint">{t("fineprint")}</p>
               </>
             )}
 
             {authenticated && overview && overview.requests.length > 0 && (
               <div className="data-removal-history">
-                <h3>Your requests</h3>
+                <h3>{t("history.title")}</h3>
                 {overview.requests.map((request) => (
                   <article key={request.id} className={`data-removal-request is-${request.status}`}>
                     <div className="data-removal-request-head">
                       <div>
-                        <strong>{request.scope === "account" ? "Account data" : request.guild_name || "Server data"}</strong>
+                        <strong>{request.scope === "account" ? t("history.account") : request.guild_name || t("history.server")}</strong>
                         <small>{formatDate(request.created_at)} · ID {request.id.slice(0, 8)}</small>
                       </div>
                       <span className={`data-removal-status is-${request.status}`}>
-                        {STATUS_LABELS[request.status] || request.status}
+                        {STATUS_KEYS[request.status] ? t(STATUS_KEYS[request.status]) : request.status}
                       </span>
                     </div>
                     {request.review_note && <p className="data-removal-note">{request.review_note}</p>}
                     {request.status === "pending" && (
                       <button type="button" className="data-removal-withdraw" onClick={() => void withdraw(request)}>
-                        Withdraw request
+                        {t("history.withdraw")}
                       </button>
                     )}
                   </article>
@@ -405,10 +362,10 @@ export function DataRemovalPage() {
 
         <div className="data-removal-back">
           <button type="button" className="link-button" onClick={() => navigate("/privacy")}>
-            ← Read the full privacy policy
+            {t("back.privacy")}
           </button>
           <button type="button" className="link-button" onClick={() => navigate("/terms")}>
-            Read the terms of service →
+            {t("back.terms")}
           </button>
         </div>
       </main>

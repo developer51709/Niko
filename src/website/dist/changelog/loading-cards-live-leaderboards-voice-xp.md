@@ -1,6 +1,7 @@
 # Faster Cards, Live Server Leaderboards & Voice XP
 
 - Date: 2026-10-26
+- Version: 2.23.0
 - Tags: economy, leveling, spotify, website, dashboard, added
 
 Image cards no longer leave you staring at a spinner: economy, leveling, and Spotify commands open with an animated card-shaped placeholder and edit it into the finished render. The leveling leaderboard moved to a live page at /levels/<server id>, servers can exclude channels from XP and opt into passive voice XP, and the support server got clearer panels and a rules page that prints all twenty rules in one message.

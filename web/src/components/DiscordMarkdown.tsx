@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DiscordBadgeList } from "./DiscordBadgeList";
+import { useStrings } from "../i18n";
 import { DiscordServerTagPill, type DiscordServerTagInfo } from "./DiscordServerTag";
 import { DiscordStatusAvatar } from "./DiscordStatusAvatar";
 import { isApplicationEmoji, useBotEmojis } from "../data/botEmojis";
@@ -25,7 +26,12 @@ const timestampStyles = new Set(["t", "T", "d", "D", "f", "F", "R"]);
 // Every marker is a capture group, because the format each one opens is chosen
 // by the group that matched: 8 bold (``**``), 9 underline (``__``), 10 italic
 // (``*``), 11 italic-alt (``_``), 12 strike (``~~``), 13 spoiler (``||``).
-const tokenPattern = /(`[^`\n]+`)|(<t:-?\d+(?::[tTdDfFR])?>)|(<@!?\d+>|<@&\d+>|<#\d+>|@everyone\b|@here\b)|(<a?:[\w~]+:\d+>)|(\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\))|(\*\*)|(__)|((?<!\*)\*(?!\*))|((?<!_)_(?!_))|(~~)|(\|\|)/g;
+// A bare URL is group 14 and is matched as one piece on purpose: ``_`` is legal
+// in a query string (``?client_id=…``), so a URL tokenised after the markers
+// would be cut at its first underscore and only the text in front of it would
+// become the link. The last character may not be a marker, so the ``**`` that
+// closes a bold link stays a marker instead of being swallowed by the URL.
+const tokenPattern = /(`[^`\n]+`)|(<t:-?\d+(?::[tTdDfFR])?>)|(<@!?\d+>|<@&\d+>|<#\d+>|@everyone\b|@here\b)|(<a?:[\w~]+:\d+>)|(\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\))|(\*\*)|(__)|((?<!\*)\*(?!\*))|((?<!_)_(?!_))|(~~)|(\|\|)|(https?:\/\/[^\s<>\(\)*|~_](?:[^\s<>\(\)*|~]*[^\s<>\(\)*|~_])?)/g;
 
 function timestampLabel(unix: number, style: string): string | null {
   if (!Number.isSafeInteger(unix) || !timestampStyles.has(style)) return null;
@@ -89,6 +95,7 @@ function tokenize(text: string): Node[] {
     else if (match[11]) tokens.push({ kind: "marker", format: "italicAlt" });
     else if (match[12]) tokens.push({ kind: "marker", format: "strike" });
     else if (match[13]) tokens.push({ kind: "marker", format: "spoiler" });
+    else if (match[14]) tokens.push({ kind: "link", text: match[14], url: match[14] });
     cursor = tokenPattern.lastIndex;
   }
   if (cursor < text.length) appendPlain(text.slice(cursor));
@@ -150,29 +157,41 @@ function DiscordEmojiPopup({ name, id, animated, isApplication, guildName, guild
   popupRef?: Ref<HTMLDivElement>;
   style?: CSSProperties;
 }) {
-  const initial = Array.from((guildName || "This server").trim())[0]?.toUpperCase() || "?";
+  // A transcript knows its own server. Anywhere else — a bio preview, the docs,
+  // a card with no emoji source — the server behind the emoji is unknown, and
+  // Discord's popup for that case says so rather than inventing one.
+  const { t } = useStrings("shared");
+  const knownGuild = Boolean((guildName || "").trim());
+  const initial = Array.from((guildName || "").trim())[0]?.toUpperCase() || "?";
   const art = `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "png"}`;
-  return <div ref={popupRef} className="discord-emoji-popup" role="dialog" aria-label={`:${name}: emoji`} style={style}>
+  return <div ref={popupRef} className="discord-emoji-popup" role="dialog" aria-label={t("emoji.aria", { name })} style={style}>
     <div className="discord-emoji-popup-main">
       <img className="discord-emoji-popup-art" src={art} alt="" />
       <div className="discord-emoji-popup-copy">
         <strong className="discord-emoji-popup-name">:{name}:</strong>
-        <p>{isApplication ? "This emoji is from the Niko app" : "This emoji is from this server. Get Nitro to use it everywhere."}</p>
+        {isApplication
+          ? <p>{t("emoji.application")}</p>
+          : knownGuild
+            ? <p>{t("emoji.knownGuild")}</p>
+            : <p>
+              {t("emoji.unknownBefore")}<br />
+              <a className="discord-emoji-popup-learn" href="https://support.discord.com/hc/en-us/articles/360036479811-How-to-Add-Custom-Emojis-on-Discord" target="_blank" rel="noopener noreferrer">{t("emoji.learnMore")}</a> {t("emoji.unknownAfter")}
+            </p>}
       </div>
     </div>
-    {!isApplication && <>
+    {!isApplication && knownGuild && <>
       <a className="discord-emoji-popup-nitro" href="https://discord.com/nitro" target="_blank" rel="noopener noreferrer">
         <NitroMark />
-        <span>Get Nitro</span>
+        <span>{t("emoji.getNitro")}</span>
       </a>
       <div className="discord-emoji-popup-source">
-        <p>This emoji is from</p>
+        <p>{t("emoji.from")}</p>
         <div className="discord-emoji-popup-guild">
           {guildIconUrl
             ? <img className="discord-emoji-popup-guild-icon" src={guildIconUrl} alt="" />
             : <span className="discord-emoji-popup-guild-icon discord-emoji-popup-guild-fallback" aria-hidden="true">{initial}</span>}
           <div className="discord-emoji-popup-guild-copy">
-            <strong>{guildName || "This server"}</strong>
+            <strong>{guildName}</strong>
             <small>Invite-only server</small>
           </div>
         </div>
@@ -190,17 +209,16 @@ function DiscordEmojiPopup({ name, id, animated, isApplication, guildName, guild
  * a failed image from shifting the line or eating the formatting around it.
  *
  * A resolved emoji is clickable and opens Discord's own emoji popup. Application
- * emojis name the Niko app; server emojis name the transcript's server and show
- * the Nitro prompt, matching Discord's two popup layouts.
+ * emojis name the Niko app; server emojis name the server that owns them and
+ * show the Nitro prompt, matching Discord's two popup layouts. Which one an
+ * emoji is comes from the bot's live catalog, never from the caller.
  */
-export function DiscordEmoji({ name, id, animated = false, className, interactive = true, source }: {
+export function DiscordEmoji({ name, id, animated = false, className, interactive = true }: {
   name: string;
   id: string;
   animated?: boolean;
   className?: string;
   interactive?: boolean;
-  /** Lets the rendering lab preview a server popup with a known emoji id. */
-  source?: "app" | "server";
 }) {
   const [broken, setBroken] = useState(false);
   const [open, setOpen] = useState(false);
@@ -211,7 +229,7 @@ export function DiscordEmoji({ name, id, animated = false, className, interactiv
   // Application emojis live on the bot itself; every other custom emoji is a
   // server emoji. The bot's live catalog answers that, so the popup never has
   // to guess from the name and never reads a frozen copy of the list.
-  const isApplication = source ? source === "app" : isApplicationEmoji(id);
+  const isApplication = isApplicationEmoji(id);
 
   const positionPopup = useCallback(() => {
     const trigger = triggerRef.current;
@@ -309,6 +327,7 @@ export function DiscordEmoji({ name, id, animated = false, className, interactiv
  * to trick someone into opening a link they have not chosen to reveal.
  */
 function DiscordSpoiler({ children }: { children: ReactNode }) {
+  const { t } = useStrings("shared");
   const [revealed, setRevealed] = useState(false);
   const reveal = () => setRevealed(true);
   return <span
@@ -316,7 +335,7 @@ function DiscordSpoiler({ children }: { children: ReactNode }) {
     role="button"
     tabIndex={0}
     aria-expanded={revealed}
-    aria-label={revealed ? undefined : "Spoiler, click to reveal"}
+    aria-label={revealed ? undefined : t("spoiler.reveal")}
     onClick={(event) => {
       if (revealed) return;
       event.preventDefault();
@@ -414,27 +433,30 @@ type TranscriptProfile = {
 // page uses instead of freezing at the moment it was first opened.
 const PROFILE_REFRESH_INTERVAL = 5000;
 
-const PROFILE_STATUS_LABELS: Record<string, string> = {
-  online: "Online",
-  idle: "Idle",
-  dnd: "Do Not Disturb",
-  offline: "Offline",
-  streaming: "Streaming",
+const PROFILE_STATUS_KEYS: Record<string, string> = {
+  online: "status.online",
+  idle: "status.idle",
+  dnd: "status.dnd",
+  offline: "status.offline",
+  streaming: "status.streaming",
 };
 
 /** Discord may report a status enum or a plain string; unknown values are offline. */
 function profileStatusKey(status?: string | null) {
   const value = typeof status === "string" ? status.trim().toLowerCase().replace(/^status\./, "") : "";
-  return Object.prototype.hasOwnProperty.call(PROFILE_STATUS_LABELS, value) ? value : "offline";
+  return Object.prototype.hasOwnProperty.call(PROFILE_STATUS_KEYS, value) ? value : "offline";
 }
 
-function profileStatusLabel(status?: string | null) {
-  return PROFILE_STATUS_LABELS[profileStatusKey(status)];
+function profileStatusLabel(status: string | null | undefined, t: (key: string) => string) {
+  return t(PROFILE_STATUS_KEYS[profileStatusKey(status)]);
 }
+
+/** Marks a failed profile fetch so the caller can localize the message. */
+const PROFILE_LOAD_ERROR = "niko:profile-load-failed";
 
 async function fetchDiscordProfile(userId: string): Promise<TranscriptProfile> {
   const response = await fetch(`/api/discord/users/${encodeURIComponent(userId)}`);
-  if (!response.ok) throw new Error("Could not load this Discord profile.");
+  if (!response.ok) throw new Error(PROFILE_LOAD_ERROR);
   return await response.json() as TranscriptProfile;
 }
 
@@ -451,6 +473,7 @@ function statusEmoji(status: DiscordCustomStatus) {
  * Discord truncates a long status and opens it in full.
  */
 function ProfileCustomStatus({ status }: { status: DiscordCustomStatus }) {
+  const { t } = useStrings("shared");
   const emoji = statusEmoji(status);
   const text = status.text?.trim() || "";
   const [expanded, setExpanded] = useState(false);
@@ -472,8 +495,8 @@ function ProfileCustomStatus({ status }: { status: DiscordCustomStatus }) {
     role={expandable ? "button" : undefined}
     tabIndex={expandable ? 0 : undefined}
     aria-expanded={expandable ? expanded : undefined}
-    aria-label={expandable ? (expanded ? "Collapse custom status" : "Show full custom status") : undefined}
-    title={expandable ? (expanded ? "Show less" : "Show full status") : undefined}
+    aria-label={expandable ? (expanded ? t("profile.collapseStatus") : t("profile.showFullStatus")) : undefined}
+    title={expandable ? (expanded ? t("profile.showLess") : t("profile.showStatus")) : undefined}
     onClick={expandable ? toggle : undefined}
     onKeyDown={expandable ? (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
@@ -526,6 +549,7 @@ function ProfileSpotifyCard({ activity }: { activity: DiscordProfileActivity }) 
 
 /** The circular "..." menu in the popup's top corner, with Copy User ID. */
 function ProfileMenu({ userId }: { userId: string }) {
+  const { t } = useStrings("shared");
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -557,7 +581,7 @@ function ProfileMenu({ userId }: { userId: string }) {
     <button
       type="button"
       className="discord-profile-menu-button"
-      aria-label="More options"
+      aria-label={t("profile.moreOptions")}
       aria-haspopup="menu"
       aria-expanded={open}
       onClick={() => setOpen((value) => !value)}
@@ -567,7 +591,7 @@ function ProfileMenu({ userId }: { userId: string }) {
     {open && <div className="discord-profile-menu-list" role="menu">
       <button type="button" className="discord-profile-menu-item" role="menuitem" onClick={() => void copyUserId()}>
         <span className="mask-icon discord-profile-menu-icon" style={{ "--mask-icon": "url(/assets/discord-icons/from-discord/id.svg)" } as CSSProperties} aria-hidden="true" />
-        {copied ? "Copied!" : "Copy User ID"}
+        {copied ? t("profile.copied") : t("profile.copyUserId")}
       </button>
     </div>}
   </div>;
@@ -580,6 +604,7 @@ let profileOwnerSequence = 0;
 
 /** Shared profile-popup state for mention links and transcript author rows. */
 export function useDiscordProfile(enabled = true) {
+  const { t } = useStrings("shared");
   const ownerRef = useRef(0);
   if (ownerRef.current === 0) ownerRef.current = ++profileOwnerSequence;
   const [profile, setProfile] = useState<TranscriptProfile | null>(null);
@@ -642,11 +667,13 @@ export function useDiscordProfile(enabled = true) {
       const result = await fetchDiscordProfile(userId);
       if (requestRef.current === requestId) setProfile(result);
     } catch (error) {
-      if (requestRef.current === requestId) setProfileError(error instanceof Error ? error.message : "Could not load this Discord profile.");
+      if (requestRef.current === requestId) {
+        setProfileError(error instanceof Error && error.message !== PROFILE_LOAD_ERROR ? error.message : t("profile.loadFailed"));
+      }
     } finally {
       if (requestRef.current === requestId) setProfileLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, t]);
   const openProfileId = profile?.id || "";
   useEffect(() => {
     if (!openProfileId) return;
@@ -713,7 +740,7 @@ export function useDiscordProfile(enabled = true) {
           <ProfileMenu key={profile.id} userId={profile.id} />
           <div className="discord-profile-body">
             <div className="discord-profile-head">
-              {profile.avatar_url && <DiscordStatusAvatar status={profileStatusKey(profile.status)} className="discord-profile-avatar-wrap" label={profileStatusLabel(profile.status)}>
+              {profile.avatar_url && <DiscordStatusAvatar status={profileStatusKey(profile.status)} className="discord-profile-avatar-wrap" label={profileStatusLabel(profile.status, t)}>
                 <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
                 {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
               </DiscordStatusAvatar>}

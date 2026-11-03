@@ -151,6 +151,29 @@
 .changelog-detail-nav button { display: inline-flex; align-items: center; gap: 7px; padding: 0; color: var(--accent-dark); background: transparent; border: 0; font-size: 12px; font-weight: 700; }
 .changelog-detail-nav button:hover { text-decoration: underline; }
 
+/* Release prose is written in Discord's markdown and drawn by the bot's own
+   renderer, so `code`, **bold**, *italic*, links and :emoji: read here the way
+   they do in the client. The renderer's span sits inside the paragraph or list
+   item this page already styles, so only the pieces that carry Discord's own
+   colours are toned to the page. */
+.changelog-inline-markdown { display: inline; color: inherit; font: inherit; line-height: inherit; vertical-align: baseline; }
+.changelog-inline-markdown .discord-md-code {
+  padding: 1px 5px;
+  color: var(--accent-dark);
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(226, 234, 246, .16);
+  border-radius: 4px;
+  font: .9em "Space Mono", monospace;
+}
+.changelog-inline-markdown .discord-md-link {
+  color: var(--accent-dark);
+  text-decoration: underline;
+  text-decoration-color: var(--filter-border);
+  text-underline-offset: 2px;
+}
+.changelog-inline-markdown .discord-md-link:hover { color: var(--ink); }
+.changelog-inline-markdown .discord-md-emoji { width: 1.2em; height: 1.2em; vertical-align: -.25em; }
+
 /* Not found */
 .changelog-not-found { padding: 80px 0; text-align: center; color: var(--dim); }
 .changelog-not-found h1 { margin: 16px 0 8px; font-size: 24px; color: var(--ink); }

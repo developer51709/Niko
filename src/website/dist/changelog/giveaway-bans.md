@@ -1,6 +1,7 @@
 # Giveaway Bans Keep Ban-Dodgers Out of Your Giveaways
 
 - Date: 2026-10-20
+- Version: 2.20.0
 - Tags: giveaway, moderation, commands, added
 
 Servers can now ban a member from their giveaways with `.giveaway ban`, and lift it with `.giveaway unban`. A ban is per server, clears the entries the member already holds, and is enforced at the draw as well as on the Join button, so a banned member cannot win by entering before the ban or during a giveaway's final seconds.

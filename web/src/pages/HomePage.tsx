@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getStats } from "../api";
+import { useStrings } from "../i18n";
 import { DemoDiscordMessage, type DemoEmojiToken } from "../components/DemoDiscordMessage";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
@@ -11,19 +12,17 @@ import type { BotStats } from "../types";
 import { formatNumber } from "../utils/format";
 
 // /auth/callback reports a failed sign-in by redirecting here with ?error=...
-// Without this the visitor lands on the home page with no explanation.
-const signInErrorMessages: Record<string, string> = {
-  oauth_denied: "Discord sign-in was cancelled before it finished.",
-  invalid_state: "That sign-in link expired before it was used.",
-  no_code: "Discord did not return a sign-in code.",
-  token_exchange_failed: "Niko could not complete the token exchange with Discord.",
-  user_fetch_failed: "Niko could not read your Discord profile.",
+// Without this the visitor lands on the home page with no explanation. The map
+// holds catalogue keys, so the explanation follows the site language too.
+const signInErrorKeys: Record<string, string> = {
+  oauth_denied: "signin.denied",
+  invalid_state: "signin.invalid",
+  no_code: "signin.no_code",
+  token_exchange_failed: "signin.token",
+  user_fetch_failed: "signin.profile",
 };
 
-// The bot's own replies, drawn as Discord messages. The ids are real accounts
-// that share a server with the bot, so the names, avatars and the profile
-// popups behind them are the live ones rather than painted-on placeholders.
-const examples: {
+type HomeExample = {
   userId: string;
   command?: string;
   message?: string;
@@ -31,70 +30,80 @@ const examples: {
   time: string;
   reply: (emoji: DemoEmojiToken) => string;
   note: string;
-}[] = [
-  {
-    userId: "1528084386652754010",
-    command: "/ban",
-    time: "Today at 3:04 PM",
-    reply: (emoji) =>
-      `### ${emoji("ban")} User Banned\n**<@1514675711493935114>** has been banned.\n**Reason:** spamming invite links`,
-    note: "Confirms first, clears the last 7 days of their messages, and writes the ban into your log channel.",
-  },
-  {
-    userId: "1451608836174512301",
-    command: "/reminder set",
-    time: "Today at 3:06 PM",
-    // The bot writes its due time as a Discord timestamp, which the viewer's
-    // own client turns into a relative "in 2 hours".
-    reply: (emoji) =>
-      `### ${emoji("reminder")} Reminder Set\nI will remind you about **check the support queue** <t:${Math.floor(Date.now() / 1000) + 7200}:R>.`,
-    note: "Arrives in your DMs, or in the channel it was set in when the whole server needs to see it.",
-  },
-  {
-    userId: "1451608836174512301",
-    // XP comes from talking, so the level-up answers something they said.
-    message: "gm! anyone up for a few rounds later?",
-    messageTime: "Today at 3:08 PM",
-    time: "Today at 3:09 PM",
-    reply: () => "Congratulations <@1451608836174512301>, you leveled up to level **25**!",
-    note: "Talking earns XP; level roles and announcements are set up once and then run themselves.",
-  },
-];
+};
 
-const sections = [
-  {
-    index: "01",
-    title: "Voice",
-    body: "Temporary channels members open themselves, run from a panel instead of a command list.",
-    tags: "lock · hide · claim · limits",
-    link: "/commands",
-    linkLabel: "Commands",
-  },
-  {
-    index: "02",
-    title: "Moderation",
-    body: "Automod, raid protection, warnings and a log channel your moderators can actually read.",
-    tags: "automod · anti-raid · warnings · logs",
-    link: "/docs",
-    linkLabel: "Docs",
-  },
-  {
-    index: "03",
-    title: "Economy",
-    body: "Jobs, banking, a casino, shops and leaderboards that give members a reason to come back tomorrow.",
-    tags: "jobs · bank · gambling · shop",
-    link: "/leaderboard",
-    linkLabel: "Leaderboard",
-  },
-  {
-    index: "04",
-    title: "Assistant",
-    body: "A co-pilot with memory for the conversations that matter, and switches to turn it off per channel.",
-    tags: "memory · personality · per-channel",
-    link: "/docs",
-    linkLabel: "Docs",
-  },
-];
+// The accounts shown in the cards. They are real accounts that share a server
+// with the bot, so the names, avatars and profile popups are the live ones
+// rather than painted-on placeholders.
+const BAN_TARGET = "<@1514675711493935114>";
+const EXAMPLE_MEMBER = "1451608836174512301";
+
+/**
+ * The bot's own replies, drawn as Discord messages.
+ *
+ * Every string comes from the ``home`` catalogue, so the cards follow the site
+ * language like the rest of the page. Only the command names and ids stay
+ * literal: ``/ban`` is the command a member actually types, and a mention is an
+ * id, not copy.
+ */
+function useHomeExamples(): HomeExample[] {
+  const { t } = useStrings("home");
+
+  return useMemo(() => [
+    {
+      userId: "1528084386652754010",
+      command: "/ban",
+      time: t("examples.ban.time"),
+      reply: (emoji) => t("examples.ban.reply", {
+        emoji: emoji("ban"),
+        user: BAN_TARGET,
+        reason: t("examples.ban.reason"),
+      }),
+      note: t("examples.ban.note"),
+    },
+    {
+      userId: EXAMPLE_MEMBER,
+      command: "/reminder set",
+      time: t("examples.reminder.time"),
+      // The bot writes its due time as a Discord timestamp, which the viewer's
+      // own client turns into a relative "in 2 hours".
+      reply: (emoji) => t("examples.reminder.reply", {
+        emoji: emoji("reminder"),
+        timestamp: Math.floor(Date.now() / 1000) + 7200,
+      }),
+      note: t("examples.reminder.note"),
+    },
+    {
+      userId: EXAMPLE_MEMBER,
+      // XP comes from talking, so the level-up answers something they said.
+      message: t("examples.level.message"),
+      messageTime: t("examples.level.messageTime"),
+      time: t("examples.level.time"),
+      reply: () => t("examples.level.reply", { user: `<@${EXAMPLE_MEMBER}>` }),
+      note: t("examples.level.note"),
+    },
+  ], [t]);
+}
+
+// The four systems, built from the catalogue so their wording follows the site
+// language. Only the numbers and the destinations are fixed.
+function useHomeSections() {
+  const { t } = useStrings("home");
+
+  return useMemo(() => [
+    { index: "01", key: "inside.voice", link: "/commands" },
+    { index: "02", key: "inside.moderation", link: "/docs" },
+    { index: "03", key: "inside.economy", link: "/leaderboard" },
+    { index: "04", key: "inside.assistant", link: "/docs" },
+  ].map((section) => ({
+    index: section.index,
+    link: section.link,
+    title: t(`${section.key}.title`),
+    body: t(`${section.key}.body`),
+    tags: t(`${section.key}.tags`),
+    linkLabel: t(`${section.key}.link`),
+  })), [t]);
+}
 
 export function HomePage() {
   const config = useBotConfig();
@@ -108,6 +117,9 @@ export function HomePage() {
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
+  const examples = useHomeExamples();
+  const sections = useHomeSections();
+  const { t } = useStrings("home");
   const open = (path: string) => (event: React.MouseEvent) => { event.preventDefault(); navigate(path); };
 
   return (
@@ -117,49 +129,43 @@ export function HomePage() {
         {signInError && (
           <section className="shell">
             <div className="inline-error" role="alert">
-              <strong>Sign-in could not be completed.</strong>
+              <strong>{t("signin.title")}</strong>
               <span>
-                {signInErrorMessages[signInError] ?? "Discord rejected the sign-in attempt."}{" "}
-                You are still signed out, so nothing was changed.
+                {t(signInErrorKeys[signInError] ?? "signin.unknown")}{" "}
+                {t("signin.body")}
               </span>
-              <a className="button button-muted" href="/auth/login?next=%2Fdashboard">Try again</a>
+              <a className="button button-muted" href="/auth/login?next=%2Fdashboard">{t("signin.retry")}</a>
             </div>
           </section>
         )}
 
         <section className="shell home-hero">
           <div className="home-hero-copy">
-            <p className="home-kicker">Discord app</p>
-            <h1>One bot,<br />not five.</h1>
-            <p className="home-lede">
-              Voice channels, moderation, an economy and an assistant — the jobs usually split across a stack of
-              bots, in one app your members only have to learn once.
-            </p>
+            <p className="home-kicker">{t("hero.kicker")}</p>
+            <h1>{t("hero.titleA")}<br />{t("hero.titleB")}</h1>
+            <p className="home-lede">{t("hero.lede")}</p>
             <div className="home-actions">
               <a className="button button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">
-                Add Niko <Icon name="arrow" />
+                {t("hero.add")} <Icon name="arrow" />
               </a>
-              <a className="button button-muted" href="/commands" onClick={open("/commands")}>Browse commands</a>
+              <a className="button button-muted" href="/commands" onClick={open("/commands")}>{t("hero.browse")}</a>
             </div>
-            <p className="home-meta">Free to start · No card · Four languages</p>
+            <p className="home-meta">{t("hero.meta")}</p>
           </div>
         </section>
 
-        <section className="shell home-stats-band" aria-label="Niko in numbers">
-          <div className="home-stat"><strong>{formatNumber(stats?.guild_count)}</strong><span>servers</span></div>
-          <div className="home-stat"><strong>{formatNumber(stats?.user_count)}</strong><span>members</span></div>
-          <div className="home-stat"><strong>{formatNumber(stats?.command_count)}</strong><span>commands</span></div>
-          <p className="home-stats-note"><span className="status-dot" /> Live from the bot</p>
+        <section className="shell home-stats-band" aria-label={t("stats.aria")}>
+          <div className="home-stat"><strong>{formatNumber(stats?.guild_count)}</strong><span>{t("stats.servers")}</span></div>
+          <div className="home-stat"><strong>{formatNumber(stats?.user_count)}</strong><span>{t("stats.members")}</span></div>
+          <div className="home-stat"><strong>{formatNumber(stats?.command_count)}</strong><span>{t("stats.commands")}</span></div>
+          <p className="home-stats-note"><span className="status-dot" /> {t("stats.live")}</p>
         </section>
 
         <section className="shell home-features" aria-labelledby="home-features-title">
           <header className="home-features-head">
-            <p className="home-kicker">In the server</p>
-            <h2 id="home-features-title">What it actually<br />sends back.</h2>
-            <p>
-              The panel is Niko&rsquo;s real VoiceMaster interface, wired to the same buttons the bot posts — press one.
-              The replies shown with it are what the rest of the stack looks like in a channel.
-            </p>
+            <p className="home-kicker">{t("features.kicker")}</p>
+            <h2 id="home-features-title">{t("features.titleA")}<br />{t("features.titleB")}</h2>
+            <p>{t("features.body")}</p>
           </header>
           <div className="home-features-grid">
             <VoiceMasterPanel className="home-panel" />
@@ -182,9 +188,9 @@ export function HomePage() {
 
         <section className="shell home-inside">
           <header className="home-inside-head">
-            <p className="home-kicker">What is inside</p>
-            <h2>Four systems,<br />one bot.</h2>
-            <p>Nothing here is a checkbox on a feature list. Each one is a full system your staff can run without a manual.</p>
+            <p className="home-kicker">{t("inside.kicker")}</p>
+            <h2>{t("inside.titleA")}<br />{t("inside.titleB")}</h2>
+            <p>{t("inside.body")}</p>
           </header>
           <div className="home-rows">
             {sections.map((section) => (
@@ -201,22 +207,22 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="shell home-cta">
-          <div className="home-cta-identity">
-            <span className="home-cta-avatar">
-              {config?.bot_avatar_url ? <img src={config.bot_avatar_url} alt="" /> : "N"}
-            </span>
-            <div>
-              <p className="home-kicker">Ready when you are</p>
-              <h2>Put Niko in your server.</h2>
-              <p>One invite, the settings you already know, and every command documented in the same four languages.</p>
-            </div>
+        <section className="shell home-cta" aria-labelledby="home-cta-title">
+          <div className="home-cta-copy">
+            <p className="home-kicker">
+              <span className="home-cta-mark">
+                {config?.bot_avatar_url ? <img src={config.bot_avatar_url} alt="" /> : "N"}
+              </span>
+              {t("cta.kicker")}
+            </p>
+            <h2 id="home-cta-title">{t("cta.title")}</h2>
+            <p>{t("cta.body")}</p>
           </div>
           <div className="home-cta-actions">
             <a className="button button-primary" href={config?.invite_url || "#"} target="_blank" rel="noreferrer">
-              Add Niko <Icon name="arrow" />
+              {t("cta.add")} <Icon name="arrow" />
             </a>
-            <a className="button button-muted" href="/docs" onClick={open("/docs")}>Read the docs</a>
+            <a className="button button-muted" href="/docs" onClick={open("/docs")}>{t("cta.docs")}</a>
           </div>
         </section>
       </main>

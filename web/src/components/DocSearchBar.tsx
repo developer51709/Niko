@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Icon } from "./Icon";
+import { useStrings } from "../i18n";
 
 const IS_APPLE = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
@@ -7,6 +8,10 @@ interface DocSearchBarProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Screen-reader copy, passed in so the page's catalogue owns the wording. */
+  ariaLabel?: string;
+  clearLabel?: string;
+  /** Shared copy is the fallback: a page that passes its own wording wins. */
   onFocus?: () => void;
   onBlur?: () => void;
   onEnter?: () => void;
@@ -15,11 +20,17 @@ interface DocSearchBarProps {
 export function DocSearchBar({
   value,
   onChange,
-  placeholder = "Search documentation...",
+  placeholder,
+  ariaLabel,
+  clearLabel,
   onFocus,
   onBlur,
   onEnter,
 }: DocSearchBarProps) {
+  const { t } = useStrings("shared");
+  const resolvedPlaceholder = placeholder ?? t("docs.searchPlaceholder");
+  const resolvedAriaLabel = ariaLabel ?? t("docs.searchAria");
+  const resolvedClearLabel = clearLabel ?? t("docs.searchClear");
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -74,9 +85,9 @@ export function DocSearchBar({
           onFocus={handleFocus}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           className="search-input"
-          aria-label="Search documentation"
+          aria-label={resolvedAriaLabel}
         />
         {!!value && (
           <button
@@ -86,7 +97,7 @@ export function DocSearchBar({
               onChange("");
               inputRef.current?.focus();
             }}
-            aria-label="Clear search"
+            aria-label={resolvedClearLabel}
           >
             <Icon name="close" size={12} />
           </button>

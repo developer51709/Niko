@@ -6,7 +6,7 @@ before a restart still resolves the right person after it.
 
 import discord
 
-from ._messages import msg
+from ._messages import _divider, msg
 
 # The avatar panel's buttons carry the target's user id in their custom id, so
 # they resolve the right person after a restart without any message state.
@@ -24,9 +24,38 @@ def _avatar_image_view(title: str, image_url: str) -> discord.ui.LayoutView:
     return view
 
 
+def _avatar_banners_view(title: str, banners: list[tuple[str, str]]) -> discord.ui.LayoutView:
+    """One container with a labelled gallery per banner the user has."""
+    children = [discord.ui.TextDisplay(content=f"### {title}")]
+    for label, image_url in banners:
+        children.append(_divider())
+        children.append(discord.ui.TextDisplay(content=f"**{label}**"))
+        children.append(discord.ui.MediaGallery(
+            discord.MediaGalleryItem(media=image_url)
+        ))
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(*children))
+    return view
+
+
+async def _full_user(client, user_id: int):
+    """The user as Discord's REST API reports them, not as the gateway cached
+    them.
+
+    Gateway user payloads only carry ``banner`` once it is set, and the cached
+    copy of a bot (or of a member seen before they uploaded one) can sit there
+    without it. The button would then claim the user has no global banner, so it
+    reads the full object and falls back to the cache only if that read fails.
+    """
+    try:
+        return await client.fetch_user(user_id)
+    except discord.HTTPException:
+        return client.get_user(user_id)
+
+
 async def _avatar_member(interaction: discord.Interaction, user_id: int):
     """Resolve the target as a member, wherever the interaction happens."""
-    guild = interaction.guild
+    guild = getattr(interaction, "guild", None)
     if guild is not None:
         member = guild.get_member(user_id)
         if member is not None:
@@ -37,7 +66,7 @@ async def _avatar_member(interaction: discord.Interaction, user_id: int):
             return None
     # DMs have no guild of their own, so fall back to a cached server avatar.
     fallback = None
-    for shared in interaction.client.guilds:
+    for shared in getattr(interaction.client, "guilds", ()):
         member = shared.get_member(user_id)
         if member is None:
             continue
@@ -135,23 +164,30 @@ class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        user = interaction.client.get_user(self.user_id)
-        if user is None:
-            try:
-                user = await interaction.client.fetch_user(self.user_id)
-            except discord.HTTPException:
-                user = None
+        user = await _full_user(interaction.client, self.user_id)
         if user is None:
             return await interaction.followup.send(
                 msg(interaction, "avatar_user_gone"), ephemeral=True
             )
-        if not user.banner:
+        # The user's own picture is their global banner; the server may show a
+        # different one. Both are shown when the user has both.
+        member = await _avatar_member(interaction, self.user_id)
+        banners = []
+        server_banner = getattr(getattr(member, "guild_banner", None), "url", None)
+        if server_banner:
+            banners.append((msg(interaction, "avatar_banner_server"), server_banner))
+        if user.banner:
+            banners.append((msg(interaction, "avatar_banner_global"), user.banner.url))
+        if not banners:
             return await interaction.followup.send(
                 msg(interaction, "avatar_no_banner"), ephemeral=True
             )
+        name = (getattr(member, "display_name", None)
+                or getattr(user, "display_name", None)
+                or getattr(user, "name", ""))
         await interaction.followup.send(
-            view=_avatar_image_view(
-                msg(interaction, "avatar_banner_button"), user.banner.url),
+            view=_avatar_banners_view(
+                msg(interaction, "banner_title", user=name), banners),
             ephemeral=True,
         )
 

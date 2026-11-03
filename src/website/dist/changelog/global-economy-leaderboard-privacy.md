@@ -1,6 +1,7 @@
 # Global Economy Leaderboard & Privacy
 
 - Date: 2026-10-13
+- Version: 2.15.0
 - Tags: economy, leaderboard, privacy, dashboard
 
 The public economy leaderboard is now a paginated global ranking, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.

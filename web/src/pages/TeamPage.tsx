@@ -4,6 +4,7 @@ import { PublicHeader } from "../components/PublicHeader";
 import { PublicPageIntro } from "../components/PublicPageIntro";
 import { Footer } from "../components/Footer";
 import { DiscordStatusAvatar } from "../components/DiscordStatusAvatar";
+import { useStrings } from "../i18n";
 import { navigate } from "../router";
 import type { SocialProfileCardData, StaffActivity, StaffEmoji, StaffMember } from "../types";
 
@@ -27,9 +28,20 @@ function ActivityEmoji({ emoji }: { emoji?: StaffEmoji | null }) {
   return <img className="presence-emoji" src={twemojiUrl(emoji.value)} alt={emoji.name || emoji.value} />;
 }
 
-function activityLabel(type: string) {
-  const labels: Record<string, string> = { playing: "Playing", listening: "Listening to", watching: "Watching", streaming: "Streaming", competing: "Competing in" };
-  return labels[type] || (type ? `${type.charAt(0).toUpperCase()}${type.slice(1)}` : "Activity");
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+// Discord activity types, mapped to catalogue keys. Only the wording is ours;
+// an activity kind the bot adds later falls back to its own name.
+const ACTIVITY_KEYS: Record<string, string> = {
+  playing: "activity.playing",
+  listening: "activity.listening",
+  watching: "activity.watching",
+  streaming: "activity.streaming",
+  competing: "activity.competing",
+};
+
+function activityLabel(type: string, t: Translate) {
+  return ACTIVITY_KEYS[type] ? t(ACTIVITY_KEYS[type]) : type ? `${type.charAt(0).toUpperCase()}${type.slice(1)}` : t("activity.fallback");
 }
 
 function formatClock(milliseconds: number) {
@@ -40,6 +52,7 @@ function formatClock(milliseconds: number) {
 // Spotify shares the custom-status card layout and adds a live track progress
 // bar, so a listening status reads as the same kind of card as a custom status.
 function SpotifyActivityCard({ activity }: { activity: StaffActivity }) {
+  const { t } = useStrings("team");
   const start = activity.start ? Date.parse(activity.start) : Number.NaN;
   const end = activity.end ? Date.parse(activity.end) : Number.NaN;
   const hasWindow = Number.isFinite(start) && Number.isFinite(end) && end > start;
@@ -57,7 +70,7 @@ function SpotifyActivityCard({ activity }: { activity: StaffActivity }) {
   const card = <span className="profile-custom-status profile-spotify-status">
     <span className="profile-custom-status-emoji">{activity.image_url ? <img src={activity.image_url} alt="" /> : <PlatformMark platform="spotify" />}</span>
     <span className="profile-custom-status-copy">
-      <small>Listening on Spotify</small>
+      <small>{t("spotify.listening")}</small>
       <span>{activity.details || "Spotify"}</span>
       {activity.state && <span className="profile-spotify-artist">{activity.state}</span>}
     </span>
@@ -70,23 +83,26 @@ function SpotifyActivityCard({ activity }: { activity: StaffActivity }) {
 }
 
 function ActivitySummary({ activity }: { activity: StaffActivity }) {
+  const { t } = useStrings("team");
   if (activity.kind === "spotify") return <SpotifyActivityCard activity={activity} />;
   const primary = activity.name;
   const secondaryLines = [activity.details, activity.state]
     .filter((line): line is string => Boolean(line && line !== primary));
   const card = <span className={`activity-card activity-${activity.kind}`}>
     {activity.image_url && <img className="activity-art" src={activity.image_url} alt="" />}
-    <span className="activity-copy"><strong>{activityLabel(activity.type)}</strong><span>{primary}</span>{secondaryLines.map((line, index) => <small key={`${line}-${index}`}>{line}</small>)}</span>
+    <span className="activity-copy"><strong>{activityLabel(activity.type, t)}</strong><span>{primary}</span>{secondaryLines.map((line, index) => <small key={`${line}-${index}`}>{line}</small>)}</span>
   </span>;
   return activity.url ? <a className="presence-activity" href={activity.url} target="_blank" rel="noreferrer">{card}</a> : <span className="presence-activity">{card}</span>;
 }
 
-function statusLabel(member: StaffMember) {
-  return member.status_label || ({ online: "Online", idle: "Idle", dnd: "Do Not Disturb", offline: "Offline" }[member.status || "offline"] || "Offline");
+function statusLabel(member: StaffMember, t: Translate) {
+  const keys: Record<string, string> = { online: "status.online", idle: "status.idle", dnd: "status.dnd", offline: "status.offline" };
+  return member.status_label || t(keys[member.status || "offline"] ?? "status.offline");
 }
 
 function StatusAvatar({ member, className }: { member: StaffMember; className: string }) {
-  return <DiscordStatusAvatar status={member.status} className={className} label={statusLabel(member)}>
+  const { t } = useStrings("team");
+  return <DiscordStatusAvatar status={member.status} className={className} label={statusLabel(member, t)}>
     {avatar(member) ? <img className={className} src={avatar(member)!} alt="" /> : <span className={`${className} team-avatar-fallback`}>{member.name.slice(0, 1)}</span>}
   </DiscordStatusAvatar>;
 }
@@ -140,6 +156,7 @@ function profileHandle(card: SocialProfileCardData) {
 }
 
 function ProfileLinkCard({ link }: { link: ProfileLink }) {
+  const { t } = useStrings("team");
   const platform = (link.type || "").toLowerCase();
   const meta = PLATFORM_META[platform];
   const [card, setCard] = useState<SocialProfileCardData | null>(null);
@@ -180,13 +197,13 @@ function ProfileLinkCard({ link }: { link: ProfileLink }) {
     </a>;
   }
 
-  return <a className="team-profile-social-card social-profile-card" href={card?.url || link.url} target="_blank" rel="noopener noreferrer" aria-label={`${card?.display_name || meta.label} on ${meta.label}`}>
+  return <a className="team-profile-social-card social-profile-card" href={card?.url || link.url} target="_blank" rel="noopener noreferrer" aria-label={t("social.aria", { name: card?.display_name || meta.label, platform: meta.label })}>
     <span className={`social-card-chip platform-${platform}`}><PlatformMark platform={platform} />{meta.label}</span>
     <span className={`social-card-avatar platform-${platform}`}>
       {card?.avatar_url ? <img src={card.avatar_url} alt="" /> : <PlatformMark platform={platform} />}
     </span>
     <span className="social-card-details">
-      <strong>{card ? card.display_name || profileHandle(card) : `Loading ${meta.label} profile…`}</strong>
+      <strong>{card ? card.display_name || profileHandle(card) : t("social.loading", { platform: meta.label })}</strong>
       {card && profileHandle(card) && <small>{profileHandle(card)}</small>}
       {card?.bio && <span className="social-card-bio">{card.bio}</span>}
       {card?.status && <span className="social-card-status">{card.status}</span>}
@@ -198,12 +215,13 @@ function ProfileLinkCard({ link }: { link: ProfileLink }) {
 }
 
 function PresenceSummary({ member }: { member: StaffMember }) {
+  const { t } = useStrings("team");
   const custom = member.custom_status;
   const activities = member.activities || [];
   const hasCustom = Boolean(custom?.text || custom?.emoji);
   if (!hasCustom && !activities.length) return null;
   return <div className="presence-stack">
-    {hasCustom && <div className="profile-custom-status"><span className="profile-custom-status-emoji"><ActivityEmoji emoji={custom?.emoji} /></span><span className="profile-custom-status-copy"><small>Custom status</small><span>{custom?.text || "Sharing an emoji status"}</span></span></div>}
+    {hasCustom && <div className="profile-custom-status"><span className="profile-custom-status-emoji"><ActivityEmoji emoji={custom?.emoji} /></span><span className="profile-custom-status-copy"><small>{t("status.custom")}</small><span>{custom?.text || t("status.emojiOnly")}</span></span></div>}
     {activities.length > 0 && <div className="presence-activity-list">{activities.map((activity, index) => <ActivitySummary activity={activity} key={`${activity.kind}-${activity.name}-${index}`} />)}</div>}
   </div>;
 }
@@ -214,6 +232,7 @@ const teamStyles = `
 const PRESENCE_REFRESH_INTERVAL = 5000;
 
 export function TeamPage() {
+  const { t } = useStrings("team");
   const [members, setMembers] = useState<StaffMember[]>([]);
   useEffect(() => {
     let active = true;
@@ -243,21 +262,22 @@ export function TeamPage() {
   }, []);
   return <><style>{teamStyles}</style><PublicHeader page="team" /><main className="shell page-main">
     <PublicPageIntro
-      eyebrow="The people behind Niko"
-      title={<>Meet the <em>team.</em></>}
-      description="A small group of builders, moderators, and creative minds keeping Niko friendly, useful, and moving forward."
+      eyebrow={t("intro.eyebrow")}
+      title={<>{t("intro.title")} <em>{t("intro.titleEm")}</em></>}
+      description={t("intro.description")}
     />
     <div className="team-grid">{members.map((member) => <button className="team-card" key={member.id} onClick={() => navigate(`/team/${member.handle || member.id}`)}>
       <div className="team-card-art" style={member.public_banner_url ? { backgroundImage: `url(${member.public_banner_url})` } : undefined} />
-      <div className="team-card-body"><StatusAvatar member={member} className="team-avatar" /><div><span className="team-role">{member.role_label}</span><h2>{member.name}</h2><p>{member.bio || "Part of the Niko team."}</p></div></div>
-      <span className="team-card-footer"><span>View profile</span><span aria-hidden="true">↗</span></span>
-    </button>)}{!members.length && <div className="empty-state">The team roster is being prepared.</div>}</div>
-    <section className="team-application-cta"><span className="panel-kicker">Niko recruitment</span><p>Interested in contributing to the team?</p><a href="/team/apply">View open staff roles <span aria-hidden="true">→</span></a></section>
+      <div className="team-card-body"><StatusAvatar member={member} className="team-avatar" /><div><span className="team-role">{member.role_label}</span><h2>{member.name}</h2><p>{member.bio || t("card.bioFallback")}</p></div></div>
+      <span className="team-card-footer"><span>{t("card.viewProfile")}</span><span aria-hidden="true">↗</span></span>
+    </button>)}{!members.length && <div className="empty-state">{t("roster.empty")}</div>}</div>
+    <section className="team-application-cta"><span className="panel-kicker">{t("cta.kicker")}</span><p>{t("cta.body")}</p><a href="/team/apply">{t("cta.link")} <span aria-hidden="true">→</span></a></section>
   </main><Footer /></>;
 }
 
 // The route segment is the member's handle, or their user id for an older link.
 export function TeamMemberPage({ profileKey }: { profileKey: string }) {
+  const { t } = useStrings("team");
   const [member, setMember] = useState<StaffMember | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -271,7 +291,7 @@ export function TeamMemberPage({ profileKey }: { profileKey: string }) {
           }
         })
         .catch((reason) => {
-          if (active && initial) setError(reason instanceof Error ? reason.message : "Team member not found.");
+          if (active && initial) setError(reason instanceof Error ? reason.message : t("profile.notFound"));
         });
     };
     const handleVisibility = () => {
@@ -288,27 +308,27 @@ export function TeamMemberPage({ profileKey }: { profileKey: string }) {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [profileKey]);
-  return <><style>{teamStyles}</style><PublicHeader page="team" /><main className="shell page-main team-profile-page">{error ? <div className="empty-state">{error}</div> : !member ? <div className="section-loading">Loading profile…</div> : <>
-    <button className="back-link team-back" onClick={() => navigate("/team")}>← Back to team</button>
+  }, [profileKey, t]);
+  return <><style>{teamStyles}</style><PublicHeader page="team" /><main className="shell page-main team-profile-page">{error ? <div className="empty-state">{error}</div> : !member ? <div className="section-loading">{t("profile.loading")}</div> : <>
+    <button className="back-link team-back" onClick={() => navigate("/team")}>{t("profile.back")}</button>
     <section className="team-profile-shell">
-      <div className="team-profile-banner" style={member.public_banner_url ? { backgroundImage: `url(${member.public_banner_url})` } : undefined}><span>TEAM MEMBER</span></div>
+      <div className="team-profile-banner" style={member.public_banner_url ? { backgroundImage: `url(${member.public_banner_url})` } : undefined}><span>{t("profile.memberTag")}</span></div>
       <div className="team-profile-card">
         <div className="team-profile-header">
           <StatusAvatar member={member} className="team-profile-avatar" />
         </div>
         <div className="team-profile-identity">
-          <span className="team-profile-role">{member.role_label}<i>STAFF</i></span>
+          <span className="team-profile-role">{member.role_label}<i>{t("profile.staffTag")}</i></span>
           <h1>{member.name}</h1>
-          <p className="team-profile-handle">{member.username ? `@${member.username}` : "Niko staff"}</p>
+          <p className="team-profile-handle">{member.username ? `@${member.username}` : t("profile.staffFallback")}</p>
         </div>
         <div className="team-profile-divider" />
-        <section className="team-profile-section"><h2>About me</h2><p className="team-profile-bio">{member.bio || "This team member has not added an extended introduction yet."}</p></section>
-        <section className="team-profile-section team-activity-section"><h2>Current activity</h2><div className="team-activity-content">{member.custom_status?.text || member.custom_status?.emoji || (member.activities || []).length ? <PresenceSummary member={member} /> : <div className="team-activity-empty">No current activity.</div>}</div></section>
-        {(member.public_links || []).length > 0 && <section className="team-profile-section"><h2>Find me elsewhere</h2><div className="team-profile-social-grid" aria-label={`${member.name}'s social profiles`}>
+        <section className="team-profile-section"><h2>{t("profile.about")}</h2><p className="team-profile-bio">{member.bio || t("profile.aboutFallback")}</p></section>
+        <section className="team-profile-section team-activity-section"><h2>{t("profile.activity")}</h2><div className="team-activity-content">{member.custom_status?.text || member.custom_status?.emoji || (member.activities || []).length ? <PresenceSummary member={member} /> : <div className="team-activity-empty">{t("profile.noActivity")}</div>}</div></section>
+        {(member.public_links || []).length > 0 && <section className="team-profile-section"><h2>{t("profile.links")}</h2><div className="team-profile-social-grid" aria-label={t("profile.linksAria", { name: member.name })}>
           {(member.public_links || []).map((link, index) => <ProfileLinkCard link={link} key={`${link.type}-${index}`} />)}
         </div></section>}
-        <footer className="team-profile-footer"><span>NIKO COMMUNITY</span><span>PROFILE · {member.id}</span></footer>
+        <footer className="team-profile-footer"><span>{t("profile.footerCommunity")}</span><span>{t("profile.footerProfile", { id: member.id })}</span></footer>
       </div>
     </section>
   </>}</main><Footer /></>;

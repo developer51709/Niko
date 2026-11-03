@@ -7,6 +7,7 @@ import { ChannelSelect } from "./ChannelSelect";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards } from "./SettingCards";
+import { useStrings } from "../../i18n";
 
 type Props = {
   guildId: string;
@@ -21,13 +22,14 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   return <label className="form-field"><span className="form-label">{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
-function selectedChannels(resources: GuildResources | null, selected: string) {
+function selectedChannels(resources: GuildResources | null, selected: string, savedLabel: string) {
   const channels = resources?.channels || [];
   if (!selected || channels.some((channel) => String(channel.id) === selected)) return channels;
-  return [{ id: selected, name: `Saved channel · ${selected}` }, ...channels];
+  return [{ id: selected, name: savedLabel }, ...channels];
 }
 
 export function BoostersView({ guildId, resources, csrfToken, initialSettings }: Props) {
+  const { t } = useStrings("dashboard");
   const [settings, setSettings] = useState<Draft>(initialSettings || {
     notifications_enabled: false,
     roles_enabled: false,
@@ -52,10 +54,10 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
     setLoading(true);
     getBoosterSettings(guildId)
       .then((response) => { if (active) setSettings(response.config); })
-      .catch((error) => { if (active) setLoadError(error instanceof Error ? error.message : "Booster settings could not be loaded."); })
+      .catch((error) => { if (active) setLoadError(error instanceof Error ? error.message : t("boosters.loadError")); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [guildId, initialSettings, retryAttempt]);
+  }, [guildId, initialSettings, retryAttempt, t]);
 
   const update = (key: keyof Draft, value: string | boolean) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -64,55 +66,55 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
-    notifyLoading("Saving booster settings…", "boosters-settings");
+    notifyLoading(t("boosters.savingToast"), "boosters-settings");
     saveBoosterSettings(guildId, settings, csrfToken)
       .then((response) => {
         setSettings(response.config);
-        notifySuccess("Booster settings saved.", "boosters-settings");
+        notifySuccess(t("boosters.savedToast"), "boosters-settings");
       })
-      .catch((error) => notifyError(error instanceof Error ? error.message : "Booster settings could not be saved.", "boosters-settings"))
+      .catch((error) => notifyError(error instanceof Error ? error.message : t("boosters.saveFailed"), "boosters-settings"))
       .finally(() => setSaving(false));
   };
 
-  if (loading) return <SectionSkeleton label="booster settings" />;
+  if (loading) return <SectionSkeleton label={t("boosters.loading")} />;
   if (loadError) return <div className="inline-error" role="alert">
-    <strong>Couldn’t load booster settings.</strong>
+    <strong>{t("boosters.loadErrorTitle")}</strong>
     <span>{loadError}</span>
-    <button className="button button-muted" type="button" onClick={() => { setLoading(true); setLoadError(""); setRetryAttempt((attempt) => attempt + 1); }}>Try again</button>
+    <button className="button button-muted" type="button" onClick={() => { setLoading(true); setLoadError(""); setRetryAttempt((attempt) => attempt + 1); }}>{t("boosters.retry")}</button>
   </div>;
 
   return <>
     <DashHeading
-      eyebrow="Boosters"
-      title="Give every boost a personal thank-you."
-      text="Set up boost announcements and let active boosters create and share their own server role."
+      eyebrow={t("boosters.eyebrow")}
+      title={t("boosters.title")}
+      text={t("boosters.text")}
     />
     <form onSubmit={submit} className="settings-stack guild-feature-settings">
       <section className="dash-panel settings-panel">
         <div className="panel-heading settings-section-title">
-          <div><span className="panel-kicker">Announcements</span><h3>Boost notifications</h3><p>Choose where boost and unboost messages appear, then customize both messages.</p></div>
+          <div><span className="panel-kicker">{t("boosters.announceLabel")}</span><h3>{t("boosters.announceTitle")}</h3><p>{t("boosters.announceDetail")}</p></div>
           <span className="panel-icon"><Icon name="guild_notifications" /></span>
         </div>
         <SettingCards>
           <SettingCard
-            title="Post boost and unboost announcements"
-            hint="Messages are only posted after a member starts or stops boosting."
-            action={<Switch checked={settings.notifications_enabled} onCheckedChange={(value) => update("notifications_enabled", value)} aria-label="Post boost and unboost announcements" />}
+            title={t("boosters.enableAnnouncements")}
+            hint={t("boosters.enableAnnouncementsHint")}
+            action={<Switch checked={settings.notifications_enabled} onCheckedChange={(value) => update("notifications_enabled", value)} aria-label={t("boosters.enableAnnouncements")} />}
           />
         </SettingCards>
         <div className="form-grid">
-          <Field label="Announcement channel">
+          <Field label={t("boosters.channelLabel")}>
             <ChannelSelect
-              channels={selectedChannels(resources, settings.channel_id)}
+              channels={selectedChannels(resources, settings.channel_id, t("boosters.savedChannel", { id: settings.channel_id }))}
               value={settings.channel_id}
-              placeholder="Choose a text channel"
+              placeholder={t("boosters.channelPlaceholder")}
               onChange={(value) => update("channel_id", value)}
             />
           </Field>
-          <Field label="Boost message" hint="Placeholders: {user}, {name}, {server}, {boost_count}, {boost_level}">
+          <Field label={t("boosters.boostLabel")} hint={t("boosters.boostHint")}>
             <textarea rows={3} maxLength={2000} value={settings.boost_message} onChange={(event) => update("boost_message", event.target.value)} />
           </Field>
-          <Field label="Unboost message" hint="Uses the same placeholders as the boost message.">
+          <Field label={t("boosters.unboostLabel")} hint={t("boosters.unboostHint")}>
             <textarea rows={3} maxLength={2000} value={settings.unboost_message} onChange={(event) => update("unboost_message", event.target.value)} />
           </Field>
         </div>
@@ -120,25 +122,23 @@ export function BoostersView({ guildId, resources, csrfToken, initialSettings }:
 
       <section className="dash-panel settings-panel">
         <div className="panel-heading settings-section-title">
-          <div><span className="panel-kicker">Personal roles</span><h3>Booster role access</h3><p>Each active booster gets a separate role they can customize and share.</p></div>
+          <div><span className="panel-kicker">{t("boosters.rolesLabel")}</span><h3>{t("boosters.rolesTitle")}</h3><p>{t("boosters.rolesDetail")}</p></div>
           <span className="panel-icon"><Icon name="users" /></span>
         </div>
         <SettingCards>
           <SettingCard
-            title="Enable personal booster roles"
-            hint="Active boosters can use /boosterrole to rename, recolor, set an icon, and share or unshare their role."
-            action={<Switch checked={settings.roles_enabled} onCheckedChange={(value) => update("roles_enabled", value)} aria-label="Enable personal booster roles" />}
+            title={t("boosters.enableRoles")}
+            hint={t("boosters.enableRolesHint")}
+            action={<Switch checked={settings.roles_enabled} onCheckedChange={(value) => update("roles_enabled", value)} aria-label={t("boosters.enableRoles")} />}
           />
         </SettingCards>
-        <p className="form-hint" role="note">
-          Turning this off deletes Niko-managed booster roles and removes them from the boosters and anyone they shared them with. Role icons and gradient colors are available only when Discord unlocks those perks for your server.
-        </p>
+        <p className="form-hint" role="note">{t("boosters.rolesNote")}</p>
       </section>
 
       <div className="setting-footer">
-        <span>Changes apply to this server.</span>
+        <span>{t("settings.footerNote")}</span>
         <button className="button button-primary" type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save changes"}
+          {t(saving ? "settings.saving" : "boosters.save")}
         </button>
       </div>
     </form>

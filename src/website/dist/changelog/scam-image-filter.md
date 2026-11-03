@@ -1,6 +1,7 @@
 # Scam Image Filter (Experimental)
 
 - Date: 2026-10-01
+- Version: 2.13.0
 - Tags: automod, scam, images, experimental, dashboard, discord
 
 A community-driven image filter that catches known MrBeast scam images: members report suspicious messages, Niko staff verify them, and confirmed images are then detected and removed automatically — with a feedback loop that lets servers flag false positives to improve accuracy. The feature is still in early testing and may have some reliability issues.

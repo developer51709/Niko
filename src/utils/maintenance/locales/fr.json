@@ -1,0 +1,10 @@
+{
+  "gate": {
+    "title": "### {warning} En maintenance",
+    "body": "{target} est en mode maintenance et n’est pas disponible pour le moment.",
+    "cog_target": "Le module **{name}**",
+    "command_target": "**{command}**",
+    "reason": "**Raison :** {reason}",
+    "cta": "Réessaie plus tard."
+  }
+}

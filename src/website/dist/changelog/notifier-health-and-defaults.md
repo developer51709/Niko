@@ -1,6 +1,7 @@
 # The Notifier Keeps Quiet Channels and Uses Your Default Channel
 
 - Date: 2026-10-19
+- Version: 2.19.4
 - Tags: notifier, dashboard, youtube, twitch, social, fixed, improved
 
 Quiet channels are no longer mistaken for broken ones: a YouTube channel with no uploads, an offline Twitch channel with no VODs and an empty subreddit all stay healthy, and a successful check clears the failed-check count. Adding an account also no longer demands a channel when the server has a default channel saved — leave the picker on the default and the follow posts there, and the picker only becomes required again once that default is cleared.

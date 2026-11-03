@@ -2,6 +2,7 @@ import type { ChangeEvent } from "react";
 import { Check, X } from "lucide-react";
 import type { GuildResources } from "../../types";
 import { RolePicker } from "./RolePicker";
+import { useStrings } from "../../i18n";
 
 type Role = GuildResources["roles"][number];
 
@@ -20,12 +21,13 @@ type Props = {
  * multi-select with chips, since only a listbox with several choices at once
  * (and a chip per chosen role) can show a set that large.
  */
-export function RoleSelect({ roles, value, onChange, multiple = false, placeholder = "Choose a role", disabled, ariaLabel }: Props) {
+export function RoleSelect({ roles, value, onChange, multiple = false, placeholder, disabled, ariaLabel }: Props) {
+  const { t } = useStrings("dashboard");
   if (!multiple) return <RolePicker
     roles={roles}
     value={String(value || "")}
     onChange={onChange}
-    placeholder={placeholder}
+    placeholder={placeholder ?? t("pickers.chooseRole")}
     ariaLabel={ariaLabel}
     disabled={disabled}
   />;
@@ -35,7 +37,7 @@ export function RoleSelect({ roles, value, onChange, multiple = false, placehold
   const options = [
     ...selected
       .filter((id, index) => !knownIds.has(id) && selected.indexOf(id) === index)
-      .map((id) => ({ id, name: `Unavailable role (${id})` })),
+      .map((id) => ({ id, name: t("pickers.unavailableRole", { id }) })),
     ...roles,
   ];
   const roleFor = (id: string) => options.find((role) => String(role.id) === id);
@@ -57,8 +59,8 @@ export function RoleSelect({ roles, value, onChange, multiple = false, placehold
         {options.map((role) => <option value={String(role.id)} key={role.id}>@{role.name}</option>)}
       </select>
     </span>
-    {selected.length > 0 && <div className="role-select-selected" aria-label={`${selected.length} selected roles`}>
-      {selected.map((id) => <span className="role-select-chip" key={id}><Check size={12} aria-hidden="true" /> @{roleFor(id)?.name || `Role ${id}`}<button type="button" onClick={() => remove(id)} aria-label={`Remove @${roleFor(id)?.name || `role ${id}`}`} disabled={disabled}><X size={12} aria-hidden="true" /></button></span>)}
+    {selected.length > 0 && <div className="role-select-selected" aria-label={t("pickers.selectedRolesAria", { count: selected.length })}>
+      {selected.map((id) => <span className="role-select-chip" key={id}><Check size={12} aria-hidden="true" /> @{roleFor(id)?.name || t("pickers.roleFallback", { id })}<button type="button" onClick={() => remove(id)} aria-label={t("pickers.removeRoleAria", { name: roleFor(id)?.name || t("pickers.roleFallback", { id }) })} disabled={disabled}><X size={12} aria-hidden="true" /></button></span>)}
     </div>}
   </div>;
 }

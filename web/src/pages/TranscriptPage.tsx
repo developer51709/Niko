@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 import { DiscordEmojiProvider, DiscordMarkdown, useDiscordProfile, type DiscordMentionNames } from "../components/DiscordMarkdown";
+import { useStrings } from "../i18n";
 
 // ── Types mirroring the stored transcript message payloads ────────────────
 
@@ -581,6 +582,7 @@ function TranscriptMessageView({ msg, mentionNames, grouped, author, onOpenProfi
   author?: TranscriptAuthorProfile;
   onOpenProfile: (userId: string, trigger: HTMLElement) => void;
 }) {
+  const { t } = useStrings("transcript");
   const hasRich = !!(
     (msg.attachments && msg.attachments.length > 0) ||
     (msg.embeds && msg.embeds.length > 0) ||
@@ -633,7 +635,7 @@ function TranscriptMessageView({ msg, mentionNames, grouped, author, onOpenProfi
             <MessageContent text={msg.content} mentionNames={mentionNames} />
           </div>
         ) : !hasRich ? (
-          <div className="transcript-message-text is-muted">Message content unavailable</div>
+          <div className="transcript-message-text is-muted">{t("contentUnavailable")}</div>
         ) : null}
 
         {msg.attachments && msg.attachments.length > 0 && (
@@ -678,7 +680,7 @@ function TranscriptMessageView({ msg, mentionNames, grouped, author, onOpenProfi
               const url = stickerUrl(sticker);
               return url ? (
                 <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                  <img src={url} alt={sticker.name || "Discord sticker"} title={sticker.name || "Discord sticker"} />
+                  <img src={url} alt={sticker.name || t("sticker")} title={sticker.name || t("sticker")} />
                 </a>
               ) : null;
             })}
@@ -694,6 +696,7 @@ function TranscriptMessageView({ msg, mentionNames, grouped, author, onOpenProfi
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
+  const { t } = useStrings("transcript");
   const [data, setData] = useState<TranscriptData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -707,7 +710,7 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
     setError("");
     fetch(`/api/transcript/${transcriptId}`)
       .then((res) => {
-        if (!res.ok) throw new Error("Transcript not found");
+        if (!res.ok) throw new Error(t("notFound"));
         return res.json();
       })
       .then((json) => {
@@ -715,7 +718,7 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message || "Failed to load transcript");
+        setError(err.message || t("loadFailed"));
         setLoading(false);
       });
   }, [transcriptId]);
@@ -728,7 +731,7 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
     return (
       <div className="page-main">
         <div className="shell" style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ color: "var(--muted)", fontSize: 14 }}>Loading transcript…</div>
+          <div style={{ color: "var(--muted)", fontSize: 14 }}>{t("loading")}</div>
         </div>
       </div>
     );
@@ -738,9 +741,9 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
     return (
       <div className="page-main">
         <div className="shell" style={{ textAlign: "center", padding: "60px 20px" }}>
-          <h2 style={{ marginBottom: 12 }}>Transcript not found</h2>
+          <h2 style={{ marginBottom: 12 }}>{t("notFound")}</h2>
           <p style={{ color: "var(--muted)" }}>
-            {error || "This transcript doesn't exist or has been deleted."}
+            {error || t("missing")}
           </p>
         </div>
       </div>
@@ -812,7 +815,7 @@ export function TranscriptPage({ transcriptId }: { transcriptId: string }) {
                   onOpenProfile={profile.openProfile}
                 />)}
             {rows.length === 0 && (
-              <div className="transcript-empty">No messages in this transcript.</div>
+              <div className="transcript-empty">{t("empty")}</div>
             )}
           </div>
         </div>

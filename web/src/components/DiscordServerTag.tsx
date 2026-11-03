@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, Ref } from "react";
+import { useStrings } from "../i18n";
 
 /**
  * The server (guild tag) a Discord profile wears beside its username.
@@ -145,13 +146,14 @@ export function ServerTagPopup({ server, tag, badgeUrl, popupRef, style }: {
   popupRef?: Ref<HTMLDivElement>;
   style?: CSSProperties;
 }) {
+  const { t } = useStrings("shared");
   const isPrivate = Boolean(server.private);
   const isUnknown = !isPrivate && !server.available;
-  const name = isPrivate ? "Private Server" : isUnknown ? "Unknown Server" : server.name || tag;
+  const name = isPrivate ? t("serverTag.private") : isUnknown ? t("serverTag.unknown") : server.name || tag;
   const description = isPrivate
-    ? "The server has limited who can see this profile."
+    ? t("serverTag.privateBody")
     : isUnknown
-      ? "This server is unavailable, or Niko is not a member of it."
+      ? t("serverTag.unknownBody")
       : server.description;
   const online = count(server.online_count);
   const members = count(server.member_count);
@@ -192,15 +194,15 @@ export function ServerTagPopup({ server, tag, badgeUrl, popupRef, style }: {
         </span>}
       </div>
       {hasStats && <p className="discord-server-tag-stats">
-        {online !== null && <span className="discord-server-tag-online"><i aria-hidden="true" />{online} Online</span>}
-        {members !== null && <span className="discord-server-tag-members"><i aria-hidden="true" />{members} Members</span>}
+        {online !== null && <span className="discord-server-tag-online"><i aria-hidden="true" />{t("serverTag.online", { count: online })}</span>}
+        {members !== null && <span className="discord-server-tag-members"><i aria-hidden="true" />{t("serverTag.members", { count: members })}</span>}
       </p>}
-      {showDetails && established && <p className="discord-server-tag-created">Est. {established}</p>}
+      {showDetails && established && <p className="discord-server-tag-created">{t("serverTag.established", { date: established })}</p>}
       {description && <p className="discord-server-tag-description">{description}</p>}
       {memberUrl
-        ? <a className="discord-server-tag-invite" href={memberUrl} target="_blank" rel="noopener noreferrer">Go to Server</a>
+        ? <a className="discord-server-tag-invite" href={memberUrl} target="_blank" rel="noopener noreferrer">{t("serverTag.goToServer")}</a>
         : joinUrl
-          ? <a className="discord-server-tag-invite is-join" href={joinUrl} target="_blank" rel="noopener noreferrer">Join</a>
+          ? <a className="discord-server-tag-invite is-join" href={joinUrl} target="_blank" rel="noopener noreferrer">{t("serverTag.join")}</a>
           : null}
     </div>
   </div>;

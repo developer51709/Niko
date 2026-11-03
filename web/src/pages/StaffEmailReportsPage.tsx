@@ -6,12 +6,13 @@ import { Icon } from "../components/Icon";
 import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
 import { notifyError, notifyLoading, notifySuccess } from "../utils/toast";
+import { useStrings } from "../i18n";
 import type { AuthStatus, BotStats, Guild, StaffEmailMessage, StaffEmailReport } from "../types";
 
-const STATUS_LABELS: Record<string, string> = {
-  open: "Needs review",
-  replied: "Answered",
-  resolved: "Closed",
+const STATUS_KEYS: Record<string, string> = {
+  open: "status.needsReview",
+  replied: "status.answered",
+  resolved: "status.closed",
 };
 
 function stamp(epoch?: number | null) {
@@ -48,6 +49,7 @@ function ReportMessage({ message, label }: { message: StaffEmailMessage; label: 
  * to, from the address it came from, and the answer is filed in the mailbox.
  */
 export function StaffEmailReportsPage() {
+  const { t } = useStrings("staff-email-reports");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [staffRole, setStaffRole] = useState<string | null>(null);
@@ -86,7 +88,7 @@ export function StaffEmailReportsPage() {
         setSelectedId(loaded.reports[0]?.report_id || null);
       } catch (reason) {
         if (active) {
-          setLoadError(reason instanceof Error ? reason.message : "The report queue could not be loaded.");
+          setLoadError(reason instanceof Error ? reason.message : t("error.loadFailed"));
           setAccessLoading(false);
         }
       } finally {
@@ -120,7 +122,7 @@ export function StaffEmailReportsPage() {
     if (!selected || busy) return;
     if (action === "reply" && !reply.trim()) return;
     setBusy(true);
-    notifyLoading(action === "reply" ? "Sending the response…" : "Closing the report…", "staff-email");
+    notifyLoading(action === "reply" ? t("toast.sending") : t("toast.closing"), "staff-email");
     try {
       const result = await actOnEmailReport(selected.report_id, {
         action,
@@ -130,9 +132,9 @@ export function StaffEmailReportsPage() {
         ? { ...item, ...result.report, message: item.message, thread: item.thread }
         : item));
       setReply("");
-      notifySuccess(action === "reply" ? `Response sent to ${selected.reporter_address}.` : "Report closed.", "staff-email");
+      notifySuccess(action === "reply" ? t("toast.sent", { address: selected.reporter_address }) : t("toast.closed"), "staff-email");
     } catch (reason) {
-      notifyError(reason instanceof Error ? reason.message : "That report could not be updated.", "staff-email");
+      notifyError(reason instanceof Error ? reason.message : t("error.updateFailed"), "staff-email");
     } finally {
       setBusy(false);
     }
@@ -144,58 +146,58 @@ export function StaffEmailReportsPage() {
   );
   const open = reports.filter((report) => report.status === "open").length;
 
-  if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>Checking your access…</p></div>;
+  if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>{t("auth.checkingAccess")}</p></div>;
   if (!auth?.authenticated) {
     return <AuthScreen
-      eyebrow="Message reports"
-      title={<>Sign in to <em>continue.</em></>}
-      description="The report queue opens with the bot owner's Discord account."
-      back={{ label: "Return to dashboard", onClick: () => navigate(dashboardPath()) }}
+      eyebrow={t("auth.eyebrow")}
+      title={<>{t("auth.signInBefore")} <em>{t("auth.signInEmphasis")}</em></>}
+      description={t("auth.signedOutText")}
+      back={{ label: t("auth.back"), onClick: () => navigate(dashboardPath()) }}
     >
       <DiscordSignIn next={staffEmailReportsPath()} available={auth?.oauth_available} />
     </AuthScreen>;
   }
   if (staffRole !== "owner") {
     return <AuthScreen
-      eyebrow="Message reports"
-      title={<>Owner <em>only.</em></>}
-      description="Reports filed from a staff email are read by the bot owner. Your account does not hold that role."
-      back={{ label: "Back to dashboard", onClick: () => navigate(dashboardPath()) }}
+      eyebrow={t("auth.eyebrow")}
+      title={<>{t("auth.ownerOnlyBefore")} <em>{t("auth.ownerOnlyEmphasis")}</em></>}
+      description={t("auth.ownerOnlyText")}
+      back={{ label: t("auth.backDashboard"), onClick: () => navigate(dashboardPath()) }}
     />;
   }
   if (loadError && reports.length === 0) {
     return <AuthScreen
-      eyebrow="Message reports"
-      title={<>The queue is <em>unavailable.</em></>}
+      eyebrow={t("auth.eyebrow")}
+      title={<>{t("auth.queueUnavailableBefore")} <em>{t("auth.queueUnavailableEmphasis")}</em></>}
       description={loadError}
-      back={{ label: "Back to dashboard", onClick: () => navigate(dashboardPath()) }}
+      back={{ label: t("auth.backDashboard"), onClick: () => navigate(dashboardPath()) }}
     />;
   }
 
   const content = <div className="staff-page staff-email-page">
     <header className="staff-heading">
       <div>
-        <div className="eyebrow">Mail safety</div>
-        <h1>Report queue.</h1>
-        <p>Every mail sent from a Niko address carries a link its recipient can complain through. Reports land here with the message they are about, and with the conversation only when the reporter agreed to share it. Your answer goes out as a real email and is filed in the mailbox.</p>
+        <div className="eyebrow">{t("page.eyebrow")}</div>
+        <h1>{t("page.title")}</h1>
+        <p>{t("page.body")}</p>
       </div>
       <div className="staff-email-head-side">
         <button type="button" className="button button-muted button-small" onClick={() => navigate("/dashboard/staff/email")}>
-          <Icon name="mail" /> Mailbox
+          <Icon name="mail" /> {t("page.mailbox")}
         </button>
-        <div className="staff-role-card"><span className="staff-role-mark staff-email-mark"><Icon name="alert" /></span><span><small>Awaiting review</small><strong>{open} {open === 1 ? "report" : "reports"}</strong></span></div>
+        <div className="staff-role-card"><span className="staff-role-mark staff-email-mark"><Icon name="alert" /></span><span><small>{t("page.awaitingReview")}</small><strong>{t(open === 1 ? "page.reportOne" : "page.reportMany", { count: open })}</strong></span></div>
       </div>
     </header>
 
-    {reports.length === 0 ? (loading ? <div className="staff-guild-empty"><div className="loading-ring" /><p>Loading reports…</p></div> : <section className="staff-guild-empty">
+    {reports.length === 0 ? (loading ? <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("list.loading")}</p></div> : <section className="staff-guild-empty">
       <span className="staff-email-reader-icon"><Icon name="check" /></span>
-      <h2>Nothing reported.</h2>
-      <p>When a recipient flags a mail from the footer link, it shows up here with the reason they chose.</p>
-      <button type="button" className="button button-muted" onClick={() => navigate("/dashboard/staff/email")}>Open the mailbox</button>
+      <h2>{t("list.emptyTitle")}</h2>
+      <p>{t("list.emptyBody")}</p>
+      <button type="button" className="button button-muted" onClick={() => navigate("/dashboard/staff/email")}>{t("list.openMailbox")}</button>
     </section>) : <div className="staff-email-layout">
-      <aside className="staff-email-inbox" aria-label="Reports">
+      <aside className="staff-email-inbox" aria-label={t("list.aria")}>
         <div className="staff-email-inbox-head">
-          <span className="panel-kicker">{reports.length} {reports.length === 1 ? "report" : "reports"}</span>
+          <span className="panel-kicker">{t(reports.length === 1 ? "page.reportOne" : "page.reportMany", { count: reports.length })}</span>
           <button type="button" className="button button-muted button-small" onClick={() => void load()} disabled={loading}>
             <Icon name="refresh" /> Refresh
           </button>
@@ -213,21 +215,21 @@ export function StaffEmailReportsPage() {
                 <time dateTime={new Date(report.created_at * 1000).toISOString()}>{shortWhen(report.created_at)}</time>
               </span>
             </span>
-            <span className="staff-email-item-subject">{report.message?.subject || "(message unavailable)"}</span>
-            <span className="staff-email-item-preview">{report.details || `Reported by ${report.reporter_address}`}</span>
-            <span className="staff-email-item-address">{STATUS_LABELS[report.status] || report.status}{report.include_thread ? " · full conversation shared" : " · message only"}</span>
+            <span className="staff-email-item-subject">{report.message?.subject || t("item.noSubject")}</span>
+            <span className="staff-email-item-preview">{report.details || t("item.reportedBy", { address: report.reporter_address })}</span>
+            <span className="staff-email-item-address">{STATUS_KEYS[report.status] ? t(STATUS_KEYS[report.status]) : report.status}{report.include_thread ? t("item.fullShared") : t("item.messageOnly")}</span>
           </button>)}
         </div>
       </aside>
 
-      <section className="staff-email-reader" aria-label="Report">
+      <section className="staff-email-reader" aria-label={t("reader.aria")}>
         {selected ? <article className="staff-email-message">
           <div className="staff-email-reader-head">
             <div>
-              <span className="panel-kicker">{selected.reason_label} · {STATUS_LABELS[selected.status] || selected.status}</span>
-              <h2>{selected.message?.subject || "(message unavailable)"}</h2>
+              <span className="panel-kicker">{selected.reason_label} · {STATUS_KEYS[selected.status] ? t(STATUS_KEYS[selected.status]) : selected.status}</span>
+              <h2>{selected.message?.subject || t("item.noSubject")}</h2>
               <p className="staff-email-meta">
-                <strong>Reported by {selected.reporter_address}</strong>
+                <strong>{t("detail.reportedBy", { address: selected.reporter_address })}</strong>
                 <span>{stamp(selected.created_at)}</span>
               </p>
             </div>
@@ -237,17 +239,17 @@ export function StaffEmailReportsPage() {
           </div>
 
           <dl className="staff-email-status-facts">
-            <div><dt>Reason</dt><dd>{selected.reason_label}</dd></div>
-            <div><dt>Shared</dt><dd>{selected.include_thread ? `${selected.thread?.length || 1} messages` : "This message only"}</dd></div>
-            <div className="is-wide"><dt>What they wrote</dt><dd>{selected.details || "No note was added."}</dd></div>
+            <div><dt>{t("detail.reason")}</dt><dd>{selected.reason_label}</dd></div>
+            <div><dt>{t("detail.shared")}</dt><dd>{selected.include_thread ? t("detail.messages", { count: selected.thread?.length || 1 }) : t("detail.thisMessage")}</dd></div>
+            <div className="is-wide"><dt>{t("detail.wrote")}</dt><dd>{selected.details || t("detail.noNote")}</dd></div>
           </dl>
 
           {selected.message
-            ? <ReportMessage message={selected.message} label="Reported message" />
-            : <p className="staff-email-blank">The reported message is no longer in the mailbox.</p>}
+            ? <ReportMessage message={selected.message} label={t("detail.reportedMessage")} />
+            : <p className="staff-email-blank">{t("detail.messageGone")}</p>}
 
           {selected.include_thread && (selected.thread?.length || 0) > 0 ? <div className="staff-email-thread">
-            <p className="staff-email-thread-head"><span>Conversation the reporter shared</span><small>Oldest first</small></p>
+            <p className="staff-email-thread-head"><span>{t("detail.sharedThread")}</span><small>{t("detail.oldestFirst")}</small></p>
             {selected.thread!.map((entry) => <article key={entry.message_id} className={`staff-email-turn is-${entry.direction}`}>
               <header>
                 <strong>{entry.direction === "outbound" ? `Niko · ${entry.from_address}` : entry.from_name || entry.from_address}</strong>
@@ -259,35 +261,35 @@ export function StaffEmailReportsPage() {
 
           {selected.status === "open" ? <div className="staff-email-report-answer">
             <label className="form-field">
-              <span className="form-label">Your response</span>
+              <span className="form-label">{t("answer.label")}</span>
               <textarea
                 value={reply}
                 onChange={(event) => setReply(event.target.value)}
                 rows={4}
                 maxLength={4000}
-                placeholder={`Write back to ${selected.reporter_address}…`}
+                placeholder={t("answer.placeholder", { address: selected.reporter_address })}
                 disabled={busy}
               />
-              <small>Sent from {selected.mailbox}@niko.sryze.cc, filed in the mailbox conversation, and recorded on this report.</small>
+              <small>{t("answer.hint", { address: `${selected.mailbox}@niko.sryze.cc` })}</small>
             </label>
             <div className="staff-panel-footer">
-              <span>Nothing is sent until you answer.</span>
+              <span>{t("answer.notYet")}</span>
               <span className="staff-email-report-actions">
-                <button type="button" className="button button-muted button-small" onClick={() => void act("close")} disabled={busy}>Close without reply</button>
+                <button type="button" className="button button-muted button-small" onClick={() => void act("close")} disabled={busy}>{t("answer.close")}</button>
                 <button type="button" className="button button-primary button-small" onClick={() => void act("reply")} disabled={busy || !reply.trim()}>
-                  {busy ? "Working…" : "Send response"}
+                  {busy ? t("answer.working") : t("answer.send")}
                 </button>
               </span>
             </div>
           </div> : <div className="staff-email-report-note">
-            <strong>{selected.status === "replied" ? "Answered" : "Closed"}</strong>
+            <strong>{t(selected.status === "replied" ? "status.answered" : "status.closed")}</strong>
             {selected.responded_at ? <span> · {stamp(selected.responded_at)}</span> : null}
-            {selected.response ? <p>{selected.response}</p> : <p>No response was sent.</p>}
+            {selected.response ? <p>{selected.response}</p> : <p>{t("answer.noneSent")}</p>}
           </div>}
         </article> : <div className="staff-email-reader-empty">
           <span className="staff-email-reader-icon"><Icon name="alert" /></span>
-          <h2>Pick a report.</h2>
-          <p>Reports are on the left, newest first. Opening one shows what was flagged, the reason, and the conversation if the reporter shared it.</p>
+          <h2>{t("reader.pickTitle")}</h2>
+          <p>{t("reader.pickBody")}</p>
         </div>}
       </section>
     </div>}

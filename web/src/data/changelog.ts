@@ -49,9 +49,276 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    slug: "website-localization-status-and-maintenance",
+    title: "The Site Learns Languages",
+    date: "2026-11-03",
+    version: "2.27.0",
+    tags: ["localization", "website", "dashboard", "status", "maintenance", "added"],
+    summary:
+      "Every public page and every dashboard screen now draws its copy from a per-page locale catalogue, so translating the site is a translation job instead of a search through components. This is the first and largest part of that pass — 28 catalogues and 2,955 strings are in place, with the German, Spanish and French files following page by page. Alongside it: a public `/status` page, and an owner-only maintenance mode that pauses cogs and single commands from the dashboard.",
+    highlights: [
+      {
+        title: "One Catalogue per Page",
+        description:
+          "`web/src/locales/<page>/en.json` holds every heading, button, empty state, error and screen-reader string a page renders, and components ask for it with `useStrings(\"<page>\")`. A page with no translation falls back to English, and a missing key falls back to its English string, so a half-translated page never shows raw keys. The chrome the header and footers share lives once, in `shared/`.",
+        icon: "doc",
+      },
+      {
+        title: "A Language Picker, Not Just Files",
+        description:
+          "The owner devtools panel has a **Site language** picker on its Page tab. It switches the site for that browser, remembers the choice in `localStorage`, and leaves Discord replies on each guild's own locale. The tab title is re-stamped from the page's catalogue after every client-side navigation, so a translated page does not keep an English title in the window.",
+        icon: "settings",
+      },
+      {
+        title: "A Public Status Page",
+        description:
+          "`/status` reads a new `/api/status` payload: online state and latency, uptime, servers and members, the command count, every cog with its state and its own command count, per-shard guilds and latency, host metrics, and how much of the bot's wording each language has translated. Shards that have not finished connecting read **Starting** instead of a five-second latency, and a paused cog shows as maintenance rather than as an error.",
+        icon: "chart",
+      },
+      {
+        title: "Maintenance Mode, Owner Only",
+        description:
+          "The owner can pause a whole cog or a single command from the dashboard's maintenance tab, with an optional reason shown to anyone who tries to use it. The gate runs before a command's own checks: a paused cog answers with the maintenance notice on slash, prefix, and user/message context-menu commands alike, leaves its cooldowns and usage counters untouched, and does not push members toward the abuse limit. State is written to the database, so a restart keeps every switch where you left it.",
+        icon: "shield",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "`web/src/locales/` — one catalogue per page plus the shared chrome, 28 catalogues and 2,955 English strings",
+          "`web/src/i18n` — `useStrings(page)`, `t(key, values)` interpolation, and English fallback per language and per key",
+          "A public `/status` page with a verdict card, live metrics, cog and shard cards, host stats and locale coverage",
+          "`/api/status`: one payload for the bot's state, cogs, shards, host, and the string coverage of both sides of the project",
+          "Owner maintenance mode — `utils/maintenance`, a dashboard tab, `/api/staff/maintenance`, and the `maintenance_targets` table",
+          "Per-cog startup outcomes — loaded, maintenance, disabled, failed, each with a label and a reason — recorded on the bot for the status page",
+          "`MAINTENANCE = True` and `DNL = True` with a `*_REASON` let a module announce its own state; those rows stay read-only in the dashboard",
+          "German, Spanish and French files for the shared chrome, plus the landing page in all four languages",
+        ],
+      },
+      {
+        category: "improved",
+        items: [
+          "The status page's cogs and shards are laid out as glass cards, single column on phones",
+          "A shard reports `starting`, with no latency, until its first heartbeat arrives",
+          "The status page, the landing page and the commands page count commands the same way — 323 today, subcommands and context menus included",
+          "Maintenance also covers context menus and the AI's name replies, not only slash and prefix commands",
+          "Number emojis (0–9) redrawn from Phosphor's digits, on the same grid and stroke weight as the rest of the icon set",
+          "`/avatar` shows a user's global banner and their server banner as two labelled galleries, read from the REST user instead of the gateway cache",
+          "The leveling panel's headings and navigation use Niko's own emojis instead of unicode glyphs",
+          "Page titles follow the route and the chosen site language instead of staying on the landing page's title",
+          "**Dashboard translation is not finished** — this update is the first part of it and the most complex: the catalogues, the picker and the coverage readout are in place, while the staff workspace's remaining admin tabs, the owner devtools and the render lab are still English and follow in later updates.",
+        ],
+      },
+      {
+        category: "fixed",
+        items: [
+          "A paused cog still answering its user and message context menus",
+          "Group commands (`/sticker`, `/stage`, `/soundboard`, `/premium`, `/boosterrole`) listed as having no cog in the maintenance tab",
+          "A shard that was still connecting showing roughly 5,000 ms of latency instead of a starting state",
+          "The status page's command count disagreeing with the landing page and the commands page",
+        ],
+      },
+      {
+        category: "migrated",
+        items: [
+          "Page copy moved out of components into `web/src/locales/<page>/en.json`; docs articles, changelog entries and the legal documents stay authored content, not catalogue entries",
+          "`load_locales` and the tests now expect `fr.json` beside every `en.json`, `de.json` and `es.json`",
+        ],
+      },
+    ],
+    chart: {
+      type: "metrics",
+      title: "Release At a Glance",
+      data: [
+        { label: "Catalogues", value: "28", detail: "pages plus the shared chrome", color: "#4a7fb5" },
+        { label: "Site strings", value: "2,955", detail: "English copy now in JSON", color: "#66866f" },
+        { label: "Bot strings", value: "3,904", detail: "already in four languages", color: "#d96545" },
+      ],
+    },
+    commits: [],
+  },
+  {
+    slug: "website-and-dashboard-redesign",
+    title: "A New Website and Dashboard",
+    date: "2026-11-02",
+    version: "2.26.0",
+    tags: ["website", "dashboard", "design", "landing", "docs", "added"],
+    summary:
+      "The site has been rebuilt around Niko's own interface: a new landing page, one graphite, steel and sage theme carried through every public page, and a dashboard whose pickers, selectors and settings panels were rebuilt to match it.",
+    highlights: [
+      {
+        title: "The Landing Page Is the Product",
+        description:
+          "The page now leads with the VoiceMaster panel Niko actually posts — the same buttons, the same app badge, real replies in the same card — instead of a screenshot or a painted-on dashboard mock. The member list behind it opens real profile cards.",
+        icon: "spark",
+      },
+      {
+        title: "One Theme, Every Page",
+        description:
+          "Commands, documentation, changelog, team profiles and the landing page now share the graphite, steel and sage palette, the same hairline cards and the same ambient canvas, so moving between them no longer feels like visiting a different site.",
+        icon: "settings",
+      },
+      {
+        title: "Dashboard Controls, Rebuilt",
+        description:
+          "Every dashboard dropdown is now the same popup of buttons: a trigger, arrow, Enter and Escape handling, a highlight that follows the pointer and a tick on the chosen row, with channel icons and role dots where they help. The list is drawn in a portal, so it can escape a settings card that blurs what is behind it.",
+        icon: "utility",
+      },
+      {
+        title: "Docs and Commands, One Library",
+        description:
+          "The commands page and the documentation centre were rethemed together: one type scale, matching cards and a search bar that looks and behaves the same in both.",
+        icon: "doc",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "A new landing page built around the bot's own VoiceMaster panel",
+          "An ambient shader canvas behind the public pages",
+          "Shared select menu, role picker and channel select components for the dashboard",
+        ],
+      },
+      {
+        category: "improved",
+        items: [
+          "The graphite, steel and sage palette replaces the warm café styling across the site",
+          "Glass card treatment on the commands, docs, changelog and team pages",
+          "Dashboard settings, notifier and staff application views rebuilt on the new controls",
+          "One type scale shared by the commands page and the documentation centre",
+        ],
+      },
+    ],
+    commits: [
+      "e691b8a Redesigned the landing page and site theme",
+      "eee279e Redesigned various components and pages across the website",
+    ],
+  },
+  {
+    slug: "music-playback-fixes",
+    title: "Music Playback Fixes",
+    date: "2026-10-31",
+    version: "2.25.1",
+    tags: ["music", "lavalink", "spotify", "autoplay", "fixed"],
+    summary:
+      "Three playback failures are fixed: autoplay no longer stops when Last.fm has nothing to suggest, Spotify links resolve even without API credentials, and the node pool keeps the healthy Lavalink nodes instead of quietly collapsing onto one host.",
+    highlights: [
+      {
+        title: "Autoplay Stops Stopping",
+        description:
+          "When Last.fm has no neighbours for the seed track, autoplay now continues with the music provider's own related results and schedules a refill, so the queue keeps moving instead of ending the session. The log only reports a dead end when there is genuinely nothing playable.",
+        icon: "spark",
+      },
+      {
+        title: "Spotify Without Credentials",
+        description:
+          "Spotify links now resolve through the public embed page, so `/play` works with no `SPOTIFY_CLIENT_ID` or `SPOTIFY_CLIENT_SECRET` configured. When credentials do exist the Web API is still tried first, and a refusal — playlists answer `403` for client-credentials tokens since February 2026 — falls through instead of failing the command.",
+        icon: "settings",
+      },
+      {
+        title: "Playlists That Finish Loading",
+        description:
+          "Playlist expansion paces its Lavalink searches, widens the gap after a `429` instead of firing every track at once, and works to a 90-second budget, so a long playlist resolves while the first track is already playing. Resolving, progress and the added count are all edited into one message.",
+        icon: "utility",
+      },
+      {
+        title: "The Node Pool Keeps Its Nodes",
+        description:
+          "The health probe now asks the authenticated `/v4/info` endpoint and checks the reply is really Lavalink, which is the same endpoint wavelink connects to. It used to require an unauthenticated `/version` to answer `200`, so working nodes were marked failed and the pool fell back to the one host with the tightest rate limit.",
+        icon: "shield",
+      },
+    ],
+    changes: [
+      {
+        category: "fixed",
+        items: [
+          "Autoplay ending the session when Last.fm returned no similar tracks",
+          "Spotify track links resolving to nothing without API credentials",
+          "Spotify playlist links failing to resolve",
+          "Healthy Lavalink nodes rejected because `/version` answered `404` or `401`",
+          "Lavalink nodes given a pool slot even though wavelink would refuse their certificate",
+        ],
+      },
+      {
+        category: "improved",
+        items: [
+          "Autoplay falls back to the provider's related tracks and queues a refill",
+          "Playlist expansion spaced at 0.35s per search, up to 3s after a `429`, inside a 90-second budget",
+          "One status message carries resolving, progress and the added count instead of three separate messages",
+        ],
+      },
+    ],
+    commits: [
+      "ffe0a0e Fixed the spotify playback",
+      "9ec80c0 Improved spotify playlist resolution",
+      "50f0c2d Fixed an issue with the music node connections",
+    ],
+  },
+  {
+    slug: "french-language-support",
+    title: "Niko Speaks French",
+    date: "2026-10-30",
+    version: "2.25.0",
+    tags: ["languages", "localization", "french", "commands", "website", "added"],
+    summary:
+      "French is Niko's fourth language. Command help lines, replies, panels, error messages, the help menu and Discord's own slash command descriptions are translated across every cog, so a French server stops reading English. The wording lives in the same `locales` folder as the other three, which kept this a translation job rather than a refactor.",
+    highlights: [
+      {
+        title: "The Fourth Language",
+        description:
+          "Set the server's language in Discord and Niko answers in French: replies, panels, errors and the help menu all follow. Any French locale — `fr`, `fr-FR`, `fr-CA` — resolves to French, and English stays the fallback for a key no translation has reached yet.",
+        icon: "spark",
+      },
+      {
+        title: "Discord's Command List Follows",
+        description:
+          "Slash command descriptions, subcommand descriptions and argument hints are sent to Discord in French too, so a French client sees French in the `/` picker while a German client keeps German.",
+        icon: "settings",
+      },
+      {
+        title: "Twenty-Four Cogs, One Shape",
+        description:
+          "Every cog that already carried `en.json`, `de.json` and `es.json` now has `fr.json` beside them, with the wording in the same `commands` and `messages` namespaces, so the next language is again a translation job rather than a change to Python.",
+        icon: "doc",
+      },
+      {
+        title: "The Website Follows the Visitor",
+        description:
+          "The commands page reads the browser's language and renders the French description from the same catalogue the bot uses, so the site and Discord cannot drift apart on a command's wording.",
+        icon: "utility",
+      },
+    ],
+    changes: [
+      {
+        category: "added",
+        items: [
+          "French (`fr`) as a shipped language in `utils/locales.py`",
+          "`fr.json` for all 24 cogs that carry a locale folder",
+          "French slash command, subcommand and option descriptions",
+          "French help menu, per-command help lines and panel wording",
+          "French AI action wording under `utils/ai/locales/fr.json`",
+        ],
+      },
+      {
+        category: "improved",
+        items: [
+          "A key missing from French falls back to English instead of an empty reply",
+          "Command descriptions stay in one place, so the bot and the website read the same French text",
+        ],
+      },
+    ],
+    commits: [
+      "7b5cca8 Added support for french",
+      "88513d1 Added french to the supported locales",
+    ],
+  },
+  {
     slug: "multi-language-everywhere",
     title: "Niko Now Speaks German and Spanish — Everywhere",
     date: "2026-10-29",
+    version: "2.24.0",
     tags: ["languages", "localization", "commands", "website", "dashboard", "added"],
     summary:
       "Niko is trilingual. Command help lines, replies, the help menu, and the website's command reference now exist in English, German, and Spanish, and Discord itself receives translated slash command and option descriptions so each member sees the `/` picker in their own language. Every cog keeps its wording in a `locales` folder next to the code, which makes adding the next language a translation job rather than a refactor.",
@@ -119,6 +386,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "loading-cards-live-leaderboards-voice-xp",
     title: "Faster Cards, Live Server Leaderboards & Voice XP",
     date: "2026-10-26",
+    version: "2.23.0",
     tags: ["economy", "leveling", "spotify", "website", "dashboard", "added"],
     summary:
       "Image cards no longer leave you staring at a spinner: economy, leveling, and Spotify commands open with an animated card-shaped placeholder and edit it into the finished render. The leveling leaderboard moved to a live page at /levels/<server id>, servers can exclude channels from XP and opt into passive voice XP, and the support server got clearer panels and a rules page that prints all twenty rules in one message.",
@@ -195,6 +463,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "booster-roles-and-notifications",
     title: "Booster Roles and Boost Announcements",
     date: "2026-10-24",
+    version: "2.22.0",
     tags: ["boosters", "roles", "dashboard", "notifications", "added"],
     summary:
       "Server admins can now customize boost and unboost announcements in the dashboard and enable personal roles for active boosters. Boosters can rename, recolor, add an eligible role icon, choose gradient colors when Discord unlocks them, and share or unshare their role.",
@@ -237,6 +506,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "premium-subscriptions",
     title: "Niko Premium Is Here — Real AI Image Moderation, Plus a Legal Update",
     date: "2026-10-20",
+    version: "2.21.0",
     tags: ["premium", "moderation", "billing", "dashboard", "legal", "added"],
     summary:
       "Some things are worth doing properly. Niko Premium is a $15/month server subscription that puts every image posted in your server in front of fal.ai's NSFW model and deletes the ones that should never have been posted. Everything else — the scam image filter, bot profile customization, economy, leveling, tickets, giveaways, and the rest — stays free, exactly as it is today. This same release ships a legal update: a stricter, owner-verified data-removal process, protected moderation records, and a formal route for court-ordered requests.",
@@ -319,6 +589,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "giveaway-bans",
     title: "Giveaway Bans Keep Ban-Dodgers Out of Your Giveaways",
     date: "2026-10-20",
+    version: "2.20.0",
     tags: ["giveaway", "moderation", "commands", "added"],
     summary:
       "Servers can now ban a member from their giveaways with `.giveaway ban`, and lift it with `.giveaway unban`. A ban is per server, clears the entries the member already holds, and is enforced at the draw as well as on the Join button, so a banned member cannot win by entering before the ban or during a giveaway's final seconds.",
@@ -366,6 +637,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "notifier-health-and-defaults",
     title: "The Notifier Keeps Quiet Channels and Uses Your Default Channel",
     date: "2026-10-19",
+    version: "2.19.4",
     tags: ["notifier", "dashboard", "youtube", "twitch", "social", "fixed", "improved"],
     summary:
       "Quiet channels are no longer mistaken for broken ones: a YouTube channel with no uploads, an offline Twitch channel with no VODs and an empty subreddit all stay healthy, and a successful check clears the failed-check count. Adding an account also no longer demands a channel when the server has a default channel saved — leave the picker on the default and the follow posts there, and the picker only becomes required again once that default is cleared.",
@@ -415,6 +687,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "seasonal-badges-in-season",
     title: "Seasonal Badges Only Progress Inside Their Season",
     date: "2026-10-16",
+    version: "2.19.3",
     tags: ["economy", "achievements", "events", "fixed"],
     summary:
       "Seasonal badges are now measured inside their own event window. A spending spree in July or a career level reached in March no longer counts toward the Halloween and New Year badges, and an out-of-season badge shows no progress at all.",
@@ -448,6 +721,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "ticket-panel-accent-color",
     title: "The Ticket Panel Now Wears Its Accent Color",
     date: "2026-10-16",
+    version: "2.19.2",
     tags: ["tickets", "dashboard", "fixed"],
     summary:
       "Saved accent color for the ticket panel is applied to the panel itself again. It used to be printed as a `#RRGGBB` code next to the panel title, so a color picked in the dashboard looked like a stray hex code instead of a colored panel.",
@@ -473,6 +747,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "guild-settings-tidy-up",
     title: "Server Settings Hand Tickets and Onboarding to Their Own Tabs",
     date: "2026-10-16",
+    version: "2.19.1",
     tags: ["dashboard", "tickets", "onboarding", "customization", "fixed"],
     summary:
       "The ticket and onboarding settings are gone from the dashboard's Server tab now that both own a tab of their own, the ticket cards finally line up with every other settings page, and the Customization tab previews Niko's global avatar and banner for a server that has not set its own.",
@@ -512,6 +787,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "blacklist-lockdown",
     title: "Blacklisting a Server Now Pauses Its Features Instead of Erasing Them",
     date: "2026-10-16",
+    version: "2.19.0",
     tags: ["blacklist", "moderation", "dashboard", "starboard", "polls", "giveaways", "added"],
     summary:
       "Blacklisting a server used to be one opaque database write. It is now a reported sequence of steps — save the entry, pause social notifications, disable the starboard, lock open polls and giveaways, notify the owner — each announced as it runs in the staff dashboard, followed by a summary of what was paused, skipped, or could not be switched off. Everything saved comes back untouched if the appeal is approved, and every disabled feature stays disabled across a bot restart.",
@@ -561,6 +837,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "notifier-dashboard-tab",
     title: "Twitch Live Alerts and a Dashboard Tab for Social Notifications",
     date: "2026-10-16",
+    version: "2.18.0",
     tags: ["dashboard", "notifier", "social", "twitch", "added"],
     summary:
       "Twitch joins the social notifier, so a stream going live is announced in your channel through the same application credentials the team profile cards use — and every server now has a Notifications tab in the dashboard, where an account can be added by pasting a profile link, pointed at its own channel, ping role and custom message, tested, paused or resumed. The poll loop behind it got cheaper and more honest too: one request per creator no matter how many servers follow them, and an account that keeps failing is paused automatically instead of being retried forever.",
@@ -618,6 +895,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "team-profile-cards",
     title: "Team Profiles Get Platform Cards and a Spotify Progress Bar",
     date: "2026-10-16",
+    version: "2.17.0",
     tags: ["team", "profiles", "notifier", "twitch", "added"],
     summary:
       "Staff profiles now draw a real profile card for every supported platform instead of a bare link — GitHub, Bluesky, Twitch, YouTube, Reddit and X — the Spotify status keeps the custom-status card layout with a live track progress bar, and Twitch joins the notifier using the same application credentials those cards use, so the credentials earn their keep twice.",
@@ -665,6 +943,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "personal-economy-tabs",
     title: "Economy & Achievements Move to Your Profile",
     date: "2026-10-14",
+    version: "2.16.2",
     tags: ["dashboard", "economy", "achievements", "fixed"],
     summary:
       "The dashboard's economy and achievements views now sit under My overview as personal tabs, because the Niko economy is one account-wide balance rather than something a server owns, and My servers finally separates the servers Niko is already in from the ones you can add it to.",
@@ -711,6 +990,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "economy-card-theme-refresh",
     title: "Economy & Leveling Cards Match the Website Theme",
     date: "2026-10-14",
+    version: "2.16.1",
     tags: ["economy", "leveling", "theme", "cards", "dashboard"],
     summary:
       "Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.",
@@ -756,6 +1036,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "topgg-voting-rewards-and-achievements",
     title: "top.gg Voting Rewards & Café Achievements",
     date: "2026-10-14",
+    version: "2.16.0",
     tags: ["economy", "voting", "achievements", "dashboard", "streaks"],
     summary:
       "Voting for Niko on top.gg now pays coins and builds a streak that boosts your daily and work earnings, with a new set of badges to collect. Both the café standings and every badge are visible in two new dashboard tabs.",
@@ -805,6 +1086,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "global-economy-leaderboard-privacy",
     title: "Global Economy Leaderboard & Privacy",
     date: "2026-10-13",
+    version: "2.15.0",
     tags: ["economy", "leaderboard", "privacy", "dashboard"],
     summary:
       "The public economy leaderboard is now a paginated global ranking, ranked by net worth, with a dashboard privacy control that lets members protect their identity without leaving the rankings.",
@@ -851,6 +1133,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "dashboard-and-community-experience-refresh",
     title: "Dashboard & Community Experience Refresh",
     date: "2026-10-10",
+    version: "2.14.0",
     tags: ["dashboard", "website", "transcripts", "moderation", "staff", "accessibility"],
     summary:
       "A substantial platform update across Niko’s dashboard, public website, Discord integrations, and core bot systems. Guild admins get a redesigned server-profile editor and clearer analytics, while communities benefit from richer Discord-aware transcripts, expanded staff tools, and reliability improvements throughout moderation and data handling.",
@@ -921,6 +1204,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "scam-image-filter",
     title: "Scam Image Filter (Experimental)",
     date: "2026-10-01",
+    version: "2.13.0",
     tags: ["automod", "scam", "images", "experimental", "dashboard", "discord"],
     summary:
       "A community-driven image filter that catches known MrBeast scam images: members report suspicious messages, Niko staff verify them, and confirmed images are then detected and removed automatically — with a feedback loop that lets servers flag false positives to improve accuracy. The feature is still in early testing and may have some reliability issues.",
@@ -980,6 +1264,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "staff-applications",
     title: "Staff Applications",
     date: "2026-09-29",
+    version: "2.12.0",
     tags: ["applications", "staff", "dashboard", "discord"],
     summary:
       "Guild dashboards can now manage multiple staff role openings with shareable web forms, Discord membership and eligibility checks, and reusable application links.",
@@ -1021,6 +1306,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "server-logging-onboarding-updates",
     title: "Logging Reliability & Onboarding Rules",
     date: "2026-09-29",
+    version: "2.11.1",
     tags: ["logging", "onboarding", "dashboard"],
     summary:
       "Server event logs are less likely to be delayed during busy periods, and onboarding now gives communities more room to share their rules with new members.",
@@ -1136,6 +1422,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     slug: "guild-server-pulse-stats",
     title: "Guild Server Pulse Stats",
     date: "2026-09-24",
+    version: "2.10.1",
     tags: ["dashboard", "guild", "analytics", "stats"],
     summary:
       "Guild settings now include a Server pulse analytics card with an at-a-glance view of server size and recent community activity.",
