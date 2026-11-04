@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { getOwnerLocales, syncOwnerLocales } from "../../api";
+import { getOwnerLocales, setOwnerLocaleTranslationCard, syncOwnerLocales } from "../../api";
 import { useStrings } from "../../i18n";
 import type { OwnerLocalePage, OwnerLocales } from "../../types";
 import { notifyError, notifySuccess } from "../../utils/toast";
@@ -129,6 +129,7 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
   const [data, setData] = useState<OwnerLocales | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [panelBusy, setPanelBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -168,11 +169,29 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
   }
 
   if (!data) {
-    return <div className="owner-view"><div className="owner-empty"><div className="loading-ring" /><p>{t("owner.loading")}</p></div></div>;
+    // The same loading card the update page uses: the ring and its line of
+    // text in the dashboard's empty-state panel, with no tile around the ring.
+    return <div className="owner-view"><div className="staff-guild-empty"><div className="loading-ring" /><p>{t("owner.loading")}</p></div></div>;
   }
 
   const live = data.source?.mode === "beta";
   const languages = [...data.coverage].sort((a, b) => b.percent - a.percent);
+  // The card is drawn by the bot, so this switch records the owner's intent; the
+  // panel picks it up on its next refresh, which is why nothing here polls it.
+  const cardOn = data.status_panel?.translation_card ?? false;
+
+  const toggleCard = async () => {
+    setPanelBusy(true);
+    try {
+      const next = await setOwnerLocaleTranslationCard(!cardOn, csrfToken);
+      setData(next);
+      notifySuccess(t(next.status_panel?.translation_card ? "owner.locales.panelEnabled" : "owner.locales.panelDisabled"), TOAST_KEY);
+    } catch (exc) {
+      notifyError(exc instanceof Error ? exc.message : String(exc), TOAST_KEY);
+    } finally {
+      setPanelBusy(false);
+    }
+  };
 
   return (
     <div className="owner-view">
@@ -236,6 +255,33 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section className="owner-card">
+        <div className="owner-card-head">
+          <div>
+            <span className="panel-kicker">{t("owner.locales.panelKicker")}</span>
+            <h3>{t("owner.locales.panelTitle")}</h3>
+            <p>{t("owner.locales.panelBody")}</p>
+          </div>
+          <div className="owner-card-actions">
+            <span className={`owner-chip${cardOn ? " is-live" : ""}`}>
+              {cardOn ? t("owner.locales.panelShown") : t("owner.locales.panelHidden")}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={cardOn}
+              aria-label={t("owner.locales.panelToggle")}
+              className={`owner-switch${cardOn ? " is-on" : ""}`}
+              onClick={() => void toggleCard()}
+              disabled={panelBusy}
+            >
+              <span />
+            </button>
+          </div>
+        </div>
+        <p className="owner-card-note">{t("owner.locales.panelHint")}</p>
       </section>
 
       <section className="owner-card">

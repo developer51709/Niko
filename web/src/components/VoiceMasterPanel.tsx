@@ -53,8 +53,9 @@ export function VoiceMasterPanel({ className }: { className?: string }) {
   // The panel is a replay of the bot's own message, so it opens in the language
   // the page is showing; the selector above it stays for trying the others.
   const { language: siteLanguage } = useLanguage();
-  // The panel only ships four replays, so a language the feed adds but the bot
-  // does not speak yet falls back to English here instead of the site's copy.
+  // The panel ships a replay for every language the landing page offers, so the
+  // site's language always wins; only a language the feed adds ahead of a
+  // release falls back to English here.
   const panelLanguage: PanelLanguage = PANEL_LANGUAGES.some((entry) => entry.value === siteLanguage)
     ? (siteLanguage as PanelLanguage)
     : "en";

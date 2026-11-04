@@ -9,6 +9,14 @@ import datetime
 
 from utils import logging
 
+#: The version this build reports: the console banner, ``data/bot_stats.json``,
+#: the public /status page and the support servers' status panel all read it from
+#: here. It matches the newest entry in the website's changelog
+#: (``web/src/data/changelog.ts``); bump both in the same change. It lives in this
+#: file, rather than a module of its own, because an update applies one area at a
+#: time — a new module an area imports is a module production may not have yet.
+VERSION = "2.27.0"
+
 
 def write_bot_stats(bot):
     try:
@@ -25,7 +33,7 @@ def write_bot_stats(bot):
             "guild_ids":     [g.id for g in bot.guilds],
             "user_count":    user_count,
             "command_count": command_count,
-            "version":       "1.0",
+            "version":       VERSION,
             "uptime_since":  datetime.datetime.utcnow().isoformat(),
         }
         with open("data/bot_stats.json", "w") as f:

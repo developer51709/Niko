@@ -30,10 +30,17 @@ from utils.command_locales import CommandTexts, command_path, resolve_package
 #: Discord speaks its own locale codes: German is ``de``, while Spanish ships as
 #: both the European and the Latin American variant. A catalogue language can
 #: therefore map to more than one Discord locale.
+#: Discord has no Arabic locale, so ``ar`` deliberately maps to nothing: the
+#: bot answers in Arabic, but the command UI stays in the client's language.
 DISCORD_LOCALES: dict[str, tuple[str, ...]] = {
     "de": (Locale.german.value,),
     "es": (Locale.spain_spanish.value, Locale.latin_american_spanish.value),
     "fr": (Locale.french.value,),
+    "ru": (Locale.russian.value,),
+    "ja": (Locale.japanese.value,),
+    # The catalogues are Simplified Chinese, so they fill ``zh-CN`` only.
+    "zh": (Locale.chinese.value,),
+    "hi": (Locale.hindi.value,),
 }
 
 #: Discord rejects the whole payload when a localization is too long, so a text

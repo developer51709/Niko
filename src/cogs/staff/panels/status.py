@@ -96,6 +96,62 @@ async def _check_database(bot):
         return backend, False
 
 
+def _percent(value) -> str:
+    """A percentage without a trailing ``.0`` — the panel has no room to waste."""
+    text = f"{float(value or 0):.1f}"
+    return text[:-2] if text.endswith(".0") else text
+
+
+def _translation_snapshot() -> dict | None:
+    """Coverage figures for the status panel's translation card.
+
+    Read through :mod:`webapp.status`, the module the public /status page and the
+    owner's locale page use: it already merges beta's live catalogues into the
+    numbers, and the dashboard runs in this same process, so the card cannot
+    disagree with them. A panel must never fall over because the API half is
+    absent, so every failure here simply drops the card.
+    """
+    try:
+        from webapp import status as site_status
+
+        payload = site_status.locale_status()
+    except Exception:
+        return None
+
+    bot_rows = {str(row.get("code")): row for row in payload.get("bot") or []}
+    site_rows = {str(row.get("code")): row for row in payload.get("website") or []}
+    # English is the source copy, so counting it would advertise 100% forever.
+    codes = [code for code in payload.get("languages") or [] if code != "en"]
+
+    def share(rows) -> float:
+        done = sum(int((rows.get(code) or {}).get("translated") or 0) for code in codes)
+        total = sum(int((rows.get(code) or {}).get("total") or 0) for code in codes)
+        return round(done / total * 100, 1) if total else 0.0
+
+    languages = []
+    for code in codes:
+        bot_row = bot_rows.get(code) or {}
+        site_row = site_rows.get(code) or {}
+        languages.append({
+            "label": bot_row.get("label") or site_row.get("label") or str(code).upper(),
+            "bot": float(bot_row.get("percent") or 0),
+            "site": float(site_row.get("percent") or 0),
+        })
+    if not languages:
+        return None
+    languages.sort(key=lambda row: (row["site"], row["bot"]), reverse=True)
+
+    source = payload.get("source") or {}
+    return {
+        "languages": len(payload.get("languages") or []),
+        "bot": share(bot_rows),
+        "site": share(site_rows),
+        "rows": languages,
+        "mode": str(source.get("mode") or "local"),
+        "scanned_at": int(payload.get("scanned_at") or time.time()),
+    }
+
+
 async def _collect_status(bot) -> dict:
     """Snapshot every stat the panel shows. Best-effort; never raises."""
     now = time.time()
@@ -107,7 +163,9 @@ async def _collect_status(bot) -> dict:
         "slash_commands": 0,
         "prefix_commands": 0,
         "uptime": "—",
-        "version": "1.0",
+        # Filled from ``data/bot_stats.json`` below; unknown until the bot has
+        # written its first snapshot, and left out of the footer until then.
+        "version": None,
         "latency_ms": None,
         "gateway_ok": None,
         "music_ok": None,
@@ -118,6 +176,7 @@ async def _collect_status(bot) -> dict:
         "website_note": None,
         "api_ok": None,
         "overall_ok": None,
+        "translations": None,
     }
 
     try:
@@ -209,6 +268,22 @@ async def _collect_status(bot) -> dict:
         except Exception:
             status["website_ok"] = False
 
+    # The translation card is an owner switch, and it is the most expensive
+    # figure on the panel, so it is only collected while it is switched on.
+    try:
+        # Imported here, not at the top of the file: an update applies one area
+        # at a time, and this module must still load on a deployment that has
+        # not received ``utils/panel_settings.py`` yet. ``ensure_loaded`` covers
+        # the other direction: the module can arrive after this process booted,
+        # in which case the first pass after it does reads its stored flag.
+        from utils import panel_settings
+
+        await panel_settings.ensure_loaded(bot)
+        if panel_settings.show_translation_card():
+            status["translations"] = _translation_snapshot()
+    except Exception:
+        status["translations"] = None
+
     # Overall roll-up for the summary row on the panel.
     checks = [
         status.get("database_ok"),
@@ -295,7 +370,8 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     elif db_backend == "mongodb":
         db_backend = "MongoDB"
 
-    version = status.get("version") or "1.0"
+    version = status.get("version")
+    version_text = f" · v{version}" if version else ""
     checked_at = f"<t:{int(status.get('checked_at') or time.time())}:R>"
     uptime = status.get("uptime") or "—"
 
@@ -364,10 +440,39 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     )
     view.add_item(health)
 
+    # ── Translation coverage (owner toggle) ───────────────────────────────────
+    # Kept off by default: the panel is the support server's first impression and
+    # the card is a display choice, so the owner's locale page owns the switch.
+    translations = status.get("translations")
+    if translations:
+        origin = "live from beta" if translations.get("mode") == "beta" else "from this build"
+        marker = get_emoji("stats") or ""
+        heading = f"### {marker} Translation Coverage" if marker else "### Translation Coverage"
+        contents = [
+            discord.ui.TextDisplay(content=heading),
+            separator(),
+            line(
+                f"-# {int(translations.get('languages') or 0)} languages · "
+                f"bot **{_percent(translations.get('bot'))}%** · "
+                f"website **{_percent(translations.get('site'))}%** translated"
+            ),
+        ]
+        # Every shipped language, most translated first: the summary line counts
+        # them, so the card has to list all of them or the reader is left
+        # wondering which four the numbers came from.
+        for row in translations.get("rows") or []:
+            contents.append(line(
+                f"**{row['label']}** — website {_percent(row['site'])}% · bot {_percent(row['bot'])}%"
+            ))
+        # One timestamp only: Discord renders it in the reader's own time zone and
+        # keeps it relative, so a second "Ns ago" figure would just disagree with it.
+        contents.append(line(f"-# {origin} · scanned <t:{int(translations.get('scanned_at') or time.time())}:R>"))
+        view.add_item(discord.ui.Container(*contents, accent_colour=0x2E3440))
+
     # ── Footer ────────────────────────────────────────────────────────────────
     view.add_item(discord.ui.Container(
         line(
-            f"-# Shards {shards} · v{version} · Updated {checked_at} · "
+            f"-# Shards {shards}{version_text} · Updated {checked_at} · "
             f"refreshes every {int(STATUS_PANEL_INTERVAL)}s"
         ),
         accent_colour=0x2E3440,

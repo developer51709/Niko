@@ -26,7 +26,6 @@ that were written stay on disk, so a retry (or a normal deploy) picks them up.
 from __future__ import annotations
 
 import json
-import logging
 import os
 import secrets
 import subprocess
@@ -34,6 +33,8 @@ import sys
 import threading
 import time
 from pathlib import Path
+
+from utils import logging
 
 ROOT = Path(__file__).resolve().parents[2]
 

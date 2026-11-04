@@ -9,6 +9,9 @@ needs the Flask app rebuilt and nothing else.
 This module stages files from beta and then applies them area by area:
 
 ===========  ==================================================================
+``support``  *new* ``src/config/*.py`` modules only — a module the areas below
+             import must exist before they reload; an existing config file keeps
+             this deployment's own ids, links and copy
 ``website``  copied into ``src/website/dist``; Flask serves that folder from
              disk, so the next request is the new site. Nothing restarts.
 ``cogs``     the changed ``cogs/<package>`` modules are dropped from
@@ -61,20 +64,29 @@ DATA_DIR = ROOT / "data" / "updates"
 
 #: Areas in apply order. A file belongs to the first area whose path it is under.
 AREAS: dict[str, dict] = {
+    "support": {
+        "label": "Shared modules",
+        # ``src/config`` holds each deployment's own ids, links and status copy,
+        # so these files are additions only: a module that already exists here is
+        # never replaced and one beta dropped is never deleted, so beta cannot
+        # repoint production's links. A *new* module has nothing to overwrite,
+        # and leaving it behind is what makes an update import something this
+        # deployment does not have — ``ModuleNotFoundError: No module named
+        # 'config.version'``. It applies before every other area for that reason.
+        "paths": ("src/config/",),
+        "additive": True,
+    },
     "website": {"label": "Website build", "paths": ("src/website/dist/",)},
     "cogs": {"label": "Cog extensions", "paths": ("src/cogs/",)},
     "utils": {"label": "Utilities", "paths": ("src/utils/",)},
     "webapp": {"label": "API & dashboard", "paths": ("src/webapp/",)},
     "bot": {
         "label": "Bot core",
-        # ``src/config`` stays out on purpose: it holds the guild ids, links and
-        # status copy this deployment was configured with, which beta must not
-        # overwrite just because the bot code changed.
         "paths": ("src/bot.py", "src/api_server.py", "src/events/", "src/database/"),
     },
 }
 
-AREA_ORDER = ("website", "cogs", "utils", "webapp", "bot")
+AREA_ORDER = ("support", "website", "cogs", "utils", "webapp", "bot")
 
 #: Files that never travel: bytecode, editor state, and the update's own data.
 SKIPPED_PARTS = {"__pycache__", ".pytest_cache", ".git", "node_modules"}
@@ -269,6 +281,9 @@ def plan(areas=None) -> dict:
     total_bytes = 0
     for name in chosen:
         remote = (document.get("areas", {}).get(name) or {}).get("files") or {}
+        # An additive area only ever adds: beta's copy of a file this deployment
+        # already has is a difference in configuration, not in code.
+        additive = bool(AREAS[name].get("additive"))
         local_files = set(_files(name))
         changes = []
         for relative, info in sorted(remote.items()):
@@ -281,15 +296,16 @@ def plan(areas=None) -> dict:
             path = ROOT / relative
             if not path.exists():
                 changes.append({"path": relative, "status": "added", "bytes": size, "sha": sha})
-            else:
+            elif not additive:
                 try:
                     current = _sha(path)
                 except OSError:
                     current = None
                 if current != sha:
                     changes.append({"path": relative, "status": "modified", "bytes": size, "sha": sha})
-        for relative in sorted(local_files - set(remote)):
-            changes.append({"path": relative, "status": "removed", "bytes": 0, "sha": None})
+        if not additive:
+            for relative in sorted(local_files - set(remote)):
+                changes.append({"path": relative, "status": "removed", "bytes": 0, "sha": None})
 
         count = len(changes)
         size = sum(change["bytes"] for change in changes if change["status"] != "removed")
@@ -663,6 +679,14 @@ def last_run() -> dict | None:
 def apply(areas, bot=None) -> dict:
     """Stage and apply the selected areas, then report what each one did."""
     chosen = _selected(areas)
+    # A new shared module is a precondition for the areas that import it, not a
+    # choice: applying a route that imports ``config.version`` without writing
+    # ``config/version.py`` is precisely the ModuleNotFoundError this prevents. So
+    # a pending support module rides along with any run, before anything reloads.
+    if chosen and "support" not in chosen:
+        pending = (plan(["support"])["areas"].get("support") or {}).get("changed")
+        if pending:
+            chosen = ["support", *chosen]
     current = plan(chosen)
     if not current["ok"]:
         return current
@@ -704,7 +728,11 @@ def apply(areas, bot=None) -> dict:
             _set_progress(phase="applying")
             outcome = {"ok": True, "changed": changes, **staged}
             try:
-                if name == "cogs":
+                if name == "support":
+                    # Written before the areas below reload on top of them; the
+                    # files are new, so nothing was importing them yet.
+                    outcome["strategy"] = "added new shared modules"
+                elif name == "cogs":
                     if bot is None:
                         raise RuntimeError("The bot is not running.")
                     names = _extensions_for([change["path"] for change in current["areas"][name]["files"]])
@@ -713,7 +741,11 @@ def apply(areas, bot=None) -> dict:
                 elif name == "utils":
                     if bot is None:
                         raise RuntimeError("The bot is not running.")
-                    prefixes = _utils_prefixes(current["areas"][name]["files"])
+                    # Each entry is a change record, not a path: the prefix
+                    # helper reads ``path`` off it like the extension one does.
+                    prefixes = _utils_prefixes(
+                        [change["path"] for change in current["areas"][name]["files"]]
+                    )
                     outcome["purged"] = _purge(prefixes)
                     outcome.update(_reload_summary(reload_extensions(bot)))
                     outcome.update({"dashboard": reload_webapp(bot)})
@@ -783,6 +815,8 @@ def _utils_prefixes(files) -> list[str]:
     """``src/utils/ai/config.py`` → ``utils.ai`` so the whole package reloads."""
     prefixes = set()
     for relative in files:
+        if not isinstance(relative, str):
+            continue
         parts = Path(relative).parts
         if len(parts) >= 4 and parts[0] == "src" and parts[1] == "utils":
             prefixes.add(f"utils.{parts[2]}")

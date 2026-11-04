@@ -21,6 +21,12 @@ hash it has not seen and hands the whole set to :mod:`utils.locales` as a live
 overlay, which every ``msg()`` lookup reads. A bot reply written on beta is
 therefore shown by the running process — no cog reload, no deploy, no restart.
 
+Beta itself reads its own files, never a feed of its own, so the same timer also
+watches those files: :func:`utils.locales.refresh_from_disk` notices a catalogue
+saved on this instance and moves the revision every live table re-resolves on.
+Both halves therefore pick up a translation within seconds, which is what the
+website's per-request file reads have always done.
+
 Three rules keep that safe on a live site:
 
 - **The build is always the fallback.** If beta is not configured, is down, is
@@ -504,20 +510,42 @@ def bot_sync_state() -> dict:
         }
 
 
-def start_sync_loop() -> None:
-    """Keep beta's bot wording warm even when nobody is browsing the site.
+def _watch_local_files() -> None:
+    """Pick up catalogues edited on this instance, without a restart.
 
-    The website refreshes the manifest when a page asks for it, but the bot
-    answers Discord messages whether or not anyone has the dashboard open. One
-    daemon thread per process polls the same feed, so a translator saving
-    ``fr.json`` on beta reaches the live bot within :data:`FEED_TTL` seconds.
+    Beta reads its own files rather than a feed — a deployment pointed at
+    itself would recurse — so a translation saved there has to reach the running
+    cog some other way. The tables a cog captured re-resolve when
+    :func:`utils.locales.refresh_from_disk` sees a new mtime, which is what this
+    thread does on the same cadence as the website's own manifest.
     """
-    if not BETA_INSTANCE_URL:
-        return
+    from utils.locales import refresh_from_disk
+
+    while True:
+        try:
+            refresh_from_disk()
+        except Exception:
+            # A watcher must never take the bot down with it.
+            pass
+        time.sleep(FEED_TTL)
+
+
+def start_sync_loop() -> None:
+    """Keep a running bot's wording current, on a timer.
+
+    Two sources, one loop each: this instance's own files (a translator saving
+    ``fr.json`` on beta) and beta's feed (production reading beta). Either way a
+    cog that captured its tables at import serves the new wording on its next
+    reply — no restart, no deploy.
+    """
     with _lock:
         if _loop["started"]:
             return
         _loop["started"] = True
+
+    threading.Thread(target=_watch_local_files, name="locale-files", daemon=True).start()
+    if not BETA_INSTANCE_URL:
+        return
 
     def run() -> None:
         while True:
@@ -532,8 +560,13 @@ def start_sync_loop() -> None:
 
 
 def _merged_languages(local: dict, beta: dict) -> list[dict]:
-    labels = {row["code"]: row["label"] for row in local["languages"]}
-    labels.update({row["code"]: row["label"] for row in beta["languages"]})
+    # Beta's labels only fill the gaps. A feed running older code names a
+    # language it has no entry for by upper-casing its code ("RU", "ZH"), and
+    # that placeholder must not replace the real name this deploy knows — which
+    # is the common case, because a new language reaches beta's files before
+    # beta's label table has been deployed.
+    labels = {row["code"]: row["label"] for row in beta["languages"]}
+    labels.update({row["code"]: row["label"] for row in local["languages"]})
     # A language counts as available when either side has a file for it: that is
     # how a brand-new beta language reaches the picker before production builds.
     seen = set(labels)
@@ -741,7 +774,14 @@ def decorate(payload: dict) -> dict:
     payload["languages"] = [language["code"] for language in document["languages"]]
     if source["mode"] == "beta":
         if document["bot"]:
-            payload["bot"] = document["bot"]
+            # Beta supplies the figures, but the names come from the merged
+            # language list, so both halves of the page call each language the
+            # same thing instead of showing one in English and one endonym.
+            names = {row["code"]: row["label"] for row in document["languages"]}
+            payload["bot"] = [
+                dict(row, label=names.get(row["code"], row.get("label") or row["code"].upper()))
+                for row in document["bot"]
+            ]
         # When beta scanned its own files, not when this payload was built: the
         # page's "Scanned at" line should describe the catalogues it is showing.
         payload["scanned_at"] = document["generated_at"] or int(time.time())

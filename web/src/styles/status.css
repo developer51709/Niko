@@ -212,7 +212,8 @@
  * vertically, so the same markup reads cleanly from a 320px phone up to a wide
  * desktop without a separate mobile layout. */
 .status-cog-list,
-.status-shard-list {
+.status-shard-list,
+.status-node-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(246px, 1fr));
   gap: 10px;
@@ -221,7 +222,8 @@
   list-style: none;
 }
 .status-cog,
-.status-shard {
+.status-shard,
+.status-node {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -235,7 +237,8 @@
 }
 /* The state colour lives on the card's edge, so it reads before the text does. */
 .status-cog::before,
-.status-shard::before {
+.status-shard::before,
+.status-node::before {
   content: "";
   position: absolute;
   inset: 10px auto 10px 0;
@@ -244,15 +247,20 @@
   background: rgba(159, 180, 216, .5);
 }
 .status-cog-ok::before,
-.status-shard-ok::before { background: #8bd5b1; }
+.status-shard-ok::before,
+.status-node-ok::before { background: #8bd5b1; }
 .status-cog-warn::before,
-.status-shard-warn::before { background: #e9c877; }
+.status-shard-warn::before,
+.status-node-warn::before { background: #e9c877; }
 .status-cog-bad::before,
-.status-shard-bad::before { background: #e8a2a2; }
+.status-shard-bad::before,
+.status-node-bad::before { background: #e8a2a2; }
 .status-cog-wait::before,
-.status-shard-wait::before { background: rgba(159, 180, 216, .6); }
+.status-shard-wait::before,
+.status-node-wait::before { background: rgba(159, 180, 216, .6); }
 .status-cog:hover,
-.status-shard:hover { background: rgba(255, 255, 255, .055); border-color: rgba(226, 234, 246, .18); }
+.status-shard:hover,
+.status-node:hover { background: rgba(255, 255, 255, .055); border-color: rgba(226, 234, 246, .18); }
 
 .status-cog-name { display: grid; gap: 2px; min-width: 0; }
 .status-cog-name strong { color: #f4f5f7; font-size: 12.5px; line-height: 1.3; overflow-wrap: anywhere; }
@@ -265,10 +273,14 @@
 .status-cog-bad .status-cog-name strong { color: #f2b9b9; }
 .status-cog > .status-pill { grid-row: 1; grid-column: 2; justify-self: end; }
 
-.status-shard { align-items: center; gap: 10px 12px; }
-.status-shard-id { grid-row: 1; grid-column: 1; color: #f4f5f7; font: 700 11px "Space Mono", monospace; letter-spacing: .02em; }
-.status-shard > .status-pill { grid-row: 1; grid-column: 2; justify-self: end; }
-.status-shard-figures {
+.status-shard,
+.status-node { align-items: center; gap: 10px 12px; }
+.status-shard-id,
+.status-node-id { grid-row: 1; grid-column: 1; color: #f4f5f7; font: 700 11px "Space Mono", monospace; letter-spacing: .02em; overflow-wrap: anywhere; }
+.status-shard > .status-pill,
+.status-node > .status-pill { grid-row: 1; grid-column: 2; justify-self: end; }
+.status-shard-figures,
+.status-node-figures {
   display: grid;
   grid-row: 2;
   grid-column: 1 / -1;
@@ -277,10 +289,16 @@
   padding-top: 10px;
   border-top: 1px solid rgba(226, 234, 246, .08);
 }
-.status-shard-figures span { display: grid; gap: 2px; min-width: 0; }
-.status-shard-figures span + span { padding-left: 10px; border-left: 1px solid rgba(226, 234, 246, .08); }
-.status-shard-figures strong { color: #f4f5f7; font-size: 13px; font-variant-numeric: tabular-nums; }
-.status-shard-figures small { color: #858c96; text-transform: uppercase; letter-spacing: .06em; font: 8.5px "Space Mono", monospace; overflow-wrap: anywhere; }
+/* A node reports two figures; the shared three-column grid would leave a gap. */
+.status-node-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.status-shard-figures span,
+.status-node-figures span { display: grid; gap: 2px; min-width: 0; }
+.status-shard-figures span + span,
+.status-node-figures span + span { padding-left: 10px; border-left: 1px solid rgba(226, 234, 246, .08); }
+.status-shard-figures strong,
+.status-node-figures strong { color: #f4f5f7; font-size: 13px; font-variant-numeric: tabular-nums; }
+.status-shard-figures small,
+.status-node-figures small { color: #858c96; text-transform: uppercase; letter-spacing: .06em; font: 8.5px "Space Mono", monospace; overflow-wrap: anywhere; }
 
 /* ── Hosting ──────────────────────────────────────────────────────────────── */
 .status-host-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }

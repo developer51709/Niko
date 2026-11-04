@@ -541,6 +541,11 @@ class MusicSystem(commands.Cog):
         self._connecting = False
         # Labels of Lavalink nodes currently in the pool (host:port).
         self._node_labels: list[str] = []
+        # Owner-saved nodes by identifier (host:port). The public status page
+        # needs to know which pool entries are private so it can withhold their
+        # hosts; keeping the mapping here means it does not have to read the
+        # music database on every status poll.
+        self._private_nodes: dict[str, dict] = {}
         self._rescan_task: asyncio.Task | None = None
 
         # { guild_id: { loop, autoplay, history, np_message, last_track } }
@@ -1042,6 +1047,12 @@ class MusicSystem(commands.Cog):
             db = MusicDatabase()
             if await db.ensure(self.bot):
                 private = await db.lavalink_nodes()
+                # Union, not replace, and only after a successful read: a node
+                # deleted from the database stays in the live pool until the
+                # rescan closes it, and a database hiccup leaves the previous
+                # copy in place. Both would otherwise let the public status page
+                # start naming a host that is the owner's own server.
+                self._private_nodes.update({_node_identifier(node): node for node in private})
         except Exception as exc:
             # A database hiccup must not keep the public nodes from connecting.
             log.warning("Lavalink", f"Private nodes unavailable: {exc!r}")
@@ -1082,8 +1093,11 @@ class MusicSystem(commands.Cog):
         """Live pool state for the owner dashboard (no passwords leave here)."""
         nodes = []
         for node in wavelink.Pool.nodes.values():
+            private = self._private_nodes.get(node.identifier) or {}
             nodes.append({
                 "identifier": node.identifier,
+                "private": bool(private),
+                "label": private.get("label") or "",
                 "status": getattr(node.status, "name", str(node.status)).lower(),
                 "players": len(node.players),
                 "heartbeat": round(float(node.heartbeat or 0), 1),

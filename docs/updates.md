@@ -61,6 +61,7 @@ by area, and applies what is selected:
 
 | Area | What it covers | How it is applied |
 | --- | --- | --- |
+| Shared modules | new `src/config/**` files | Written before anything is reloaded, because a module an area imports has to exist first. Only *additions* travel: an existing config file keeps this deployment's own ids, links and copy, and a file beta dropped is never deleted. Applied with every run, whether or not the owner ticked it. |
 | Website build | `src/website/dist/**` | Files replaced in place. Flask serves that folder from disk, so the next request is the new site. Nothing restarts. |
 | Cog extensions | `src/cogs/**` | The changed `cogs.<package>` modules are dropped from `sys.modules` (clearing the cached import) and only the affected extensions are reloaded. |
 | Utilities | `src/utils/**` | Changed `utils.*` modules are purged, every loaded extension is reloaded on top of them, and the dashboard app is rebuilt. |
@@ -130,9 +131,11 @@ file descriptor, so this is for a single-process deployment (the normal
 - A website update replaces files, it does not rebuild them. Beta must have run
   its own build (the `dist/` folder is in the manifest) before production pulls
   it.
-- `src/config/**` never travels: it holds the guild ids, links and status copy a
-  deployment was configured with. A bot-core update deliberately leaves it
-  alone, so beta cannot repoint production's links.
+- `src/config/**` never *replaces* anything: it holds the guild ids, links and
+  status copy a deployment was configured with, so beta cannot repoint
+  production's links. A **new** config module does travel, because code that
+  imports it would otherwise fail its reload with `ModuleNotFoundError` — that
+  is the Shared modules area, and it applies first in every run.
 - Updates are pulled on demand by the owner; nothing polls beta and applies
   changes by itself.
 - A visitor who already has the site open is not sent a new bundle. Their tab

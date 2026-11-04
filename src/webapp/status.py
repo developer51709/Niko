@@ -33,15 +33,33 @@ try:
 except Exception:  # pragma: no cover - psutil is a hard dependency of the bot
     psutil = None
 
+from utils.locales import SUPPORTED_LANGUAGES
+
 from .commands import (
     _LEGACY_INTERNAL_COMMAND_NAMES,
     _is_internal_command,
     _live_internal_command_names,
 )
 
-#: Every language the bot ships, in the order the site shows them.
-LANGUAGES = ("en", "de", "es", "fr")
-LANGUAGE_LABELS = {"en": "English", "de": "German", "es": "Spanish", "fr": "French"}
+#: Every language the bot can be set to, in the order the site shows them.
+#: Taken from the bot's own list rather than copied, so a language added there
+#: is counted here (and published in the feed) without a second edit.
+LANGUAGES = SUPPORTED_LANGUAGES
+#: Names for the language codes the website can carry. Wider than :data:`LANGUAGES`
+#: on purpose: the site's landing page ships more languages than the bot speaks,
+#: and the feed labels whatever catalogue files it finds. A code without an entry
+#: still works — it is shown upper-cased.
+LANGUAGE_LABELS = {
+    "en": "English",
+    "de": "Deutsch",
+    "es": "Español",
+    "fr": "Français",
+    "ru": "Русский",
+    "ja": "日本語",
+    "zh": "中文",
+    "hi": "हिन्दी",
+    "ar": "العربية",
+}
 
 #: The website's own per-page catalogues (``web/src/locales/<page>/<lang>.json``,
 #: or ``<page>/<sub>/<lang>.json`` for a page made of sub pages).
@@ -263,8 +281,12 @@ def _website_locale_status() -> list[dict]:
     stopped is still partial, however many keys it filled in.
     """
     total = 0
-    translated: dict[str, int] = {code: 0 for code in LANGUAGES}
-    complete: dict[str, int] = {code: 0 for code in LANGUAGES}
+    # The site can carry more languages than the bot speaks — the landing page
+    # ships Russian, Japanese, Chinese, Hindi and Arabic — so the rows follow the
+    # files on disk and the bot's four are only the starting order.
+    codes = list(LANGUAGES)
+    translated: dict[str, int] = {}
+    complete: dict[str, int] = {}
     pages = 0
 
     if SITE_LOCALES.is_dir():
@@ -275,30 +297,31 @@ def _website_locale_status() -> list[dict]:
             english_keys = set(_leaf_keys(english))
             pages += 1
             total += len(english_keys)
-            translated["en"] += len(english_keys)
+            translated["en"] = translated.get("en", 0) + len(english_keys)
             # English is the source copy, so a page that has any at all is
             # translated into English by definition.
-            if english_keys:
-                complete["en"] += 1
-            for code in LANGUAGES:
+            complete["en"] = complete.get("en", 0) + 1
+            for code in site_page_languages(folder):
+                if code not in codes:
+                    codes.append(code)
                 if code == "en":
                     continue
                 catalogue, _ = site_catalogue(folder, code)
                 if not catalogue:
                     continue
                 keys = set(_leaf_keys(catalogue))
-                translated[code] += len(english_keys & keys)
-                if english_keys and english_keys <= keys:
-                    complete[code] += 1
+                translated[code] = translated.get(code, 0) + len(english_keys & keys)
+                if english_keys <= keys:
+                    complete[code] = complete.get(code, 0) + 1
 
     return [
         _coverage_row(
             code,
-            translated[code],
+            translated.get(code, 0),
             total,
-            extra={"pages": pages, "complete_pages": complete[code]},
+            extra={"pages": pages, "complete_pages": complete.get(code, 0)},
         )
-        for code in LANGUAGES
+        for code in codes
     ]
 
 
@@ -542,6 +565,59 @@ def _shard_rows(bot) -> list[dict]:
     return rows
 
 
+def _lavalink_pool(bot) -> dict | None:
+    """The music node pool for the public page, with private hosts withheld.
+
+    Lavalink nodes come from two places: the catalogue committed in
+    ``config/lavalink.py``, whose hosts are already in the repository, and the
+    private nodes the owner saves from the dashboard. A private node is the
+    owner's own server, so nothing identifying it may reach a public payload —
+    not its host, its port, or the label, which an owner is free to type as the
+    hostname. Those rows are published as ``private-<n>`` instead, ordered by
+    identifier so the alias for a given node does not move between polls.
+
+    Returns ``None`` when the music system is not loaded, which the page shows
+    as a missing section rather than a pool of zero nodes.
+    """
+    getter = getattr(bot, "get_cog", None)
+    cog = getter("MusicSystem") if getter else None
+    snapshot = getattr(cog, "pool_snapshot", None)
+    if not callable(snapshot):
+        return None
+    try:
+        pool = snapshot()
+    except Exception:
+        return None
+    if not isinstance(pool, dict):
+        return None
+
+    rows = sorted(pool.get("nodes") or [], key=lambda row: str(row.get("identifier") or ""))
+    nodes = []
+    private_index = 0
+    for row in rows:
+        identifier = str(row.get("identifier") or "")
+        private = bool(row.get("private"))
+        node = {
+            "id": identifier,
+            "private": False,
+            "index": None,
+            "status": str(row.get("status") or "disconnected"),
+            "players": int(row.get("players") or 0),
+            "heartbeat": float(row.get("heartbeat") or 0),
+        }
+        if private:
+            private_index += 1
+            node.update({"id": f"private-{private_index}", "private": True, "index": private_index})
+        nodes.append(node)
+
+    return {
+        "connected": sum(1 for node in nodes if node["status"] == "connected"),
+        "pool": len(nodes),
+        "private": private_index,
+        "nodes": nodes,
+    }
+
+
 def _cog_rows(bot) -> list[dict]:
     """Every cog with its load outcome and, when it is not running, why."""
     recorded = list(getattr(bot, "cog_status", None) or [])
@@ -610,6 +686,7 @@ async def bot_status(bot) -> dict:
         },
         "shards": shards,
         "shard_count": len(shards),
+        "lavalink": _lavalink_pool(bot),
         "cogs": cogs,
         "cog_counts": {
             state: sum(1 for cog in cogs if cog["state"] == state)
@@ -627,6 +704,7 @@ def offline_status(reason: str | None = None) -> dict:
         "bot": None,
         "shards": [],
         "shard_count": 0,
+        "lavalink": None,
         "cogs": [],
         "cog_counts": {"loaded": 0, "disabled": 0, "maintenance": 0, "failed": 0},
     }

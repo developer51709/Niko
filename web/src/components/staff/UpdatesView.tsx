@@ -174,7 +174,7 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
     return (
       <div className="updates-view">
         <div className="staff-guild-empty updates-state">
-          <span className="updates-state-mark"><div className="loading-ring" /></span>
+          <div className="loading-ring" />
           <p>{t("owner.loading")}</p>
         </div>
       </div>

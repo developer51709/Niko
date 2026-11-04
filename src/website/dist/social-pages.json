@@ -262,7 +262,7 @@
     },
     "/docs/language-support": {
       "title": "Languages & Localization — Niko docs",
-      "description": "Niko speaks English, German, Spanish, and French — in Discord's command UI, in the bot's own wording, and on the website.",
+      "description": "Niko speaks English, German, Spanish, French, Russian, Japanese, Chinese, Hindi, and Arabic — in Discord's command UI, in the bot's own wording, and on the website.",
       "section": "Documentation",
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/language-support.png"

@@ -523,7 +523,7 @@ def api_botstats():
         "user_count":    stats.get("user_count", 0),
         "command_count": stats.get("command_count", 76),
         "uptime_since":  stats.get("uptime_since", None),
-        "version":       stats.get("version", "1.0"),
+        "version":       stats.get("version"),
         "economy_users": econ_count,
     })
 
@@ -555,7 +555,7 @@ def _bot_card_profile() -> dict:
         "guild_count": snapshot.get("guild_count", 0),
         "user_count": snapshot.get("user_count", 0),
         "command_count": snapshot.get("command_count", 0),
-        "version": snapshot.get("version", "1.0"),
+        "version": snapshot.get("version"),
     }
 
     user = getattr(bot, "user", None) if bot is not None else None
@@ -597,7 +597,7 @@ def _bot_card_profile() -> dict:
         "command_count": stats.get("command_count", 0),
         "latency_ms": latency_ms,
         "uptime_seconds": uptime_seconds,
-        "version": str(stats.get("version") or "1.0"),
+        "version": str(stats.get("version") or ""),
     }
 
 
@@ -657,6 +657,6 @@ async def _live_bot_stats():
         "user_count":    user_count,
         "command_count": command_count,
         "uptime_since":  load_json(BOT_STATS, {}).get("uptime_since"),
-        "version":       load_json(BOT_STATS, {}).get("version", "1.0"),
+        "version":       load_json(BOT_STATS, {}).get("version"),
         "economy_users": len(glob.glob(os.path.join(ECONOMY_DIR, "[0-9]*.json"))),
     }

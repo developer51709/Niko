@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +73,46 @@ def test_overlay_reaches_a_table_loaded_before_it(package):
     assert table.get("fr", {}).get("hello") == "Bonjour"
     assert "hello" in table["fr"]
     # A language the overlay did not carry keeps its file copy.
+    assert table["de"]["hello"] == "Hallo"
+
+
+def test_an_edit_on_disk_reaches_a_running_table(package):
+    """Beta saves a file; the cog's table follows, with no restart."""
+    from utils.locales import load_locales, locales_path, refresh_from_disk
+
+    name, _catalogues = package
+    table = load_locales(name, "messages")
+    assert table["de"]["hello"] == "Hallo"
+
+    path = locales_path(name) / "de.json"
+    path.write_text(json.dumps({"messages": {"hello": "Servus"}}), encoding="utf-8")
+    stamp = time.time() + 5
+    os.utime(path, (stamp, stamp))  # a fresh mtime whatever the clock resolution
+
+    assert refresh_from_disk() is True
+    assert table["de"]["hello"] == "Servus"
+    # The key the editor left out is served in English, like a missing page key.
+    assert table["de"]["bye"] == "Bye"
+    # Nothing changed since, so the watcher has nothing to do.
+    assert refresh_from_disk() is False
+
+
+def test_the_overlay_can_fill_in_a_language_the_files_do_not_have(package):
+    """A language needs no local file: beta can send it, key by key."""
+    from utils.locales import apply_overlay, load_locales
+
+    name, catalogues = package
+    table = load_locales(name, "messages")
+    # Nothing on disk for Russian yet, so it reads as English.
+    assert table["ru"]["hello"] == "Hello"
+
+    apply_overlay({name: {"en": catalogues["en"], "ru": {"messages": {"hello": "Привет"}}}})
+
+    assert table["ru"]["hello"] == "Привет"
+    # A key beta has not translated keeps its English wording, the way a page
+    # the website has not finished falls back.
+    assert table["ru"]["bye"] == "Bye"
+    # The shipped languages are untouched by the round.
     assert table["de"]["hello"] == "Hallo"
 
 
