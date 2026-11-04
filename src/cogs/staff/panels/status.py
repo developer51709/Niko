@@ -12,7 +12,7 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils import logging, panel_settings
+from utils import logging
 
 # The refresh cadence lives with the panel so the footer and the loop can never
 # disagree about it.
@@ -148,7 +148,6 @@ def _translation_snapshot() -> dict | None:
         "site": share(site_rows),
         "rows": languages,
         "mode": str(source.get("mode") or "local"),
-        "age_seconds": int(source.get("age_seconds") or 0),
         "scanned_at": int(payload.get("scanned_at") or time.time()),
     }
 
@@ -164,7 +163,9 @@ async def _collect_status(bot) -> dict:
         "slash_commands": 0,
         "prefix_commands": 0,
         "uptime": "—",
-        "version": "1.0",
+        # Filled from ``data/bot_stats.json`` below; unknown until the bot has
+        # written its first snapshot, and left out of the footer until then.
+        "version": None,
         "latency_ms": None,
         "gateway_ok": None,
         "music_ok": None,
@@ -270,6 +271,14 @@ async def _collect_status(bot) -> dict:
     # The translation card is an owner switch, and it is the most expensive
     # figure on the panel, so it is only collected while it is switched on.
     try:
+        # Imported here, not at the top of the file: an update applies one area
+        # at a time, and this module must still load on a deployment that has
+        # not received ``utils/panel_settings.py`` yet. ``ensure_loaded`` covers
+        # the other direction: the module can arrive after this process booted,
+        # in which case the first pass after it does reads its stored flag.
+        from utils import panel_settings
+
+        await panel_settings.ensure_loaded(bot)
         if panel_settings.show_translation_card():
             status["translations"] = _translation_snapshot()
     except Exception:
@@ -361,7 +370,8 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     elif db_backend == "mongodb":
         db_backend = "MongoDB"
 
-    version = status.get("version") or "1.0"
+    version = status.get("version")
+    version_text = f" · v{version}" if version else ""
     checked_at = f"<t:{int(status.get('checked_at') or time.time())}:R>"
     uptime = status.get("uptime") or "—"
 
@@ -435,10 +445,7 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
     # the card is a display choice, so the owner's locale page owns the switch.
     translations = status.get("translations")
     if translations:
-        if translations.get("mode") == "beta":
-            origin = f"live from beta · {int(translations.get('age_seconds') or 0)}s ago"
-        else:
-            origin = "from this build"
+        origin = "live from beta" if translations.get("mode") == "beta" else "from this build"
         marker = get_emoji("stats") or ""
         heading = f"### {marker} Translation Coverage" if marker else "### Translation Coverage"
         contents = [
@@ -450,20 +457,22 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
                 f"website **{_percent(translations.get('site'))}%** translated"
             ),
         ]
-        # The four most translated languages: a reader scanning the panel gets the
-        # state of the work without a wall of rows, and the locale page has the
-        # full list for whoever is doing the translating.
-        for row in list(translations.get("rows") or [])[:4]:
+        # Every shipped language, most translated first: the summary line counts
+        # them, so the card has to list all of them or the reader is left
+        # wondering which four the numbers came from.
+        for row in translations.get("rows") or []:
             contents.append(line(
                 f"**{row['label']}** — website {_percent(row['site'])}% · bot {_percent(row['bot'])}%"
             ))
+        # One timestamp only: Discord renders it in the reader's own time zone and
+        # keeps it relative, so a second "Ns ago" figure would just disagree with it.
         contents.append(line(f"-# {origin} · scanned <t:{int(translations.get('scanned_at') or time.time())}:R>"))
         view.add_item(discord.ui.Container(*contents, accent_colour=0x2E3440))
 
     # ── Footer ────────────────────────────────────────────────────────────────
     view.add_item(discord.ui.Container(
         line(
-            f"-# Shards {shards} · v{version} · Updated {checked_at} · "
+            f"-# Shards {shards}{version_text} · Updated {checked_at} · "
             f"refreshes every {int(STATUS_PANEL_INTERVAL)}s"
         ),
         accent_colour=0x2E3440,

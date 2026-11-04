@@ -6,6 +6,8 @@ import re
 
 import colorama
 
+from .writers import VERSION
+
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
 
@@ -67,7 +69,7 @@ def print_banner(bot, guild_count: int = 0):
         div(),
         bline(),
         irow("bot",     str(bot.user),  "servers", guild_str),
-        irow("version", "1.0",          "users",   user_count),
+        irow("version", VERSION,        "users",   user_count),
         irow("model",   ai_mode,        "author",  "@sorenthedev"),
         bline(),
         div("╰", "╯"),

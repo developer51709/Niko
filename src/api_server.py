@@ -79,7 +79,14 @@ def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -
         _thread = threading.Thread(target=serve, name="niko-api", daemon=True)
         _thread.start()
     if fd is not None:
-        logging.info("Startup", "Dashboard API adopted the listening socket from the predecessor.")
+        # The stdlib module, not the project's ``utils.logging`` wrapper: this
+        # file also builds the werkzeug filter below. Two positional strings on
+        # stdlib ``logging.info`` are a format string and its arguments, which is
+        # how this line used to raise "not all arguments converted" inside the
+        # logging handler instead of logging anything.
+        logging.getLogger("Startup").info(
+            "Dashboard API adopted the listening socket from the predecessor."
+        )
     return _thread
 
 

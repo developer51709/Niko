@@ -20,7 +20,7 @@ import time
 
 from flask import jsonify, request, send_from_directory, session
 
-from utils import handoff, panel_settings
+from utils import handoff
 
 from .. import locale_feed, updates
 from .. import server as _server
@@ -64,7 +64,24 @@ def _locale_rows(entries: dict) -> list[dict]:
     return rows
 
 
+def _panel_settings():
+    """``utils.panel_settings``, once this deployment has received it.
+
+    The module is newer than the page that reads it and arrives with the
+    Utilities area of an update. Importing it here rather than at the top of the
+    file keeps a webapp-only update from failing to rebuild the dashboard on a
+    deployment that has not taken that area yet — the switch just reports off.
+    """
+    try:
+        from utils import panel_settings
+
+        return panel_settings
+    except Exception:
+        return None
+
+
 def _locale_payload() -> dict:
+    settings = _panel_settings()
     document = locale_feed.manifest()
     pages = _locale_rows(document["pages"])
     # The bot keeps its wording in each cog's own ``locales`` folder, so it has
@@ -91,7 +108,9 @@ def _locale_payload() -> dict:
         "bot_sync": locale_feed.bot_sync_state(),
         # The status panel posted in the support servers is drawn by the bot; its
         # translation card is the one display choice this page owns.
-        "status_panel": {"translation_card": panel_settings.show_translation_card()},
+        "status_panel": {
+            "translation_card": bool(settings.show_translation_card()) if settings else False
+        },
     }
 
 
@@ -129,11 +148,14 @@ def api_owner_locales_panel():
     body = request.get_json(silent=True) or {}
     if "translation_card" not in body:
         return jsonify({"error": "Choose whether the translation card is shown."}), 400
+    settings = _panel_settings()
+    if settings is None:
+        return jsonify({"error": "This build has no panel settings module yet."}), 503
     enabled = bool(body.get("translation_card"))
     actor = session["user"]["id"]
 
     async def save():
-        await panel_settings.set_translation_card(enabled, actor, _discord_bot)
+        await settings.set_translation_card(enabled, actor, _discord_bot)
 
     try:
         run_on_bot_loop(save(), timeout=15)

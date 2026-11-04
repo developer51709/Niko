@@ -23,7 +23,7 @@ the cogs were discovered.
 import os
 import importlib
 
-from utils import logging, maintenance, panel_settings
+from utils import logging, maintenance
 
 
 #: Names title-casing gets wrong, spelled the way the product spells them.
@@ -104,8 +104,18 @@ async def load_cogs(bot):
     # recorded as maintained (its commands still load and answer with the notice).
     await maintenance.load(bot)
     # The status panel's card toggles are read before any panel can be posted, so
-    # the first render already matches the dashboard's switches.
-    await panel_settings.load(bot)
+    # the first render already matches the dashboard's switches. The module is
+    # imported here rather than at the top of the file because an update applies
+    # one area at a time: this loader ships with the bot core, and the module it
+    # reads ships with the utilities — a bot-core update must still start on a
+    # deployment that has not taken the utilities area yet (the panel then loads
+    # the flag itself on its first refresh).
+    try:
+        from utils import panel_settings
+
+        await panel_settings.load(bot)
+    except Exception as exc:
+        logging.warning("Panel", f"Panel display settings not loaded: {exc}")
 
     for item in os.listdir("./src/cogs"):
         item_path = os.path.join("./src/cogs", item)
