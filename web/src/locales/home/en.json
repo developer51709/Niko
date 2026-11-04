@@ -53,6 +53,8 @@
   "signin.retry": "Try again",
   "signin.denied": "Discord sign-in was cancelled before it finished.",
   "signin.invalid": "That sign-in link expired before it was used.",
+  "signin.no_state": "No sign-in cookie came back from Discord: it may already have been used, or the return arrived at a different address.",
+  "signin.addresses": "The sign-in started on {from} and came back to {to}; it can only finish on the address it started on.",
   "signin.no_code": "Discord did not return a sign-in code.",
   "signin.token": "Niko could not complete the token exchange with Discord.",
   "signin.profile": "Niko could not read your Discord profile.",

@@ -1,5 +1,7 @@
 """Flask routes for auth."""
 
+from utils import logging
+
 from .. import server as _server
 
 globals().update({
@@ -7,6 +9,33 @@ globals().update({
     for name, value in vars(_server).items()
     if not name.startswith("__")
 })
+
+def _request_origin() -> str:
+    """The address the visitor is on, honouring a proxy's forwarded scheme."""
+    proto = (request.headers.get("X-Forwarded-Proto") or request.scheme).split(",")[0].strip() or request.scheme
+    return f"{proto}://{runtime.request_host()}"
+
+
+def _callback_origin() -> str:
+    """The address Discord will send the visitor back to."""
+    parts = urlparse(redirect_uri())
+    return f"{parts.scheme}://{parts.netloc}" if parts.netloc else ""
+
+
+def _same_site(first: str, second: str) -> bool:
+    """Whether two origins sit under the same name, so cookies can be shared.
+
+    ``dash.example.com`` and ``example.com`` are one site (the session cookie is
+    set on the parent), while a preview host and the site it previews are not.
+    """
+    def host_of(origin: str) -> str:
+        return (urlparse(origin).hostname or "").lower().strip(".")
+
+    one, other = host_of(first), host_of(second)
+    if not one or not other:
+        return False
+    return one == other or one.endswith("." + other) or other.endswith("." + one)
+
 
 def _oauth_destination(path: str) -> str:
     """Where a finished sign-in lands, on the host that started it.
@@ -18,6 +47,7 @@ def _oauth_destination(path: str) -> str:
     another site.
     """
     prefix = session.pop("oauth_return", "")
+    session.pop("oauth_start_host", None)
     origin = config.section_origins().get(prefix, "") if prefix else ""
     if not origin:
         return path
@@ -32,12 +62,33 @@ def auth_login():
             "hint": "Add DISCORD_CLIENT_SECRET to your Replit secrets to enable login.",
         }), 503
 
-    state = secrets.token_urlsafe(32)
-    session["oauth_state"] = state
     host = runtime.request_host()
     next_path = request.args.get("next", "/dashboard")
     if not (next_path.startswith("/") and not next_path.startswith("//")):
         next_path = "/dashboard"
+    # The OAuth state is a cookie on the host that starts the sign-in, and Discord
+    # sends the visitor back to the host in the registered callback. When those
+    # are different sites the cookie never comes back: the state check fails and
+    # the sign-in ends as "link expired" with no clue why. Starting on the
+    # address that receives the callback is the one place both halves meet.
+    landing = _callback_origin()
+    site = config.canonical_origin()
+    if landing and not _same_site(landing, _request_origin()) and site and _same_site(landing, site):
+        logging.warning(
+            "Auth",
+            f"Sign-in started on {_request_origin()} but the callback is {landing}; continuing on {landing}.",
+        )
+        target = f"{landing}/auth/login?next={quote(config.apex_path(host, next_path), safe='')}"
+        return redirect(target)
+    # A callback that names some other address is a configuration problem, not
+    # something to follow: the visitor stays here and the callback says which
+    # two addresses were involved when it arrives.
+
+    state = secrets.token_urlsafe(32)
+    session["oauth_state"] = state
+    # Where this started, so a failed return can say which two addresses were
+    # involved instead of only "the link expired".
+    session["oauth_start_host"] = host
     # A section host writes its paths short (``/staff`` on ``dash.``), while the
     # callback runs on the site's own address (``runtime.redirect_uri``), which
     # only knows the apex form: ``/dashboard/staff``. Without this a sign-in
@@ -46,6 +97,10 @@ def auth_login():
     # Remember the section so the finished sign-in can be handed back to the
     # host it started on instead of the long form of the same page.
     session["oauth_return"] = config.subdomain_prefix(host)
+    # One line per sign-in so a failed return can be traced: which address it
+    # started on, which address Discord will send it back to, and where it was
+    # headed.
+    logging.info("Auth", f"Sign-in started on {_request_origin()} for {session['oauth_next']} (callback {redirect_uri()}).")
 
     params = urlencode({
         "client_id": DISCORD_CLIENT_ID,
@@ -65,8 +120,23 @@ def auth_callback():
     if error:
         return redirect("/?error=oauth_denied")
 
-    if request.args.get("state") != session.pop("oauth_state", None):
-        return redirect("/?error=invalid_state")
+    expected = session.pop("oauth_state", None)
+    if request.args.get("state") != expected:
+        started = session.pop("oauth_start_host", "") or ""
+        returned = runtime.request_host()
+        # No state in the session at all means the cookie never came back with
+        # this request — a different address, a blocked cookie, or a callback
+        # that a previous visit already used. A state that is present but
+        # different is a link that is not this session's.
+        reason = "invalid_state" if expected else "no_state"
+        logging.warning(
+            "Auth",
+            f"Discord sign-in could not be verified ({reason}): started on {started or 'unknown address'}, "
+            f"returned to {returned}; session cookie domain "
+            f"{app.config.get('SESSION_COOKIE_DOMAIN') or 'host-only'}, "
+            f"secure {app.config.get('SESSION_COOKIE_SECURE')}.",
+        )
+        return redirect(f"/?{urlencode({'error': reason, 'from': started, 'to': returned})}")
 
     code = request.args.get("code", "")
     if not code:

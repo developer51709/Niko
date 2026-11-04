@@ -53,6 +53,8 @@
   "signin.retry": "Erneut versuchen",
   "signin.denied": "Die Discord-Anmeldung wurde abgebrochen, bevor sie fertig war.",
   "signin.invalid": "Dieser Anmeldelink ist abgelaufen, bevor er benutzt wurde.",
+  "signin.no_state": "Von Discord kam kein Anmelde-Cookie zurück: Es wurde vielleicht schon benutzt oder die Rückkehr kam auf einer anderen Adresse an.",
+  "signin.addresses": "Die Anmeldung begann auf {from} und kam auf {to} zurück; sie kann nur auf der Adresse abgeschlossen werden, auf der sie begonnen hat.",
   "signin.no_code": "Discord hat keinen Anmeldecode zurückgegeben.",
   "signin.token": "Niko konnte den Token-Austausch mit Discord nicht abschließen.",
   "signin.profile": "Niko konnte dein Discord-Profil nicht lesen.",

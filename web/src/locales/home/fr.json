@@ -53,6 +53,8 @@
   "signin.retry": "Réessayer",
   "signin.denied": "La connexion Discord a été annulée avant la fin.",
   "signin.invalid": "Ce lien de connexion a expiré avant d’être utilisé.",
+  "signin.no_state": "Aucun cookie de connexion n’est revenu de Discord : il a peut-être déjà été utilisé, ou le retour est arrivé sur une autre adresse.",
+  "signin.addresses": "La connexion a commencé sur {from} et est revenue sur {to} ; elle ne peut aboutir que sur l’adresse où elle a commencé.",
   "signin.no_code": "Discord n’a pas renvoyé de code de connexion.",
   "signin.token": "Niko n’a pas pu terminer l’échange de jetons avec Discord.",
   "signin.profile": "Niko n’a pas pu lire ton profil Discord.",

@@ -250,6 +250,67 @@ def test_a_short_path_is_remembered_in_its_apex_form(subdomains, host, path, exp
     assert config.apex_path(host, path) == expected
 
 
+def test_a_sign_in_on_another_site_continues_where_the_callback_lands(subdomains, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    # A preview host and the site are different sites: the state cookie set on
+    # one never reaches the other. The sign-in is handed to the address that
+    # receives the callback instead of dying on the state check.
+    response = app.test_client().get("/auth/login?next=/dashboard", base_url="https://preview.e2b.app")
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://niko.sryze.cc/auth/login?next=%2Fdashboard"
+
+
+def test_a_callback_on_another_address_is_not_followed(subdomains, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://staging.example.test/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    # A callback that is not the site cannot be followed: sending the visitor
+    # there would leave this site for one that may not even exist. The attempt
+    # goes ahead and the callback reports both addresses when it fails.
+    response = app.test_client().get("/auth/login", base_url="https://niko.sryze.cc")
+
+    assert _redirect_uri_param(response) == "https://staging.example.test/auth/callback"
+
+
+def test_a_section_host_signs_in_without_leaving_the_site(subdomains, monkeypatch):
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    # `dash.` and the apex share the site's cookies, so there is nothing to hop
+    # over: the button goes straight to Discord.
+    response = app.test_client().get("/auth/login?next=/staff", base_url="https://dash.niko.sryze.cc")
+
+    assert _redirect_uri_param(response) == "https://niko.sryze.cc/auth/callback"
+
+
+def test_a_callback_without_the_state_cookie_says_so(subdomains):
+    response = app.test_client().get("/auth/callback?state=abc&code=x", base_url="https://niko.sryze.cc")
+
+    location = response.headers["Location"]
+    # No session at all is a different failure from a stale link, and saying so
+    # (with the two addresses) is what makes it diagnosable.
+    assert "error=no_state" in location
+    assert "to=niko.sryze.cc" in location
+
+
+def test_a_mismatched_state_is_reported_as_a_stale_link(subdomains):
+    client = app.test_client()
+    with client.session_transaction(base_url="https://niko.sryze.cc") as stored:
+        stored["oauth_state"] = "expected"
+        stored["oauth_start_host"] = "dash.niko.sryze.cc"
+
+    response = client.get("/auth/callback?state=other&code=x", base_url="https://niko.sryze.cc")
+
+    location = response.headers["Location"]
+    assert "error=invalid_state" in location
+    assert "from=dash.niko.sryze.cc" in location
+
+
 def test_a_finished_sign_in_returns_to_the_section_host(subdomains, monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
     from webapp.routes import auth_routes

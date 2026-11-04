@@ -94,6 +94,17 @@ How the two halves meet:
   `next=` a sign-in was given is stored in its apex form first
   (`config.apex_path`), since a section host writes it short: `/staff` on
   `dash.` has to come back as `/dashboard/staff`.
+- A sign-in can only finish on the address that started it, because the OAuth
+  state is a cookie on that host. When the callback names a different *site*
+  (a preview host signing in against the real site's callback, say),
+  `/auth/login` hands the visitor to the callback's own address — but only when
+  that address is the site itself, which `PUBLIC_URL` names. Anything else is a
+  misconfiguration and is not followed.
+- A failed return explains itself: the login line and the failure both name the
+  address the sign-in started on and the one it came back to
+  (`/?error=…&from=…&to=…`, shown under the sign-in notice), and the server logs
+  the pair with the cookie's domain and `Secure` flag. "The link expired" alone
+  never has to be the whole story again.
 - Sessions are shared when `PUBLIC_URL` names the apex (it usually does):
   `config.session_cookie_domain` then puts the session cookie on `.<domain>`, so
   a sign-in on the apex is valid on the subdomain and the other way round.
