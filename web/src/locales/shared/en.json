@@ -71,5 +71,9 @@
   "status.offline": "Offline",
   "status.streaming": "Streaming",
   "auth.continue": "Continue with Discord",
-  "auth.unavailable": "Discord sign-in isn’t available right now. Try again later."
+  "auth.unavailable": "Discord sign-in isn’t available right now. Try again later.",
+  "update.kicker": "New version",
+  "update.body": "This tab is still running the version it opened with. Reload to pick up the latest changes.",
+  "update.reload": "Reload page",
+  "update.later": "Not now"
 }

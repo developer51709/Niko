@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 import { PublicHeader } from "./PublicHeader";
 import { useStrings } from "../i18n";
+import { publicPath } from "../router";
 
 type BackLink = {
   label: ReactNode;
@@ -18,7 +19,9 @@ type BackLink = {
 export function DiscordSignIn({ next, available = true, label, unavailableNotice }: { next: string; available?: boolean; label?: string; unavailableNotice?: ReactNode }) {
   const { t } = useStrings("shared");
   if (!available) return <div className="notice warning">{unavailableNotice ?? t("auth.unavailable")}</div>;
-  return <a className="button button-primary full-width" href={`/auth/login?next=${encodeURIComponent(next)}`}>
+  // ``next`` is written in the apex form like every other path here; on a
+  // section host it is the short form that the visitor comes back to.
+  return <a className="button button-primary full-width" href={`/auth/login?next=${encodeURIComponent(publicPath(next))}`}>
     <Icon name="lock" /> {label ?? t("auth.continue")} <Icon name="arrow" />
   </a>;
 }

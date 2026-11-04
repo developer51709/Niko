@@ -11,10 +11,14 @@ under the running socket. Two things have to hold for that to be usable:
 """
 
 import importlib
+import importlib.util
+import py_compile
 import socket
 import sys
+import tempfile
 import unittest
 import urllib.request
+from pathlib import Path
 from unittest.mock import patch
 
 import api_server
@@ -30,6 +34,21 @@ def _free_port() -> int:
 def _health(port: int) -> dict:
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=10) as response:
         return {"status": response.status, "body": response.read(64)}
+
+
+def _unhealthy_app():
+    """A stand-in ``webapp`` package whose API cannot answer a request."""
+    from types import SimpleNamespace
+
+    from flask import Flask
+
+    app = Flask("unhealthy")
+
+    @app.route("/api/health")
+    def health():
+        return {"ok": False}, 500
+
+    return SimpleNamespace(app=app, configure_bot=lambda bot: None)
 
 
 class ApiReloadTests(unittest.TestCase):
@@ -148,3 +167,63 @@ class TransactionalApiUpdateTests(unittest.TestCase):
         self.assertLess(source.index("    _record(run)"), call)
         self.assertLess(source.index("result = {**current"), call)
         self.assertLess(call, source.index("    return result"))
+
+
+class SwapVerificationTests(unittest.TestCase):
+    def setUp(self):
+        self.modules = updates._webapp_modules()
+        self.port = _free_port()
+        api_server.start_api_server(None, port=self.port)
+
+    def tearDown(self):
+        api_server.stop_serving()
+        updates._restore_modules(self.modules)
+
+    def test_an_app_that_does_not_answer_is_rolled_back(self):
+        # A rebuild can import cleanly and still be unable to serve a request;
+        # reporting it as applied is how an API update looks like it needs a
+        # restart.
+        before_app = api_server._server.app
+
+        with patch("importlib.import_module", return_value=_unhealthy_app()):
+            with self.assertRaises(RuntimeError):
+                updates.reload_webapp(None)
+
+        self.assertIs(api_server._server.app, before_app)
+        self.assertIs(sys.modules["webapp"], self.modules["webapp"])
+        self.assertEqual(_health(self.port)["status"], 200)
+
+    def test_a_swap_that_never_lands_is_rolled_back(self):
+        before_app = api_server._server.app
+
+        # A ``replace_app`` that silently does nothing must not be reported as a
+        # successful update.
+        with patch.object(api_server, "replace_app", lambda app: None):
+            with self.assertRaises(RuntimeError):
+                updates.reload_webapp(None)
+
+        self.assertIs(api_server._server.app, before_app)
+        self.assertIs(sys.modules["webapp"], self.modules["webapp"])
+        self.assertEqual(_health(self.port)["status"], 200)
+
+
+class BytecodeTests(unittest.TestCase):
+    def test_replacing_a_module_drops_its_compiled_copy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "src" / "webapp" / "thing.py"
+            source.parent.mkdir(parents=True)
+            source.write_text("VALUE = 1\n", encoding="utf-8")
+            py_compile.compile(str(source), doraise=True)
+            cached = Path(importlib.util.cache_from_source(str(source)))
+            self.assertTrue(cached.is_file())
+
+            with patch.object(updates, "ROOT", root), \
+                    patch.object(updates, "DATA_DIR", root / "data" / "updates"), \
+                    patch.object(updates, "_download", lambda relative, expected: b"VALUE = 2\n"):
+                updates._stage_area("webapp", [{"path": "src/webapp/thing.py", "status": "modified", "sha": "x"}], "run")
+
+            self.assertEqual(source.read_text(encoding="utf-8"), "VALUE = 2\n")
+            # A compiled copy whose stamp still matches the file would keep the
+            # old module importing until the process restarts.
+            self.assertFalse(cached.is_file())

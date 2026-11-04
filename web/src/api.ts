@@ -88,6 +88,8 @@ export const getPublicConfig = () => api<PublicConfig>("/api/config");
 export const getBotEmojis = () => api<BotEmojisResponse>("/api/emojis");
 export const getStats = () => api<BotStats>("/api/botstats");
 export const getStatus = () => api<StatusPayload>("/api/status");
+/** The build the site is serving now; an open tab compares it with its own. */
+export const getSiteBuild = (signal?: AbortSignal) => api<{ build: string }>("/api/site/build", { signal });
 
 // ── Owner maintenance controls (staff settings) ─────────────
 export const getStaffMaintenance = () => api<StaffMaintenanceResponse>("/api/staff/maintenance");

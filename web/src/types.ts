@@ -1113,9 +1113,8 @@ export type StaffMember = {
   public_banner_url?: string | null;
   public_links?: PublicProfileLink[];
   avatar_url?: string | null;
-  /** Discord's avatar decoration, drawn around the avatar; the animated copy when there is one. */
+  /** Discord's avatar decoration, drawn around the avatar. Animated ones are animated PNGs. */
   avatar_decoration_url?: string | null;
-  avatar_decoration_animated_url?: string | null;
   status?: string;
   status_label?: string;
   activities?: StaffActivity[];

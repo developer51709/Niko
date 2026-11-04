@@ -71,5 +71,9 @@
   "status.offline": "Desconectado",
   "status.streaming": "Emitiendo",
   "auth.continue": "Continuar con Discord",
-  "auth.unavailable": "El inicio de sesión con Discord no está disponible ahora mismo. Inténtalo más tarde."
+  "auth.unavailable": "El inicio de sesión con Discord no está disponible ahora mismo. Inténtalo más tarde.",
+  "update.kicker": "Nueva versión",
+  "update.body": "Esta pestaña sigue con la versión con la que se abrió. Recarga para aplicar los últimos cambios.",
+  "update.reload": "Recargar página",
+  "update.later": "Ahora no"
 }

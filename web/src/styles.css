@@ -17,6 +17,8 @@
 @import "./styles/maintenance.css";
 @import "./styles/owner.css";
 @import "./styles/updates.css";
+@import "./styles/update-prompt.css";
+@import "./styles/not-found.css";
 
 :root {
   font-family: "Plus Jakarta Sans", sans-serif;
@@ -524,7 +526,7 @@ em { color: var(--accent); font-style: normal; }
   background: var(--canvas);
   color: var(--ink);
 }
-.dashboard-layout .dash-sidebar { width: 248px; min-height: 100vh; padding: 28px 17px 20px; background: var(--sidebar); border-right-color: var(--line); position: sticky; top: 0; height: 100vh; }
+.dashboard-layout .dash-sidebar { width: 248px; min-height: 100vh; padding: 28px 17px 20px; background: var(--sidebar); border-right-color: var(--line); position: sticky; top: 0; height: 100vh; overflow-y: auto; overscroll-behavior: contain; }
 .dashboard-layout .dash-sidebar-brand { padding: 0 8px; }
 .dashboard-layout .dash-sidebar .brand-mark { border-radius: 9px; }
 .dashboard-layout .side-rail-heading { display: flex; align-items: center; justify-content: space-between;  margin: 26px 9px 10px; }
@@ -578,12 +580,8 @@ em { color: var(--accent); font-style: normal; }
 .dashboard-layout .staff-profile-rules h3 { margin-top: 7px; }
 .dashboard-layout .staff-profile-rules p { margin-bottom: 12px; }
 @media (max-width: 760px) { .dashboard-layout .staff-profile-sidebar { margin-top: 16px; } }
-.dashboard-layout .staff-tabs { display: flex; gap: 8px; margin: 0 0 20px; padding: 6px; overflow-x: auto; background: rgba(255, 255, 255, .035); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow-soft); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
-.dashboard-layout .staff-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 42px; padding: 9px 14px; white-space: nowrap; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 9px; font-size: 11px; font-weight: 700; transition: background .18s ease, color .18s ease, border-color .18s ease; }
-.dashboard-layout .staff-tabs button:hover, .dashboard-layout .staff-tabs button.active { color: var(--ink); background: var(--surface-raised); border-color: var(--line); }
-.dashboard-layout .staff-tabs button.active { box-shadow: inset 0 -2px 0 var(--accent); }
-.dashboard-layout .staff-tabs .icon { width: 15px; height: 15px; }
-.dashboard-layout .staff-tabs button > span { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; color: var(--accent-dark); background: var(--callout); border-radius: 999px; font: 9px "Space Mono", monospace; }
+/* A count on a sidebar entry, such as the staff workspace's open queues. */
+.dashboard-layout .dash-nav .nav-badge { display: grid; place-items: center; min-width: 20px; height: 20px; margin-left: auto; padding: 0 5px; color: var(--accent-dark); background: var(--callout); border-radius: 999px; font: 9px "Space Mono", monospace; }
 .dashboard-layout .staff-guild-operations { display: grid; gap: 18px; }
 .dashboard-layout .staff-guilds-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; padding: 7px 2px 5px; }
 .dashboard-layout .staff-guilds-heading h2 { margin: 8px 0; font-size: clamp(23px, 3vw, 32px); letter-spacing: -.06em; }
@@ -1508,7 +1506,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .dashboard-layout .staff-panel,
   .dashboard-layout .staff-sidebar-card,
   .dashboard-layout .staff-role-card,
-  .dashboard-layout .staff-tabs,
   .dashboard-layout .staff-links-section,
   .dashboard-layout .staff-card-section,
   .dashboard-layout .staff-profile-preview,

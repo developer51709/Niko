@@ -18,7 +18,10 @@ def root():
 
 @app.route("/dashboard")
 def dashboard_redirect():
-    return send_from_directory(WEB_DIST_DIR, "index.html")
+    # The shell rather than the file on disk: it carries the page's metadata and
+    # the build id an open tab compares with to know it can reload into a newer
+    # one (see ``social.render_site_shell``).
+    return serve_spa_shell()
 
 @app.route("/llms.txt")
 def llms_index():

@@ -270,6 +270,10 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
                       <summary>
                         <Icon name="file" />
                         <span>{t("owner.updates.showFiles", { count: area.changed })}</span>
+                        {/* A real disclosure arrow rather than a text glyph:
+                            it inherits the icon stroke and turns with the
+                            panel instead of sitting fixed. */}
+                        <Icon name="chevron" className="updates-files-caret" />
                       </summary>
                       <ul>
                         {area.files.map((file) => (

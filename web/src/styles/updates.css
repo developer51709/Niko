@@ -183,14 +183,14 @@
 .updates-files summary:hover { color: var(--accent-dark); }
 .updates-files summary svg { width: 12px; height: 12px; flex: none; }
 
-.updates-files summary::after {
-  content: "▾";
-  display: inline-block;
-  font-size: 9px;
+/* The disclosure arrow. A right-pointing chevron at rest, turned down when the
+   file list is open, so it reads the same as the site's other carets. */
+.updates-files summary .updates-files-caret {
+  color: inherit;
   transition: transform .18s ease;
 }
 
-.updates-files[open] summary::after { transform: rotate(180deg); }
+.updates-files[open] summary .updates-files-caret { transform: rotate(90deg); }
 
 .updates-files summary:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
@@ -476,7 +476,7 @@
 @media (prefers-reduced-motion: reduce) {
   .updates-area,
   .updates-files summary,
-  .updates-files summary::after,
+  .updates-files summary .updates-files-caret,
   .updates-progress-track > span { transition: none; }
   .updates-progress-steps li.is-active i { animation: none; }
 }

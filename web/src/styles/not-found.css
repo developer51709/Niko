@@ -1,0 +1,235 @@
+/* The 404 page, in its two variants: a page missing on a used host, and a host
+   that serves no site at all.
+
+   The card is one of the site's glass panels (same translucent fill, hairline
+   border and backdrop blur as the dashboard cards) with a ghosted 404 behind
+   the copy, so a dead end still looks like part of the product. Everything is
+   sized from the viewport so it fits a phone without scrolling. */
+
+.not-found-page {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 190px);
+  min-height: calc(100dvh - 190px);
+  padding: 64px 0 88px;
+}
+
+/* The host variant renders without the site's header and footer. */
+.not-found-page-alone {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 56px 0;
+}
+
+.not-found-card {
+  position: relative;
+  overflow: hidden;
+  width: min(620px, 100%);
+  padding: 42px 40px 34px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(139, 213, 177, .10), transparent 62%),
+    linear-gradient(160deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .015) 48%),
+    rgba(9, 10, 12, .55);
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, .05);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* Big enough to read as a numeral, faint enough not to fight the headline. */
+.not-found-card::before {
+  content: "404";
+  position: absolute;
+  top: -.16em;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 0;
+  color: rgba(255, 255, 255, .035);
+  font: 800 clamp(120px, 21vw, 190px)/1 "Plus Jakarta Sans", sans-serif;
+  letter-spacing: -.08em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.not-found-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* The host variant stands on its own: no site navigation, so it carries the
+   mark itself and can be a little narrower. */
+.not-found-card-alone {
+  width: min(540px, 100%);
+}
+
+.not-found-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 22px;
+}
+
+.not-found-code {
+  display: inline-block;
+  color: var(--sage);
+  font: 700 10px "Space Mono", monospace;
+  letter-spacing: .26em;
+  text-transform: uppercase;
+}
+
+.not-found-card h1 {
+  margin: 12px 0 12px;
+  font-size: clamp(27px, 4.6vw, 40px);
+  line-height: 1.06;
+  letter-spacing: -.05em;
+  text-wrap: balance;
+}
+
+.not-found-body {
+  margin: 0 auto;
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+
+/* The address that missed, or the two the visitor confused. One line, ellipsised
+   in the middle of a long path instead of pushing the card wider. */
+.not-found-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  margin: 20px auto 0;
+  padding: 7px 13px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.not-found-target svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--dim);
+}
+
+.not-found-target code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent-dark);
+  font-family: "Space Mono", monospace;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+/* Buttons keep the site's content-sized shape instead of stretching to fill the
+   row; a shared minimum width makes the pair read as one even cluster even when
+   one label is much shorter than the other. */
+.not-found-actions .button {
+  flex: 0 0 auto;
+  min-width: 158px;
+}
+
+.not-found-actions .button .icon {
+  flex: none;
+}
+
+/* The paths that do work, on the page variant only. */
+.not-found-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11px;
+}
+
+.not-found-links a {
+  color: var(--dim);
+  transition: color .18s ease;
+}
+
+.not-found-links a:hover {
+  color: var(--accent-dark);
+}
+
+@media (max-width: 720px) {
+  .not-found-page {
+    min-height: calc(100vh - 210px);
+    min-height: calc(100dvh - 210px);
+    padding: 40px 0 56px;
+  }
+
+  /* Still the whole viewport on a phone: this variant has no site chrome. */
+  .not-found-page-alone {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 32px 0;
+  }
+
+  .not-found-card {
+    padding: 32px 22px 26px;
+    border-radius: 16px;
+  }
+
+  .not-found-card::before {
+    top: -.1em;
+    font-size: clamp(96px, 30vw, 150px);
+  }
+
+  .not-found-brand {
+    margin-bottom: 16px;
+  }
+
+  .not-found-links {
+    gap: 8px 16px;
+    margin-top: 22px;
+    padding-top: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* One full-width button per row is easier to hit than two half-width ones,
+     and the address chip gets the whole line to itself. */
+  .not-found-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .not-found-actions .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .not-found-target {
+    display: flex;
+    padding: 7px 11px;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .not-found-card {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

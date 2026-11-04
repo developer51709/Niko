@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -346,6 +347,31 @@ def _write(relative: str, body: bytes) -> None:
     os.replace(temporary, path)
 
 
+def _drop_bytecode(relative: str) -> None:
+    """Forget the compiled copy of a file that is about to be replaced.
+
+    ``importlib.invalidate_caches`` clears the finders' directory listings, not
+    a ``.pyc`` whose recorded source stamp still matches the file on disk. A
+    replaced module that arrives with the same size and an unchanged timestamp —
+    a copy that keeps its mtime, or a filesystem with coarse ones — would then
+    be imported from the previous build's bytecode until the process restarts,
+    which is exactly the "the update only shows up after a restart" report. The
+    source is what has to be compiled next, so the compiled copy goes.
+    """
+    path = ROOT / relative
+    if path.suffix != ".py":
+        return
+    try:
+        cached = Path(importlib.util.cache_from_source(str(path)))
+    except (NotImplementedError, ValueError):
+        return
+    try:
+        if cached.is_file():
+            cached.unlink()
+    except OSError:
+        pass
+
+
 def _stage_area(name: str, changes: list[dict], run_id: str) -> dict:
     """Write one area's changed files, keeping a backup of what was there."""
     written = 0
@@ -358,6 +384,7 @@ def _stage_area(name: str, changes: list[dict], run_id: str) -> dict:
             if path.is_file():
                 backup.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, backup)
+            _drop_bytecode(relative)
             if change["status"] == "removed":
                 if path.is_file():
                     path.unlink()
@@ -548,16 +575,37 @@ def reload_webapp(bot) -> dict:
     importlib.invalidate_caches()
     reload_locale_feed()
 
+    serving = None
     try:
         fresh = importlib.import_module("webapp")
         fresh.configure_bot(bot)
-        from api_server import replace_app
+        import api_server
 
-        replace_app(fresh.app)
+        # What is answering right now, so a failed swap can put it back exactly
+        # as it was instead of leaving the server on a half-built app.
+        serving = api_server._server.app if api_server._server is not None else None
+        api_server.replace_app(fresh.app)
+        if api_server._server.app is not fresh.app:
+            raise RuntimeError("The rebuilt dashboard was not installed on the running server.")
+        # Installing it is half the claim; a route answering from the new modules
+        # is the other half. The app can import cleanly and still fail a request,
+        # and reporting the area as applied when it does is how an update ends up
+        # looking like it needs a restart.
+        probe = fresh.app.test_client().get("/api/health")
+        if probe.status_code != 200:
+            raise RuntimeError(f"The rebuilt dashboard answered {probe.status_code} for /api/health.")
     except Exception:
-        # Nothing was swapped, so the server still holds the old app: give it
-        # back the modules that app was built from and let the caller roll the
-        # files back. The API never stops answering during any of this.
+        # Either nothing was swapped, or it was swapped and cannot answer: in
+        # both cases the server goes back to the app and the modules it was
+        # serving before, and the caller rolls the files back. The API never
+        # stops answering during any of this.
+        if serving is not None:
+            try:
+                import api_server
+
+                api_server.replace_app(serving)
+            except Exception:
+                pass
         _restore_modules(previous)
         raise
     return {"swapped": True, "routes": len(fresh.app.url_map._rules)}

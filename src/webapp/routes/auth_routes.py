@@ -8,6 +8,22 @@ globals().update({
     if not name.startswith("__")
 })
 
+def _oauth_destination(path: str) -> str:
+    """Where a finished sign-in lands, on the host that started it.
+
+    The hop through Discord happens on the site's canonical address, so a
+    visitor who signed in on ``dash.`` would otherwise end up on the apex long
+    form of the dashboard. The origin comes from ``PUBLIC_URL`` rather than from
+    the request, so a crafted ``Host`` header can never aim this redirect at
+    another site.
+    """
+    prefix = session.pop("oauth_return", "")
+    origin = config.section_origins().get(prefix, "") if prefix else ""
+    if not origin:
+        return path
+    return f"{origin}{config.public_path(prefix, path)}"
+
+
 @app.route("/auth/login")
 def auth_login():
     if not oauth_enabled():
@@ -18,8 +34,18 @@ def auth_login():
 
     state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
+    host = runtime.request_host()
     next_path = request.args.get("next", "/dashboard")
-    session["oauth_next"] = next_path if next_path.startswith("/") and not next_path.startswith("//") else "/dashboard"
+    if not (next_path.startswith("/") and not next_path.startswith("//")):
+        next_path = "/dashboard"
+    # A section host writes its paths short (``/staff`` on ``dash.``), while the
+    # callback runs on the site's own address (``runtime.redirect_uri``), which
+    # only knows the apex form: ``/dashboard/staff``. Without this a sign-in
+    # started on the subdomain would come back to a page the apex does not have.
+    session["oauth_next"] = config.apex_path(host, next_path)
+    # Remember the section so the finished sign-in can be handed back to the
+    # host it started on instead of the long form of the same page.
+    session["oauth_return"] = config.subdomain_prefix(host)
 
     params = urlencode({
         "client_id": DISCORD_CLIENT_ID,
@@ -86,7 +112,7 @@ def auth_callback():
     # ``guilds.join``, and a session that predates it has to re-authorize.
     session["oauth_scopes"] = granted_scopes
 
-    return redirect(session.pop("oauth_next", "/dashboard"))
+    return redirect(_oauth_destination(session.pop("oauth_next", "/dashboard")))
 
 @app.route("/auth/logout")
 def auth_logout():

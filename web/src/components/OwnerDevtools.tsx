@@ -25,6 +25,7 @@ import { useLanguage, type LanguageCode } from "../i18n";
 import { pageFromPath } from "../router";
 import type { AuthStatus } from "../types";
 import { notifyError, notifySuccess } from "../utils/toast";
+import { Select } from "./dashboard/Select";
 import { Icon } from "./Icon";
 
 const OUTLINE_CLASS = "owner-devtools-outline";
@@ -247,14 +248,17 @@ export function OwnerDevtools() {
                 server's own locale.
               </small>
             </div>
-            <select
-              className="owner-devtools-select"
-              aria-labelledby="owner-devtools-language"
+            {/* The panel's own dropdown, so the language picker matches the
+                rest of the site instead of dropping back to the browser's
+                native menu inside developer tooling. */}
+            <Select
+              ariaLabel="Website language"
+              listClassName="owner-devtools-select-list"
+              placeholder={null}
               value={language}
-              onChange={(event) => setLanguage(event.target.value as LanguageCode)}
-            >
-              {languages.map((entry) => <option key={entry.code} value={entry.code}>{entry.label}</option>)}
-            </select>
+              onChange={(value) => setLanguage(value as LanguageCode)}
+              options={languages.map((entry) => ({ value: entry.code, label: entry.label }))}
+            />
           </div>
           {overridden && <button type="button" className="owner-devtools-reset" onClick={resetLanguage}>
             Use browser language ({languages.find((entry) => entry.code === browser)?.label ?? "English"})

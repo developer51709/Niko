@@ -269,35 +269,32 @@ class AvatarDecorationTests(unittest.TestCase):
         runtime._discord_bot = SimpleNamespace(guilds=[SimpleNamespace(get_member=lambda user_id: member)])
         return staff._staff_identity("44")
 
-    def test_an_animated_decoration_carries_its_gif_copy(self):
+    def test_an_animated_decoration_is_served_as_its_animated_png(self):
+        """Discord's preset is an APNG, and asking it for a gif answers 415."""
         decoration = SimpleNamespace(
-            url="https://cdn.discordapp.com/avatar-decoration-presets/a.png",
+            url="https://cdn.discordapp.com/avatar-decoration-presets/a.png?size=96",
             is_animated=lambda: True,
-            with_format=lambda fmt: SimpleNamespace(url=f"https://cdn.discordapp.com/avatar-decoration-presets/a.{fmt}"),
+            with_format=lambda fmt: self.fail("a decoration preset must not be fetched as another format"),
         )
 
         identity = self._identity(decoration)
 
-        self.assertEqual(identity["avatar_decoration_url"], "https://cdn.discordapp.com/avatar-decoration-presets/a.png")
-        self.assertEqual(identity["avatar_decoration_animated_url"], "https://cdn.discordapp.com/avatar-decoration-presets/a.gif")
+        # The one URL Discord serves is the animation itself.
+        self.assertEqual(identity["avatar_decoration_url"], "https://cdn.discordapp.com/avatar-decoration-presets/a.png?size=96")
+        self.assertNotIn("avatar_decoration_animated_url", identity)
 
-    def test_a_still_decoration_has_no_animated_copy(self):
-        decoration = SimpleNamespace(
-            url="https://cdn.discordapp.com/avatar-decoration-presets/b.png",
-            is_animated=lambda: False,
-            with_format=lambda fmt: SimpleNamespace(url="unused"),
-        )
+    def test_the_decoration_url_is_passed_through_untouched(self):
+        decoration = SimpleNamespace(url="https://cdn.discordapp.com/avatar-decoration-presets/b.png?size=96")
 
         identity = self._identity(decoration)
 
-        self.assertEqual(identity["avatar_decoration_url"], "https://cdn.discordapp.com/avatar-decoration-presets/b.png")
-        self.assertIsNone(identity["avatar_decoration_animated_url"])
+        self.assertEqual(identity["avatar_decoration_url"], "https://cdn.discordapp.com/avatar-decoration-presets/b.png?size=96")
 
     def test_a_member_without_a_decoration_reports_none(self):
         identity = self._identity(None)
 
         self.assertIsNone(identity["avatar_decoration_url"])
-        self.assertIsNone(identity["avatar_decoration_animated_url"])
+        self.assertNotIn("avatar_decoration_animated_url", identity)
 
 
 class ProfilePopupPresenceTests(unittest.TestCase):

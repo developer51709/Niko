@@ -71,5 +71,9 @@
   "status.offline": "Offline",
   "status.streaming": "Streamt",
   "auth.continue": "Weiter mit Discord",
-  "auth.unavailable": "Die Discord-Anmeldung ist gerade nicht verfügbar. Versuch es später noch einmal."
+  "auth.unavailable": "Die Discord-Anmeldung ist gerade nicht verfügbar. Versuch es später noch einmal.",
+  "update.kicker": "Neue Version",
+  "update.body": "Dieser Tab läuft noch mit der Version, mit der er geöffnet wurde. Lade neu, um die letzten Änderungen zu übernehmen.",
+  "update.reload": "Seite neu laden",
+  "update.later": "Jetzt nicht"
 }

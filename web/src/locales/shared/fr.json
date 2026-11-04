@@ -71,5 +71,7 @@
   "status.offline": "Hors ligne",
   "status.streaming": "En direct",
   "auth.continue": "Continuer avec Discord",
-  "auth.unavailable": "La connexion Discord n’est pas disponible pour le moment. Réessaie plus tard."
-}
+  "auth.unavailable": "La connexion Discord n’est pas disponible pour le moment. Réessaie plus tard.",
+  "update.kicker": "Nouvelle version",  "update.body": "Cet onglet utilise encore la version avec laquelle il a été ouvert. Recharge pour récupérer les derniers changements.",
+  "update.reload": "Recharger la page",
+  "update.later": "Plus tard"}

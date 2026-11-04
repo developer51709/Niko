@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import type { KeyboardEvent } from "react";
 import { createStaffGuildInvite, getAuth, getGuilds, getTeamRecruitmentSettings, getTeamRecruitmentSubmissions, getStaffBilling, getStaffDataRemovalRequests, getStaffMembers, getStaffBlacklist, getStaffBlacklistAppeals, getStaffErrorReports, getStaffGuilds, getStaffMe, getStats, leaveStaffGuild, manageStaffMember, resetStaffGuildProfile, resolveStaffBillingPayment, reviewStaffDataRemoval, reviewTeamRecruitmentSubmission, reviewStaffBlacklistAppeal, saveGlobalProfile, saveStaffProfile, sendStaffGuildNotice, setTeamRecruitmentOpeningStatus, setStaffGuildBlacklist, updateStaffBlacklist, updateStaffSubscription } from "../api";
 import { DiscordMarkdown } from "../components/DiscordMarkdown";
 import { DiscordStatusAvatar } from "../components/DiscordStatusAvatar";
@@ -7,7 +6,7 @@ import { Icon } from "../components/Icon";
 import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../utils/toast";
 import { LOCKDOWN_STATUS_LABELS, blacklistGuildWithLockdown, groupLockdownSteps } from "../utils/guildBlacklist";
 import type { GuildLockdownSummary } from "../utils/guildBlacklist";
-import { DashboardShell } from "../components/dashboard/DashboardShell";
+import { DashboardShell, type ShellTab } from "../components/dashboard/DashboardShell";
 import { ProxyWorkersView } from "../components/dashboard/ProxyWorkersView";
 import { LavalinkView } from "../components/dashboard/LavalinkView";
 import { BotAnalyticsView } from "../components/dashboard/BotAnalyticsView";
@@ -104,11 +103,6 @@ function tabFromHash(hash: string, role: string | null): StaffTab | null {
   if (!(name in TAB_ROLES)) return null;
   if (role && !tabAllowedForRole(role, name)) return null;
   return name;
-}
-
-function tabFromTabButton(button: HTMLButtonElement): StaffTab | null {
-  const name = /^staff-(.+)-tab$/.exec(button.id)?.[1] as StaffTab | undefined;
-  return name && name in TAB_ROLES ? name : null;
 }
 
 /** The brand accent the staff card uses when no custom colour is saved. */
@@ -648,20 +642,6 @@ export function StaffDashboardPage() {
     } catch (reason) { notifyError(reason instanceof Error ? reason.message : t("applications.saveFailed"), "staff-niko-applications"); }
     finally { setNikoBusy(false); }
   };
-  const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
-    const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    if (!tabs.length) return;
-    const current = tabs.findIndex((tab) => tab === document.activeElement);
-    const next = event.key === "Home" ? 0
-      : event.key === "End" ? tabs.length - 1
-      : ((current === -1 ? 0 : current) + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    event.preventDefault();
-    const target = tabs[next];
-    const tab = tabFromTabButton(target);
-    target.focus();
-    if (tab) setActiveTab(tab);
-  };
   const saveGlobal = async () => {
     if (savingGlobal) return;
     setSavingGlobal(true); notifyLoading(t("global.saving"), "staff-global");
@@ -670,31 +650,35 @@ export function StaffDashboardPage() {
     finally { setSavingGlobal(false); }
   };
 
+  // The page's navigation, handed to the shell so the tabs live in the sidebar
+  // instead of a bar over the content. The role checks are the same ones the
+  // panels render behind, so a tab can never be offered for a panel the member
+  // may not open.
+  const staffTabs: ShellTab[] = [
+    { id: "profile", label: t("tabs.profile"), icon: "users" },
+    { id: "analytics", label: t("tabs.analytics"), icon: "chart" },
+    ...(canManageGlobal ? [{ id: "global", label: t("tabs.global"), icon: "settings" }] : []),
+    ...(canManageGuilds ? [{ id: "guilds", label: t("tabs.guilds"), icon: "shield", badge: staffGuilds.length }] : []),
+    ...(canManageGuilds ? [{ id: "blacklist", label: t("tabs.blacklist"), icon: "lock", badge: blacklistEntries.users.length + blacklistEntries.guilds.length }] : []),
+    ...(canReviewAppeals ? [{ id: "appeals", label: t("tabs.appeals"), icon: "message", badge: appeals.filter((appeal) => appeal.status === "pending").length }] : []),
+    ...(canManageProxyWorkers ? [{ id: "proxy-workers", label: t("tabs.proxy"), icon: "chart" }] : []),
+    ...(canManageLavalink ? [{ id: "lavalink", label: t("tabs.lavalink"), icon: "guild_server" }] : []),
+    ...(canManageNikoApplications ? [{ id: "team-recruitment", label: t("tabs.applications"), icon: "users", badge: nikoApplications.reduce((count, application) => count + application.submission_count, 0) }] : []),
+    ...(canManageMaintenance ? [{ id: "maintenance", label: t("tabs.maintenance"), icon: "settings" }] : []),
+    ...(canManageLocales ? [{ id: "locales", label: t("tabs.locales"), icon: "doc" }] : []),
+    ...(canManageUpdates ? [{ id: "updates", label: t("tabs.updates"), icon: "spark" }] : []),
+    ...(canManageStaffRoster ? [{ id: "staff-management", label: t("tabs.roster"), icon: "users", badge: staffRoster.filter((member) => member.staff_status !== "former").length }] : []),
+    ...(canManageStaffRoster ? [{ id: "broadcasts", label: t("tabs.broadcasts"), icon: "message" }] : []),
+    ...(canManageDataRemoval ? [{ id: "data-removal", label: t("tabs.dataRemoval"), icon: "lock", badge: dataRemoval?.filter((request) => request.status === "pending").length ?? 0 }] : []),
+    ...(canManageBilling ? [{ id: "billing", label: t("tabs.billing"), icon: "guild_economy", badge: billing?.payments.filter((payment) => payment.issue_status === "open").length ?? 0 }] : []),
+    { id: "reports", label: t("tabs.reports"), icon: "alert", badge: errorReports.length },
+  ];
+
   const content = <div className="staff-page">
     <header className="staff-heading">
       <div><div className="eyebrow">{t("page.eyebrow")}</div><h1>{t("page.title")}</h1><p>{t("page.body")}</p></div>
       <div className="staff-role-card"><span className="staff-role-mark"><img src={signedInAvatar} alt={t("page.avatarAlt")} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = discordDefaultAvatar; }} /></span><span><small>{t("page.signedInAs")}</small><strong>{staff.role_label}</strong></span></div>
     </header>
-
-    <div className="staff-tabs" role="tablist" aria-label={t("tabs.aria")} onKeyDown={onTabKeyDown}>
-      <button type="button" role="tab" id="staff-profile-tab" aria-selected={activeTab === "profile"} aria-controls="staff-profile-panel" className={activeTab === "profile" ? "active" : ""} onClick={() => setActiveTab("profile")}><Icon name="users" /> {t("tabs.profile")}</button>
-      <button type="button" role="tab" id="staff-analytics-tab" aria-selected={activeTab === "analytics"} aria-controls="staff-analytics-panel" className={activeTab === "analytics" ? "active" : ""} onClick={() => setActiveTab("analytics")}><Icon name="chart" /> {t("tabs.analytics")}</button>
-      {canManageGlobal && <button type="button" role="tab" id="staff-global-tab" aria-selected={activeTab === "global"} aria-controls="staff-global-panel" className={activeTab === "global" ? "active" : ""} onClick={() => setActiveTab("global")}><Icon name="settings" /> {t("tabs.global")}</button>}
-      {canManageGuilds && <button type="button" role="tab" id="staff-guilds-tab" aria-selected={activeTab === "guilds"} aria-controls="staff-guilds-panel" className={activeTab === "guilds" ? "active" : ""} onClick={() => setActiveTab("guilds")}><Icon name="shield" /> {t("tabs.guilds")} <span>{staffGuilds.length}</span></button>}
-      {canManageGuilds && <button type="button" role="tab" id="staff-blacklist-tab" aria-selected={activeTab === "blacklist"} aria-controls="staff-blacklist-panel" className={activeTab === "blacklist" ? "active" : ""} onClick={() => setActiveTab("blacklist")}><Icon name="lock" /> {t("tabs.blacklist")} <span>{blacklistEntries.users.length + blacklistEntries.guilds.length}</span></button>}
-      {canReviewAppeals && <button type="button" role="tab" id="staff-appeals-tab" aria-selected={activeTab === "appeals"} aria-controls="staff-appeals-panel" className={activeTab === "appeals" ? "active" : ""} onClick={() => setActiveTab("appeals")}><Icon name="message" /> {t("tabs.appeals")} <span>{appeals.filter((appeal) => appeal.status === "pending").length}</span></button>}
-      {canManageProxyWorkers && <button type="button" role="tab" id="staff-proxy-workers-tab" aria-selected={activeTab === "proxy-workers"} aria-controls="staff-proxy-workers-panel" className={activeTab === "proxy-workers" ? "active" : ""} onClick={() => setActiveTab("proxy-workers")}><Icon name="chart" /> {t("tabs.proxy")}</button>}
-      {canManageLavalink && <button type="button" role="tab" id="staff-lavalink-tab" aria-selected={activeTab === "lavalink"} aria-controls="staff-lavalink-panel" className={activeTab === "lavalink" ? "active" : ""} onClick={() => setActiveTab("lavalink")}><Icon name="guild_server" /> {t("tabs.lavalink")}</button>}
-      {canManageNikoApplications && <button type="button" role="tab" id="staff-team-recruitment-tab" aria-selected={activeTab === "team-recruitment"} aria-controls="staff-team-recruitment-panel" className={activeTab === "team-recruitment" ? "active" : ""} onClick={() => setActiveTab("team-recruitment")}><Icon name="users" /> {t("tabs.applications")} <span>{nikoApplications.reduce((count, application) => count + application.submission_count, 0)}</span></button>}
-      {canManageMaintenance && <button type="button" role="tab" id="staff-maintenance-tab" aria-selected={activeTab === "maintenance"} aria-controls="staff-maintenance-panel" className={activeTab === "maintenance" ? "active" : ""} onClick={() => setActiveTab("maintenance")}><Icon name="settings" /> {t("tabs.maintenance")}</button>}
-      {canManageLocales && <button type="button" role="tab" id="staff-locales-tab" aria-selected={activeTab === "locales"} aria-controls="staff-locales-panel" className={activeTab === "locales" ? "active" : ""} onClick={() => setActiveTab("locales")}><Icon name="doc" /> {t("tabs.locales")}</button>}
-      {canManageUpdates && <button type="button" role="tab" id="staff-updates-tab" aria-selected={activeTab === "updates"} aria-controls="staff-updates-panel" className={activeTab === "updates" ? "active" : ""} onClick={() => setActiveTab("updates")}><Icon name="spark" /> {t("tabs.updates")}</button>}
-      {canManageStaffRoster && <button type="button" role="tab" id="staff-staff-management-tab" aria-selected={activeTab === "staff-management"} aria-controls="staff-staff-management-panel" className={activeTab === "staff-management" ? "active" : ""} onClick={() => setActiveTab("staff-management")}><Icon name="users" /> {t("tabs.roster")} <span>{staffRoster.filter((member) => member.staff_status !== "former").length}</span></button>}
-      {canManageStaffRoster && <button type="button" role="tab" id="staff-broadcasts-tab" aria-selected={activeTab === "broadcasts"} aria-controls="staff-broadcasts-panel" className={activeTab === "broadcasts" ? "active" : ""} onClick={() => setActiveTab("broadcasts")}><Icon name="message" /> {t("tabs.broadcasts")}</button>}
-      {canManageDataRemoval && <button type="button" role="tab" id="staff-data-removal-tab" aria-selected={activeTab === "data-removal"} aria-controls="staff-data-removal-panel" className={activeTab === "data-removal" ? "active" : ""} onClick={() => setActiveTab("data-removal")}><Icon name="lock" /> {t("tabs.dataRemoval")} <span>{dataRemoval?.filter((request) => request.status === "pending").length ?? 0}</span></button>}
-      {canManageBilling && <button type="button" role="tab" id="staff-billing-tab" aria-selected={activeTab === "billing"} aria-controls="staff-billing-panel" className={activeTab === "billing" ? "active" : ""} onClick={() => setActiveTab("billing")}><Icon name="guild_economy" /> {t("tabs.billing")} <span>{billing?.payments.filter((payment) => payment.issue_status === "open").length ?? 0}</span></button>}
-      <button type="button" role="tab" id="staff-reports-tab" aria-selected={activeTab === "reports"} aria-controls="staff-reports-panel" className={activeTab === "reports" ? "active" : ""} onClick={() => setActiveTab("reports")}><Icon name="alert" /> {t("tabs.reports")} <span>{errorReports.length}</span></button>
-    </div>
 
     {activeTab === "profile" && <section id="staff-profile-panel" role="tabpanel" aria-labelledby="staff-profile-tab"><div className="staff-layout">
       <section className="staff-panel staff-panel-main">
@@ -898,5 +882,5 @@ export function StaffDashboardPage() {
     </div></section></div>}
   </div>;
 
-  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={null} view="overview" section="overview" userTab="overview" stats={stats} staffRole={staff.role} onHome={() => navigate(dashboardPath())} onServers={() => navigate(dashboardServersPath())} onGuildChange={() => undefined} onSectionChange={() => undefined} onUserTabChange={(tab) => navigate(dashboardUserPath(tab))} onRefresh={() => window.location.reload()} refreshing={false}>{content}</DashboardShell>;
+  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={null} view="overview" section="overview" userTab="overview" stats={stats} staffRole={staff.role} staffTabs={staffTabs} activeStaffTab={activeTab} onStaffTabChange={(tab) => setActiveTab(tab as StaffTab)} onHome={() => navigate(dashboardPath())} onServers={() => navigate(dashboardServersPath())} onGuildChange={() => undefined} onSectionChange={() => undefined} onUserTabChange={(tab) => navigate(dashboardUserPath(tab))} onRefresh={() => window.location.reload()} refreshing={false}>{content}</DashboardShell>;
 }

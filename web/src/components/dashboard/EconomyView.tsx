@@ -1,4 +1,5 @@
 import { AnimatedValue, CoinLabel, DashHeading } from "./DashboardViews";
+import { siteHref } from "../../router";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import type { EconomyStanding, EconomyTransaction, LotteryStanding } from "../../types";
@@ -201,7 +202,7 @@ export function EconomyView({ standing }: { standing: EconomyStanding }) {
             <div><span>{t("economy.lifetimeEarnings")}</span><AnimatedValue value={standing.total_earned}>{formatNumber(standing.total_earned)}</AnimatedValue></div>
           </div>
           <p className="economy-panel-note">{t("economy.rankNote")}</p>
-          <a className="button button-muted button-small" href="/leaderboard">{t("economy.openLeaderboard")} <Icon name="arrow" /></a>
+          <a className="button button-muted button-small" href={siteHref("/leaderboard")}>{t("economy.openLeaderboard")} <Icon name="arrow" /></a>
         </section>
 
         <section className="dash-panel">
