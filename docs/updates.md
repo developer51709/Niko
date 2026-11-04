@@ -67,6 +67,15 @@ by area, and applies what is selected:
 | API & dashboard | `src/webapp/**` | `webapp.*` is re-imported and the new Flask app is swapped into the running server (`server.app`). The listening socket, its thread and in-flight connections stay up. |
 | Bot core | `src/bot.py`, `src/api_server.py`, `src/events/**`, `src/database/**` | A successor process is started on the inherited listening socket; see below. |
 
+The API rebuild is transactional. The modules the running app was built from
+are snapshotted before `webapp.*` is dropped; if the new copy fails to import,
+they are put back and the area is rolled back, so the page reports the error
+while the site keeps answering on the old code. An API update never leaves a
+process whose modules were purged and whose route imports now read a file that
+does not load. The updater reloads its own module at the end of such a run for
+the same reason: `src/webapp/updates.py` is part of the area it replaces, and it
+is the one module that cannot be re-imported while it is executing.
+
 Every replaced file is hashed against beta's manifest before it is written, and
 copied to `data/updates/backups/<run>/` first. A failed download or a failed
 reload restores that area from the backup and reports the error on the page; the

@@ -102,8 +102,13 @@ function statusLabel(member: StaffMember, t: Translate) {
 
 function StatusAvatar({ member, className }: { member: StaffMember; className: string }) {
   const { t } = useStrings("team");
+  // Discord keeps the decoration out of the avatar image: it is its own asset,
+  // drawn over the avatar and a little wider than it. The member's animated
+  // copy is preferred when Discord has one, exactly as Discord renders it.
+  const decoration = member.avatar_decoration_animated_url || member.avatar_decoration_url;
   return <DiscordStatusAvatar status={member.status} className={className} label={statusLabel(member, t)}>
     {avatar(member) ? <img className={className} src={avatar(member)!} alt="" /> : <span className={`${className} team-avatar-fallback`}>{member.name.slice(0, 1)}</span>}
+    {decoration && <img className="discord-profile-avatar-decoration" src={decoration} alt="" aria-hidden="true" />}
   </DiscordStatusAvatar>;
 }
 

@@ -247,6 +247,59 @@ class SpotifyPresenceTests(unittest.TestCase):
         self.assertIsNone(activity["end"])
 
 
+class AvatarDecorationTests(unittest.TestCase):
+    """Discord's avatar decoration reaches the Team pages with the identity."""
+
+    def setUp(self):
+        self.previous = runtime._discord_bot
+
+    def tearDown(self):
+        runtime._discord_bot = self.previous
+
+    def _identity(self, decoration):
+        member = SimpleNamespace(
+            status="online",
+            activities=[],
+            global_name="Staffer",
+            name="staffer",
+            display_avatar=SimpleNamespace(url="https://example.test/avatar.png"),
+            avatar_decoration=decoration,
+            _user=None,
+        )
+        runtime._discord_bot = SimpleNamespace(guilds=[SimpleNamespace(get_member=lambda user_id: member)])
+        return staff._staff_identity("44")
+
+    def test_an_animated_decoration_carries_its_gif_copy(self):
+        decoration = SimpleNamespace(
+            url="https://cdn.discordapp.com/avatar-decoration-presets/a.png",
+            is_animated=lambda: True,
+            with_format=lambda fmt: SimpleNamespace(url=f"https://cdn.discordapp.com/avatar-decoration-presets/a.{fmt}"),
+        )
+
+        identity = self._identity(decoration)
+
+        self.assertEqual(identity["avatar_decoration_url"], "https://cdn.discordapp.com/avatar-decoration-presets/a.png")
+        self.assertEqual(identity["avatar_decoration_animated_url"], "https://cdn.discordapp.com/avatar-decoration-presets/a.gif")
+
+    def test_a_still_decoration_has_no_animated_copy(self):
+        decoration = SimpleNamespace(
+            url="https://cdn.discordapp.com/avatar-decoration-presets/b.png",
+            is_animated=lambda: False,
+            with_format=lambda fmt: SimpleNamespace(url="unused"),
+        )
+
+        identity = self._identity(decoration)
+
+        self.assertEqual(identity["avatar_decoration_url"], "https://cdn.discordapp.com/avatar-decoration-presets/b.png")
+        self.assertIsNone(identity["avatar_decoration_animated_url"])
+
+    def test_a_member_without_a_decoration_reports_none(self):
+        identity = self._identity(None)
+
+        self.assertIsNone(identity["avatar_decoration_url"])
+        self.assertIsNone(identity["avatar_decoration_animated_url"])
+
+
 class ProfilePopupPresenceTests(unittest.TestCase):
     """The web profile popup shows live presence, the way the staff cards do."""
 

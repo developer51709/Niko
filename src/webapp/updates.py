@@ -500,6 +500,25 @@ def reload_locale_feed() -> bool:
     return True
 
 
+def _webapp_modules() -> dict:
+    """The ``webapp.*`` modules this process is running right now."""
+    return {
+        name: module
+        for name, module in list(sys.modules.items())
+        if isinstance(name, str) and (name == "webapp" or name.startswith("webapp."))
+    }
+
+
+def _restore_modules(snapshot: dict) -> None:
+    """Put a module snapshot back, dropping whatever the rebuild left behind."""
+    for name in list(sys.modules):
+        if isinstance(name, str) and (name == "webapp" or name.startswith("webapp.")):
+            if name not in snapshot:
+                sys.modules.pop(name, None)
+    sys.modules.update(snapshot)
+    importlib.invalidate_caches()
+
+
 def reload_webapp(bot) -> dict:
     """Rebuild the Flask application and swap it into the running server.
 
@@ -507,24 +526,73 @@ def reload_webapp(bot) -> dict:
     route at once while the listening socket, its thread and every open
     connection stay exactly where they are. This module is deliberately kept
     alive across the purge: it is the code executing this call.
+
+    The rebuild is transactional. Dropping ``webapp.*`` before importing the new
+    copy is what makes the next import read the files on disk, but it also means
+    a new file that fails to import leaves the process with no modules to serve
+    from: the app object the server still points at keeps working, while any
+    request that imports a route module lazily re-executes the broken file and
+    answers 500 — the site is down until a restart even though the update was
+    rolled back. So the modules the server is using are snapshotted first and put
+    back when the rebuild raises, which is what keeps a bad API update from
+    taking the API down at all.
     """
     # Kept alive across the purge: this module is executing the call, and the
     # locale feed owns the caches the rebuilt routes read on the first request.
     keep = {__name__, "webapp.locale_feed"}
-    for name in list(sys.modules):
-        if name == "webapp" or name.startswith("webapp."):
-            if name in keep:
-                continue
-            sys.modules.pop(name, None)
+    previous = _webapp_modules()
+    for name in list(previous):
+        if name in keep:
+            continue
+        sys.modules.pop(name, None)
     importlib.invalidate_caches()
     reload_locale_feed()
 
-    fresh = importlib.import_module("webapp")
-    fresh.configure_bot(bot)
-    from api_server import replace_app
+    try:
+        fresh = importlib.import_module("webapp")
+        fresh.configure_bot(bot)
+        from api_server import replace_app
 
-    replace_app(fresh.app)
+        replace_app(fresh.app)
+    except Exception:
+        # Nothing was swapped, so the server still holds the old app: give it
+        # back the modules that app was built from and let the caller roll the
+        # files back. The API never stops answering during any of this.
+        _restore_modules(previous)
+        raise
     return {"swapped": True, "routes": len(fresh.app.url_map._rules)}
+
+
+#: What the updater owns rather than defines: a reload must not forget a run in
+#: flight, the lock that guards it, or the beta manifest it just read.
+_UPDATER_STATE = ("_lock", "_running", "_manifest_cache")
+
+
+def reload_updates_module() -> bool:
+    """Re-read this module from disk, so an update to the updater lands too.
+
+    ``webapp`` is rebuilt from the files an update just wrote, but the module
+    running the rebuild cannot be re-imported with it: it is the code executing
+    the call. Reloading it in place afterwards is what stops a change to this
+    file — or to anything else the API routes import from it — from sitting on
+    disk until the next restart. Callers must do it as the last thing they do,
+    because the frame in flight keeps executing its own code and its globals are
+    this module's dictionary, which the reload replaces.
+    """
+    module = sys.modules.get(__name__)
+    if module is None:
+        return False
+    carried = {name: getattr(module, name) for name in _UPDATER_STATE if hasattr(module, name)}
+    try:
+        importlib.reload(module)
+    except Exception:
+        # A broken updater must not take the update path down with it: the run
+        # already finished and was recorded, and the next restart re-reads it.
+        return False
+    for name, value in carried.items():
+        setattr(module, name, value)
+    importlib.invalidate_caches()
+    return True
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -603,8 +671,9 @@ def apply(areas, bot=None) -> dict:
                     outcome.update({"dashboard": reload_webapp(bot)})
                     outcome["strategy"] = "reloaded modules, extensions and the dashboard"
                 elif name == "webapp":
-                    if bot is None:
-                        raise RuntimeError("The bot is not running.")
+                    # Rebuilding the Flask app needs the gateway only for the
+                    # routes that read it, so an API update is not held back by
+                    # a bot that is still connecting — or absent entirely.
                     outcome["dashboard"] = reload_webapp(bot)
                     outcome["strategy"] = "rebuilt the dashboard app"
                 elif name == "website":
@@ -639,7 +708,14 @@ def apply(areas, bot=None) -> dict:
 
         handoff.schedule(bot)
 
-    return {**current, "ok": all(item.get("ok", True) for item in results.values()), "run": run_id, "areas": results, "last": last_run()}
+    result = {**current, "ok": all(item.get("ok", True) for item in results.values()), "run": run_id, "areas": results, "last": last_run()}
+    # Last, and only when this run replaced API code: the rebuilt modules read
+    # the new files, and this module — pinned while it was executing — now does
+    # too. Nothing below this point may use a module-level name, because the
+    # reload swaps this module's dictionary under the frame returning the result.
+    if any(name in results for name in ("utils", "webapp")):
+        reload_updates_module()
+    return result
 
 
 def _reload_summary(result: dict) -> dict:
