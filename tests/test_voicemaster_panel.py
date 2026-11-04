@@ -17,7 +17,7 @@ sys.path.insert(0, "src")
 import cogs.voicemaster.cog as voicemaster_module
 from config.ids import SUPPORT_GUILD
 from cogs.voicemaster import messages as vm_messages
-from utils.locales import load_locales
+from utils.locales import SUPPORTED_LANGUAGES, load_locales
 
 #: Command wording lives in the ``commands`` namespace every cog shares.
 COMMAND_CATALOGUE = load_locales("cogs.voicemaster", "commands")
@@ -466,13 +466,18 @@ class VoiceMasterCommandMetadataTests(unittest.TestCase):
             params = getattr(command, "clean_params", {}).values()
         return [parameter for parameter in params if getattr(parameter, "name", None)]
 
-    def test_every_command_help_has_all_three_languages(self):
+    def test_every_command_help_carries_english_and_only_real_translations(self):
         commands_seen = self._commands()
         self.assertTrue(commands_seen)
 
         for command in commands_seen:
             parsed = json.loads(str(command.help))
-            self.assertEqual(set(parsed), {"en", "de", "es", "fr"}, command.qualified_name)
+            # English is the fallback every reader lands on, so it is always
+            # there. Other languages appear only once they carry wording of
+            # their own — the tables are English-filled, so a language the cog
+            # has not reached would otherwise advertise English as a translation.
+            self.assertIn("en", parsed, command.qualified_name)
+            self.assertLessEqual(set(parsed), set(SUPPORTED_LANGUAGES), command.qualified_name)
             self.assertTrue(all(parsed.values()), command.qualified_name)
 
     def test_every_command_help_matches_the_locale_catalog(self):
@@ -546,6 +551,10 @@ class PanelPreviewCopyTests(unittest.TestCase):
         "disconnect_done",
     )
 
+    #: The cog's own folder, including the languages the bot does not speak yet:
+    #: the site replays their panel wording too.
+    LOCALE_FOLDER = Path("src/cogs/voicemaster/locales")
+
     def _website_strings(self) -> set:
         source = self.WEBSITE_COPY.read_text(encoding="utf-8")
         return {
@@ -553,11 +562,20 @@ class PanelPreviewCopyTests(unittest.TestCase):
             for literal in re.findall(r'"((?:[^"\\]|\\.)*)"', source)
         }
 
+    def _panel_catalogue(self, lang: str) -> dict:
+        """One language's panel wording, read the way the bot reads it."""
+        if lang in SUPPORTED_LANGUAGES:
+            return load_locales("cogs.voicemaster", "messages")[lang]
+        data = json.loads((self.LOCALE_FOLDER / f"{lang}.json").read_text(encoding="utf-8"))
+        return data["messages"]
+
     def test_every_translation_reaches_the_website(self):
         website = self._website_strings()
 
-        for lang in ("en", "de", "es", "fr"):
-            catalogue = load_locales("cogs.voicemaster", "messages")[lang]
+        languages = sorted(path.stem for path in self.LOCALE_FOLDER.glob("*.json"))
+        self.assertIn("en", languages)
+        for lang in languages:
+            catalogue = self._panel_catalogue(lang)
             for key in self.MIRRORED:
                 self.assertIn(
                     catalogue[key], website,

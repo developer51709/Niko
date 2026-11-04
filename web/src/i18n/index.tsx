@@ -45,12 +45,22 @@ export type LanguageOption = { code: string; label: string };
 /** Language codes are open-ended: the feed can add one before a build does. */
 export type LanguageCode = string;
 
-/** The languages the build ships, used until the feed answers. */
+/**
+ * The languages the build ships, used until the feed answers.
+ *
+ * The label is the language's own name: the picker is read by the visitor who
+ * wants that language, and "Русский" is more useful to them than "Russian".
+ */
 export const LANGUAGES: LanguageOption[] = [
   { code: "en", label: "English" },
-  { code: "de", label: "German" },
-  { code: "es", label: "Spanish" },
-  { code: "fr", label: "French" },
+  { code: "de", label: "Deutsch" },
+  { code: "es", label: "Español" },
+  { code: "fr", label: "Français" },
+  { code: "ru", label: "Русский" },
+  { code: "ja", label: "日本語" },
+  { code: "zh", label: "中文" },
+  { code: "hi", label: "हिन्दी" },
+  { code: "ar", label: "العربية" },
 ];
 
 /** Where the devtools override lives; only this browser sees it. */

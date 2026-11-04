@@ -42,14 +42,22 @@ def _card_copy() -> dict[str, dict[str, object]]:
     return module.CARD_COPY
 
 
-def test_every_supported_language_has_one_description():
+#: The listing is marketing copy for the app directory, so it advertises the
+#: languages the bot is actually translated into — not every code the bot will
+#: accept once its wording catches up. The card generator owns that list.
+LISTED_LANGUAGES = tuple(_card_copy())
+
+
+def test_every_listed_language_has_one_description():
     descriptions = {path.stem for path in DOCS.glob("*.md")} - {"README"}
 
-    assert descriptions == set(SUPPORTED_LANGUAGES)
+    assert descriptions == set(LISTED_LANGUAGES)
+    # A listed language must still be one the bot ships.
+    assert set(LISTED_LANGUAGES) <= set(SUPPORTED_LANGUAGES)
 
 
 def test_a_description_embeds_its_own_card_and_the_listing_links():
-    for language in SUPPORTED_LANGUAGES:
+    for language in LISTED_LANGUAGES:
         source = (DOCS / f"{language}.md").read_text(encoding="utf-8")
 
         assert f"]({CARD_URL}/{language}.png)" in source, language
@@ -58,13 +66,13 @@ def test_a_description_embeds_its_own_card_and_the_listing_links():
 
 
 def test_the_card_artwork_matches_the_languages_it_is_generated_for():
-    assert set(_card_copy()) == set(SUPPORTED_LANGUAGES)
+    assert set(_card_copy()) == set(LISTED_LANGUAGES)
 
 
 def test_the_website_serves_a_generated_card_for_each_language():
     client = app.test_client()
 
-    for language in SUPPORTED_LANGUAGES:
+    for language in LISTED_LANGUAGES:
         source = PUBLIC / f"{language}.png"
         mirror = DIST / f"{language}.png"
         assert source.is_file(), source
@@ -77,7 +85,7 @@ def test_the_website_serves_a_generated_card_for_each_language():
 
 def test_cards_keep_their_corners_transparent():
     """The listing paints the card on its own background, dark or light."""
-    for language in SUPPORTED_LANGUAGES:
+    for language in LISTED_LANGUAGES:
         with Image.open(PUBLIC / f"{language}.png") as card:
             assert card.mode == "RGBA", language
             width, height = card.size

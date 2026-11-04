@@ -24,11 +24,17 @@ Modules load their slice with::
     from utils.locales import load_locales
     MESSAGES = load_locales(__package__, "birthdays")
 
-``load_locales`` returns ``{lang: {key: text}}`` with German, Spanish, and
-French filled in from English for any key a translation has not caught up with
-yet, so a new English string never crashes a guild that speaks another language. Keys may map
+``load_locales`` returns ``{lang: {key: text}}`` with every language filled in
+from English for any key a translation has not caught up with yet, so a new
+English string never crashes a guild that speaks another language. Keys may map
 to a string or to a list of strings (roleplay keeps its sentence variants in
 lists).
+
+A language does not have to be finished, or even present, in every cog. The
+website works that way — its pages fall back to English key by key — and the bot
+follows it: ``en.json`` is the only file a cog must have, a language it has not
+reached yet serves English there, and a language grows one catalogue at a time
+without a deploy, a reload or a restart.
 
 A translation written on the beta instance does not have to wait for a deploy.
 :mod:`webapp.locale_feed` fetches beta's catalogues and calls
@@ -41,14 +47,18 @@ list, so an overlay can never add a key the code does not know about.
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import threading
 from importlib import util as importlib_util
 from pathlib import Path
 from typing import Any, Iterator
 
-#: Languages the bot ships. English is the fallback for everything else.
-SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "de", "es", "fr")
+#: Languages a server can pick, in the order the bot and the site show them.
+#: English is the fallback for everything else. Adding a code here makes the
+#: language selectable everywhere; its wording then arrives catalogue by
+#: catalogue, and every key it does not carry yet is served in English.
+SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "de", "es", "fr", "ru", "ja", "zh", "hi", "ar")
 FALLBACK_LANGUAGE = "en"
 
 #: Folder name inside a cog package.
@@ -68,6 +78,10 @@ _OVERLAY_LOCK = threading.Lock()
 #: Resolved tables, keyed by everything that can change one: package, namespace,
 #: language, overlay revision, and the mtimes of the files on disk.
 _RESOLVED: dict[tuple[str, str | None, str, int, tuple[float, ...]], dict[str, Any]] = {}
+
+#: The catalogue signature this process has already read, for the disk watcher:
+#: a translator saving a file on this instance is what changes it.
+_WATCH: dict = {"signature": None}
 
 
 class LocaleError(RuntimeError):
@@ -98,7 +112,11 @@ def locales_path(package: str) -> Path:
 def _load_language(package: str, lang: str) -> dict[str, Any]:
     path = locales_path(package) / f"{lang}.json"
     if not path.is_file():
-        raise LocaleError(f"missing locale file: {path}")
+        if lang == FALLBACK_LANGUAGE:
+            raise LocaleError(f"missing locale file: {path}")
+        # Not translated here yet. The English copy covers every key, which is
+        # how a language can be rolled out one cog at a time.
+        return {}
     try:
         with path.open(encoding="utf-8") as handle:
             data = json.load(handle)
@@ -109,9 +127,8 @@ def _load_language(package: str, lang: str) -> dict[str, Any]:
     return data
 
 
-def _signature(package: str) -> tuple[float, ...]:
-    """The mtimes of a package's catalogue files, or ``-1`` when one is absent."""
-    folder = locales_path(package)
+def _signature(folder: Path) -> tuple[float, ...]:
+    """The mtimes of a folder's catalogue files, or ``-1`` when one is absent."""
     return tuple(
         (folder / f"{lang}.json").stat().st_mtime if (folder / f"{lang}.json").is_file() else -1.0
         for lang in SUPPORTED_LANGUAGES
@@ -122,20 +139,32 @@ def _catalogues(package: str) -> dict[str, dict[str, Any]]:
     """Every language catalogue for ``package``, cached on file mtimes."""
     folder = locales_path(package)
     key = str(folder)
-    mtimes = _signature(package)
+    mtimes = _signature(folder)
     cached = _CACHE.get(key)
     if cached and cached[0] == mtimes:
         return cached[1]
-    raw = {lang: _load_language(package, lang) for lang in SUPPORTED_LANGUAGES}
-    _validate(package, raw)
+    raw: dict[str, dict[str, Any]] = {}
+    for lang in SUPPORTED_LANGUAGES:
+        try:
+            table = _load_language(package, lang)
+            _validate_language(package, lang, table)
+            if lang == FALLBACK_LANGUAGE and not table:
+                raise LocaleError(f"{package}: en.json is empty")
+        except LocaleError as exc:
+            # English is the key list and the fallback, so a broken one is fatal.
+            # Anything else is a translation in progress: that language reads as
+            # English rather than taking the whole cog down on a live instance.
+            if lang == FALLBACK_LANGUAGE:
+                raise
+            logging.getLogger(__name__).warning("%s: serving %s in English — %s", package, lang, exc)
+            table = {}
+        raw[lang] = table
     _CACHE[key] = (mtimes, raw)
     return raw
 
 
-def _validate(package: str, raw: dict[str, dict[str, Any]]) -> None:
-    english = raw[FALLBACK_LANGUAGE]
-    if not english:
-        raise LocaleError(f"{package}: en.json is empty")
+def _validate_language(package: str, lang: str, data: dict[str, Any]) -> None:
+    """One language's catalogue must be strings, string lists, or namespaces."""
 
     def is_leaf(value: Any) -> bool:
         if isinstance(value, str):
@@ -156,8 +185,16 @@ def _validate(package: str, raw: dict[str, dict[str, Any]]) -> None:
                 "or a namespace object"
             )
 
+    check(lang, data)
+
+
+def _validate(package: str, raw: dict[str, dict[str, Any]]) -> None:
+    """Every language of a catalogue, English first because it is the fallback."""
+    english = raw.get(FALLBACK_LANGUAGE) or {}
+    if not english:
+        raise LocaleError(f"{package}: en.json is empty")
     for lang in SUPPORTED_LANGUAGES:
-        check(lang, raw[lang])
+        _validate_language(package, lang, raw.get(lang) or {})
 
 
 def apply_overlay(catalogues: dict[str, dict[str, dict[str, Any]]] | None) -> int:
@@ -221,7 +258,7 @@ def _section(catalogue: dict[str, Any], namespace: str | None) -> dict[str, Any]
 
 def _resolve(package: str, namespace: str | None, lang: str) -> dict[str, Any]:
     """One language's table, English-filled, from whichever copy is current."""
-    key = (package, namespace, lang, _OVERLAY_REVISION, _signature(package))
+    key = (package, namespace, lang, _OVERLAY_REVISION, _signature(locales_path(package)))
     cached = _RESOLVED.get(key)
     if cached is not None:
         return cached
@@ -276,6 +313,18 @@ class LocaleTable(dict):
     def get(self, key: str, default: Any = None) -> Any:
         return self._current().get(key, default)
 
+    def translated(self, key: str) -> bool:
+        """Whether this language carries its own wording for ``key``.
+
+        Lookups are English-filled, so a key that exists here may still be the
+        English fallback. Callers that publish a translation — Discord's command
+        localizations, the help menu's language map — use this to skip languages
+        that would only echo English back.
+        """
+        if self._lang == FALLBACK_LANGUAGE:
+            return key in self._current()
+        return key in _section(_raw_language(self._package, self._lang), self._namespace)
+
     def __contains__(self, key: object) -> bool:
         return key in self._current()
 
@@ -306,9 +355,11 @@ def available_namespaces(package: str) -> tuple[str, ...]:
 def load_locales(package: str, namespace: str | None = None) -> dict[str, dict[str, Any]]:
     """``{lang: {key: text}}`` for one cog (optionally one namespace of it).
 
-    Missing German/Spanish keys fall back to the English wording, so a
-    translator can lag behind without breaking a reply. ``namespace`` is
-    required when a cog groups several modules' tables in one file.
+    Every supported language is present; the keys a language has not been
+    translated for fall back to the English wording, so a translator can lag
+    behind — or not have reached this cog at all — without breaking a reply.
+    ``namespace`` is required when a cog groups several modules' tables in one
+    file.
     """
     raw = _catalogues(package)
     english = raw[FALLBACK_LANGUAGE]
@@ -384,3 +435,26 @@ def catalogue_packages() -> Iterator[Path]:
         if not base.is_dir():
             continue
         yield from sorted(base.glob(f"**/{LOCALES_DIRNAME}"))
+
+
+def catalogue_signature() -> tuple:
+    """Every catalogue file's identity, for noticing an edit on this machine."""
+    return tuple((str(folder), _signature(folder)) for folder in catalogue_packages())
+
+
+def refresh_from_disk() -> bool:
+    """Re-read the catalogues when a file on this instance changed.
+
+    Production serves beta's wording through the overlay, but beta itself reads
+    its own files — and a table a cog captured at import time only re-resolves
+    when the revision moves. This is what moves it: the translator saves a JSON
+    file, the watcher notices the new mtime, and the next reply uses it. No
+    restart, no cog reload. Returns whether anything changed.
+    """
+    signature = catalogue_signature()
+    with _OVERLAY_LOCK:
+        if _WATCH.get("signature") == signature:
+            return False
+        _WATCH["signature"] = signature
+    reload_locales()
+    return True

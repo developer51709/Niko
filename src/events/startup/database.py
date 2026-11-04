@@ -1150,6 +1150,17 @@ async def _create_tables(bot):
         )
     """)
 
+    # ── Owner-level panel display settings ─────────────────────────────
+    # Read by the bot process when it redraws the support servers' panels and
+    # written by the staff dashboard, which runs in the same process. Nothing
+    # lives on disk, so the choice survives a restart on hosting without one.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS panel_settings (
+            key         TEXT PRIMARY KEY,
+            value       TEXT
+        )
+    """)
+
     # ── Owner maintenance targets (cogs and single commands) ───────────
     # ``target`` is "cog:<extension>" or "command:<qualified name>". The rows
     # live here rather than in a JSON file because production has no persistent

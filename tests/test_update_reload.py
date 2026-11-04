@@ -155,6 +155,36 @@ class TransactionalApiUpdateTests(unittest.TestCase):
         self.assertIs(updates._lock, lock)
         self.assertFalse(updates.progress()["active"])
 
+    def test_a_utils_run_purges_the_changed_modules(self):
+        # The plan lists change records, not bare paths. Reading ``path`` off
+        # each one is what keeps the purge from being handed a dict.
+        fake_plan = {
+            "ok": True,
+            "configured": True,
+            "areas": {"utils": {"changed": 2, "files": [
+                {"path": "src/utils/locales.py", "status": "modified", "sha": "x", "bytes": 1},
+                {"path": "src/utils/ai/config.py", "status": "modified", "sha": "y", "bytes": 1},
+            ]}},
+        }
+        purged = {}
+
+        def record_purge(prefixes):
+            purged["prefixes"] = list(prefixes)
+            return list(prefixes)
+
+        with patch.object(updates, "plan", return_value=fake_plan), \
+                patch.object(updates, "_stage_area", return_value={"written": 2, "removed": 0, "backup": ""}), \
+                patch.object(updates, "_purge", side_effect=record_purge), \
+                patch.object(updates, "reload_extensions", return_value={"reloaded": []}), \
+                patch.object(updates, "reload_webapp", return_value={"swapped": True, "routes": 1}), \
+                patch.object(updates, "reload_updates_module", return_value=True), \
+                patch.object(updates, "_record"):
+            result = updates.apply(["utils"], object())
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(purged["prefixes"], ["utils.ai", "utils.locales"])
+        self.assertEqual(result["areas"]["utils"]["strategy"], "reloaded modules, extensions and the dashboard")
+
     def test_a_run_that_replaced_api_code_reloads_the_updater(self):
         source = (updates.ROOT / "src" / "webapp" / "updates.py").read_text(encoding="utf-8")
 

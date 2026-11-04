@@ -7,6 +7,7 @@ committed.
 """
 
 import asyncio
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -255,6 +256,90 @@ class DashboardNodeApiTests(unittest.IsolatedAsyncioTestCase):
         # Every private node adds a slot on top of the public pool.
         self.assertEqual(snapshot["target"], 3 + 1)
         self.assertNotIn("password", private_row)
+
+
+class StatusPoolPrivacyTests(unittest.TestCase):
+    """The public /status page can show the pool, but never a private host."""
+
+    def _pool(self, nodes, connected=2):
+        from webapp import status
+
+        class FakeCog:
+            def pool_snapshot(self):
+                return {"nodes": nodes, "connected": connected, "target": 3}
+
+        class FakeBot:
+            def get_cog(self, name):
+                return FakeCog() if name == "MusicSystem" else None
+
+        return status._lavalink_pool(FakeBot())
+
+    def test_private_nodes_are_published_as_aliases_only(self):
+        pool = self._pool([
+            {"identifier": "lavalink.jirayu.net:443", "private": False,
+             "status": "connected", "players": 1, "heartbeat": 30.0},
+            {"identifier": "mine.example.com:2333", "private": True, "label": "Home box",
+             "status": "connected", "players": 2, "heartbeat": 41.5},
+            {"identifier": "backup.example.com:80", "private": True,
+             "label": "backup.example.com",
+             "status": "disconnected", "players": 0, "heartbeat": 0},
+        ])
+
+        blob = json.dumps(pool)
+        # Neither the host, the port, nor a label an owner typed leaks out.
+        for leaked in ("mine.example.com", "backup.example.com", "Home box", "2333"):
+            self.assertNotIn(leaked, blob)
+
+        rows = {row["id"]: row for row in pool["nodes"]}
+        # Aliases are numbered by identifier, so they do not move between polls.
+        self.assertEqual(rows["private-1"]["status"], "disconnected")
+        self.assertEqual(rows["private-2"]["players"], 2)
+        self.assertTrue(rows["private-1"]["private"])
+        # A committed node is already public, so the page can name it.
+        self.assertIn("lavalink.jirayu.net:443", rows)
+        self.assertFalse(rows["lavalink.jirayu.net:443"]["private"])
+        self.assertEqual(pool["connected"], 2)
+        self.assertEqual(pool["pool"], 3)
+        self.assertEqual(pool["private"], 2)
+
+    def test_a_private_node_stays_private_after_it_leaves_the_database(self):
+        # A deleted node is still connected until the rescan closes it. The
+        # remembered set is a union, so the site cannot start naming its host in
+        # that window — or after a failed database read.
+        cog = object.__new__(music_cog.MusicSystem)
+        cog.bot = mock.Mock()
+        cog._private_nodes = {}
+
+        class SavedDb:
+            async def ensure(self, bot=None):
+                return True
+
+            async def lavalink_nodes(self):
+                return [_private()]
+
+        class EmptyDb:
+            async def ensure(self, bot=None):
+                return True
+
+            async def lavalink_nodes(self):
+                return []
+
+        with mock.patch.object(music_cog, "MusicDatabase", SavedDb):
+            asyncio.run(cog._node_catalog())
+        self.assertIn("lavalink.example.com:2333", cog._private_nodes)
+
+        with mock.patch.object(music_cog, "MusicDatabase", EmptyDb):
+            asyncio.run(cog._node_catalog())
+        self.assertIn("lavalink.example.com:2333", cog._private_nodes)
+
+    def test_a_missing_music_system_reports_no_pool(self):
+        from webapp import status
+
+        class BareBot:
+            def get_cog(self, name):
+                return None
+
+        self.assertIsNone(status._lavalink_pool(BareBot()))
 
 
 if __name__ == "__main__":

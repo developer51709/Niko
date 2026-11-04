@@ -713,7 +713,11 @@ def apply(areas, bot=None) -> dict:
                 elif name == "utils":
                     if bot is None:
                         raise RuntimeError("The bot is not running.")
-                    prefixes = _utils_prefixes(current["areas"][name]["files"])
+                    # Each entry is a change record, not a path: the prefix
+                    # helper reads ``path`` off it like the extension one does.
+                    prefixes = _utils_prefixes(
+                        [change["path"] for change in current["areas"][name]["files"]]
+                    )
                     outcome["purged"] = _purge(prefixes)
                     outcome.update(_reload_summary(reload_extensions(bot)))
                     outcome.update({"dashboard": reload_webapp(bot)})
@@ -783,6 +787,8 @@ def _utils_prefixes(files) -> list[str]:
     """``src/utils/ai/config.py`` → ``utils.ai`` so the whole package reloads."""
     prefixes = set()
     for relative in files:
+        if not isinstance(relative, str):
+            continue
         parts = Path(relative).parts
         if len(parts) >= 4 and parts[0] == "src" and parts[1] == "utils":
             prefixes.add(f"utils.{parts[2]}")

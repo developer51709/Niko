@@ -88,11 +88,16 @@ class CommandTexts:
         return self._tables[FALLBACK_LANGUAGE].get(key, "")
 
     def language_map(self, key: str) -> dict[str, str]:
-        """``{language: text}`` for a flat key, skipping languages without it."""
+        """``{language: text}`` for a flat key, skipping languages without it.
+
+        "Without it" means no wording of its own: every table is English-filled,
+        so a language that has not reached this catalogue would otherwise publish
+        the English string as its translation.
+        """
         return {
             lang: self._tables[lang][key]
             for lang in SUPPORTED_LANGUAGES
-            if self._tables[lang].get(key)
+            if self._tables[lang].translated(key)
         }
 
     def text(self, key: str) -> str:

@@ -188,6 +188,35 @@ def test_command_text_entries_are_never_empty():
                 )
 
 
+def test_a_language_a_cog_does_not_have_reads_as_english(temporary_package):
+    """Partial catalogues: a language is not required in every cog."""
+    from utils.locales import SUPPORTED_LANGUAGES, load_locales, locales_path, reload_locales
+
+    package = temporary_package({"messages": {"hello": "Hello", "bye": "Bye"}})
+    # A translator has not reached this cog yet, so its Spanish file never landed.
+    (locales_path(package) / "es.json").unlink()
+    reload_locales(package)
+
+    table = load_locales(package, "messages")
+    assert set(table) == set(SUPPORTED_LANGUAGES)
+    assert table["es"]["hello"] == "Hello"
+    # The languages that do have a file keep their wording.
+    assert table["en"]["hello"] == "Hello"
+
+
+def test_a_half_written_catalogue_does_not_take_the_cog_down(temporary_package):
+    """A broken translation is one language reading English, not a failed cog."""
+    from utils.locales import load_locales, locales_path, reload_locales
+
+    package = temporary_package({"messages": {"hello": "Hello", "bye": "Bye"}})
+    (locales_path(package) / "fr.json").write_text('{"messages": {"hello":', encoding="utf-8")
+    reload_locales(package)
+
+    table = load_locales(package, "messages")
+    assert table["fr"]["hello"] == "Hello"
+    assert table["en"]["hello"] == "Hello"
+
+
 def test_every_load_locales_call_resolves():
     calls = []
     for path in sorted(SRC.rglob("*.py")):

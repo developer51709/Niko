@@ -12,7 +12,7 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils import logging
+from utils import logging, panel_settings
 
 # The refresh cadence lives with the panel so the footer and the loop can never
 # disagree about it.
@@ -96,6 +96,63 @@ async def _check_database(bot):
         return backend, False
 
 
+def _percent(value) -> str:
+    """A percentage without a trailing ``.0`` — the panel has no room to waste."""
+    text = f"{float(value or 0):.1f}"
+    return text[:-2] if text.endswith(".0") else text
+
+
+def _translation_snapshot() -> dict | None:
+    """Coverage figures for the status panel's translation card.
+
+    Read through :mod:`webapp.status`, the module the public /status page and the
+    owner's locale page use: it already merges beta's live catalogues into the
+    numbers, and the dashboard runs in this same process, so the card cannot
+    disagree with them. A panel must never fall over because the API half is
+    absent, so every failure here simply drops the card.
+    """
+    try:
+        from webapp import status as site_status
+
+        payload = site_status.locale_status()
+    except Exception:
+        return None
+
+    bot_rows = {str(row.get("code")): row for row in payload.get("bot") or []}
+    site_rows = {str(row.get("code")): row for row in payload.get("website") or []}
+    # English is the source copy, so counting it would advertise 100% forever.
+    codes = [code for code in payload.get("languages") or [] if code != "en"]
+
+    def share(rows) -> float:
+        done = sum(int((rows.get(code) or {}).get("translated") or 0) for code in codes)
+        total = sum(int((rows.get(code) or {}).get("total") or 0) for code in codes)
+        return round(done / total * 100, 1) if total else 0.0
+
+    languages = []
+    for code in codes:
+        bot_row = bot_rows.get(code) or {}
+        site_row = site_rows.get(code) or {}
+        languages.append({
+            "label": bot_row.get("label") or site_row.get("label") or str(code).upper(),
+            "bot": float(bot_row.get("percent") or 0),
+            "site": float(site_row.get("percent") or 0),
+        })
+    if not languages:
+        return None
+    languages.sort(key=lambda row: (row["site"], row["bot"]), reverse=True)
+
+    source = payload.get("source") or {}
+    return {
+        "languages": len(payload.get("languages") or []),
+        "bot": share(bot_rows),
+        "site": share(site_rows),
+        "rows": languages,
+        "mode": str(source.get("mode") or "local"),
+        "age_seconds": int(source.get("age_seconds") or 0),
+        "scanned_at": int(payload.get("scanned_at") or time.time()),
+    }
+
+
 async def _collect_status(bot) -> dict:
     """Snapshot every stat the panel shows. Best-effort; never raises."""
     now = time.time()
@@ -118,6 +175,7 @@ async def _collect_status(bot) -> dict:
         "website_note": None,
         "api_ok": None,
         "overall_ok": None,
+        "translations": None,
     }
 
     try:
@@ -208,6 +266,14 @@ async def _collect_status(bot) -> dict:
             status["website_ok"] = await _probe_http(f"{public_url}/")
         except Exception:
             status["website_ok"] = False
+
+    # The translation card is an owner switch, and it is the most expensive
+    # figure on the panel, so it is only collected while it is switched on.
+    try:
+        if panel_settings.show_translation_card():
+            status["translations"] = _translation_snapshot()
+    except Exception:
+        status["translations"] = None
 
     # Overall roll-up for the summary row on the panel.
     checks = [
@@ -363,6 +429,36 @@ def _build_status_panel(bot, status: dict) -> discord.ui.LayoutView:
         accent_colour=health_accent(),
     )
     view.add_item(health)
+
+    # ── Translation coverage (owner toggle) ───────────────────────────────────
+    # Kept off by default: the panel is the support server's first impression and
+    # the card is a display choice, so the owner's locale page owns the switch.
+    translations = status.get("translations")
+    if translations:
+        if translations.get("mode") == "beta":
+            origin = f"live from beta · {int(translations.get('age_seconds') or 0)}s ago"
+        else:
+            origin = "from this build"
+        marker = get_emoji("stats") or ""
+        heading = f"### {marker} Translation Coverage" if marker else "### Translation Coverage"
+        contents = [
+            discord.ui.TextDisplay(content=heading),
+            separator(),
+            line(
+                f"-# {int(translations.get('languages') or 0)} languages · "
+                f"bot **{_percent(translations.get('bot'))}%** · "
+                f"website **{_percent(translations.get('site'))}%** translated"
+            ),
+        ]
+        # The four most translated languages: a reader scanning the panel gets the
+        # state of the work without a wall of rows, and the locale page has the
+        # full list for whoever is doing the translating.
+        for row in list(translations.get("rows") or [])[:4]:
+            contents.append(line(
+                f"**{row['label']}** — website {_percent(row['site'])}% · bot {_percent(row['bot'])}%"
+            ))
+        contents.append(line(f"-# {origin} · scanned <t:{int(translations.get('scanned_at') or time.time())}:R>"))
+        view.add_item(discord.ui.Container(*contents, accent_colour=0x2E3440))
 
     # ── Footer ────────────────────────────────────────────────────────────────
     view.add_item(discord.ui.Container(

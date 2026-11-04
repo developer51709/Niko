@@ -4,7 +4,7 @@ import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { useStrings } from "../i18n";
-import type { CogState, StatusCoverage, StatusPayload, StatusState } from "../types";
+import type { CogState, StatusLavalinkNode, StatusCoverage, StatusPayload, StatusState } from "../types";
 import { formatNumber } from "../utils/format";
 
 const POLL_MS = 5_000;
@@ -39,6 +39,20 @@ const COG_TONE: Record<CogState, string> = {
   disabled: "wait",
   maintenance: "warn",
   failed: "bad",
+};
+
+// A node's pill. The API lowercases wavelink's status names, so the three
+// states here cover the pool; anything else is reported as disconnected.
+const NODE_KEYS: Record<string, string> = {
+  connected: "lavalink.connectedWord",
+  connecting: "lavalink.connecting",
+  disconnected: "lavalink.disconnected",
+};
+
+const NODE_TONE: Record<string, string> = {
+  connected: "ok",
+  connecting: "wait",
+  disconnected: "bad",
 };
 
 function formatUptime(seconds?: number | null) {
@@ -100,6 +114,28 @@ function CoverageRow({ row }: { row: StatusCoverage }) {
   );
 }
 
+/** One Lavalink node. A private one arrives as an alias, never as a host. */
+function NodeRow({ node }: { node: StatusLavalinkNode }) {
+  const { t } = useStrings("status");
+  const tone = NODE_TONE[node.status] ?? "bad";
+  const name = node.private && node.index !== null
+    ? t("lavalink.privateNode", { index: node.index })
+    : node.id;
+  return (
+    <li className={`status-node status-node-${tone}`}>
+      <span className="status-node-id">{name}</span>
+      <span className="status-node-figures">
+        <span><strong>{formatNumber(node.players)}</strong><small>{t("lavalink.players")}</small></span>
+        <span>
+          <strong>{node.status === "connected" ? `${Math.round(node.heartbeat)} ms` : "—"}</strong>
+          <small>{t("lavalink.heartbeat")}</small>
+        </span>
+      </span>
+      <span className={`status-pill ${tone}`}>{t(NODE_KEYS[node.status] ?? "lavalink.disconnected")}</span>
+    </li>
+  );
+}
+
 export function StatusPage() {
   const { t } = useStrings("status");
   const [data, setData] = useState<StatusPayload | null>(null);
@@ -153,6 +189,7 @@ export function StatusPage() {
   const shards = data?.shards ?? [];
   const host = data?.host;
   const locales = data?.locales;
+  const lavalink = data?.lavalink ?? null;
 
   const cogCounts = data?.cog_counts;
   const issueCount = (cogCounts?.disabled ?? 0) + (cogCounts?.maintenance ?? 0) + (cogCounts?.failed ?? 0);
@@ -313,6 +350,40 @@ export function StatusPage() {
                       );
                     })}
                   </ul>}
+              </div>
+            </details>
+
+            <details className="status-section">
+              <summary className="status-section-summary">
+                <span className="status-section-heading">
+                  <span className="status-section-icon"><Icon name="guild_tickets" /></span>
+                  <span>
+                    <strong>{t("lavalink.title")}</strong>
+                    <small>{t("lavalink.subtitle")}</small>
+                  </span>
+                </span>
+                <span className="status-section-meta">
+                  {lavalink && (
+                    <span className={`status-pill ${lavalink.connected > 0 && lavalink.connected === lavalink.pool ? "ok" : "warn"}`}>
+                      {t("lavalink.connectedOf", { connected: formatNumber(lavalink.connected), pool: formatNumber(lavalink.pool) })}
+                    </span>
+                  )}
+                  {lavalink && lavalink.private > 0 && (
+                    <span className="status-pill wait">{t("lavalink.private", { count: formatNumber(lavalink.private) })}</span>
+                  )}
+                </span>
+              </summary>
+              <div className="status-section-body">
+                {!lavalink
+                  ? <p className="status-empty">{t("lavalink.unavailable")}</p>
+                  : lavalink.nodes.length === 0
+                    ? <p className="status-empty">{t("lavalink.empty")}</p>
+                    : <ul className="status-node-list">
+                      {lavalink.nodes.map((node) => <NodeRow key={node.id} node={node} />)}
+                    </ul>}
+                {lavalink && lavalink.private > 0 && (
+                  <p className="status-locale-foot">{t("lavalink.privacy")}</p>
+                )}
               </div>
             </details>
 

@@ -23,7 +23,7 @@ the cogs were discovered.
 import os
 import importlib
 
-from utils import logging, maintenance
+from utils import logging, maintenance, panel_settings
 
 
 #: Names title-casing gets wrong, spelled the way the product spells them.
@@ -103,6 +103,9 @@ async def load_cogs(bot):
     # The owner's pauses come from the database, so a cog the dashboard paused is
     # recorded as maintained (its commands still load and answer with the notice).
     await maintenance.load(bot)
+    # The status panel's card toggles are read before any panel can be posted, so
+    # the first render already matches the dashboard's switches.
+    await panel_settings.load(bot)
 
     for item in os.listdir("./src/cogs"):
         item_path = os.path.join("./src/cogs", item)

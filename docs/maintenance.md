@@ -42,11 +42,13 @@ msg = make_flat_msg(MESSAGES)
 await ctx.send(msg(ctx, "birthday_saved"))
 ```
 
-`load_locales` returns `{lang: {key: text}}` and fills a missing German, Spanish or French key from English, so a new English string is never a `KeyError` in another language. Values may be a string or a list of strings (roleplay keeps its sentence variants in lists).
+`load_locales` returns `{lang: {key: text}}` for every language in `SUPPORTED_LANGUAGES` and fills a key a translation has not reached from English, so a new English string is never a `KeyError` in another language. Values may be a string or a list of strings (roleplay keeps its sentence variants in lists).
+
+A catalogue only has to exist in English. German, Spanish and French are complete, and the other shipped languages arrive one cog at a time: a cog without `ru.json` answers in English for Russian, and a key missing from a partial file does the same. That is the same rule the website's page catalogues follow. A translation saved on the staging instance reaches the running bot on the next reply — see `utils.locales.refresh_from_disk` — so no restart is needed.
 
 ### Namespaces
 
-A cog with one table stores its keys at the root of `en.json` and can call `load_locales(__package__)`. A cog whose modules each keep their own table groups them by module name in the same four files:
+A cog with one table stores its keys at the root of `en.json` and can call `load_locales(__package__)`. A cog whose modules each keep their own table groups them by module name in the same file per language:
 
 ```json
 {

@@ -76,6 +76,8 @@ export type OwnerLocales = {
   bot: OwnerLocalePage[];
   bot_total_keys: number;
   bot_sync: OwnerBotSync;
+  /** The support servers' status panel, drawn by the bot. */
+  status_panel?: { translation_card: boolean };
   synced_at?: number;
 };
 
@@ -203,6 +205,28 @@ export type StatusHost = {
   };
 };
 
+/** One Lavalink node as the public page may show it. */
+export type StatusLavalinkNode = {
+  /** `host:port` for a public node, `private-<n>` for an owner-saved one. */
+  id: string;
+  /** True for owner-saved nodes: their host and label never leave the bot. */
+  private: boolean;
+  /** Stable 1-based alias for a private node, so the page can name it. */
+  index: number | null;
+  status: string;
+  players: number;
+  /** Websocket heartbeat in milliseconds; 0 while the node is not connected. */
+  heartbeat: number;
+};
+
+/** The music node pool: what the bot is connected to, and how healthy it is. */
+export type StatusLavalink = {
+  connected: number;
+  pool: number;
+  private: number;
+  nodes: StatusLavalinkNode[];
+};
+
 export type StatusPayload = {
   online: boolean;
   state: StatusState;
@@ -223,6 +247,8 @@ export type StatusPayload = {
   } | null;
   shards: StatusShard[];
   shard_count: number;
+  /** Null when the music system is not loaded, or when the bot is offline. */
+  lavalink?: StatusLavalink | null;
   cogs: StatusCog[];
   cog_counts: Record<CogState, number>;
   host: StatusHost;

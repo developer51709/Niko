@@ -110,6 +110,12 @@ export const syncOwnerLocales = (csrfToken?: string) => api<OwnerLocales>("/api/
   headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
   body: JSON.stringify({}),
 });
+/** Show or hide the translation coverage card on the support servers' status panel. */
+export const setOwnerLocaleTranslationCard = (translationCard: boolean, csrfToken?: string) => api<OwnerLocales>("/api/owner/locales/panel", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify({ translation_card: translationCard }),
+});
 /** What beta has that this deployment does not, area by area. */
 export const getOwnerUpdates = () => api<OwnerUpdates>("/api/owner/updates");
 /** Where the update in flight has got to. */

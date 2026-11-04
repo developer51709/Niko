@@ -18,9 +18,9 @@ import logging
 import threading
 import time
 
-from flask import jsonify, request, send_from_directory
+from flask import jsonify, request, send_from_directory, session
 
-from utils import handoff
+from utils import handoff, panel_settings
 
 from .. import locale_feed, updates
 from .. import server as _server
@@ -28,6 +28,7 @@ from .. import server as _server
 app = _server.app
 require_auth = _server.require_auth
 require_csrf = _server.require_csrf
+run_on_bot_loop = _server.run_on_bot_loop
 _current_staff_role = _server._current_staff_role
 _discord_bot = None
 log = logging.getLogger(__name__)
@@ -88,6 +89,9 @@ def _locale_payload() -> dict:
         "bot": bot,
         "bot_total_keys": sum(entry.get("keys", 0) for entry in (document.get("bot_pages") or {}).values()),
         "bot_sync": locale_feed.bot_sync_state(),
+        # The status panel posted in the support servers is drawn by the bot; its
+        # translation card is the one display choice this page owns.
+        "status_panel": {"translation_card": panel_settings.show_translation_card()},
     }
 
 
@@ -106,6 +110,38 @@ def api_owner_locales():
     error = _require_owner()
     if error:
         return error
+    return jsonify(_locale_payload())
+
+
+@app.route("/api/owner/locales/panel", methods=["POST"])
+@require_auth
+@require_csrf
+def api_owner_locales_panel():
+    """Show or hide the translation card on the support servers' status panel.
+
+    The panel redraws itself every ``STATUS_PANEL_INTERVAL`` seconds, so the
+    change lands there on its next pass; the same in-process flag is what that
+    pass reads, which is why this does not need to reach for the Discord API.
+    """
+    error = _require_owner()
+    if error:
+        return error
+    body = request.get_json(silent=True) or {}
+    if "translation_card" not in body:
+        return jsonify({"error": "Choose whether the translation card is shown."}), 400
+    enabled = bool(body.get("translation_card"))
+    actor = session["user"]["id"]
+
+    async def save():
+        await panel_settings.set_translation_card(enabled, actor, _discord_bot)
+
+    try:
+        run_on_bot_loop(save(), timeout=15)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+    except Exception:
+        log.exception("Could not change the status panel translation card")
+        return jsonify({"error": "The panel setting could not be saved."}), 502
     return jsonify(_locale_payload())
 
 
