@@ -88,12 +88,33 @@ How the two halves meet:
   registered callback — `DISCORD_REDIRECT_URI` if it is set, otherwise
   `PUBLIC_URL` + `/auth/callback` while routing is on (`runtime.redirect_uri`)
   — because Discord refuses a callback it does not know, and `dash.` is not one
-  of them. The shared session cookie carries the OAuth state across the hop, and
-  `/auth/callback` then sends the visitor back to the section host they started
-  from, with the path in that host's short form (`config.public_path`). The
-  `next=` a sign-in was given is stored in its apex form first
+  of them. `/auth/callback` then sends the visitor back to the section host they
+  started from, with the path in that host's short form (`config.public_path`).
+  The `next=` a sign-in was given is stored in its apex form first
   (`config.apex_path`), since a section host writes it short: `/staff` on
   `dash.` has to come back as `/dashboard/staff`.
+- The OAuth `state` carries the whole sign-in — the apex path, the section, and
+  the host — signed with the app secret (`auth_routes._encode_oauth_state` and
+  `_decode_oauth_state`) and good for 15 minutes. Nothing about a sign-in depends
+  on a cookie coming back with the callback: the signature is the check.
+  That is deliberate. The state used to live in the session cookie, and once the
+  cookie was shared on the whole domain browsers kept sending the old host-only
+  copy alongside the new one; the server read the stale copy, found no state,
+  and answered "the sign-in link expired" for every attempt while the log could
+  only say the cookie was missing. A parameter the client cannot alter has no
+  such twin.
+- The session cookie is named `niko_session`, for the same reason: a fresh name
+  cannot be shadowed by the copies of the old one. `/auth/login`, `/auth/logout`
+  and `/auth/callback` delete the legacy `session` cookie (both the host-only and
+  the domain form) as they go.
+- When the callback names a different *site* (a preview host signing in against
+  the real site's callback, say), `/auth/login` hands the visitor to the
+  callback's own address — but only when that address is the site itself, which
+  `PUBLIC_URL` names. Anything else is a misconfiguration and is not followed.
+- A failed return explains itself: the failure names the address Discord
+  returned to (`/?error=…&to=…`, shown under the sign-in notice), and the server
+  logs which cookies arrived with it. "The link expired" alone never has to be
+  the whole story again.
 - Sessions are shared when `PUBLIC_URL` names the apex (it usually does):
   `config.session_cookie_domain` then puts the session cookie on `.<domain>`, so
   a sign-in on the apex is valid on the subdomain and the other way round.

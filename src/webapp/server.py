@@ -68,8 +68,22 @@ from .staff import STAFF_PRIORITY, _current_staff_role, _find_staff_member, _is_
 
 app = Flask(__name__, static_folder=WEB_DIST_DIR, static_url_path="")
 app.secret_key = os.environ.get("SESSION_SECRET", secrets.token_hex(32))
+# A new name for the session cookie, deliberately. The cookie used to be called
+# "session" and was host-only; when the site started sharing it on the whole
+# domain, browsers kept *both* — the old host-only one and the new domain one —
+# and sent them together (`session=old; session=new`). Werkzeug reads the first,
+# so the server saw an old session forever: sign-in stored its OAuth state in the
+# domain cookie and every callback then read the stale one and answered
+# "the sign-in link expired". A fresh name has no stale twin, and the old cookie
+# is deleted on the way through auth (``auth_routes._drop_legacy_session_cookie``).
+app.config["SESSION_COOKIE_NAME"]     = "niko_session"
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"]   = True
+# A Secure cookie is never sent back over plain HTTP, so an http deployment
+# would sign in and lose the session on the very next request — the OAuth state
+# included, which is what makes that failure read as "the link expired". The
+# flag follows the site's own address: https, or nothing configured at all (the
+# safe default), keeps it on; an explicitly http PUBLIC_URL turns it off.
+app.config["SESSION_COOKIE_SECURE"]   = not config.canonical_origin().startswith("http://")
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 # Sharing the cookie on the whole domain is what keeps a sign-in alive across
 # the apex and a section subdomain. It is fixed at import from PUBLIC_URL — the

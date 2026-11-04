@@ -17,6 +17,7 @@ import { formatNumber } from "../utils/format";
 const signInErrorKeys: Record<string, string> = {
   oauth_denied: "signin.denied",
   invalid_state: "signin.invalid",
+  no_state: "signin.no_state",
   no_code: "signin.no_code",
   token_exchange_failed: "signin.token",
   user_fetch_failed: "signin.profile",
@@ -108,7 +109,16 @@ function useHomeSections() {
 export function HomePage() {
   const config = useBotConfig();
   const [stats, setStats] = useState<BotStats | null>(null);
-  const signInError = useMemo(() => new URLSearchParams(window.location.search).get("error"), []);
+  const signInParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const signInError = signInParams.get("error");
+  // A failed sign-in carries the address it started on and the one Discord
+  // returned to. When they differ that difference *is* the failure, so both are
+  // shown rather than leaving the visitor with only "the link expired".
+  const signInHop = useMemo(() => {
+    const from = signInParams.get("from") || "";
+    const to = signInParams.get("to") || "";
+    return from && to && from !== to ? { from, to } : null;
+  }, [signInParams]);
   useEffect(() => {
     let cancelled = false;
     const refresh = () => getStats().then((s) => { if (!cancelled) setStats(s); }).catch(() => undefined);
@@ -132,6 +142,7 @@ export function HomePage() {
               <strong>{t("signin.title")}</strong>
               <span>
                 {t(signInErrorKeys[signInError] ?? "signin.unknown")}{" "}
+                {signInHop && `${t("signin.addresses", { from: signInHop.from, to: signInHop.to })} `}
                 {t("signin.body")}
               </span>
               <a className="button button-muted" href="/auth/login?next=%2Fdashboard">{t("signin.retry")}</a>

@@ -6,7 +6,6 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from flask import session as flask_session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -141,11 +140,13 @@ def test_a_section_host_carries_the_shared_cookie(subdomains, monkeypatch):
         headers={"Accept": "text/html"},
     )
 
-    cookie = response.headers.get("Set-Cookie", "")
+    cookies = response.headers.getlist("Set-Cookie")
     # A session cookie set while the visitor is on the subdomain must belong to
     # the domain, or signing in there would not be seen on the apex. Werkzeug
     # writes it without the leading dot that ``.domain`` implies.
-    assert "Domain=niko.sryze.cc" in cookie
+    written = [header for header in cookies if header.startswith(f"{app.config['SESSION_COOKIE_NAME']}=")]
+    assert written
+    assert all("Domain=niko.sryze.cc" in header for header in written)
 
 
 def test_every_section_is_known_by_the_origin_that_serves_it(subdomains, monkeypatch):
@@ -250,24 +251,167 @@ def test_a_short_path_is_remembered_in_its_apex_form(subdomains, host, path, exp
     assert config.apex_path(host, path) == expected
 
 
+def test_a_sign_in_on_another_site_continues_where_the_callback_lands(subdomains, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    # A preview host and the site are different sites: the state cookie set on
+    # one never reaches the other. The sign-in is handed to the address that
+    # receives the callback instead of dying on the state check.
+    response = app.test_client().get("/auth/login?next=/dashboard", base_url="https://preview.e2b.app")
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://niko.sryze.cc/auth/login?next=%2Fdashboard"
+
+
+def test_a_callback_on_another_address_is_not_followed(subdomains, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://staging.example.test/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    # A callback that is not the site cannot be followed: sending the visitor
+    # there would leave this site for one that may not even exist. The attempt
+    # goes ahead and the callback reports both addresses when it fails.
+    response = app.test_client().get("/auth/login", base_url="https://niko.sryze.cc")
+
+    assert _redirect_uri_param(response) == "https://staging.example.test/auth/callback"
+
+
+def test_a_section_host_signs_in_without_leaving_the_site(subdomains, monkeypatch):
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    # `dash.` and the apex share the site's cookies, so there is nothing to hop
+    # over: the button goes straight to Discord.
+    response = app.test_client().get("/auth/login?next=/staff", base_url="https://dash.niko.sryze.cc")
+
+    assert _redirect_uri_param(response) == "https://niko.sryze.cc/auth/callback"
+
+
+def _state_param(response) -> str:
+    return parse_qs(urlparse(response.headers["Location"]).query).get("state", [""])[0]
+
+
+def _start_sign_in(monkeypatch, path: str = "/dashboard/staff", host: str = "dash.niko.sryze.cc") -> str:
+    """Run ``/auth/login`` the way a section host does and return its state."""
+    from types import SimpleNamespace
+    from webapp.routes import auth_routes
+
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+    # The callback would otherwise call Discord; an unusable code is enough to
+    # prove the state was accepted, because the session check comes first.
+    monkeypatch.setattr(auth_routes, "discord_request", lambda *a, **k: SimpleNamespace(ok=False))
+
+    response = app.test_client().get(f"/auth/login?next={path}", base_url=f"https://{host}")
+    return _state_param(response)
+
+
+def test_a_callback_without_a_state_says_so(subdomains):
+    response = app.test_client().get("/auth/callback?code=x", base_url="https://niko.sryze.cc")
+
+    location = response.headers["Location"]
+    # A callback opened directly is a different failure from a stale link, and
+    # saying which one it was is what makes it diagnosable.
+    assert "error=no_state" in location
+    assert "to=niko.sryze.cc" in location
+
+
+def test_a_tampered_state_is_reported_as_a_stale_link(subdomains):
+    response = app.test_client().get("/auth/callback?state=abc.def&code=x", base_url="https://niko.sryze.cc")
+
+    location = response.headers["Location"]
+    assert "error=invalid_state" in location
+    assert "to=niko.sryze.cc" in location
+
+
+def test_an_expired_state_is_rejected(subdomains, monkeypatch):
+    from webapp.routes import auth_routes
+
+    state = _start_sign_in(monkeypatch)
+    monkeypatch.setattr(auth_routes, "_OAUTH_STATE_MAX_AGE", -1)
+
+    response = app.test_client().get(f"/auth/callback?state={state}&code=x", base_url="https://niko.sryze.cc")
+
+    assert "error=invalid_state" in response.headers["Location"]
+
+
+def test_the_state_alone_verifies_the_sign_in(subdomains, monkeypatch):
+    state = _start_sign_in(monkeypatch)
+
+    # A client that has never seen this site: no cookies at all. The signature in
+    # the state is the whole check, so the sign-in still gets past it.
+    response = app.test_client().get(f"/auth/callback?state={state}&code=x", base_url="https://niko.sryze.cc")
+
+    location = response.headers["Location"]
+    assert "error=no_state" not in location
+    assert "error=invalid_state" not in location
+    assert "error=token_exchange_failed" in location
+
+
+def test_a_stale_duplicate_session_cookie_does_not_block_the_sign_in(subdomains, monkeypatch):
+    state = _start_sign_in(monkeypatch)
+
+    # Production sent two ``session`` cookies — an old host-only copy and the new
+    # domain one — and the server read the first, so every callback looked like
+    # an expired link. Nothing reads that cookie any more; this is the guard.
+    response = app.test_client().get(
+        f"/auth/callback?state={state}&code=x",
+        base_url="https://niko.sryze.cc",
+        headers={"Cookie": "session=stale-host-only; session=stale-domain"},
+    )
+
+    assert "error=token_exchange_failed" in response.headers["Location"]
+    # ...and the dead cookie is cleaned up on the way out.
+    cleared = [header for header in response.headers.getlist("Set-Cookie") if header.startswith("session=")]
+    assert cleared
+
+
+def test_a_sign_in_that_completes_lands_on_the_section_host(subdomains, monkeypatch):
+    from types import SimpleNamespace
+    from webapp.routes import auth_routes
+
+    monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+    monkeypatch.setattr(
+        auth_routes,
+        "discord_request",
+        lambda *a, **k: SimpleNamespace(
+            ok=True,
+            json=lambda: {"access_token": "token", "refresh_token": "refresh", "expires_in": 3600, "scope": "identify"},
+        ),
+    )
+    monkeypatch.setattr(auth_routes, "discord_get", lambda path, token: {"id": "42", "username": "tester"})
+
+    client = app.test_client()
+    state = _state_param(client.get("/auth/login?next=/dashboard/staff", base_url="https://dash.niko.sryze.cc"))
+    done = client.get(f"/auth/callback?state={state}&code=abc", base_url="https://niko.sryze.cc")
+
+    # The whole round trip, exactly as production runs it: sign in on ``dash.``,
+    # come back to the callback, and land signed in on the section host.
+    assert done.headers["Location"] == "https://dash.niko.sryze.cc/staff"
+
+
 def test_a_finished_sign_in_returns_to_the_section_host(subdomains, monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
     from webapp.routes import auth_routes
 
-    with app.test_request_context("/auth/callback"):
-        flask_session["oauth_return"] = "/dashboard"
+    state = auth_routes._encode_oauth_state("/dashboard/staff", "/dashboard", "dash.niko.sryze.cc")
+    sign_in = auth_routes._decode_oauth_state(state)
 
-        assert auth_routes._oauth_destination("/dashboard/staff") == "https://dash.niko.sryze.cc/staff"
+    assert auth_routes._oauth_destination(sign_in["r"], sign_in["n"]) == "https://dash.niko.sryze.cc/staff"
 
 
 def test_an_apex_sign_in_stays_on_the_apex(subdomains, monkeypatch):
     monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
     from webapp.routes import auth_routes
 
-    with app.test_request_context("/auth/callback"):
-        flask_session["oauth_return"] = ""
+    state = auth_routes._encode_oauth_state("/dashboard/staff", "", "niko.sryze.cc")
+    sign_in = auth_routes._decode_oauth_state(state)
 
-        assert auth_routes._oauth_destination("/dashboard/staff") == "/dashboard/staff"
+    assert auth_routes._oauth_destination(sign_in["r"], sign_in["n"]) == "/dashboard/staff"
 
 
 def test_the_helpers_are_inert_without_the_switch(monkeypatch):

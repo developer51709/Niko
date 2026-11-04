@@ -53,6 +53,8 @@
   "signin.retry": "Reintentar",
   "signin.denied": "El inicio de sesión con Discord se canceló antes de terminar.",
   "signin.invalid": "Ese enlace de inicio de sesión caducó antes de usarse.",
+  "signin.no_state": "No volvió ninguna cookie de inicio de sesión de Discord: puede que ya se haya usado o que la vuelta llegara a otra dirección.",
+  "signin.addresses": "El inicio de sesión comenzó en {from} y volvió a {to}; solo puede completarse en la dirección donde empezó.",
   "signin.no_code": "Discord no devolvió un código de inicio de sesión.",
   "signin.token": "Niko no pudo completar el intercambio de tokens con Discord.",
   "signin.profile": "Niko no pudo leer tu perfil de Discord.",
