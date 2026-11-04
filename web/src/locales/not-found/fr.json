@@ -1,0 +1,14 @@
+{
+  "title": "Page introuvable — Niko",
+  "page.eyebrow": "404 · Page introuvable",
+  "page.title": "Cette page n’existe pas",
+  "page.body": "L’adresse est peut-être mal tapée, ou le lien mène à une page qui a été déplacée.",
+  "page.hint": "Rien n’est servi à {path}. Toutes les pages du site sont dans la navigation ci-dessus.",
+  "subdomain.eyebrow": "404 · Sous-domaine inconnu",
+  "subdomain.title": "Ce sous-domaine ne fait pas partie de Niko",
+  "subdomain.body": "Le site ne répond que sur les adresses qu’il utilise réellement, et celle-ci n’en fait pas partie.",
+  "subdomain.hint": "Tu as demandé {host}. Le site se trouve sur {site}.",
+  "action.home": "Retour au site",
+  "action.site": "Aller au site",
+  "action.support": "Obtenir de l’aide"
+}

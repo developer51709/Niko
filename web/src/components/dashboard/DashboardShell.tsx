@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PublicHeader } from "../PublicHeader";
 import { Icon } from "../Icon";
-import { navigate, type DashboardView, type DashSection, type UserTab } from "../../router";
+import { currentPath, navigate, siteHref, type DashboardView, type DashSection, type UserTab } from "../../router";
 import { displayName, formatNumber } from "../../utils/format";
 import { useStrings } from "../../i18n";
 import type { BotStats, Guild, User } from "../../types";
@@ -32,6 +32,9 @@ const personalSections: [UserTab, string, string][] = [
   ["achievements", "shell.personal.achievements", "guild_achievements"],
 ];
 
+/** One tab of a page whose navigation lives in the sidebar rather than a bar. */
+export type ShellTab = { id: string; label: string; icon: string; badge?: number };
+
 type Props = {
   user: User;
   guilds: Guild[];
@@ -48,6 +51,11 @@ type Props = {
   onRefresh: () => void;
   refreshing: boolean;
   staffRole?: string | null;
+  /** The staff workspace's tabs. Present only on the staff page, where they
+   *  take the place of a navigation bar at the top of the page. */
+  staffTabs?: ShellTab[];
+  activeStaffTab?: string;
+  onStaffTabChange?: (id: string) => void;
   children: ReactNode;
 };
 
@@ -67,6 +75,9 @@ export function DashboardShell({
   onRefresh,
   refreshing,
   staffRole,
+  staffTabs = [],
+  activeStaffTab,
+  onStaffTabChange,
   children,
 }: Props) {
   const { t } = useStrings("dashboard");
@@ -77,7 +88,7 @@ export function DashboardShell({
   // The private staff pages are routed outside the view/section state this shell
   // drives, so their current entry is read from the path itself; the mailbox and
   // its report queue share one entry.
-  const path = window.location.pathname.replace(/\/+$/, "");
+  const path = currentPath().replace(/\/+$/, "");
   const staffPage: "workspace" | "email" | null = path.startsWith("/dashboard/staff/email")
     ? "email"
     : path === "/dashboard/staff" ? "workspace" : null;
@@ -163,6 +174,27 @@ export function DashboardShell({
     </nav>
   );
 
+  // The staff workspace's own tabs, in the same place the server settings and
+  // personal tabs sit: one sidebar for everything, never a bar over the page.
+  // The ids are what the panels' aria-labelledby points at; the mobile copy
+  // leaves them off so they are not duplicated in the document.
+  const staffNav = (mobile = false) => (
+    <nav className={mobile ? "dash-nav dash-nav-mobile" : "dash-nav"} aria-label={t("shell.staffTabs")}>
+      {staffTabs.map((tab) => (
+        <button
+          key={tab.id}
+          id={mobile ? undefined : `staff-${tab.id}-tab`}
+          className={activeStaffTab === tab.id ? "active" : ""}
+          aria-current={activeStaffTab === tab.id ? "page" : undefined}
+          onClick={() => { onStaffTabChange?.(tab.id); setSidebarOpen(false); }}
+        >
+          <Icon name={tab.icon} /><span>{tab.label}</span>
+          {tab.badge ? <span className="nav-badge">{tab.badge}</span> : null}
+        </button>
+      ))}
+    </nav>
+  );
+
   const primaryNav = (mobile = false) => (
     <nav className={mobile ? "dash-nav dash-primary-nav dash-nav-mobile" : "dash-nav dash-primary-nav"} aria-label={t("shell.dashboard")}>
       <button className={view === "overview" && !staffPage ? "active" : ""} aria-current={view === "overview" && !staffPage ? "page" : undefined} onClick={() => { onHome(); setSidebarOpen(false); }}>
@@ -230,7 +262,9 @@ export function DashboardShell({
           <div className="dash-mobile-controls">{topActions()}</div>
           <div className="side-rail-heading"><span className="side-label">{t("shell.workspace")}</span><span className="rail-status"><span className="status-dot" /> {t("shell.live")}</span></div>
           {primaryNav()}
-          {view === "overview" && (
+          {/* The personal tabs are not this page's navigation, so a staff page
+              shows its own group instead of them. */}
+          {view === "overview" && !staffPage && (
             <>
               <div className="side-label side-label-settings">{t("shell.personal")}</div>
               <div className="side-guild">
@@ -253,17 +287,24 @@ export function DashboardShell({
               {sectionNav()}
             </>
           )}
+          {staffPage === "workspace" && staffTabs.length > 0 && (
+            <>
+              <div className="side-label side-label-settings">{t("shell.staffTabs")}</div>
+              {staffNav()}
+            </>
+          )}
           <div className="sidebar-bottom">
             <span className="online-label"><span className="status-dot" /> {t("shell.botOnline")}</span>
             <small>{t("shell.connectedServers", { count: formatNumber(stats?.guild_count), version: stats?.version || "1.0" })}</small>
-            <a href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>{t("shell.backToSite")} <Icon name="arrow" /></a>
+            <a href={siteHref("/")} onClick={(e) => { e.preventDefault(); navigate("/"); }}>{t("shell.backToSite")} <Icon name="arrow" /></a>
           </div>
         </aside>
         <div className="dash-content">
           <div className="dash-contextbar">{topActions()}</div>
           <div className="mobile-primary-bar">{primaryNav(true)}</div>
           {view === "guild" && <div className="mobile-section-bar">{sectionNav(true)}</div>}
-          {view === "overview" && <div className="mobile-section-bar">{personalNav(true)}</div>}
+          {view === "overview" && !staffPage && <div className="mobile-section-bar">{personalNav(true)}</div>}
+          {staffPage === "workspace" && staffTabs.length > 0 && <div className="mobile-section-bar">{staffNav(true)}</div>}
           <main className="dash-main">{children}</main>
         </div>
       </div>

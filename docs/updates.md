@@ -64,7 +64,7 @@ by area, and applies what is selected:
 | Website build | `src/website/dist/**` | Files replaced in place. Flask serves that folder from disk, so the next request is the new site. Nothing restarts. |
 | Cog extensions | `src/cogs/**` | The changed `cogs.<package>` modules are dropped from `sys.modules` (clearing the cached import) and only the affected extensions are reloaded. |
 | Utilities | `src/utils/**` | Changed `utils.*` modules are purged, every loaded extension is reloaded on top of them, and the dashboard app is rebuilt. |
-| API & dashboard | `src/webapp/**` | `webapp.*` is re-imported and the new Flask app is swapped into the running server (`server.app`). The listening socket, its thread and in-flight connections stay up. |
+| API & dashboard | `src/webapp/**` | `webapp.*` is re-imported and the new Flask app is swapped into the running server (`server.app`). The listening socket, its thread and in-flight connections stay up. The swap is checked before it is reported: the new app must be the one on the server and must answer `/api/health`. |
 | Bot core | `src/bot.py`, `src/api_server.py`, `src/events/**`, `src/database/**` | A successor process is started on the inherited listening socket; see below. |
 
 The API rebuild is transactional. The modules the running app was built from
@@ -75,6 +75,18 @@ process whose modules were purged and whose route imports now read a file that
 does not load. The updater reloads its own module at the end of such a run for
 the same reason: `src/webapp/updates.py` is part of the area it replaces, and it
 is the one module that cannot be re-imported while it is executing.
+
+Two smaller things are what make the new code the code that actually answers:
+
+- **The compiled copy of a replaced file is deleted** (`__pycache__/*.pyc`).
+  `importlib.invalidate_caches()` refreshes the finders, not a bytecode file
+  whose recorded source stamp still matches; a module that arrives with the same
+  size and timestamp would otherwise import from the previous build until the
+  process restarted.
+- **A swap that does not take effect is a failure, not a success.** After
+  `replace_app`, the updater checks that the server holds the new app and that it
+  answers `/api/health`; if either is false, the old app and the old modules go
+  back and the area is rolled back — so "applied" always means "live now".
 
 Every replaced file is hashed against beta's manifest before it is written, and
 copied to `data/updates/backups/<run>/` first. A failed download or a failed
@@ -123,6 +135,11 @@ file descriptor, so this is for a single-process deployment (the normal
   alone, so beta cannot repoint production's links.
 - Updates are pulled on demand by the owner; nothing polls beta and applies
   changes by itself.
+- A visitor who already has the site open is not sent a new bundle. Their tab
+  keeps the one it loaded and is offered a reload by the update notice — the
+  build name in the shell against `/api/site/build`, see "Reloading a tab after
+  a build" in `docs/dashboard.md`. Only a change to the bundle triggers it; a
+  server-only update is picked up by the next request without a reload.
 - The handoff replaces the running process, so the supervisor that started it
   must not restart it on a clean exit. `data/updates/handoff.json` records the
   successor's pid and state if you need to trace one.

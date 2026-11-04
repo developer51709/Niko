@@ -32,7 +32,7 @@ import time
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from . import runtime, social
+from . import config, runtime, social
 
 # ── Shared namespace ──────────────────────────────────────────────────────────
 # Re-exported for the route modules' snapshot (see the module docstring),
@@ -71,6 +71,11 @@ app.secret_key = os.environ.get("SESSION_SECRET", secrets.token_hex(32))
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"]   = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+# Sharing the cookie on the whole domain is what keeps a sign-in alive across
+# the apex and a section subdomain. It is fixed at import from PUBLIC_URL — the
+# canonical apex — because a cookie domain cannot depend on the host that
+# happens to be answering; "" leaves cookies host-only.
+app.config["SESSION_COOKIE_DOMAIN"] = config.session_cookie_domain()
 
 # ── Instance state ────────────────────────────────────────────────────────────
 
@@ -85,6 +90,46 @@ def api_health_local():
         "gateway": "active",
         "uptime_seconds": max(0, int(time.time() - _WEB_STARTED_AT)),
     })
+
+
+@app.before_request
+def route_section_subdomain():
+    """Serve a section subdomain from the apex path it stands in for.
+
+    On ``dash.example.com`` the visitor's ``/staff`` is the dashboard's
+    ``/dashboard/staff``: the shell is told the prefix (see
+    ``social.render_site_shell``) and the client applies it to every path it
+    reads, so one build serves both the long and the short form. Anything under
+    the long form is sent to the short one, which is what keeps old links, the
+    dashboard's own ``/dashboard/...`` URLs and a visitor who types the prefix
+    on a subdomain on the page they meant.
+
+    A host the site does not serve at all (``foo.example.com`` under the site's
+    own domain) is answered with the subdomain variant of the 404 page, and
+    answered as a real 404 — there is no page behind it to come back to. Its
+    API and sign-in endpoints keep working: the shell only needs them to render,
+    and refusing them would turn a wrong host into a broken one.
+    """
+    host = runtime.request_host()
+    prefix = config.subdomain_prefix(host)
+    if prefix:
+        if request.path == prefix or request.path.startswith(prefix + "/"):
+            target = request.path[len(prefix):] or "/"
+            if request.query_string:
+                target = f"{target}?{request.query_string.decode('utf-8', 'replace')}"
+            return redirect(target, code=301)
+        return None
+    if config.unknown_subdomain(host) and not request.path.startswith(("/api/", "/auth/")):
+        # The 404 page is still a page: its stylesheet, script and icons are
+        # files this host ships, and only a path that is not one of them is the
+        # page itself. The static route answers every single-segment path, so
+        # existence — not the matched rule — is what tells the two apart.
+        shipped = os.path.isfile(os.path.join(WEB_DIST_DIR, request.path.lstrip("/")))
+        if not shipped:
+            response = social.render_site_shell()
+            response.status_code = 404
+            return response
+    return None
 
 
 @app.after_request

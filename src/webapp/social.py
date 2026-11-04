@@ -2,12 +2,13 @@
 embeds. Rendering itself lives in ``social_preview``."""
 
 from urllib.parse import urlencode
+import json
 import os
 import re
 import time
 from . import social_preview
 from flask import Response, jsonify, request
-from . import config, database, runtime, staff
+from . import config, database, runtime, site_build, staff
 
 
 # Landing-page counts for the Discord embeds, refreshed at most once a minute.
@@ -417,6 +418,23 @@ def _social_invite_url() -> str:
     })
 
 
+def _with_shell_state(shell: str, state: dict) -> str:
+    """Hand the client the two facts it cannot work out from the bundle alone.
+
+    ``build`` is the identity of the build this response was served from: an
+    open tab compares it with what the site serves later and offers to reload
+    when the frontend has moved on. ``prefix`` is the apex path this host serves
+    from its own root (``/dashboard`` on ``dash.``), which is what makes
+    ``/staff`` the dashboard's ``/dashboard/staff`` and keeps the links the page
+    writes short again. It is absent on the apex, where paths already are what
+    they say. ``sections`` maps each apex section path to the origin serving it,
+    so an apex link to the dashboard goes to ``dash.`` rather than the long
+    form; it is absent while subdomain routing is off.
+    """
+    marker = f"<script>window.__NIKO_SHELL__={json.dumps(state)}</script>"
+    return shell.replace("</head>", f"{marker}</head>", 1)
+
+
 def render_site_shell(path: str = None):
     """Serve the React shell with this route's social metadata rendered in.
 
@@ -427,6 +445,13 @@ def render_site_shell(path: str = None):
     filled in now.
     """
     route = request.path if path is None else path
+    prefix = config.subdomain_prefix(runtime.request_host())
+    if prefix:
+        # On a section host the short path *is* the apex page with the prefix
+        # left off, so the copy and the canonical URL come from the long form:
+        # ``/staff`` on ``dash.`` describes itself as ``/dashboard/staff``
+        # rather than as the home page.
+        route = prefix + ("" if route == "/" else route)
     shell_path = os.path.join(config.WEB_DIST_DIR, "index.html")
     try:
         with open(shell_path, "r", encoding="utf-8") as handle:
@@ -441,6 +466,23 @@ def render_site_shell(path: str = None):
         stats_provider=_social_stats,
         context_provider=_social_context,
     )
+    state = {"build": site_build.build_id()}
+    # Where each section lives when the site routes sections onto their own
+    # hosts. The apex keeps its paths; this is what lets its links to a section
+    # point at that section's host instead of the long form.
+    sections = config.section_origins()
+    if sections:
+        state["sections"] = sections
+    if prefix:
+        state["prefix"] = prefix
+    if config.unknown_subdomain(runtime.request_host()):
+        # The host is under the site's own domain but serves nothing: the page
+        # renders the subdomain variant of the 404 and points at the real site.
+        state["unknown"] = True
+        site = config.canonical_origin()
+        if site:
+            state["site"] = site
+    body = _with_shell_state(body, state)
     response = Response(body, mimetype="text/html")
     # The served head depends on the request (and, on landing pages, on live
     # counts), so it is revalidated rather than cached blind.

@@ -1,0 +1,14 @@
+{
+  "title": "Page not found — Niko",
+  "page.eyebrow": "404 · Page not found",
+  "page.title": "This page doesn’t exist",
+  "page.body": "The address may be mistyped, or the link may point at a page that has moved.",
+  "page.hint": "Nothing is served at {path}. Every page the site has is in the navigation above.",
+  "subdomain.eyebrow": "404 · Unknown subdomain",
+  "subdomain.title": "This subdomain isn’t part of Niko",
+  "subdomain.body": "The site only answers on the addresses it actually uses, and this isn’t one of them.",
+  "subdomain.hint": "You asked for {host}. The site lives at {site}.",
+  "action.home": "Back to the site",
+  "action.site": "Go to the site",
+  "action.support": "Get support"
+}

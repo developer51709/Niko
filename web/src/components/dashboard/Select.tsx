@@ -37,6 +37,11 @@ type Props = {
   ariaLabel?: string;
   disabled?: boolean;
   id?: string;
+  /**
+   * Extra class on the portalled list, for a surface that lives in its own
+   * layer and needs the list above it (the owner devtools panel, for one).
+   */
+  listClassName?: string;
 };
 
 /**
@@ -52,7 +57,7 @@ type Props = {
  * backdrop-filter, which makes each card its own stacking context, so a list
  * drawn inside a card would paint underneath the card below it.
  */
-export function Select({ options, value, onChange, placeholder, placeholderGlyph, unknownOption, ariaLabel, disabled, id }: Props) {
+export function Select({ options, value, onChange, placeholder, placeholderGlyph, unknownOption, ariaLabel, disabled, id, listClassName }: Props) {
   const { t } = useStrings("dashboard");
   const resolvedPlaceholder = placeholder === undefined ? t("pickers.chooseOption") : placeholder;
   const [open, setOpen] = useState(false);
@@ -188,7 +193,7 @@ export function Select({ options, value, onChange, placeholder, placeholderGlyph
       <ChevronDown className="dash-select-chevron" size={14} aria-hidden="true" />
     </button>
     {open && createPortal(<div
-      className="dash-select-list"
+      className={`dash-select-list${listClassName ? ` ${listClassName}` : ""}`}
       role="listbox"
       aria-label={ariaLabel}
       ref={listRef}

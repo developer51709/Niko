@@ -1,0 +1,14 @@
+{
+  "title": "Seite nicht gefunden — Niko",
+  "page.eyebrow": "404 · Seite nicht gefunden",
+  "page.title": "Diese Seite gibt es nicht",
+  "page.body": "Vielleicht ist die Adresse vertippt, oder der Link zeigt auf eine Seite, die umgezogen ist.",
+  "page.hint": "Unter {path} liegt nichts. Alle Seiten der Website findest du in der Navigation oben.",
+  "subdomain.eyebrow": "404 · Unbekannte Subdomain",
+  "subdomain.title": "Diese Subdomain gehört nicht zu Niko",
+  "subdomain.body": "Die Website antwortet nur auf den Adressen, die sie wirklich nutzt — und diese gehört nicht dazu.",
+  "subdomain.hint": "Du hast {host} aufgerufen. Die Website liegt unter {site}.",
+  "action.home": "Zurück zur Website",
+  "action.site": "Zur Website",
+  "action.support": "Support erhalten"
+}

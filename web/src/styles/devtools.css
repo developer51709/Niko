@@ -248,19 +248,25 @@
 .owner-devtools-locale { align-items: flex-start; }
 .owner-devtools-locale > div { flex: 1 1 auto; }
 
-.owner-devtools-select {
+/* The language picker is the shared dropdown (the same control the dashboard
+   uses), sized down for this compact panel. Its list is portalled to the body,
+   so it keeps the standard row height and spacing. */
+.owner-devtools-locale .dash-select {
   flex: 0 0 auto;
-  max-width: 128px;
-  min-height: 28px;
-  padding: 4px 6px;
-  color: var(--ink);
-  background: rgba(255, 255, 255, .05);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  font: 11px "Plus Jakarta Sans", sans-serif;
+  width: 148px;
 }
-.owner-devtools-select:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
-.owner-devtools-select option { color: #f4f5f7; background: #121418; }
+.owner-devtools-locale .dash-select-trigger {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.owner-devtools-locale .dash-select-chevron { width: 12px; height: 12px; }
+
+/* The list is portalled to the body, so it cannot inherit the panel's layer:
+   the panel sits at 4000 (above every page overlay) and the list's own 2000
+   would leave it painted underneath, invisible and unclickable. */
+.owner-devtools-select-list { z-index: 4100; }
 
 .owner-devtools-reset {
   justify-self: start;

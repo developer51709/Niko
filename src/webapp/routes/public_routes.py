@@ -7,6 +7,7 @@ from config import links as bot_links
 from .. import leaderboard_cache
 from .. import locale_feed
 from .. import server as _server
+from .. import site_build
 from .. import status as status_source
 from ..bot_card import render_bot_card
 from ..staff_card import avatar_data_url
@@ -258,6 +259,17 @@ def api_commands():
 @app.route("/api/health")
 def api_health():
     return jsonify({"ok": True, "service": "niko-api", "static_build": os.path.exists(os.path.join(WEB_DIST_DIR, "index.html"))})
+
+
+@app.route("/api/site/build")
+def api_site_build():
+    """The build the site is serving right now.
+
+    An open tab compares this with the build it was served from and offers to
+    reload when they differ, which is only ever true when the frontend itself
+    was replaced — a server-only update leaves this name alone.
+    """
+    return jsonify({"build": site_build.build_id()})
 
 
 @app.route("/api/locales/source.json")

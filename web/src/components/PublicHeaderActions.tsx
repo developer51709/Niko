@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useStrings } from "../i18n";
+import { dashboardHref } from "../router";
 import { Icon } from "./Icon";
 
 interface PublicHeaderActionsProps {
@@ -62,6 +63,12 @@ export function PublicHeaderActions({
     };
   }, [menuOpen]);
 
+  // On a site that serves the dashboard from its own subdomain this is an
+  // absolute URL to that host; there is then nothing to intercept, and the
+  // browser has to make the request.
+  const dashboard = dashboardHref();
+  const dashboardIsHere = dashboard.startsWith("/");
+
   if (isDashboard) {
     return (
       <div className="dashboard-menu">
@@ -94,7 +101,12 @@ export function PublicHeaderActions({
                 {t(link.key)}
               </a>
             ))}
-            <a className="dashboard-menu-current" href="/dashboard" aria-current="page" onClick={onNavigate("/dashboard")}>
+            <a
+              className="dashboard-menu-current"
+              href={dashboard}
+              aria-current="page"
+              onClick={dashboardIsHere ? onNavigate("/dashboard") : undefined}
+            >
               {t("header.dashboard")}
             </a>
           </nav>,
@@ -106,7 +118,11 @@ export function PublicHeaderActions({
 
   return (
     <>
-      <a className="button button-small button-muted dashboard-link" href="/dashboard" onClick={onNavigate("/dashboard")}>
+      <a
+        className="button button-small button-muted dashboard-link"
+        href={dashboard}
+        onClick={dashboardIsHere ? onNavigate("/dashboard") : undefined}
+      >
         {t("header.dashboard")} <Icon name="arrow" />
       </a>
       <a className="button button-small button-primary" href={inviteUrl || "#"} target="_blank" rel="noreferrer">

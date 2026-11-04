@@ -14,7 +14,7 @@ import { useBotConfig } from "../hooks/useBotConfig";
 import { useLiveResource } from "../hooks/useLiveResource";
 import { useStrings } from "../i18n";
 import type { PublicConfig } from "../types";
-import { dashboardPath, dashboardRoute, dashboardServersPath, dashboardUserPath, navigate, type DashboardView, type DashSection, type UserTab } from "../router";
+import { dashboardPath, dashboardRoute, dashboardServersPath, dashboardUserPath, navigate, siteHref, type DashboardView, type DashSection, type UserTab } from "../router";
 import type { AchievementsResponse, AuthStatus, BotStats, BoosterSettings, EconomyStanding, Guild, GuildConfig, GuildOverview, GuildResources, LevelRow, ReferralSummary, User, UserOverview } from "../types";
 import { Icon } from "../components/Icon";
 
@@ -25,7 +25,7 @@ function AuthCard({ auth }: { auth: AuthStatus }) {
     eyebrow={t("auth.eyebrow")}
     title={<>{t("auth.titleBefore")} <em>{t("auth.titleEmphasis")}</em></>}
     description={t("auth.description")}
-    back={{ label: t("auth.back"), href: "/", onClick: () => navigate("/") }}
+    back={{ label: t("auth.back"), href: siteHref("/"), onClick: () => navigate("/") }}
   >
     <DiscordSignIn
       next="/dashboard"
@@ -193,9 +193,9 @@ function BlacklistAppealScreen({ scope, reason, guildId, guildName, supportUrl, 
   >
     <div className="blacklist-appeal-reason"><span className="panel-kicker">{t("auth.reasonKicker")}</span><p>{reason?.trim() || t("auth.noReason")}</p></div>
     <p className="blacklist-appeal-note">{t("auth.appealNote")}</p>
-    {scope === "user" ? <a className="button button-primary full-width" href="/appeals/blacklist">{t("auth.appealUser")} <Icon name="arrow" /></a> : appealable ? <a className="button button-primary full-width" href={`/appeals/blacklist?guild_id=${encodeURIComponent(guildId || "")}`}>{t("auth.appealGuild")} <Icon name="arrow" /></a> : <button type="button" className="button button-muted full-width" disabled>{t(appealable === null ? "auth.checkingEligibility" : "auth.notAppealable")}</button>}
+    {scope === "user" ? <a className="button button-primary full-width" href={siteHref("/appeals/blacklist")}>{t("auth.appealUser")} <Icon name="arrow" /></a> : appealable ? <a className="button button-primary full-width" href={siteHref(`/appeals/blacklist?guild_id=${encodeURIComponent(guildId || "")}`)}>{t("auth.appealGuild")} <Icon name="arrow" /></a> : <button type="button" className="button button-muted full-width" disabled>{t(appealable === null ? "auth.checkingEligibility" : "auth.notAppealable")}</button>}
     {safeSupportUrl && <AuthBackLink label={<>{t("auth.orSupport")} <Icon name="external" /></>} href={safeSupportUrl} external />}
-    {!embedded && <AuthBackLink label={t("auth.backPublic")} href="/" onClick={() => navigate("/")} />}
+    {!embedded && <AuthBackLink label={t("auth.backPublic")} href={siteHref("/")} onClick={() => navigate("/")} />}
   </AuthScreen>;
 }
 
@@ -297,7 +297,7 @@ export function DashboardPage() {
     eyebrow={t("auth.connectionEyebrow")}
     title={<>{t("auth.connectionTitle")}<br /><em>{t("auth.connectionEmphasis")}</em></>}
     description={error}
-    back={{ label: t("auth.back"), href: "/", onClick: () => navigate("/") }}
+    back={{ label: t("auth.back"), href: siteHref("/"), onClick: () => navigate("/") }}
   >
     <button className="button button-primary full-width" onClick={() => window.location.reload()}>{t("auth.tryAgain")} <Icon name="arrow" /></button>
   </AuthScreen>;

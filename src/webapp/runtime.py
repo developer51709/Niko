@@ -69,6 +69,17 @@ def schedule_on_bot_loop(awaitable):
     return future
 
 
+def request_host() -> str:
+    """The host the visitor asked for, honouring a proxy that rewrites ``Host``.
+
+    A reverse proxy may forward the internal address as ``Host`` and the public
+    name in ``X-Forwarded-Host``; subdomain routing and the origins built for
+    provider callbacks both need the name the visitor used.
+    """
+    forwarded = (request.headers.get("X-Forwarded-Host") or "").split(",")[0].strip()
+    return forwarded or request.host
+
+
 def public_base_url() -> str:
     """Return the externally reachable origin used by provider callbacks."""
     explicit = os.environ.get("PUBLIC_URL")
@@ -77,16 +88,28 @@ def public_base_url() -> str:
     domain = os.environ.get("REPLIT_DEV_DOMAIN")
     if domain:
         return f"https://{domain}".rstrip("/")
-    forwarded_host = request.headers.get("X-Forwarded-Host")
-    host = forwarded_host or request.host
     forwarded_proto = request.headers.get("X-Forwarded-Proto", request.scheme)
-    return f"{forwarded_proto}://{host}".rstrip("/")
+    return f"{forwarded_proto}://{request_host()}".rstrip("/")
 
 
 def redirect_uri() -> str:
+    """The one callback address Discord knows this site by.
+
+    ``DISCORD_REDIRECT_URI`` wins when it is set. Otherwise the address is the
+    host the visitor is on — which stops working the moment sections live on
+    their own subdomains: ``https://dash.example.com/auth/callback`` is not a
+    registered callback for the application, and Discord refuses the sign-in
+    before it starts. The site's canonical origin is used instead, so there is
+    one callback to register no matter where the visitor pressed the button.
+    The shared session cookie carries the sign-in back to the section they
+    started from (``/auth/callback`` redirects there).
+    """
     explicit = os.environ.get("DISCORD_REDIRECT_URI")
     if explicit:
         return explicit
+    canonical = config.canonical_origin()
+    if config.SUBDOMAIN_ROUTING and canonical:
+        return f"{canonical}/auth/callback"
     domain = os.environ.get("REPLIT_DEV_DOMAIN")
     if domain:
         return f"https://{domain}/auth/callback"
