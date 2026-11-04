@@ -81,6 +81,31 @@ def custom_status_text(activity) -> str | None:
     return None
 
 
+def _avatar_decoration(user) -> tuple[str | None, str | None]:
+    """The user's Discord avatar decoration: its still image and, if it moves,
+    its animated copy.
+
+    The decoration is a separate asset painted around the avatar, not part of
+    the avatar image, so the pages draw it themselves. Older library versions
+    and cached objects may not expose it at all, which is why every read is
+    guarded and an absent decoration is simply ``None``.
+    """
+    decoration = getattr(user, "avatar_decoration", None)
+    if decoration is None:
+        return None, None
+    try:
+        still = str(decoration.url) or None
+    except Exception:
+        return None, None
+    animated = None
+    try:
+        if decoration.is_animated():
+            animated = str(decoration.with_format("gif").url) or None
+    except Exception:
+        animated = None
+    return still, animated
+
+
 def _staff_identity(user_id: str) -> dict:
     """Resolve a staff member's global identity and the richest live presence."""
     ordered_members = _presence_members(user_id)
@@ -98,10 +123,16 @@ def _staff_identity(user_id: str) -> dict:
                 # to avoid polling Discord every 5s.
                 user = runtime.run_on_bot_loop(runtime._discord_bot.fetch_user(int(user_id)))
                 avatar = getattr(user, "display_avatar", None)
+                decoration_url, decoration_animated_url = _avatar_decoration(user)
                 cached_identity = {
                     "name": getattr(user, "global_name", None) or getattr(user, "name", None),
                     "username": getattr(user, "name", None),
                     "avatar_url": str(avatar.url) if avatar is not None else None,
+                    # Cached with the rest of the identity: a decoration is part
+                    # of how the member's avatar is drawn, so a cached name with
+                    # no decoration would render the wrong picture.
+                    "avatar_decoration_url": decoration_url,
+                    "avatar_decoration_animated_url": decoration_animated_url,
                 }
                 _staff_user_identity_cache[str(user_id)] = (time.time(), cached_identity)
             except Exception:
@@ -194,6 +225,7 @@ def _staff_identity(user_id: str) -> dict:
     # the frontend by returning the normalized enum value.
     status = getattr(raw_status, "name", None) or str(raw_status)
     status = status.rsplit(".", 1)[-1].lower()
+    decoration_url, decoration_animated_url = _avatar_decoration(user) if user is not None else (None, None)
     return {
         "id": str(user_id),
         # Use the global Discord display name, never a guild nickname from
@@ -201,6 +233,10 @@ def _staff_identity(user_id: str) -> dict:
         "name": getattr(member, "global_name", None) or getattr(getattr(member, "_user", None), "global_name", None) or getattr(user, "global_name", None) or getattr(user, "name", None) or (cached_identity or {}).get("name") or f"Staff member {user_id}",
         "username": getattr(user, "name", None) or (cached_identity or {}).get("username"),
         "avatar_url": str(getattr(getattr(user, "display_avatar", None), "url", "")) or (cached_identity or {}).get("avatar_url"),
+        # Drawn around the avatar by the Team pages, the same way Discord shows
+        # a Nitro avatar decoration on a profile.
+        "avatar_decoration_url": decoration_url or (cached_identity or {}).get("avatar_decoration_url"),
+        "avatar_decoration_animated_url": decoration_animated_url or (cached_identity or {}).get("avatar_decoration_animated_url"),
         "status": status,
         "status_label": {"online": "Online", "idle": "Idle", "dnd": "Do Not Disturb", "offline": "Offline"}.get(status, status.title()),
         "activities": activities,
