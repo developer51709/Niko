@@ -139,10 +139,7 @@ def _rules_panel_row() -> discord.ui.ActionRow:
 def _rules_links_view(bot) -> discord.ui.LayoutView:
     """Ephemeral card listing every official Niko link."""
     bot_id = getattr(getattr(bot, "user", None), "id", None)
-    invite = (
-        f"https://discord.com/oauth2/authorize?client_id={bot_id}&permissions=8&scope=bot%20applications.commands"
-        if bot_id else links.SUPPORT_SERVER
-    )
+    invite = links.invite_url(bot_id) if bot_id else links.SUPPORT_SERVER
     items: list = [
         _rules_header(bot, "Important links", "Every official Niko page in one place."),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),

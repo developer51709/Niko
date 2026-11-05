@@ -128,6 +128,30 @@ def snapshots():
         yield store
 
 
+class _Cdn:
+    """Stands in for the bot's HTTP session on the CDN read used by the retry."""
+
+    def __init__(self, data):
+        self.data = data
+        self.urls = []
+
+    def get_from_cdn(self, url):
+        self.urls.append(url)
+        cdn = self
+
+        class _Response:
+            async def read(self):
+                return cdn.data
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_exc):
+                return False
+
+        return _Response()
+
+
 class _Asset:
     def __init__(self, url, data=b"\x89PNG-bytes", error=None):
         self.url = url
@@ -253,6 +277,29 @@ class TestProfilePictures:
         asyncio.run(cog.on_user_update(before, after))
 
         cog.log_event.assert_not_awaited()
+
+    def test_a_failed_png_download_retries_the_picture_as_webp(self):
+        cog = _cog()
+        cog.bot.http = _Cdn(b"RIFF\x00\x00\x00\x00WEBPVP8 ")
+        before = _user(avatar=_Asset("https://cdn.example/old.png"))
+        after = _user(avatar=_Asset(
+            "https://cdn.discordapp.com/avatars/42/hash.png?size=1024",
+            error=OSError("404 on the png rendition")))
+
+        # A picture Discord holds only as webp has no png file to read, so the
+        # archive asks the same CDN asset for its webp bytes instead.
+        asyncio.run(cog.on_user_update(before, after))
+
+        assert cog.bot.http.urls == [
+            "https://cdn.discordapp.com/avatars/42/hash.webp?size=1024"]
+        call = _call(cog)
+        # The file name follows the bytes, or the attachment shows as broken.
+        assert [file.filename for file in call.files] == [
+            "profile-picture-before.png", "profile-picture-after.webp"]
+        assert call.media_urls[-1] == (
+            "attachment://profile-picture-after.webp",
+            "After — Global profile picture")
+        assert "**After:**" not in call.body
 
     def test_a_failed_download_falls_back_to_links(self):
         cog = _cog()

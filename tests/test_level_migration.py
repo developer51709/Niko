@@ -280,6 +280,28 @@ async def _entries(items):
         yield item
 
 
+def _migrate_row(container):
+    """The import offer's own buttons, if this DM carries one."""
+    for item in container.children:
+        if not isinstance(item, discord.ui.ActionRow):
+            continue
+        labels = [button.label for button in item.children]
+        if any(str(label).startswith("Import from") for label in labels):
+            return labels
+    return None
+
+
+def _link_urls(container):
+    """Every link button on the DM (the dashboard and docs row)."""
+    return [
+        button.url
+        for item in container.children
+        if isinstance(item, discord.ui.ActionRow)
+        for button in item.children
+        if isinstance(button, discord.ui.Button) and button.style is discord.ButtonStyle.link
+    ]
+
+
 class JoinDmTests(unittest.TestCase):
     def make_guild(self, member_ids, *, inviter=None, owner=None, audit_raises=None):
         guild = FakeGuild(member_ids)
@@ -320,12 +342,9 @@ class JoinDmTests(unittest.TestCase):
 
         self.assertEqual(len(inviter.views), 1)
         container = inviter.views[0].children[0]
-        rows = [item for item in container.children if isinstance(item, discord.ui.ActionRow)]
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(
-            [button.label for button in rows[0].children],
-            ["Import from MEE6", "No thanks"],
-        )
+        self.assertEqual(_migrate_row(container), ["Import from MEE6", "No thanks"])
+        # The import offer sits above the dashboard/docs links every DM keeps.
+        self.assertTrue(_link_urls(container))
 
     def test_dm_has_no_prompt_without_a_supported_bot(self):
         inviter = _Recorder()
@@ -333,10 +352,10 @@ class JoinDmTests(unittest.TestCase):
         asyncio.run(cog.on_guild_join(self.make_guild([1, 2], inviter=inviter)))
 
         container = inviter.views[0].children[0]
-        self.assertFalse([
-            item for item in container.children if isinstance(item, discord.ui.ActionRow)
-        ])
-        self.assertIn("/dashboard/42/leveling", container.children[0].children[1].content)
+        self.assertIsNone(_migrate_row(container))
+        self.assertTrue(any(
+            "/dashboard/42/leveling" in url for url in _link_urls(container)
+        ))
 
     def test_amaribot_offer_appears_only_when_a_key_is_set(self):
         cog = self.make_cog()
@@ -345,19 +364,13 @@ class JoinDmTests(unittest.TestCase):
         with with_key(""):
             asyncio.run(cog.on_guild_join(self.make_guild([AMARIBOT], inviter=without_key)))
         container = without_key.views[0].children[0]
-        self.assertFalse([
-            item for item in container.children if isinstance(item, discord.ui.ActionRow)
-        ])
+        self.assertIsNone(_migrate_row(container))
 
         with_key_recorder = _Recorder()
         with with_key("amari-key"):
             asyncio.run(cog.on_guild_join(self.make_guild([AMARIBOT], inviter=with_key_recorder)))
-        rows = [
-            item for item in with_key_recorder.views[0].children[0].children
-            if isinstance(item, discord.ui.ActionRow)
-        ]
         self.assertEqual(
-            [button.label for button in rows[0].children],
+            _migrate_row(with_key_recorder.views[0].children[0]),
             ["Import from AmariBot", "No thanks"],
         )
 

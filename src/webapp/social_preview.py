@@ -393,7 +393,8 @@ def render_head(
     description = escape(page["description"], quote=True)
     image = escape(page["image"], quote=True)
     return (
-        '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />'
+        # The bot's own picture, drawn by the Flask route, is the tab icon.
+        '<link rel="icon" type="image/svg+xml" href="/bot/favicon.svg" />'
         f"<title>{title}</title>"
         f'<meta name="description" content="{description}" />'
         f'<link rel="canonical" href="{canonical}" />'

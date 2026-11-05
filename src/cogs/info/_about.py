@@ -88,7 +88,7 @@ class AboutMixin:
             f"-# {msg(ctx, 'about_footer')}"
         )
 
-        invite_url = f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands"
+        invite_url = links.invite_url(bot_user.id)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.Section(
@@ -194,7 +194,7 @@ class AboutMixin:
     )
     async def invite(self, ctx):
         bot_user = self.bot.user
-        invite_link = f"https://discord.com/oauth2/authorize?client_id={bot_user.id}&permissions=8&scope=bot%20applications.commands"
+        invite_link = links.invite_url(bot_user.id)
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.TextDisplay(

@@ -12,6 +12,7 @@ from ..data import (
     ACCENT_GOLD, ACCENT_RED,
 )
 from utils.cooldown import cooldown_ready_at, cooldown_view
+from utils.economy_amount import resolve_amount
 from utils.i18n import get_lang
 from utils.locales import load_locales
 
@@ -168,15 +169,18 @@ class GamblingMixin:
         description=CMDS.text("coinflip.description"),
         help=CMDS.help("coinflip"),
     )
-    async def coinflip(self, ctx: commands.Context, amount: int, call: str = "heads"):
+    async def coinflip(self, ctx: commands.Context, amount: str, call: str = "heads"):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
         lang = get_lang(ctx)
-        if amount <= 0:
+        data = await self.get_user_economy_data(ctx.author.id)
+        # ``all`` stakes the whole wallet, so the balance has to be known before
+        # the amount can be checked.
+        amount = resolve_amount(amount, int(data.get("balance", 0)))
+        if amount is None or amount <= 0:
             return await self._send_err(ctx, T(lang, "bad_amount_title"), T(lang, "bad_bet_body"))
 
-        data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
             return await self._send_err(
                 ctx, T(lang, "no_cash_title"),
@@ -225,15 +229,17 @@ class GamblingMixin:
         description=CMDS.text("dice.description"),
         help=CMDS.help("dice"),
     )
-    async def dice(self, ctx: commands.Context, amount: int, target: int = 50):
+    async def dice(self, ctx: commands.Context, amount: str, target: int = 50):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
         lang = get_lang(ctx)
-        if amount <= 0:
+        data = await self.get_user_economy_data(ctx.author.id)
+        # ``all`` stakes the whole wallet, so the balance is read first.
+        amount = resolve_amount(amount, int(data.get("balance", 0)))
+        if amount is None or amount <= 0:
             return await self._send_err(ctx, T(lang, "bad_amount_title"), T(lang, "bad_bet_body"))
 
-        data = await self.get_user_economy_data(ctx.author.id)
         if int(data.get("balance", 0)) < amount:
             return await self._send_err(
                 ctx, T(lang, "no_cash_title"),

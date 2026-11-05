@@ -192,6 +192,26 @@ def test_the_react_markdown_writes_the_emoji_name_out_when_it_cannot_load():
     assert 'className="discord-profile-status-emoji"' in source
 
 
+def test_the_custom_status_draws_default_emojis_with_twemoji():
+    """Discord paints default emojis with Twemoji, so the bubble does too."""
+    markdown = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
+    helper = (ROOT / "web" / "src" / "data" / "twemoji.ts").read_text(encoding="utf-8")
+    transcript = (ROOT / "src" / "utils" / "tickets" / "transcripts.py").read_text(encoding="utf-8")
+
+    # The unicode branch is an image of Twemoji's own artwork, not a text glyph
+    # in whatever emoji font the visitor's OS happens to ship.
+    assert 'import { twemojiUrl } from "../data/twemoji";' in markdown
+    assert "src={twemojiUrl(status.emoji_name)}" in markdown
+    assert '<span className="discord-profile-status-emoji">{status.emoji_name}</span>' not in markdown
+    # Variation selectors are dropped so a text-style and an emoji-style spelling
+    # of one character resolve to the single asset Twemoji ships.
+    assert "character !== \"\\uFE0E\" && character !== \"\\uFE0F\"" in helper
+    assert "assets/svg/" in helper
+    # The transcript export, which has its own copy of the popup, matches.
+    assert "twemojiUrl(customStatus.emoji_name)" in transcript
+    assert "assets/svg/" in transcript
+
+
 def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
     markdown = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
     page = (ROOT / "web" / "src" / "pages" / "TranscriptPage.tsx").read_text(encoding="utf-8")

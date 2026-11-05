@@ -2,6 +2,7 @@
 
 import datetime
 import time
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from config import links as bot_links
 from utils import logging
@@ -10,7 +11,8 @@ from .. import locale_feed
 from .. import server as _server
 from .. import site_build
 from .. import status as status_source
-from ..bot_card import render_bot_card
+from ..bot_card import render_bot_card, render_bot_favicon
+from ..social import _bot_avatar_url
 from ..staff_card import avatar_data_url
 
 globals().update({
@@ -488,10 +490,7 @@ def api_public_config():
         "bot_display_name": bot_display_name,
         "bot_discriminator": bot_discriminator,
         "bot_verified": bot_verified,
-        "invite_url": (
-            f"https://discord.com/oauth2/authorize?"
-            f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands'})}"
-        ),
+        "invite_url": bot_links.invite_url(DISCORD_CLIENT_ID),
         "oauth_available": oauth_enabled(),
     }
     if _discord_bot is not None and getattr(_discord_bot, "loop", None) is not None and _discord_bot.loop.is_running():
@@ -623,6 +622,49 @@ def api_bot_card():
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+# A tab needs no more than 128px, and the base64 copy of a full-size avatar
+# would be larger than every other file a page downloads.
+_FAVICON_AVATAR_SIZE = 128
+
+
+def _favicon_avatar_url(url) -> str | None:
+    """Ask Discord's CDN for a tab-sized copy of the avatar.
+
+    Only ``cdn.discordapp.com`` takes a ``size`` parameter; the media proxy uses
+    width and height, and any host that is not a Discord CDN is rejected when the
+    image is inlined anyway, so those URLs are left untouched.
+    """
+    raw = str(url or "").strip()
+    if not raw:
+        return None
+    parts = urlsplit(raw)
+    if (parts.hostname or "").lower() != "cdn.discordapp.com":
+        return raw
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["size"] = str(_FAVICON_AVATAR_SIZE)
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+@app.route("/bot/favicon.svg")
+def api_bot_favicon():
+    """Niko's own face as the website favicon, cropped to a rounded tile.
+
+    The tab icon follows the bot it belongs to, so a new profile picture shows
+    up as soon as the CDN copy behind the inlined avatar is refreshed. Without a
+    live gateway (or with the CDN unreachable) the build's static icon is served
+    instead: a tab with the brand mark beats a tab with no icon at all.
+    """
+    svg = render_bot_favicon(avatar_data_url(_favicon_avatar_url(_bot_avatar_url())))
+    if svg is None:
+        return redirect("/favicon.svg")
+    response = Response(svg, mimetype="image/svg+xml")
+    # The avatar changes rarely and the document is a few kilobytes, so a browser
+    # may keep it — but not so long that a new profile picture is invisible.
+    response.headers["Cache-Control"] = "public, max-age=600"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 

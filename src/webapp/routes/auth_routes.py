@@ -40,6 +40,17 @@ def _same_site(first: str, second: str) -> bool:
 #: How long a sign-in link may take to come back from Discord.
 _OAUTH_STATE_MAX_AGE = 900
 
+#: Discord serves the same authorization screen on each of its client builds.
+#: Canary and PTB keep sessions of their own, so starting a sign-in on one of
+#: them authorizes with the account that build is logged into — the way a second
+#: account gets in without signing out of the first.
+_DISCORD_AUTHORIZE_HOSTS = {
+    "stable": "discord.com",
+    "canary": "canary.discord.com",
+    "ptb": "ptb.discord.com",
+}
+_DEFAULT_DISCORD_AUTHORIZE_HOST = "discord.com"
+
 
 def _secret() -> bytes:
     """The key the state signature and the session cookie share."""
@@ -137,6 +148,9 @@ def auth_login():
     # so a sign-in started on some other site has to continue there: the session
     # it ends in belongs to the callback's site, and a visitor who finished it
     # elsewhere would arrive signed out.
+    # Which Discord build runs the authorization; anything else is stable.
+    requested_client = request.args.get("client", "").strip().lower()
+    authorize_host = _DISCORD_AUTHORIZE_HOSTS.get(requested_client, _DEFAULT_DISCORD_AUTHORIZE_HOST)
     landing = _callback_origin()
     site = config.canonical_origin()
     if landing and not _same_site(landing, _request_origin()) and site and _same_site(landing, site):
@@ -144,8 +158,12 @@ def auth_login():
             "Auth",
             f"Sign-in started on {_request_origin()} but the callback is {landing}; continuing on {landing}.",
         )
-        target = f"{landing}/auth/login?next={quote(config.apex_path(host, next_path), safe='')}"
-        return redirect(target)
+        # The build travels with the hand-off, or the second leg would land the
+        # visitor on stable after they asked for Canary.
+        onward = {"next": config.apex_path(host, next_path)}
+        if authorize_host != _DEFAULT_DISCORD_AUTHORIZE_HOST:
+            onward["client"] = requested_client
+        return redirect(f"{landing}/auth/login?{urlencode(onward)}")
     # A callback that names some other address is a configuration problem, not
     # something to follow: the visitor stays here and the callback says which
     # two addresses were involved when it arrives.
@@ -159,7 +177,11 @@ def auth_login():
     # One line per sign-in so a failed return can be traced: which address it
     # started on, which address Discord will send it back to, and where it was
     # headed.
-    logging.info("Auth", f"Sign-in started on {_request_origin()} for {config.apex_path(host, next_path)} (callback {callback}).")
+    logging.info(
+        "Auth",
+        f"Sign-in started on {_request_origin()} for {config.apex_path(host, next_path)} "
+        f"via {authorize_host} (callback {callback}).",
+    )
 
     params = urlencode({
         "client_id": DISCORD_CLIENT_ID,
@@ -171,7 +193,7 @@ def auth_login():
         "scope": "identify guilds guilds.join",
         "state": state,
     })
-    return _drop_legacy_session_cookie(redirect(f"https://discord.com/oauth2/authorize?{params}"))
+    return _drop_legacy_session_cookie(redirect(f"https://{authorize_host}/oauth2/authorize?{params}"))
 
 @app.route("/auth/callback")
 def auth_callback():

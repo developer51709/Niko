@@ -379,3 +379,115 @@ def test_a_permission_error_still_reports_a_failure():
     ))
     assert (status, message_id) == ("failed", None)
     assert "could not be reached" in error
+
+
+# ── Advanced composer options: mention overrides and spoilers ────────────────
+# The editor's advanced section stores three independent mention switches and a
+# container spoiler; each uploaded image carries its own spoiler flag.
+
+
+def test_advanced_composer_options_are_stored_and_serialised():
+    source = (ROOT / "src/events/startup/database.py").read_text(encoding="utf-8")
+    assert "spoiler      INTEGER NOT NULL DEFAULT 0" in source
+    assert "allowed_mentions TEXT NOT NULL DEFAULT 'everyone,roles,users'" in source
+    assert "ALTER TABLE {table} ADD COLUMN {column} {definition}" in source
+    assert '("staff_broadcast_media", (' in source
+
+    from webapp.routes import staff_broadcast_routes as routes
+
+    row = database.Row({
+        "broadcast_id": "abc123",
+        "title": "Maintenance",
+        "body": "Back at 20:00",
+        "created_by": 1,
+    })
+    media = [database.Row({"media_id": "m1", "filename": "a.png"})]
+
+    payload = routes._serialise(row, media)
+
+    # A row written before these options existed behaves exactly as it used to.
+    assert payload["spoiler"] is False
+    assert payload["allowed_mentions"] == ["everyone", "roles", "users"]
+    assert payload["media"][0]["spoiler"] is False
+
+
+def test_mention_overrides_are_independent_switches():
+    assert broadcast.mention_overrides(None).to_dict()["parse"] == ["everyone", "users", "roles"]
+    # Every switch off is how a broadcast arrives without pinging anybody.
+    assert broadcast.mention_overrides([]).to_dict()["parse"] == []
+    assert broadcast.mention_overrides("").to_dict()["parse"] == []
+    assert broadcast.mention_overrides(["roles"]).to_dict()["parse"] == ["roles"]
+    # Unknown kinds are dropped rather than stored, and order is canonical.
+    assert broadcast.normalise_mentions("users, bogus, everyone") == "everyone,users"
+
+    from webapp.routes import staff_broadcast_routes as routes
+
+    fields, message = routes._clean_fields({"spoiler": True, "allowed_mentions": ["roles"]})
+    assert message is None
+    assert fields["spoiler"] is True
+    assert fields["allowed_mentions"] == "roles"
+    fields, message = routes._clean_fields({"spoiler": False, "allowed_mentions": []})
+    assert message is None
+    assert fields["allowed_mentions"] == ""
+
+
+def test_the_container_and_a_single_image_can_be_spoilers():
+    view = broadcast.build_broadcast_view(
+        "Title", "Body", "Footer", "C8A882",
+        [{"filename": "a.png", "spoiler": 1}, {"filename": "b.png"}],
+        spoiler=True,
+    )
+    container = view.children[0]
+    assert container.spoiler is True
+    gallery = container.children[4]
+    assert [item.spoiler for item in gallery.items] == [True, False]
+
+    plain = broadcast.build_broadcast_view("Title", "Body", "Footer", "C8A882", [])
+    assert plain.children[0].spoiler is False
+
+
+def test_sending_applies_the_mention_allow_list_and_the_spoiler():
+    captured = {}
+
+    class _Channel:
+        async def send(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(id=42)
+
+    bot = SimpleNamespace(get_channel=lambda channel_id: _Channel(), is_ready=lambda: True)
+    row = {
+        "title": "Title", "body": "Body", "footer": "Footer", "accent": "C8A882",
+        "spoiler": 1, "allowed_mentions": "",
+    }
+
+    status, message_id, _ = asyncio.run(broadcast._send_copy(bot, 5, row, []))
+
+    assert (status, message_id) == ("sent", 42)
+    assert captured["allowed_mentions"].to_dict()["parse"] == []
+    assert captured["view"].children[0].spoiler is True
+
+
+def test_the_image_spoiler_route_is_owner_only_and_csrf_guarded():
+    routes = (ROOT / "src/webapp/routes/staff_broadcast_routes.py").read_text(encoding="utf-8")
+    assert '"/api/staff/broadcasts/<broadcast_id>/media/<media_id>", methods=["PATCH"]' in routes
+    assert "UPDATE staff_broadcast_media SET filename = $1, spoiler = $2" in routes
+    assert "def api_update_staff_broadcast_media" in routes
+    assert "allowed_mentions = $6" in routes
+
+
+def test_renaming_an_image_keeps_its_real_extension():
+    from webapp.routes import staff_broadcast_routes as routes
+
+    # The readable part is sanitised the same way an upload's is.
+    assert routes._media_stem("Launch banner.png") == "Launch-banner"
+    assert routes._media_stem("  ../screenshot.PNG ") == "screenshot"
+    assert routes._media_stem("...") == ""
+
+
+def test_the_media_route_renames_without_resetting_the_spoiler():
+    routes = (ROOT / "src/webapp/routes/staff_broadcast_routes.py").read_text(encoding="utf-8")
+    assert 'if "spoiler" not in body and "filename" not in body' in routes
+    # Both fields are written together so a rename never clears the spoiler.
+    assert "UPDATE staff_broadcast_media SET filename = $1, spoiler = $2" in routes
+    assert "Another image already uses that name." in routes
+    assert "_media_extension(str(media.get('content_type') or '')" in routes

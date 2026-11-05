@@ -12,6 +12,7 @@ import time
 
 from config.emojis import get_emoji
 from utils.cooldown import cooldown_ready_at, cooldown_view
+from utils.economy_amount import resolve_amount
 from utils.paginator import PaginatedView, paginate
 from utils.prefix_manager import resolve_prefix
 from utils.image.blackjack import render_table
@@ -295,14 +296,17 @@ class Blackjack(commands.Cog):
         description=CMDS.text("blackjack.play.description"),
         help=CMDS.help("blackjack.play"),
     )
-    async def blackjack_play(self, ctx, amount: int = None):
+    async def blackjack_play(self, ctx, amount: str = None):
         """Play a full casino-grade blackjack game with a rendered table image."""
-        if amount is None or amount <= 0:
-            return await ctx.send(msg(ctx, "blackjack_bet_positive"))
-
         economy = self.bot.get_cog("EconomyCog")
         user_data = await economy.get_user_economy_data(ctx.author.id)
         balance = user_data["balance"]
+
+        # ``all`` bets the whole wallet, so the balance is read before the bet
+        # is checked. Everything below works on the resolved number.
+        amount = resolve_amount(amount, balance)
+        if amount is None or amount <= 0:
+            return await ctx.send(msg(ctx, "blackjack_bet_positive"))
 
         blackjack_cooldown = int(os.getenv("BLACKJACK_COOLDOWN") or 30)
         if user_data["last_blackjack"] + blackjack_cooldown > time.time():

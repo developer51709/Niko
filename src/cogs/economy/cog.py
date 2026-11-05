@@ -1,3 +1,6 @@
+import discord
+from discord import app_commands
+
 from config.ids import SUPPORT_GUILD
 
 from utils.i18n import get_lang
@@ -44,7 +47,16 @@ class EconomyCog(
         # Use database instead of JSON files
         self.economy_data: dict[str, dict] = {}  # Cache for performance
         self.lottery: dict = {}  # Will be loaded from database in setup
-        
+
+        # Right-click a user → the same level + wallet card, without typing a
+        # command. It lives here because ``/profile`` already renders the full
+        # card and both read the same economy tables.
+        self._profile_menu = app_commands.ContextMenu(
+            name="📊 User Profile",
+            callback=self.user_profile_context,
+        )
+        self.bot.tree.add_command(self._profile_menu)
+
         self._tick_task.start()
 
     async def cog_load(self):
@@ -54,10 +66,72 @@ class EconomyCog(
         self.bot.add_view(_ShopActionView(self, timeout=None))
 
     def cog_unload(self):
+        self.bot.tree.remove_command(
+            self._profile_menu.name, type=self._profile_menu.type)
         try:
             self._tick_task.cancel()
         except Exception:
             pass
+
+    # ── Context menu: user profile ────────────────
+
+    async def user_profile_context(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member,
+    ) -> None:
+        """Right-click a user → a compact level and wallet card."""
+        await interaction.response.defer(ephemeral=True)
+        lang = get_lang(interaction)
+        lines: list[str] = [f"### {get_emoji('user')} {member.display_name}"]
+
+        try:
+            row = await self.bot.cxn.fetchrow(
+                "SELECT xp, level FROM user_levels WHERE guild_id = $1 AND user_id = $2",
+                interaction.guild_id, member.id,
+            )
+            if row:
+                lines.append(
+                    f"**{_CARD_T(lang, 'profile_level')}:** {row['level']}  •  "
+                    f"**{_CARD_T(lang, 'profile_xp')}:** {row['xp']}"
+                )
+        except Exception:
+            pass
+
+        try:
+            eco = await self.bot.cxn.fetchrow(
+                "SELECT balance, bank FROM economy WHERE guild_id = $1 AND user_id = $2",
+                interaction.guild_id, member.id,
+            )
+            if eco:
+                lines.append(
+                    f"**{_CARD_T(lang, 'profile_wallet')}:** {eco['balance']:,} ☕  •  "
+                    f"**{_CARD_T(lang, 'profile_bank')}:** {eco['bank']:,} ☕"
+                )
+        except Exception:
+            pass
+
+        joined = (
+            discord.utils.format_dt(member.joined_at, "R")
+            if member.joined_at
+            else _CARD_T(lang, "profile_unknown")
+        )
+        lines.append(f"-# {_CARD_T(lang, 'profile_joined')}: {joined}")
+        lines.append(
+            f"-# {_CARD_T(lang, 'profile_account')}: "
+            f"{discord.utils.format_dt(member.created_at, 'R')}"
+        )
+
+        section = discord.ui.Section(
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            accessory=discord.ui.Thumbnail(
+                discord.UnfurledMediaItem(url=member.display_avatar.url)
+            ),
+        )
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            section, accent_colour=discord.Colour(0xc8a882)))
+        await interaction.followup.send(view=view, ephemeral=True)
 
     # ── Persistence ──────────────────────────────────────────────────────────
     def _load_all(self) -> dict[str, dict]:

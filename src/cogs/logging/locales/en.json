@@ -85,7 +85,11 @@
     "act_not_banned": "That user isn't banned.",
     "act_unmute_failed": "Failed to unmute: {error}",
     "act_not_in_voice": "**{member}** is not in a voice channel.",
-    "panel_footer": "-# **Need help?** Ask in the [support server]({support}) or check the [documentation]({docs})"
+    "panel_footer": "-# **Need help?** Ask in the [support server]({support}) or check the [documentation]({docs})",
+    "flag_explicit": "explicit content",
+    "flag_gore": "gore",
+    "flag_self_harm": "self-harm",
+    "flagged_media_note": "-# This image was flagged by an automated filter ({kind}) and could not be displayed. [Learn more]({link})"
   },
   "titles": {
     "Anti-Link": "Anti-Link",

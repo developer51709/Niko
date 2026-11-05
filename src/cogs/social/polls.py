@@ -368,6 +368,18 @@ class PollSetupView(discord.ui.LayoutView):
         self.message: discord.Message | None = None
         self._build()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """The builder is posted in the channel, so only its host (or a server
+        manager) may change the poll — not any member who can read it."""
+        if interaction.user.id == self.host_id:
+            return True
+        permissions = getattr(interaction.user, "guild_permissions", None)
+        if permissions is not None and getattr(permissions, "manage_guild", False):
+            return True
+        await interaction.response.send_message(
+            msg(interaction, "only_host"), ephemeral=True)
+        return False
+
     def _build(self):
         self.clear_items()
         s = self.state

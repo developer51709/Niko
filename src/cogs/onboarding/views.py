@@ -113,6 +113,27 @@ async def check_author(interaction: discord.Interaction, author: discord.abc.Use
         return False
     return True
 
+
+async def manage_gate(interaction: discord.Interaction, author=None) -> bool:
+    """Whether this interaction may change the server's onboarding settings.
+
+    The setup panels are posted in the channel (not ephemerally), so without
+    this every member who can see the channel could press their buttons. Manage
+    Server — which Administrator implies — or the person who opened the panel is
+    allowed; everyone else is refused ephemerally. This is the view-level
+    guard behind the per-button ``check_author`` calls.
+    """
+    permissions = getattr(interaction.user, "guild_permissions", None)
+    if permissions is not None and getattr(permissions, "manage_guild", False):
+        return True
+    if author is not None and getattr(interaction.user, "id", None) == getattr(author, "id", None):
+        return True
+    await interaction.response.send_message(
+        view=feedback_view(_t(interaction, "not_allowed"), ok=False),
+        ephemeral=True,
+    )
+    return False
+
 def parse_role_from_text(text: str, guild: discord.Guild) -> discord.Role | None:
     text = text.strip()
 
@@ -1097,6 +1118,7 @@ class AutoroleSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, guild: discord.Guild, cfg: OnboardingConfig, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
+        self.author = author
 
         role_ids = cfg.autorole_ids or []
 
@@ -1132,6 +1154,9 @@ class AutoroleSetupView(discord.ui.LayoutView):
             accent_colour=discord.Colour(0xFEE75C),
         )
         self.add_item(container)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await manage_gate(interaction, self.author)
 
 
 class ConfigureAutorolesBtn(discord.ui.Button):
@@ -2526,6 +2551,9 @@ class CaptchaSetupView(discord.ui.LayoutView):
         )
         self.add_item(container)
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await manage_gate(interaction, self.author)
+
 
 class ConfigureCaptchaBtn(discord.ui.Button):
     def __init__(self, guild_id: int, author: discord.Member, locale=None):
@@ -2877,6 +2905,7 @@ class OnboardingSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, prefix: str = ".", locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
+        self.author = author
 
         container = discord.ui.Container(
             discord.ui.TextDisplay(content=_t(locale, "setup_title")),
@@ -2910,6 +2939,9 @@ class OnboardingSetupView(discord.ui.LayoutView):
         )
         self.add_item(container)
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await manage_gate(interaction, self.author)
+
 
 class RoleMenuManagerView(discord.ui.LayoutView):
     """Top-level `.onboarding role-menu` panel: lists all menus for the guild."""
@@ -2917,6 +2949,7 @@ class RoleMenuManagerView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, cfg, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
+        self.author = author
 
         menus = cfg.role_menus or {}
 
@@ -2957,6 +2990,9 @@ class RoleMenuManagerView(discord.ui.LayoutView):
         ))
         container.accent_colour = discord.Colour(0x57F287)
         self.add_item(container)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await manage_gate(interaction, self.author)
 
 
 #: Locale key suffix for the plain-language hint under each menu type.
@@ -3012,6 +3048,7 @@ class RoleMenuWizardTypeView(discord.ui.LayoutView):
 
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg, locale=None):
         super().__init__(timeout=None)
+        self.author = author
         menu = cfg.role_menus[menu_id]
 
         container = discord.ui.Container(
@@ -3027,6 +3064,9 @@ class RoleMenuWizardTypeView(discord.ui.LayoutView):
             accent_colour=discord.Colour(menu.get("color") or 0x57F287),
         )
         self.add_item(container)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await manage_gate(interaction, self.author)
 
 
 class WizardFinishBtn(discord.ui.Button):
@@ -3060,6 +3100,7 @@ class RoleMenuWizardAddRolesView(discord.ui.LayoutView):
 
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg, locale=None):
         super().__init__(timeout=None)
+        self.author = author
         menu = cfg.role_menus[menu_id]
         options = menu.get("options") or []
 
@@ -3088,6 +3129,9 @@ class RoleMenuWizardAddRolesView(discord.ui.LayoutView):
         )
         self.add_item(container)
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await manage_gate(interaction, self.author)
+
 
 class RoleMenuEditView(discord.ui.LayoutView):
     """Per-menu management panel: edit info/type, manage roles, post, delete."""
@@ -3095,6 +3139,7 @@ class RoleMenuEditView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, menu_id: str, cfg, locale=None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
+        self.author = author
         self.menu_id = menu_id
         menu = (cfg.role_menus or {}).get(menu_id)
 
@@ -3157,6 +3202,9 @@ class RoleMenuEditView(discord.ui.LayoutView):
             accent_colour=discord.Colour(menu.get("color") or 0x57F287),
         )
         self.add_item(container)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await manage_gate(interaction, self.author)
 
 
 # -------------------- PREFIX COMMAND COG --------------------

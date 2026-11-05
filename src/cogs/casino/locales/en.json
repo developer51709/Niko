@@ -136,7 +136,7 @@
   "commands": {
     "blackjack.description": "Play a full casino-grade blackjack game",
     "blackjack.help": "Play a full casino-grade blackjack game",
-    "blackjack.play.args.amount": "Coins to bet.",
+    "blackjack.play.args.amount": "Coins to bet, or \"all\" to bet your whole wallet",
     "blackjack.play.description": "Play a game of blackjack",
     "blackjack.play.help": "Play a full casino-grade blackjack game",
     "blackjack.tutorial.description": "Learn how to play blackjack",
@@ -147,7 +147,7 @@
     "slots.help": "Play a casino-style 3×3 slot machine",
     "slots.payouts.description": "View the slots payout table",
     "slots.payouts.help": "See what each symbol pays out",
-    "slots.play.args.amount": "Coins to bet.",
+    "slots.play.args.amount": "Coins to bet, or \"all\" to bet your whole wallet",
     "slots.play.description": "Play a game of slots",
     "slots.play.help": "Spin the reels and hope for a line"
   }

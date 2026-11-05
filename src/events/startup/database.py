@@ -252,7 +252,9 @@ async def _create_tables(bot):
             failed_count INTEGER NOT NULL DEFAULT 0,
             skipped_count INTEGER NOT NULL DEFAULT 0,
             edited_count INTEGER NOT NULL DEFAULT 0,
-            last_error   TEXT
+            last_error   TEXT,
+            spoiler      INTEGER NOT NULL DEFAULT 0,
+            allowed_mentions TEXT NOT NULL DEFAULT 'everyone,roles,users'
         )
     """)
     await bot.cxn.execute("""
@@ -264,9 +266,27 @@ async def _create_tables(bot):
             size         INTEGER NOT NULL DEFAULT 0,
             position     INTEGER NOT NULL DEFAULT 0,
             data         TEXT NOT NULL,
-            created_at   REAL NOT NULL
+            created_at   REAL NOT NULL,
+            spoiler      INTEGER NOT NULL DEFAULT 0
         )
     """)
+    # Composer options added after the first broadcasts were stored. SQLite
+    # needs the columns on an existing table; MongoDB is schema-less, so the
+    # failed ALTER is expected there and the missing fields read as defaults.
+    for table, columns in (
+        ("staff_broadcasts", (
+            ("spoiler", "INTEGER NOT NULL DEFAULT 0"),
+            ("allowed_mentions", "TEXT NOT NULL DEFAULT 'everyone,roles,users'"),
+        )),
+        ("staff_broadcast_media", (
+            ("spoiler", "INTEGER NOT NULL DEFAULT 0"),
+        )),
+    ):
+        for column, definition in columns:
+            try:
+                await bot.cxn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            except Exception:
+                pass  # column already exists; MongoDB is schema-less
     await bot.cxn.execute(
         "CREATE INDEX IF NOT EXISTS idx_staff_broadcast_media "
         "ON staff_broadcast_media (broadcast_id, position)"
@@ -529,6 +549,16 @@ async def _create_tables(bot):
         )
     """)
     await _migrate_prefix_config(bot)
+
+    # A server's own language choice. Discord only fills preferred_locale when
+    # the server enables Community, so this is what lets every other server
+    # pick a language too.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS guild_languages (
+            guild_id INTEGER PRIMARY KEY,
+            language TEXT NOT NULL
+        )
+    """)
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS donors (
@@ -1170,9 +1200,14 @@ async def _create_tables(bot):
             target      TEXT PRIMARY KEY,
             reason      TEXT,
             since       REAL,
-            added_by    TEXT
+            added_by    TEXT,
+            report_code TEXT
         )
     """)
+    try:
+        await bot.cxn.execute("ALTER TABLE maintenance_targets ADD COLUMN report_code TEXT")
+    except Exception:
+        pass  # The column already exists, or MongoDB has no ALTER TABLE.
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS blacklist_users (

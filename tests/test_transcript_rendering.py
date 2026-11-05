@@ -188,6 +188,45 @@ def test_export_renders_attachments_inside_the_message():
     assert ">logs.zip</span>" in html
 
 
+def test_export_popup_marks_bots_with_the_app_pill():
+    profile = {
+        "id": "456",
+        "username": "niko",
+        "display_name": "Niko",
+        "avatar_url": None,
+        "avatar_decoration_url": None,
+        "banner_url": None,
+        "banner_color": None,
+        "guild_tag": None,
+        "guild_badge_url": None,
+        "badges": [],
+        "activities": [],
+        "bot": True,
+        "verified_bot": True,
+        "discriminator": "0071",
+    }
+    html = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Niko"}},
+        {"456": profile},
+    )
+
+    # The card draws Discord's pill beside the name, tick inside it for a
+    # verified bot, and the transcript carries the flags that decide both.
+    assert '"bot": true' in html
+    assert '"verified_bot": true' in html
+    assert "const botTag = profile.bot" in html
+    assert '<span class="discord-bot-tag"' in html
+    assert "'Verified bot' : 'Bot'" in html
+    assert "discord-bot-tag-check" in html
+    assert ".discord-bot-tag {" in html
+    assert "escapeHtml(profile.display_name) + botTag" in html
+    # The handle keeps Discord's four-digit tag after it.
+    assert '"discriminator": "0071"' in html
+    assert 'class="discord-profile-discriminator">#' in html
+
+
 def test_export_popup_matches_the_discord_layout():
     profile = {
         "id": "456",
@@ -276,6 +315,16 @@ def test_export_popup_matches_the_discord_layout():
     # The Spotify card is drawn above the profile link and can tick its progress.
     assert "Listening to Spotify" in html
     assert "discord-profile-spotify-track" in html
+    # Discord's card proportions and its light-grey played portion, with the
+    # Spotify mark inlined beside the wording so a saved transcript keeps it.
+    assert "width: 60px; height: 60px; flex: 0 0 auto; border-radius: 8px" in html
+    assert 'font-family: "gg sans", "Segoe UI", system-ui, -apple-system, sans-serif;' in html
+    assert "background: #dbdee1; border-radius: 999px" in html
+    # The track times are monospaced, the face the site's devtools header uses.
+    assert 'font-family: "Space Mono", monospace' in html
+    assert "family=Space+Mono" in html
+    assert "<span>Listening to Spotify</span><img src=" in html
+    assert "data:image/svg+xml," in html
     assert "setInterval(tick, 1000)" in html
     assert html.index("discord-profile-spotify") < html.index("discord-profile-full-link")
 
@@ -387,10 +436,17 @@ def test_export_popup_draws_the_presence_dot_from_inlined_art():
     from utils.tickets import transcripts
 
     art = transcripts._profile_status_art()
-    assert set(art) == {"online", "idle", "dnd", "offline", "streaming"}
-    assert [entry["label"] for entry in art.values()] == [
+    assert set(art) == {
+        "online", "idle", "dnd", "offline", "streaming",
+        # The phone-shaped icons that stand in while the phone holds the presence.
+        "online_mobile", "idle_mobile", "dnd_mobile",
+    }
+    assert [art[key]["label"] for key in ("online", "idle", "dnd", "offline", "streaming")] == [
         "Online", "Idle", "Do Not Disturb", "Offline", "Streaming"
     ]
+    # The phone-shaped art names its status with the same words as the dot.
+    for status in ("online", "idle", "dnd"):
+        assert art[f"{status}_mobile"]["label"] == art[status]["label"]
     assert all(entry["src"].startswith("data:image/png;base64,") for entry in art.values())
 
     page = export_html(
@@ -407,7 +463,15 @@ def test_export_popup_draws_the_presence_dot_from_inlined_art():
     # popup never reaches for the web app's asset folder.
     assert "/assets/discord-status/" not in page
     assert all(entry["src"] in page for entry in art.values())
-    assert ".discord-status-icon { position: absolute; right: 0; bottom: 0;" in page
+    # The dot sits in a notch masked out of the avatar, not on a painted plate.
+    assert ".discord-status-icon { position: absolute; z-index: 2; right: calc(" in page
+    # Discord's popout proportions: a 21px dot on the 76px avatar, and the
+    # banner cut away around the picture with a 4px gap of the card behind it.
+    assert "--status-icon-size: 19px; --status-gap: 3.5px" in page
+    assert "radial-gradient(circle at 54px 100%, transparent calc(42px - .5px), #000 42px)" in page
+    assert "mask-image: var(--profile-avatar-cutout)" in page
+    assert ".discord-status-avatar-art { position: absolute; inset: -10%;" in page
+    assert "mask-composite: exclude; }" in page
     # The dot rides the avatar, and its alt/title name the status in words.
     assert '<img class="discord-status-icon" data-profile-status src="' in page
     assert 'const label = escapeHtml(art.label || "Offline");' in page
@@ -435,7 +499,7 @@ def test_export_popup_refreshes_presence_while_the_card_is_open():
     assert 'typeof window.fetch === "function"' in page
     # A refresh replaces only the presence parts, so an open badge popup, the
     # "..." menu and the card's position all survive it.
-    assert "head.innerHTML = profileAvatar(next) + profileStatusBubble(next);" in page
+    assert "head.innerHTML = renderProfileAvatar(next) + profileStatusBubble(next);" in page
     assert "spotifyNode.innerHTML = nextSpotify.html;" in page
     assert "if (!next || !card.isConnected) return;" in page
     # A failed read keeps the last known presence rather than blanking the popup.
@@ -461,6 +525,21 @@ def test_export_popup_status_bubble_matches_discords_layout():
 
     # An emoji-only status is the compact square, not a text bubble.
     assert 'class="discord-profile-status is-emoji-only"' in page
+    # The laptop is Twemoji's image, the way Discord draws default emojis.
+    assert "twemojiUrl(customStatus.emoji_name)" in page
+    assert "cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/" in page
+    # The export keeps Discord's bubble shape: one flat card whose rounded tail
+    # is hooked onto the top-left corner.
+    assert "border-radius: 10px; font-size: 14px" in page
+    assert "align-self: flex-end" in page
+    # The tail is a thought bubble: a round bump on the top edge plus a separate
+    # round dot floating above and to its left, both painted behind the bubble's
+    # content so they cannot cover the status emoji or its text.
+    assert "top: -11px; left: 8px; width: 26px; height: 26px" in page
+    assert "top: -23px; left: -3px; width: 12px; height: 12px" in page
+    assert "isolation: isolate;" in page
+    assert "position: absolute; z-index: -1; top: -11px" in page
+    assert "position: absolute; z-index: -1; top: -23px" in page
     # Long text clamps to two lines and expands in place, like Discord's popup.
     assert "-webkit-line-clamp: 2" in page
     assert "bindStatusBubble(card);" in page

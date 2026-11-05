@@ -35,6 +35,14 @@ MONO = "Space Mono, ui-monospace, monospace"
 TAGLINE = "Moderation, music, leveling, economy and AI \u2014 one bot."
 CHIP_LABEL = "NIKO \u00b7 GLOBAL PROFILE"
 
+# The website favicon: the bot's own face on a rounded tile. The corner radius
+# is the app icon's (``scripts/generate_site_icons.mjs``), so a browser tab and a
+# pinned app icon share one silhouette. The tile colour shows wherever the
+# avatar is transparent, and around the corners the clip cuts away.
+FAVICON_SIZE = 512
+FAVICON_RADIUS = 112
+FAVICON_TILE = "#d96545"
+
 # Five equal tiles across the card, inside the same 24px margin the staff card
 # uses. Wider cards would stretch in a README column; narrower ones wrap labels.
 STAT_TILE_GAP = 10
@@ -178,3 +186,29 @@ def render_bot_card(
 
     return _document("".join(parts), CARD_WIDTH, CARD_HEIGHT, palette,
                      f"{name} \u2014 live bot profile")
+
+
+def render_bot_favicon(avatar_data_url: str | None) -> str | None:
+    """The bot's avatar as the website favicon, cropped to a rounded tile.
+
+    A favicon is drawn in a document of its own, where the browser never fetches
+    an external image, so the avatar is inlined exactly as the README card
+    inlines it. ``None`` means there is no avatar to draw: the caller serves the
+    build's static icon instead of an empty square.
+    """
+    if not avatar_data_url:
+        return None
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{FAVICON_SIZE}" '
+        f'height="{FAVICON_SIZE}" viewBox="0 0 {FAVICON_SIZE} {FAVICON_SIZE}">'
+        "<title>Niko</title>"
+        '<defs><clipPath id="niko-favicon">'
+        f'<rect width="{FAVICON_SIZE}" height="{FAVICON_SIZE}" rx="{FAVICON_RADIUS}"/>'
+        "</clipPath></defs>"
+        f'<rect width="{FAVICON_SIZE}" height="{FAVICON_SIZE}" rx="{FAVICON_RADIUS}" '
+        f'fill="{FAVICON_TILE}"/>'
+        f'<image href="{escape(avatar_data_url)}" width="{FAVICON_SIZE}" '
+        f'height="{FAVICON_SIZE}" preserveAspectRatio="xMidYMid slice" '
+        'clip-path="url(#niko-favicon)"/>'
+        "</svg>"
+    )

@@ -48,6 +48,7 @@ import sqlite3
 import uuid
 import requests as req
 from cogs.donations.oxapay import OxaPayClient
+from config import links as bot_links
 from cogs.staff.records import STAFF_ROLES
 from utils.ai.config import cached_config as cached_ai_config
 from utils.ai.config import save_config as save_ai_config
@@ -133,7 +134,9 @@ def route_section_subdomain():
                 target = f"{target}?{request.query_string.decode('utf-8', 'replace')}"
             return redirect(target, code=301)
         return None
-    if config.unknown_subdomain(host) and not request.path.startswith(("/api/", "/auth/")):
+    # The bot's own assets (its README card and the favicon drawn by
+    # `/bot/favicon.svg`) answer on every host, like the API and sign-in do.
+    if config.unknown_subdomain(host) and not request.path.startswith(("/api/", "/auth/", "/bot/")):
         # The 404 page is still a page: its stylesheet, script and icons are
         # files this host ships, and only a path that is not one of them is the
         # page itself. The static route answers every single-segment path, so
@@ -182,3 +185,11 @@ def spa_not_found(error):
     if request.accept_mimetypes.accept_html:
         return social.render_site_shell()
     return error
+
+
+# Unhandled website and API exceptions become staff-retrievable JSON reports.
+from .error_reporting import register_error_reporting  # noqa: E402
+from .api_maintenance import register_api_maintenance  # noqa: E402
+
+register_error_reporting(app)
+register_api_maintenance(app)

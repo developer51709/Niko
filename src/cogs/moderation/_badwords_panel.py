@@ -176,12 +176,27 @@ def _section_text(utils, guild_id: int, section: str, lang: str) -> str:
 #  PANEL
 # ──────────────────────────────────────────────────
 
+class _BadWordsPanelView(discord.ui.LayoutView):
+    """The panel, refused to everyone without Manage Server.
+
+    The panel is posted in the channel, so a member who can see it must not be
+    able to add or clear words. Every control also checks ``_may_manage`` in its
+    callback; this is the view-level gate for the whole panel.
+    """
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if _may_manage(interaction):
+            return True
+        await _deny(interaction)
+        return False
+
+
 def build_panel(utils, guild_id: int, section: str = "overview", guild=None) -> discord.ui.LayoutView:
     """The `/badwords` panel for one section, ready to send or edit in place."""
     if section not in SECTIONS:
         section = "overview"
     lang = get_lang(guild)
-    view = discord.ui.LayoutView(timeout=PANEL_TIMEOUT)
+    view = _BadWordsPanelView(timeout=PANEL_TIMEOUT)
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=_section_text(utils, guild_id, section, lang)),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),

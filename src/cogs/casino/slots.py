@@ -7,6 +7,7 @@ import os
 
 from cogs.casino.replay import InteractionContext
 from utils.cooldown import cooldown_ready_at, cooldown_view
+from utils.economy_amount import resolve_amount
 from utils.prefix_manager import resolve_prefix
 
 from utils.command_locales import command_texts
@@ -210,11 +211,11 @@ class Slots(commands.Cog):
         description=CMDS.text("slots.play.description"),
         help=CMDS.help("slots.play"),
     )
-    async def slots_play(self, ctx, amount: int = None):
+    async def slots_play(self, ctx, amount: str = None):
         """Play a casino‑style 3×3 slot machine."""
         await self.play(ctx, amount)
 
-    async def play(self, ctx, amount: int | None = None):
+    async def play(self, ctx, amount: str | int | None = None):
         """Run one spin; shared by the command and the Play Again button."""
         # Economy access
         economy = self.bot.get_cog("EconomyCog")
@@ -225,6 +226,9 @@ class Slots(commands.Cog):
         if float(user_data.get("last_slots") or 0) + slots_cooldown > time.time():
             return await ctx.send(view=_slots_cooldown_view(ctx, user_data.get("last_slots")))
 
+        # ``all`` bets the whole wallet. The Play Again button replays with the
+        # number it stored, which the resolver passes straight through.
+        amount = resolve_amount(amount, balance)
         if amount is None or amount <= 0:
             return await ctx.send(msg(ctx, "slots_bet_positive"))
 

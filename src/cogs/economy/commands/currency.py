@@ -16,6 +16,7 @@ from ..voting import vote_earnings_multiplier
 import random
 import datetime
 
+from utils.economy_amount import resolve_amount
 from utils.i18n import get_lang
 from utils.locales import load_locales
 from utils.command_locales import command_texts
@@ -232,7 +233,7 @@ class CurrencyMixin:
         description=CMDS.text("pay.description"),
         help=CMDS.help("pay"),
     )
-    async def pay(self, ctx: commands.Context, member: discord.Member, amount: int):
+    async def pay(self, ctx: commands.Context, member: discord.Member, amount: str):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
@@ -241,12 +242,15 @@ class CurrencyMixin:
             return await _reply(ctx, _info_view(
                 T(lang, "bad_target_title"), T(lang, "bad_target_body")))
 
-        if amount <= 0:
+        data   = await self.get_user_economy_data(ctx.author.id)
+        target = await self.get_user_economy_data(member.id)
+        # The amount is read as text so ``all`` can mean the whole wallet; a
+        # number still arrives as one.
+        amount = resolve_amount(amount, data["balance"])
+        if amount is None or amount <= 0:
             return await _reply(ctx, _info_view(
                 T(lang, "bad_amount_title"), T(lang, "bad_amount_body")))
 
-        data   = await self.get_user_economy_data(ctx.author.id)
-        target = await self.get_user_economy_data(member.id)
         if data["balance"] < amount:
             return await _reply(ctx, _info_view(
                 T(lang, "no_cash_title"), T(lang, "no_cash_body")))

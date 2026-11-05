@@ -33,6 +33,8 @@ try:
 except Exception:  # pragma: no cover - psutil is a hard dependency of the bot
     psutil = None
 
+from utils import maintenance
+from utils.error_reports import list_public_incidents
 from utils.locales import SUPPORTED_LANGUAGES
 
 from .commands import (
@@ -638,7 +640,8 @@ def _build_version() -> str | None:
         return None
 
 
-def _overall_state(bot, cogs: list[dict]) -> str:
+def _overall_state(bot, cogs: list[dict], notices: dict | None = None,
+                   incidents: list[dict] | None = None) -> str:
     """One word for the page's headline badge.
 
     ``starting`` is its own state: a bot that has connected but has not finished
@@ -649,7 +652,9 @@ def _overall_state(bot, cogs: list[dict]) -> str:
     states = {cog["state"] for cog in cogs}
     if "failed" in states:
         return "degraded"
-    if "maintenance" in states:
+    if any(incident.get("state") != "resolved" for incident in incidents or ()):
+        return "degraded"
+    if "maintenance" in states or any((notices or {}).get(kind) for kind in ("cogs", "commands", "apis")):
         return "maintenance"
     return "operational"
 
@@ -658,6 +663,24 @@ async def bot_status(bot) -> dict:
     """The live half of the payload. Runs on the bot's own event loop."""
     guilds = list(bot.guilds)
     cogs = _cog_rows(bot)
+    notices = maintenance.public_snapshot(bot)
+    try:
+        incidents = await list_public_incidents(bot)
+    except Exception:
+        incidents = []
+    incident_states = {item.get("code"): item for item in incidents}
+    for group in notices.values():
+        for notice in group:
+            linked = incident_states.get(notice.get("report_code"))
+            if linked:
+                notice["incident_state"] = linked.get("state")
+                notice["incident_label"] = linked.get("state_label")
+    for incident in incidents:
+        target = incident.get("maintenance") or {}
+        incident["maintenance_active"] = bool(
+            target.get("kind") and target.get("key")
+            and maintenance.entry(target["kind"], target["key"])
+        )
     user = getattr(bot, "user", None)
     started = getattr(bot, "start_time", None)
     uptime = int(time.time() - started) if started else None
@@ -669,7 +692,7 @@ async def bot_status(bot) -> dict:
 
     return {
         "online": True,
-        "state": _overall_state(bot, cogs),
+        "state": _overall_state(bot, cogs, notices, incidents),
         "bot": {
             "name": getattr(user, "name", "Niko"),
             "id": str(getattr(user, "id", "")) or None,
@@ -688,6 +711,9 @@ async def bot_status(bot) -> dict:
         "shard_count": len(shards),
         "lavalink": _lavalink_pool(bot),
         "cogs": cogs,
+        "api_maintenance": notices.get("apis", []),
+        "command_maintenance": notices.get("commands", []),
+        "incidents": incidents,
         "cog_counts": {
             state: sum(1 for cog in cogs if cog["state"] == state)
             for state in ("loaded", "disabled", "maintenance", "failed")
@@ -706,5 +732,8 @@ def offline_status(reason: str | None = None) -> dict:
         "shard_count": 0,
         "lavalink": None,
         "cogs": [],
+        "api_maintenance": maintenance.public_snapshot().get("apis", []),
+        "command_maintenance": maintenance.public_snapshot().get("commands", []),
+        "incidents": [],
         "cog_counts": {"loaded": 0, "disabled": 0, "maintenance": 0, "failed": 0},
     }

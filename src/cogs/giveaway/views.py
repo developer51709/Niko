@@ -782,6 +782,19 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         self.message: discord.Message | None = None  # set after the first send
         self._build()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """``.giveaway start`` posts its builder in the channel: only the host
+        (and a server manager) may drive it, so a normal member who can read the
+        channel cannot edit the prize, duration or requirements."""
+        if interaction.user.id == self.host_id:
+            return True
+        permissions = getattr(interaction.user, "guild_permissions", None)
+        if permissions is not None and getattr(permissions, "manage_guild", False):
+            return True
+        await interaction.response.send_message(
+            msg(interaction, "setup_host_only"), ephemeral=True)
+        return False
+
     # ── building ───────────────────────────────────────
 
     def _build(self):

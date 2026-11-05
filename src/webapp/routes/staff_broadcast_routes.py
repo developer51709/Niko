@@ -65,6 +65,23 @@ def _accent(value) -> str:
     return DEFAULT_ACCENT
 
 
+def _bool(value) -> bool:
+    """Read a checkbox that may arrive as a JSON boolean or a form string."""
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _mention_value(value) -> str:
+    """Canonical comma separated mention allow list, shared with delivery."""
+    from utils.broadcast import normalise_mentions
+    return normalise_mentions(value)
+
+
+def _mention_list(value) -> list[str]:
+    return [part for part in _mention_value(value).split(",") if part]
+
+
 def _detect_image_type(raw: bytes, reported: str) -> str | None:
     """Trust the bytes when a browser sends a generic content type."""
     reported = (reported or "").split(";")[0].strip().lower()
@@ -81,10 +98,28 @@ def _detect_image_type(raw: bytes, reported: str) -> str | None:
     return None
 
 
+def _media_stem(value) -> str:
+    """The usable part of a filename, without its extension.
+
+    Leading dots and separators are dropped so a rename can never produce a
+    hidden file or a name Discord reads as a different attachment.
+    """
+    stem = os.path.splitext(os.path.basename(str(value or "").strip()))[0]
+    return _SAFE_NAME.sub("-", stem).strip("-._")[:60]
+
+
 def _media_filename(original: str, content_type: str) -> str:
-    stem = os.path.splitext(os.path.basename(original or ""))[0]
-    stem = _SAFE_NAME.sub("-", stem).strip("-._")[:40] or "broadcast"
+    stem = _media_stem(original) or "broadcast"
     return f"{stem}-{uuid.uuid4().hex[:8]}.{_IMAGE_TYPES[content_type]}"
+
+
+def _media_extension(content_type: str, current: str) -> str:
+    """The extension a renamed image keeps, taken from its stored bytes."""
+    return (
+        _IMAGE_TYPES.get(str(content_type or ""))
+        or os.path.splitext(str(current or ""))[1].lstrip(".").lower()
+        or "png"
+    )
 
 
 def _media_url(broadcast_id: str, media_id: str) -> str:
@@ -117,12 +152,17 @@ def _serialise(row, media) -> dict:
         "skipped_count": int(row.get("skipped_count") or 0),
         "edited_count": int(row.get("edited_count") or 0),
         "last_error": row.get("last_error"),
+        # Composer options added later: a row written before them reads as the
+        # old behaviour (visible message, every mention kind pings).
+        "spoiler": bool(row.get("spoiler")),
+        "allowed_mentions": _mention_list(row.get("allowed_mentions")),
         "media": [
             {
                 "id": str(item["media_id"]),
                 "filename": item.get("filename"),
                 "content_type": item.get("content_type"),
                 "size": int(item.get("size") or 0),
+                "spoiler": bool(item.get("spoiler")),
                 "url": _media_url(broadcast_id, str(item["media_id"])),
             }
             for item in media
@@ -137,7 +177,7 @@ async def _read_payload(cxn, broadcast_id: str) -> dict | None:
     if row is None:
         return None
     media = await cxn.fetch(
-        "SELECT media_id, filename, content_type, size, position "
+        "SELECT media_id, filename, content_type, size, position, spoiler "
         "FROM staff_broadcast_media WHERE broadcast_id = $1 ORDER BY position ASC",
         broadcast_id,
     )
@@ -163,13 +203,18 @@ def _clean_fields(body: dict, current: dict | None = None) -> tuple[dict | None,
     content = str(body.get("body", current.get("body", "")) or "").strip()
     footer = str(body.get("footer", current.get("footer", DEFAULT_FOOTER)) or "").strip()
     accent = _accent(body.get("accent", current.get("accent", DEFAULT_ACCENT)))
+    spoiler = _bool(body.get("spoiler", current.get("spoiler", False)))
+    mentions = _mention_value(body.get("allowed_mentions", current.get("allowed_mentions")))
     if len(title) > MAX_TITLE:
         return None, f"The title must be {MAX_TITLE} characters or fewer."
     if len(content) > MAX_BODY:
         return None, f"The message must be {MAX_BODY} characters or fewer."
     if len(footer) > MAX_FOOTER:
         return None, f"The footer must be {MAX_FOOTER} characters or fewer."
-    return {"title": title, "body": content, "footer": footer, "accent": accent}, None
+    return {
+        "title": title, "body": content, "footer": footer, "accent": accent,
+        "spoiler": spoiler, "allowed_mentions": mentions,
+    }, None
 
 
 def _start_sync(broadcast_id: str) -> bool:
@@ -227,7 +272,7 @@ def api_staff_broadcasts():
         payloads = []
         for row in rows:
             media = await cxn.fetch(
-                "SELECT media_id, filename, content_type, size, position "
+                "SELECT media_id, filename, content_type, size, position, spoiler "
                 "FROM staff_broadcast_media WHERE broadcast_id = $1 "
                 "ORDER BY position ASC",
                 row["broadcast_id"],
@@ -262,10 +307,11 @@ def api_create_staff_broadcast():
     async def create():
         await cxn.execute(
             "INSERT INTO staff_broadcasts (broadcast_id, title, body, accent, footer, "
-            "status, created_by, created_at, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, 'draft', $6, $7, $8)",
+            "spoiler, allowed_mentions, status, created_by, created_at, updated_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft', $8, $9, $10)",
             broadcast_id, fields["title"], fields["body"], fields["accent"],
-            fields["footer"], author_id, now, now,
+            fields["footer"], int(fields["spoiler"]), fields["allowed_mentions"],
+            author_id, now, now,
         )
         return await _read_payload(cxn, broadcast_id)
 
@@ -316,6 +362,8 @@ def api_update_staff_broadcast(broadcast_id):
             "body": row["body"],
             "footer": row["footer"],
             "accent": row["accent"],
+            "spoiler": row.get("spoiler"),
+            "allowed_mentions": row.get("allowed_mentions"),
         })
         if message:
             return None, message
@@ -324,8 +372,10 @@ def api_update_staff_broadcast(broadcast_id):
             return None, "A delivered broadcast still needs a title and a message."
         await cxn.execute(
             "UPDATE staff_broadcasts SET title = $1, body = $2, accent = $3, "
-            "footer = $4, updated_at = $5 WHERE broadcast_id = $6",
+            "footer = $4, spoiler = $5, allowed_mentions = $6, updated_at = $7 "
+            "WHERE broadcast_id = $8",
             fields["title"], fields["body"], fields["accent"], fields["footer"],
+            int(fields["spoiler"]), fields["allowed_mentions"],
             time.time(), broadcast_id,
         )
         return await _read_payload(cxn, broadcast_id), None
@@ -475,6 +525,78 @@ def api_delete_staff_broadcast_media(broadcast_id, media_id):
     except Exception:
         log.exception("Could not remove broadcast image %s", media_id)
         return _json_error("The image could not be removed.", 503)
+    if message:
+        return _json_error(message, 404 if "no longer exists" in message else 409)
+    syncing = _start_sync(broadcast_id)
+    return jsonify({"broadcast": payload, "syncing": syncing})
+
+
+@app.route("/api/staff/broadcasts/<broadcast_id>/media/<media_id>", methods=["PATCH"])
+@require_auth
+@require_csrf
+def api_update_staff_broadcast_media(broadcast_id, media_id):
+    """Rename one image's attachment, or mark it as a spoiler.
+
+    The filename is what Discord shows under the attachment and what the
+    gallery points at (``attachment://…``), so a rename re-uploads every copy
+    with the new name instead of leaving the original one behind. The spoiler
+    flag is per image rather than per broadcast: a gallery can mix a visible
+    screenshot with a spoilered one, and the sent copy keeps that.
+    """
+    error = _require_owner()
+    if error:
+        return error
+    body = request.get_json(silent=True) or {}
+    if "spoiler" not in body and "filename" not in body:
+        return _json_error("Choose a new name or a spoiler for the image.")
+    rename_stem = None
+    if "filename" in body:
+        rename_stem = _media_stem(body.get("filename"))
+        if not rename_stem:
+            return _json_error("Use letters or numbers in the image name.")
+    spoiler = _bool(body.get("spoiler")) if "spoiler" in body else None
+    cxn = _discord_bot.cxn
+
+    async def update():
+        row = await cxn.fetchrow(
+            "SELECT status FROM staff_broadcasts WHERE broadcast_id = $1", broadcast_id,
+        )
+        if row is None:
+            return None, "That broadcast no longer exists."
+        if str(row["status"]) in {"sending", "syncing"}:
+            return None, "Wait for the current delivery to finish before changing images."
+        media = await cxn.fetchrow(
+            "SELECT filename, content_type, spoiler FROM staff_broadcast_media "
+            "WHERE broadcast_id = $1 AND media_id = $2",
+            broadcast_id, media_id,
+        )
+        if media is None:
+            return None, "That image no longer exists."
+        filename = str(media.get("filename") or "broadcast.png")
+        if rename_stem:
+            # The extension follows the stored bytes, so a rename can never
+            # turn a PNG into a broken attachment reference.
+            filename = f"{rename_stem}.{_media_extension(str(media.get('content_type') or ''), filename)}"
+            clash = await cxn.fetchrow(
+                "SELECT media_id FROM staff_broadcast_media "
+                "WHERE broadcast_id = $1 AND filename = $2 AND media_id <> $3",
+                broadcast_id, filename, media_id,
+            )
+            if clash is not None:
+                return None, "Another image already uses that name."
+        keep_spoiler = int(media.get("spoiler") or 0) if spoiler is None else int(spoiler)
+        await cxn.execute(
+            "UPDATE staff_broadcast_media SET filename = $1, spoiler = $2 "
+            "WHERE broadcast_id = $3 AND media_id = $4",
+            filename, keep_spoiler, broadcast_id, media_id,
+        )
+        return await _read_payload(cxn, broadcast_id), None
+
+    try:
+        payload, message = run_on_bot_loop(update(), timeout=15)
+    except Exception:
+        log.exception("Could not update broadcast image %s", media_id)
+        return _json_error("The image could not be updated.", 503)
     if message:
         return _json_error(message, 404 if "no longer exists" in message else 409)
     syncing = _start_sync(broadcast_id)

@@ -213,6 +213,38 @@ class Leveling(commands.Cog):
             json.dumps(cfg.get("card_bg_bottom")) if cfg.get("card_bg_bottom") else None,
         )
 
+    async def _has_guild_cfg(self, guild_id) -> bool:
+        """Whether this guild already has a saved leveling row."""
+        try:
+            row = await self.bot.cxn.fetchrow(
+                "SELECT * FROM level_config WHERE guild_id = $1", int(guild_id)
+            )
+        except Exception:
+            return False
+        return row is not None
+
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild):
+        """Start a newly invited server with leveling off.
+
+        Writing the row here, instead of changing the fallback for a missing
+        row, keeps servers that were already in the bot exactly as they were:
+        one without a row (and without any saved settings) still reads as
+        enabled. A guild that already saved settings — a re-invite — is left
+        alone, so re-adding Niko never resets a configured server.
+        """
+        try:
+            if await self._has_guild_cfg(guild.id):
+                return
+            await self._save_guild_cfg(guild.id, dict(NEW_GUILD_LEVEL_CONFIG))
+            log.info(
+                "Leveling",
+                f"Created the new-server leveling defaults for {guild.name} "
+                f"({guild.id}) — XP off until it is enabled.",
+            )
+        except Exception as error:  # noqa: BLE001 - joining must never fail here
+            log.warning("Leveling", f"Could not create leveling defaults for {guild.id}: {error}")
+
     # ── REWARD ROLE SYNC ───────────────────────────
 
     async def _sync_level_roles(self, guild, level_roles: dict,

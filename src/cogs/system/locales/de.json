@@ -56,31 +56,6 @@
     "error_title": "Fehler",
     "transformer_body": "`{value}` konnte nicht in den erwarteten Typ umgewandelt werden."
   },
-  "nitro": {
-    "ai_disabled_global": "Nikós KI ist derzeit vom Bot-Betreiber deaktiviert.",
-    "ai_disabled_guild": "Die KI ist auf diesem Server deaktiviert.",
-    "ask_title": "Niko sagt…",
-    "ask_empty": "Mir ist gerade keine Antwort eingefallen — versuche es gleich noch einmal.",
-    "profile_level": "Level",
-    "profile_xp": "XP",
-    "profile_wallet": "Guthaben",
-    "profile_bank": "Bank",
-    "profile_joined": "Beigetreten",
-    "profile_account": "Konto",
-    "profile_unknown": "unbekannt",
-    "vc_need_channel": "Betritt einen Sprachkanal oder gib einen mit der Option `channel` an.",
-    "vc_need_perms": "Ich brauche die Berechtigung **Kanäle verwalten**, um den Sprachstatus zu setzen.",
-    "vc_set_title": "Sprachstatus gesetzt",
-    "vc_cleared_title": "Sprachstatus gelöscht",
-    "forward_invalid_id": "Ungültige Nachrichten-ID.",
-    "forward_title": "Nachricht weitergeleitet",
-    "forward_failed": "Die Nachricht konnte nicht weitergeleitet werden. Prüfe, ob ich im Zielkanal senden darf und die Nachricht existiert.",
-    "sticker_none": "Dieser Server hat noch keine eigenen Sticker.",
-    "sticker_title": "Server-Sticker — {server}",
-    "sticker_not_found": "Kein Sticker namens **{name}** gefunden. Nutze `/sticker list`.",
-    "stage_not_in_stage": "Niko muss zuerst in einem Stage-Kanal sein.",
-    "stage_speaker": "Niko ist jetzt Sprecher auf der Stage! ☕"
-  },
   "boosters": {
     "guild_only": "Dieser Befehl kann nur auf einem Server genutzt werden.",
     "settings_failed": "Ich konnte die Booster-Einstellungen dieses Servers nicht laden. Versuche es später erneut.",
@@ -123,10 +98,6 @@
     "help": "-# 📌 **Brauchst du Hilfe?**\n-# Frag im [Support-Server]({support}) oder lies die [Dokumentation]({docs})"
   },
   "commands": {
-    "☕ Ask Niko.name": "☕ Frag Niko",
-    "☕ Ask Niko.description": "Lass Niko auf diese Nachricht antworten",
-    "📊 User Profile.name": "📊 Profil",
-    "📊 User Profile.description": "Zeig eine schnelle Profilkarte zu dieser Person",
     "boosterrole.clear-icon.description": "Entferne das eigene Icon deiner Booster-Rolle.",
     "boosterrole.color.args.hex_color": "Eine sechsstellige Farbe wie #e88cba",
     "boosterrole.color.description": "Lege eine einfarbige Farbe für deine Booster-Rolle fest.",
@@ -141,19 +112,6 @@
     "boosterrole.share.args.member": "Das Mitglied, das deine Rolle erhalten soll",
     "boosterrole.share.description": "Gib einem anderen Mitglied deine Booster-Rolle.",
     "boosterrole.unshare.args.member": "Das Mitglied, das deine Rolle verlieren soll",
-    "boosterrole.unshare.description": "Entferne deine Booster-Rolle von einem anderen Mitglied.",
-    "forward.args.destination": "Kanal, an den weitergeleitet wird",
-    "forward.args.message_id": "ID der weiterzuleitenden Nachricht",
-    "forward.args.source": "Kanal, in dem die Nachricht ist (standardmäßig der aktuelle)",
-    "forward.description": "Leite eine Nachricht (per ID) an einen anderen Kanal weiter.",
-    "stage.description": "Steuerung für Stage-Kanäle.",
-    "stage.speak.description": "Mach Niko zum Sprecher im aktuellen Stage-Kanal.",
-    "sticker.description": "Verwalte und sende Server-Sticker.",
-    "sticker.list.description": "Liste alle Sticker dieses Servers auf.",
-    "sticker.send.args.name": "Name des zu sendenden Stickers",
-    "sticker.send.description": "Sende einen Server-Sticker in diesen Kanal.",
-    "vcstatus.args.channel": "Sprachkanal, der aktualisiert wird (standardmäßig der, in dem du bist)",
-    "vcstatus.args.status": "Anzuzeigender Text (leer lassen zum Löschen)",
-    "vcstatus.description": "Lege den Textstatus in einem Sprachkanal fest oder lösche ihn."
+    "boosterrole.unshare.description": "Entferne deine Booster-Rolle von einem anderen Mitglied."
   }
 }

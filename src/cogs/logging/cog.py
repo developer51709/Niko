@@ -4,6 +4,7 @@ import re
 import time
 
 import database
+from utils import flagged_media
 from utils.command_locales import command_texts
 from utils.i18n import get_lang
 
@@ -85,6 +86,24 @@ def _asset_extension(asset) -> str:
     """The image format from the asset URL, for the archived file's name."""
     tail = (_asset_url(asset) or "").split("?", 1)[0].rsplit(".", 1)[-1].lower()
     return tail if tail in _IMAGE_EXTENSIONS else "png"
+
+
+def _webp_url(url: str | None) -> str | None:
+    """The same CDN asset asked for as webp, query string kept.
+
+    Discord keeps only the format a picture was uploaded in for some assets, so
+    an avatar uploaded as webp has no png rendition: the png URL discord.py
+    builds 404s while the webp one still resolves. None when the URL is already
+    webp (or has no extension), so the caller does not retry the same request.
+    """
+    if not url:
+        return None
+    path, separator, query = url.partition("?")
+    name = path.rsplit("/", 1)[-1]
+    stem, dot, extension = name.rpartition(".")
+    if not dot or extension.lower() == "webp":
+        return None
+    return f"{path[: -len(name)]}{stem}.webp{separator}{query}"
 
 
 def _channel_kind(channel) -> str:
@@ -224,6 +243,10 @@ class ServerLogger(commands.Cog):
         # retention window, so rapid changes to one member edit that entry.
         self._pending_entries: dict[tuple, _PendingEntry] = {}
         self._pending_locks: dict[tuple, asyncio.Lock] = {}
+        # message id → the edit that is replacing a late-flagged image in it, so
+        # two scan results arriving together cannot each rebuild the entry from
+        # a copy that lacks the other one's placeholder.
+        self._flag_locks: dict[int, asyncio.Lock] = {}
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -349,6 +372,7 @@ class ServerLogger(commands.Cog):
         action_key: str | None = None,
         channel_id: int | None = None,
         media_urls: list | None = None,
+        media_flags: dict[int, str] | None = None,
         thumbnail_url: str | None = None,
         files: list[discord.File] | None = None,
         file_components: bool = True,
@@ -357,7 +381,9 @@ class ServerLogger(commands.Cog):
         """Send a structured log entry to the configured channel for the given category.
 
         media_urls renders images in a MediaGallery inside the log container (a
-        ``(uri, caption)`` pair labels its item); thumbnail_url renders the body
+        ``(uri, caption)`` pair labels its item); media_flags maps a gallery
+        item's position to the content-scanning flag that replaced it with a
+        placeholder, which the entry explains underneath; thumbnail_url renders the body
         in a Section with a Thumbnail accessory; files uploads the bytes
         alongside the message and renders them as discord.ui.File components
         unless ``file_components`` is False, which is what an asset-archiving
@@ -383,7 +409,8 @@ class ServerLogger(commands.Cog):
         await self._send_entry(
             guild, channel, category, title, body,
             target_id=target_id, action_key=action_key, channel_id=channel_id,
-            media_urls=media_urls, thumbnail_url=thumbnail_url, files=files,
+            media_urls=media_urls, media_flags=media_flags,
+            thumbnail_url=thumbnail_url, files=files,
             file_components=file_components, revert=revert,
         )
 
@@ -399,6 +426,7 @@ class ServerLogger(commands.Cog):
         action_key: str | None = None,
         channel_id: int | None = None,
         media_urls: list | None = None,
+        media_flags: dict[int, str] | None = None,
         thumbnail_url: str | None = None,
         files: list[discord.File] | None = None,
         file_components: bool = True,
@@ -423,7 +451,8 @@ class ServerLogger(commands.Cog):
             await self._post_entry(
                 guild, channel, category, title, body,
                 target_id=target_id, action_key=action_key, channel_id=channel_id,
-                media_urls=media_urls, thumbnail_url=thumbnail_url, files=files,
+                media_urls=media_urls, media_flags=media_flags,
+                thumbnail_url=thumbnail_url, files=files,
                 file_components=file_components, revert=revert,
             )
             return
@@ -442,7 +471,8 @@ class ServerLogger(commands.Cog):
             message = await self._post_entry(
                 guild, channel, category, title, body,
                 target_id=target_id, action_key=action_key, channel_id=channel_id,
-                media_urls=media_urls, thumbnail_url=thumbnail_url, files=files,
+                media_urls=media_urls, media_flags=media_flags,
+                thumbnail_url=thumbnail_url, files=files,
                 file_components=file_components, revert=revert,
             )
             if message is None:
@@ -573,6 +603,7 @@ class ServerLogger(commands.Cog):
         action_key: str | None = None,
         channel_id: int | None = None,
         media_urls: list | None = None,
+        media_flags: dict[int, str] | None = None,
         thumbnail_url: str | None = None,
         files: list[discord.File] | None = None,
         file_components: bool = True,
@@ -588,6 +619,7 @@ class ServerLogger(commands.Cog):
             action_key=action_key or title,
             channel_id=channel_id,
             media_urls=media_urls,
+            media_flags=media_flags,
             thumbnail_url=thumbnail_url,
             files=files,
             file_components=file_components,
@@ -945,6 +977,29 @@ class ServerLogger(commands.Cog):
         except Exception:
             return None
 
+    async def _read_asset(self, asset) -> tuple[bytes | None, bool]:
+        """An asset's bytes, plus whether they came from the webp retry.
+
+        ``Asset.read`` asks the CDN for the png (or gif) rendition, which a
+        picture Discord holds only as webp does not have. That 404 used to end
+        the archive and leave an expiring link in the entry, so a failed read is
+        retried once in webp before giving up.
+        """
+        try:
+            data = await asset.read()
+        except (discord.HTTPException, discord.NotFound, OSError, AttributeError):
+            data = None
+        if data:
+            return data, False
+        fallback = _webp_url(_asset_url(asset))
+        if not fallback:
+            return None, False
+        try:
+            async with self.bot.http.get_from_cdn(fallback) as response:
+                return await response.read(), True
+        except Exception:  # noqa: BLE001 - the retry is best effort; the entry still logs
+            return None, False
+
     async def _archive_asset(self, asset, filename: str) -> discord.File | None:
         """Download an asset so the log keeps it after its CDN URL expires.
 
@@ -954,12 +1009,12 @@ class ServerLogger(commands.Cog):
         """
         if asset is None:
             return None
-        try:
-            data = await asset.read()
-        except (discord.HTTPException, discord.NotFound, OSError, AttributeError):
-            return None
+        data, webp = await self._read_asset(asset)
         if not data or len(data) > MAX_ARCHIVED_AVATAR_BYTES:
             return None
+        if webp:
+            # The name has to follow the bytes, or Discord shows a broken image.
+            filename = f"{filename.rpartition('.')[0]}.webp"
         return discord.File(io.BytesIO(data), filename=filename)
 
     async def _log_picture_change(self, before, after, *, attribute: str, title: str,
@@ -1012,7 +1067,7 @@ class ServerLogger(commands.Cog):
             archived = await self._archive_asset(asset, filename)
             if archived is not None:
                 files.append(archived)
-                media.append((f"attachment://{filename}", f"{side.title()} — {label}"))
+                media.append((f"attachment://{archived.filename}", f"{side.title()} — {label}"))
             elif url:
                 # The download failed or the file is too large to re-upload, so
                 # the entry keeps the link it has — with the caveat that the old
@@ -1252,6 +1307,7 @@ class ServerLogger(commands.Cog):
 
         attachment_note = ""
         image_urls = []
+        media_flags = {}
         files = []
         if message.attachments:
             names = ", ".join(f"`{a.filename}`" for a in message.attachments)
@@ -1268,6 +1324,15 @@ class ServerLogger(commands.Cog):
                         )
                     )
                     if is_image:
+                        # Discord's content scanning can flag an image after it
+                        # was sent, and re-uploading it here would put the same
+                        # media back in a channel. The gallery gets the site's
+                        # placeholder instead, and the entry says why below it.
+                        flag = flagged_media.flag_type(att)
+                        if flag:
+                            media_flags[len(image_urls)] = flag
+                            image_urls.append(flagged_media.placeholder_url(flag))
+                            continue
                         # Image attachments render inline in the log container's gallery.
                         image_urls.append(att.proxy_url)
                         continue
@@ -1290,8 +1355,80 @@ class ServerLogger(commands.Cog):
         await self.log_event(
             message.guild, "messages", "Message Deleted", body,
             target_id=message.author.id, media_urls=image_urls or None,
-            files=files or None,
+            media_flags=media_flags or None, files=files or None,
         )
+
+    @commands.Cog.listener()
+    async def on_raw_message_update(self, payload: discord.RawMessageUpdateEvent):
+        """Replace a logged image when Discord flags it after the entry was sent.
+
+        Content scanning can finish long after a message is deleted, and the log
+        entry is a webhook message the bot cache never saw, so the raw event is
+        the only place the scan result shows up. The entry is fetched rather than
+        read from the payload: an update can be partial, and the edit has to
+        carry everything the entry already displays.
+        """
+        data = payload.data if isinstance(payload.data, dict) else None
+        if not data or payload.guild_id is None:
+            return
+        flags = flagged_media.flagged_gallery_items(data.get("components"))
+        if not flags:
+            return
+        await self.config()
+        if payload.channel_id not in self.configured_channel_ids(payload.guild_id):
+            return
+        guild = self.bot.get_guild(payload.guild_id)
+        if guild is None:
+            return
+        channel = guild.get_channel_or_thread(payload.channel_id)
+        if channel is None:
+            return
+        lock = self._flag_locks.setdefault(payload.message_id, asyncio.Lock())
+        try:
+            async with lock:
+                await self._replace_flagged_media(
+                    guild, channel, payload.message_id, flags)
+        finally:
+            if not lock.locked():
+                self._flag_locks.pop(payload.message_id, None)
+
+    async def _replace_flagged_media(self, guild, channel, message_id: int,
+                                     flags: dict[int, str]) -> None:
+        """Rebuild one log entry with the placeholders its scan result calls for."""
+        try:
+            message = await channel.fetch_message(message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError):
+            return
+        view = discord.ui.LayoutView.from_message(message, timeout=None)
+        if not isinstance(view, discord.ui.LayoutView):
+            return
+        if not _apply_media_flags(view, flags, get_lang(guild)):
+            return
+        # The files of a deleted message are components of the entry; an edit
+        # that left them out would break those chips, so they are kept.
+        attachments = list(message.attachments)
+        try:
+            await log_channel_limiter.acquire((guild.id, channel.id))
+            webhook = None
+            if message.webhook_id:
+                candidate = await self._get_log_webhook(channel)
+                if candidate is not None and candidate.id == message.webhook_id:
+                    webhook = candidate
+            if webhook is not None:
+                await webhook.edit_message(
+                    message.id, view=view, attachments=attachments,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            elif message.author.id == self.bot.user.id:
+                await message.edit(
+                    view=view, attachments=attachments,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+        except Exception as e:
+            logging.error(
+                "logging_cog",
+                f"Could not replace a flagged image in a log entry in {channel}: {e}",
+            )
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):

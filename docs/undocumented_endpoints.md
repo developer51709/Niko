@@ -58,7 +58,7 @@ await bot.http.send_soundboard_sound(channel_id, sound_id=sound_id, source_guild
 
 ## ✅ 4. Components v2 — Section + Thumbnail (Nitro aesthetic)
 **`discord.ui.Section` · `discord.ui.Thumbnail` · `discord.ui.UnfurledMediaItem`**
-**File:** `src/cogs/system/nitro.py` → `_user_profile_ctx()` context menu
+**File:** `src/cogs/economy/cog.py` → `user_profile_context()` context menu
 
 User profile context menu uses `Section` + `Thumbnail` for a side-by-side avatar + stats card.
 No image generation (PIL) needed — pure Discord layout.
@@ -74,13 +74,11 @@ view.add_item(discord.ui.Container(section, accent_colour=discord.Colour(0xc8a88
 
 ---
 
-## ✅ 5. Message Forwarding (Discord 2024 feature)
+## 📋 5. Message Forwarding (Discord 2024 feature)
 **Raw HTTP via `Route` — `message_reference.type = 1`**
-**File:** `src/utils/discord_extras.py` → `forward_message()`
-**Command:** `/forward <message_id> <destination>` (in `src/cogs/system/nitro.py`)
 
 Native message forwarding. Type 0 = reply (existing), type 1 = forward (shows original in a frame).
-No discord.py wrapper yet — must use raw Route.
+No discord.py wrapper yet — must use raw Route. Not currently wired into the bot.
 
 ```python
 payload = {"message_reference": {"type": 1, "message_id": str(mid), "channel_id": str(src_id)}}
@@ -89,9 +87,9 @@ await bot.http.request(Route("POST", "/channels/{channel_id}/messages", channel_
 
 ---
 
-## ✅ 6. Context Menus (Nitro-tier discoverability)
+## ✅ 6. Context Menus
 **`discord.app_commands.ContextMenu` — registered via `bot.tree.add_command()`**
-**File:** `src/cogs/system/nitro.py` — `☕ Ask Niko` (message), `📊 User Profile` (user)
+**Files:** `src/cogs/ai/chat.py` — `☕ Ask Niko` (message); `src/cogs/economy/cog.py` — `📊 User Profile` (user)
 
 Right-click menus. Must be registered in cog `__init__` via `bot.tree.add_command()` and removed in `cog_unload()`.
 
@@ -104,27 +102,24 @@ self.bot.tree.remove_command(self._ctx_ask.name, type=self._ctx_ask.type)
 
 ---
 
-## ✅ 7. Sticker Management (Nitro-adjacent)
+## 📋 7. Sticker Management (Nitro-adjacent)
 **`bot.http.get_all_guild_stickers(guild_id)` — `guild.fetch_sticker(id)` — `channel.send(stickers=[sticker])`**
-**Commands:** `/sticker list`, `/sticker send` with autocomplete (in `src/cogs/system/nitro.py`)
 
-Bots can list, send, and upload guild stickers. Sending requires a `discord.Sticker` object from `fetch_sticker()`.
+Bots can list, send, and upload guild stickers. Sending requires a `discord.Sticker` object from `fetch_sticker()`. Not currently wired into the bot.
 
 ---
 
-## ✅ 8. Stage Channel Speaker
+## 📋 8. Stage Channel Speaker
 **`bot.http.edit_my_voice_state(guild_id, channel_id=..., suppress=False, request_to_speak_timestamp=...)`**
-**File:** `src/utils/discord_extras.py` → `stage_become_speaker()`
-**Command:** `/stage speak` (in `src/cogs/system/nitro.py`)
 
-Makes the bot a speaker on a Stage channel. Must already be in the Stage. Sends both a request-to-speak timestamp and suppress=False simultaneously.
+Makes the bot a speaker on a Stage channel. Must already be in the Stage. Sends both a request-to-speak timestamp and suppress=False simultaneously. Not currently wired into the bot.
 
 ---
 
-## ✅ 9. Voice Status Command
-**`/vcstatus <text>` (in `src/cogs/system/nitro.py`)**
+## ✅ 9. Voice Status
+**File:** `src/utils/discord_extras.py` → `set_voice_status()`
 
-Manual override for the voice channel status. Useful for VoiceMaster channels. Wraps `set_voice_status()` from `discord_extras.py`.
+No standalone status command: the music cog sets the status automatically on track start and clears it on disconnect, and `.voicemaster status` covers VoiceMaster channels.
 
 ---
 
@@ -187,9 +182,9 @@ has_premium = any(e["sku_id"] == PREMIUM_SKU_ID for e in entitlements)
 | Animated emoji | ✅ Always available | `<a:name:id>` format |
 | Application emoji | ✅ Already done | Works in all servers |
 | External emoji | ✅ Requires permission | `use_external_emojis` |
-| Sticker send/manage | ✅ Implemented | `/sticker` commands |
-| Stage channel speaker | ✅ Implemented | `/stage speak` |
-| Message forwarding | ✅ Implemented | `/forward` command |
+| Sticker send/manage | 📋 Possible | Client HTTP only, not wired |
+| Stage channel speaker | 📋 Possible | Client HTTP only, not wired |
+| Message forwarding | 📋 Possible | Raw `Route` only, not wired |
 | Context menus | ✅ Implemented | Right-click actions |
 | Native polls | ✅ Implemented | AI action upgraded |
 | Rich presence with images | ✅ Via activity | Already used |
@@ -204,9 +199,9 @@ has_premium = any(e["sku_id"] == PREMIUM_SKU_ID for e in entitlements)
 
 | Feature | File |
 |---------|------|
-| Burst react, VC status, forward, stage | `src/utils/discord_extras.py` |
+| Burst react, VC status | `src/utils/discord_extras.py` |
 | Soundboard commands | `src/cogs/fun/soundboard.py` |
-| Context menus, stickers, VC status cmd, forward cmd | `src/cogs/system/nitro.py` |
+| Context menus | `src/cogs/ai/chat.py`, `src/cogs/economy/cog.py` |
 | Native poll (AI action) | `src/utils/ai/actions.py` |
 | Auto VC status on track start/end | `src/cogs/music/cog.py` |
 | Burst react on giveaway win | `src/cogs/giveaway/cog.py` |

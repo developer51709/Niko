@@ -12,6 +12,7 @@ from discord.ext import commands
 
 from config.emojis import get_emoji
 from cogs.staff.base import CMDS, StaffCommands
+from utils import command_ids
 from utils.command_localization import apply_command_localizations
 
 
@@ -67,6 +68,9 @@ class RuntimeCommands:
             else:
                 synced = await self.bot.tree.sync()
                 scope_text = f"Synced `{len(synced)}` commands **globally**."
+                # Command mentions are global: a guild-scoped sync returns
+                # guild-only IDs, which would produce broken mentions elsewhere.
+                await command_ids.save(self.bot, synced)
 
             view = discord.ui.LayoutView()
             container = discord.ui.Container(

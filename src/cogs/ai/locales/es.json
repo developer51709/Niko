@@ -4,7 +4,12 @@
     "memory_title": "Memoria de {name}",
     "guild_only": "La memoria de Niko es por servidor, así que esto solo funciona dentro de un servidor.",
     "history_cleared": "Tu historial de conversación y memoria con Niko en este servidor han sido borrados.",
-    "history_empty": "Aún no tienes historial de conversación con Niko en este servidor."
+    "history_empty": "Aún no tienes historial de conversación con Niko en este servidor.",
+    "ask_no_text": "[sin contenido de texto]",
+    "ask_title": "Niko dice…",
+    "ask_empty": "Ahora mismo no se me ocurre una respuesta, inténtalo en un momento.",
+    "ai_disabled_global": "El propietario del bot ha desactivado la IA de Niko.",
+    "ai_disabled_guild": "La IA está desactivada en este servidor."
   },
   "config": {
     "panel_heading": "### {ai} Panel de configuración de IA",
@@ -73,6 +78,8 @@
     "provider_nothing": "El proveedor de imágenes no devolvió nada. Inténtalo de nuevo en un momento."
   },
   "commands": {
+    "☕ Ask Niko.name": "☕ Pregunta a Niko",
+    "☕ Ask Niko.description": "Pide a Niko que responda a este mensaje",
     "ai-config.description": "Configura los ajustes de IA de este servidor",
     "ai-config.help": "Configura los ajustes de IA de tu servidor.",
     "clearhistory.description": "Borra tu historial de conversación y la memoria de Niko en este servidor",

@@ -316,7 +316,11 @@
     "act_not_banned": "Cet utilisateur n'est pas banni.",
     "act_unmute_failed": "Échec du démutage : {error}",
     "act_not_in_voice": "**{member}** n'est pas dans un salon vocal.",
-    "panel_footer": "-# **Besoin d'aide ?** Demande dans le [serveur de support]({support}) ou consulte la [documentation]({docs})"
+    "panel_footer": "-# **Besoin d'aide ?** Demande dans le [serveur de support]({support}) ou consulte la [documentation]({docs})",
+    "flag_explicit": "contenu explicite",
+    "flag_gore": "contenu sanglant",
+    "flag_self_harm": "automutilation",
+    "flagged_media_note": "-# Cette image a été signalée par un filtre automatique ({kind}) et n'a pas pu être affichée. [En savoir plus]({link})"
   },
   "commands": {
     "logging.description": "Ouvrir le panneau de configuration des logs du serveur.",

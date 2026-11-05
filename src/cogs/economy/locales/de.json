@@ -150,7 +150,14 @@
     "note_pay_to": "an {name}",
     "note_pay_from": "von {name}",
     "card_footer_vault": "-# Verwalte deinen Tresor mit `{prefix}deposit` / `{prefix}withdraw`.",
-    "card_footer_earn": "-# `{prefix}work` zum Verdienen, `{prefix}daily` für deine Belohnung, `{prefix}shop` zum Ausgeben."
+    "card_footer_earn": "-# `{prefix}work` zum Verdienen, `{prefix}daily` für deine Belohnung, `{prefix}shop` zum Ausgeben.",
+    "profile_level": "Level",
+    "profile_xp": "XP",
+    "profile_wallet": "Guthaben",
+    "profile_bank": "Bank",
+    "profile_joined": "Beigetreten",
+    "profile_account": "Konto",
+    "profile_unknown": "unbekannt"
   },
   "jobs": {
     "current": "  ← **aktuell**",
@@ -319,6 +326,8 @@
     "referral_50.name": "Botschafter"
   },
   "commands": {
+    "📊 User Profile.name": "📊 Profil",
+    "📊 User Profile.description": "Zeig eine schnelle Profilkarte zu dieser Person",
     "balance.args.member": "Wessen Geldbörse du sehen willst (standardmäßig deine)",
     "balance.description": "Zeig deine Premium-Geldbörsen-Karte",
     "balance.help": "Sieh dein Wallet als Karte",
@@ -329,7 +338,7 @@
     "bank.upgrade.description": "Zahle für den Ausbau deines Tresors zur nächsten Stufe",
     "bank.withdraw.args.amount": "Wie viele Münzen du aus dem Tresor holen willst",
     "bank.withdraw.description": "Hole Münzen aus dem Tresor zurück in die Geldbörse",
-    "coinflip.args.amount": "Wie viele Münzen du setzt",
+    "coinflip.args.amount": "Münzen, die du setzt – oder „all“ für dein gesamtes Guthaben",
     "coinflip.args.call": "Dein Tipp: Kopf oder Zahl (standardmäßig Kopf)",
     "coinflip.description": "Wirf eine Münze — alles oder nichts",
     "coinflip.help": "Wirf eine Münze",
@@ -337,7 +346,7 @@
     "crime.help": "Versuch, etwas zu stibitzen",
     "daily.description": "Hol deine tägliche Belohnung mit Serienbonus",
     "daily.help": "Hol dir deine täglichen Belohnungen",
-    "dice.args.amount": "Wie viele Münzen du setzt",
+    "dice.args.amount": "Münzen, die du setzt – oder „all“ für dein gesamtes Guthaben",
     "dice.args.target": "Niedrigster Wurf, der gewinnt, von 1 bis 99 (höhere Ziele zahlen mehr)",
     "dice.description": "Wirf einen Würfel — wähle eine Zahl und hoffe das Beste",
     "dice.help": "Würfle und setze auf eine Zahl",
@@ -362,7 +371,7 @@
     "networth.args.member": "Wessen Vermögen du berechnen willst (standardmäßig deins)",
     "networth.description": "Kurze Übersicht über dein Vermögen",
     "networth.help": "Berechne dein gesamtes Vermögen",
-    "pay.args.amount": "Wie viele Münzen du senden willst",
+    "pay.args.amount": "Münzen, die du senden willst – oder „all“ für dein gesamtes Guthaben",
     "pay.args.member": "Wer die Münzen bekommt",
     "pay.description": "Sende Münzen an eine andere Person",
     "pay.help": "Sende Münzen an jemanden",

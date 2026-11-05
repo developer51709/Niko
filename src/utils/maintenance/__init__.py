@@ -42,15 +42,17 @@ MAX_REASON = 500
 MESSAGES = load_locales("utils.maintenance", "gate")
 msg = make_flat_msg(MESSAGES, {"warning": get_emoji("warning")})
 
-#: Public target names and the cache bucket each one belongs to.
-_BUCKETS = {"cog": "cogs", "command": "commands"}
+#: Public target names and the cache bucket each one belongs to.  An API target
+#: is a Flask endpoint name, so pausing it blocks every method and every path
+#: that endpoint serves without needing one row per URL.
+_BUCKETS = {"cog": "cogs", "command": "commands", "api": "apis"}
 
 _cache: dict | None = None
 _loaded = False
 
 
 def _empty() -> dict:
-    return {"cogs": {}, "commands": {}}
+    return {"cogs": {}, "commands": {}, "apis": {}}
 
 
 def _read() -> dict:
@@ -58,6 +60,9 @@ def _read() -> dict:
     global _cache
     if _cache is None:
         _cache = _empty()
+    # Tests and older callers may build a cache before the api bucket existed.
+    for bucket in _BUCKETS.values():
+        _cache.setdefault(bucket, {})
     return _cache
 
 
@@ -71,10 +76,15 @@ async def load(bot) -> None:
         logging.warning("Maintenance", "Database unavailable — maintenance state is empty.")
         return
     try:
-        rows = await pool.fetch(f"SELECT target, reason, since, added_by FROM {TABLE}")
-    except Exception as exc:
-        logging.warning("Maintenance", f"Could not read maintenance state: {exc}")
-        return
+        rows = await pool.fetch(f"SELECT target, reason, since, added_by, report_code FROM {TABLE}")
+    except Exception:
+        # A table created before report links existed may not have the column
+        # yet; the old rows still matter, so read them and leave the link empty.
+        try:
+            rows = await pool.fetch(f"SELECT target, reason, since, added_by FROM {TABLE}")
+        except Exception as exc:
+            logging.warning("Maintenance", f"Could not read maintenance state: {exc}")
+            return
     for row in rows:
         kind, _, key = str(row.get("target") or "").partition(":")
         bucket = _BUCKETS.get(kind)
@@ -84,8 +94,9 @@ async def load(bot) -> None:
             "reason": row.get("reason") or None,
             "since": row.get("since"),
             "by": row.get("added_by") or None,
+            "report_code": row.get("report_code") or None,
         }
-    paused = len(_cache["cogs"]) + len(_cache["commands"])
+    paused = sum(len(_cache[bucket]) for bucket in _BUCKETS.values())
     if paused:
         logging.info("Maintenance", f"{paused} maintenance target(s) loaded from the database.")
 
@@ -102,15 +113,25 @@ def entry(kind: str, key: str) -> dict | None:
     return bucket.get(key) or None
 
 
-async def set_maintenance(kind: str, key: str, enabled: bool, reason: str = "", actor=None, bot=None) -> dict | None:
-    """Pause or resume one cog/command, in the database and the cache.
+async def set_maintenance(
+    kind: str,
+    key: str,
+    enabled: bool,
+    reason: str = "",
+    actor=None,
+    bot=None,
+    *,
+    report_code: str | None = None,
+) -> dict | None:
+    """Pause or resume one cog/command/API, in the database and the cache.
 
     The row is written first: if the database rejects the change the cache is
     left alone, so the dashboard never reports a pause that would vanish on the
-    next restart.
+    next restart.  ``report_code`` links a pause started from an error report
+    back to that report; a later manual reason edit keeps the existing link.
     """
     if kind not in _BUCKETS:
-        raise ValueError("Maintenance applies to a cog or a command.")
+        raise ValueError("Maintenance applies to a cog, command, or API.")
     pool = getattr(bot, "cxn", None)
     if pool is None:
         raise RuntimeError("The database is not available.")
@@ -126,12 +147,16 @@ async def set_maintenance(kind: str, key: str, enabled: bool, reason: str = "", 
     cleaned = (reason or "").strip()[:MAX_REASON] or None
     since = int(time.time())
     added_by = str(actor) if actor is not None else None
+    existing = bucket.get(key) or {}
+    linked = report_code if report_code is not None else existing.get("report_code")
     await pool.execute(
-        f"INSERT INTO {TABLE} (target, reason, since, added_by) VALUES ($1, $2, $3, $4) "
-        "ON CONFLICT (target) DO UPDATE SET reason = $5, since = $6, added_by = $7",
-        target, cleaned, since, added_by, cleaned, since, added_by,
+        f"INSERT INTO {TABLE} (target, reason, since, added_by, report_code) "
+        "VALUES ($1, $2, $3, $4, $5) "
+        "ON CONFLICT (target) DO UPDATE SET reason = $6, since = $7, added_by = $8, report_code = $9",
+        target, cleaned, since, added_by, linked,
+        cleaned, since, added_by, linked,
     )
-    record = {"reason": cleaned, "since": since, "by": added_by}
+    record = {"reason": cleaned, "since": since, "by": added_by, "report_code": linked}
     bucket[key] = record
     return dict(record)
 
@@ -153,6 +178,20 @@ def extension_of(module: str | None) -> str | None:
 
 def _module_of(cog) -> str | None:
     return getattr(cog.__class__, "__module__", None) if cog is not None else None
+
+
+def find_api_block(endpoint: str | None, path: str | None = None) -> tuple[str, str, dict] | None:
+    """The maintenance entry blocking a Flask endpoint, if any.
+
+    Endpoint names are the stable key: a rule with a variable path still uses
+    one row, so an owner pauses ``/api/staff/error-reports/<code>`` once.  The
+    path is accepted as a fallback for routes registered without an endpoint.
+    """
+    apis = _read()["apis"]
+    for key in (str(endpoint or ""), str(path or "")):
+        if key and apis.get(key) is not None:
+            return "api", key, dict(apis[key])
+    return None
 
 
 def find_block(command_name: str | None, cog=None, extension: str | None = None) -> tuple[str, str, dict] | None:
@@ -301,7 +340,24 @@ def notice(source, target: str, reason: str | None) -> discord.ui.LayoutView:
 def _target_text(source, kind: str, key: str, bot) -> str:
     if kind == "cog":
         return msg(source, "cog_target", name=_cog_label(bot, key))
+    if kind == "api":
+        return msg(source, "command_target", command=api_label(key))
     return msg(source, "command_target", command=key)
+
+
+def api_label(endpoint: str | None) -> str:
+    """A public-friendly name for a Flask endpoint (``api_staff_reports``)."""
+    name = str(endpoint or "").strip()
+    if not name:
+        return "API"
+    name = name.lstrip("/")
+    for prefix in ("api_", "/api/"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    words = [word for word in name.replace("/", "_").replace("-", "_").split("_") if word]
+    label = " ".join(word.upper() if word.lower() == "api" else word.title() for word in words) or "API"
+    return f"{label} API"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -427,27 +483,48 @@ def _cog_for(bot, extension: str | None):
 
 
 def _command_rows(bot) -> list[dict]:
-    """Every command the bot exposes, prefix and application, one row each."""
+    """Every command the bot exposes, one row each.
+
+    Prefix commands, slash commands and the user/message context menus are all
+    listed: the interaction gate already pauses a context menu by name, so
+    leaving them out of the snapshot was the only reason one could not be
+    switched off from the dashboard. ``kind`` tells the page which prefix to
+    draw — ``/`` only belongs on a slash command — and a command that runs both
+    ways is ``hybrid`` so the page can say so instead of calling it slash-only.
+    """
     labels = {
         row.get("name"): row.get("label")
         for row in getattr(bot, "cog_status", None) or []
     }
     rows: dict[str, dict] = {}
 
-    def add(name: str, extension: str | None) -> None:
-        if not name or name in rows:
+    def add(name: str, extension: str | None, kind: str) -> None:
+        if not name:
+            return
+        row = rows.get(name)
+        if row is not None:
+            # A hybrid command arrives from both trees, and that is worth keeping:
+            # it is still callable with the guild's prefix, so drawing it as a
+            # slash command alone hides half of the ways members can use it.
+            if {row["kind"], kind} == {"prefix", "slash"}:
+                row["kind"] = "hybrid"
             return
         rows[name] = {
             "name": name,
             "cog": extension,
             "cog_label": (labels.get(extension) or _cog_label(bot, extension)) if extension else None,
+            "kind": kind,
         }
 
     def add_prefix(command, parent_extension: str | None) -> None:
         """Prefix commands, including group subcommands, which the app tree alone
         cannot place when the app object has no binding."""
         extension = extension_of(_module_of(getattr(command, "cog", None))) or parent_extension
-        add(getattr(command, "qualified_name", None) or getattr(command, "name", ""), extension)
+        add(
+            getattr(command, "qualified_name", None) or getattr(command, "name", ""),
+            extension,
+            "prefix",
+        )
         for child in getattr(command, "commands", ()) or ():
             add_prefix(child, extension)
 
@@ -455,9 +532,20 @@ def _command_rows(bot) -> list[dict]:
         add_prefix(command, None)
     tree = getattr(bot, "tree", None)
     if tree is not None:
-        for command in tree.walk_commands():
-            name = getattr(command, "qualified_name", None) or getattr(command, "name", "")
-            add(name, extension_for_command(bot, command, getattr(command, "binding", None)))
+        # walk_commands defaults to chat input only: the context menus live in
+        # the user and message buckets, so each type is walked explicitly.
+        for command_type, kind in (
+            (discord.AppCommandType.chat_input, "slash"),
+            (discord.AppCommandType.user, "context"),
+            (discord.AppCommandType.message, "context"),
+        ):
+            for command in tree.walk_commands(type=command_type):
+                name = getattr(command, "qualified_name", None) or getattr(command, "name", "")
+                add(
+                    name,
+                    extension_for_command(bot, command, getattr(command, "binding", None)),
+                    kind,
+                )
 
     for row in rows.values():
         found = find_block(row["name"], extension=row["cog"])
@@ -469,8 +557,77 @@ def _command_rows(bot) -> list[dict]:
     return sorted(rows.values(), key=lambda row: (row["cog"] or "zzz", row["name"]))
 
 
-def snapshot(bot) -> dict:
-    """Cogs and commands with their current maintenance state (cache only)."""
+def api_rows(targets=None) -> list[dict]:
+    """API endpoints the dashboard can pause.
+
+    ``targets`` is supplied by the route from Flask's URL map; without it the
+    cached API pauses still render, which is what the public status page needs.
+    """
+    store = _read()["apis"]
+    rows = {key: {"endpoint": key, "path": None, "methods": None} for key in store}
+    for target in targets or ():
+        endpoint = str(target.get("endpoint") or "")
+        if not endpoint:
+            continue
+        row = rows.setdefault(endpoint, {"endpoint": endpoint, "path": None, "methods": None})
+        row["path"] = target.get("path") or row.get("path")
+        row["methods"] = target.get("methods") or row.get("methods")
+    result = []
+    for endpoint, row in rows.items():
+        found = store.get(endpoint)
+        result.append({
+            **row,
+            "label": api_label(endpoint),
+            "maintenance": found is not None,
+            "reason": found.get("reason") if found else None,
+            "since": found.get("since") if found else None,
+            "by": found.get("by") if found else None,
+            "report_code": found.get("report_code") if found else None,
+        })
+    return sorted(result, key=lambda row: (row["path"] or row["endpoint"]).casefold())
+
+
+def public_snapshot(bot=None) -> dict:
+    """Maintenance notices safe for the public status page, cache only."""
+    store = _read()
+    cogs = [
+        {
+            "kind": "cog",
+            "name": key,
+            "label": _cog_label(bot, key),
+            "reason": found.get("reason"),
+            "since": found.get("since"),
+            "report_code": found.get("report_code"),
+        }
+        for key, found in store["cogs"].items()
+    ]
+    commands = [
+        {
+            "kind": "command",
+            "name": key,
+            "label": key,
+            "reason": found.get("reason"),
+            "since": found.get("since"),
+            "report_code": found.get("report_code"),
+        }
+        for key, found in store["commands"].items()
+    ]
+    apis = [
+        {
+            "kind": "api",
+            "name": key,
+            "label": api_label(key),
+            "reason": found.get("reason"),
+            "since": found.get("since"),
+            "report_code": found.get("report_code"),
+        }
+        for key, found in store["apis"].items()
+    ]
+    return {"cogs": cogs, "commands": commands, "apis": apis}
+
+
+def snapshot(bot, api_targets=None) -> dict:
+    """Cogs, commands, and APIs with their current maintenance state."""
     store = _read()
     cogs = []
     for row in getattr(bot, "cog_status", None) or []:
@@ -490,5 +647,6 @@ def snapshot(bot) -> dict:
     return {
         "cogs": cogs,
         "commands": _command_rows(bot),
+        "apis": api_rows(api_targets),
         "updated_at": int(time.time()),
     }

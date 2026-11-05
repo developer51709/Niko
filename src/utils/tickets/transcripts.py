@@ -219,6 +219,10 @@ _PROFILE_STATUS_FILES = {
     "dnd": ("discord-status/status_dnd.png", "Do Not Disturb"),
     "offline": ("discord-status/status_offline.png", "Offline"),
     "streaming": ("discord-status/status_streaming.png", "Streaming"),
+    # The phone-shaped icons Discord draws while the phone holds the presence.
+    "online_mobile": ("discord-status/status_online_mobile.png", "Online"),
+    "idle_mobile": ("discord-status/status_idle_mobile.png", "Idle"),
+    "dnd_mobile": ("discord-status/status_dnd_mobile.png", "Do Not Disturb"),
 }
 
 
@@ -1056,6 +1060,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Transcript — {_esc(title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{ font-family: 'gg sans', 'Segoe UI', system-ui, -apple-system, sans-serif; background: #313338; color: #dbdee1; }}
@@ -1131,7 +1136,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-md-spoiler:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; }}
   .discord-profile-popover {{ position: fixed; inset: 0; z-index: 100; pointer-events: none; }}
   .discord-profile-card {{ position: fixed; left: var(--profile-left); top: var(--profile-top); width: min(20rem, calc(100vw - 1.5rem)); max-height: min(35rem, calc(100dvh - 1.5rem)); overflow-y: auto; border: 1px solid rgb(255 255 255 / .08); border-radius: .85rem; background: #111214; color: #f2f3f5; box-shadow: 0 18px 52px rgb(0 0 0 / .58); pointer-events: auto; font-size: 13px; line-height: 1.45; }}
-  .discord-profile-banner {{ display: block; width: 100%; height: 5.5rem; object-fit: cover; background: #202225 center / cover no-repeat; }}
+  .discord-profile-banner {{ display: block; width: 100%; height: 5.5rem; object-fit: cover; background: #202225 center / cover no-repeat; --profile-avatar-cutout: radial-gradient(circle at 54px 100%, transparent calc(42px - .5px), #000 42px); -webkit-mask-image: var(--profile-avatar-cutout); mask-image: var(--profile-avatar-cutout); }}
   .discord-profile-menu {{ position: absolute; top: 8px; right: 8px; z-index: 3; }}
   .discord-profile-menu-button {{ display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: rgb(24 25 28 / .62); cursor: pointer; }}
   .discord-profile-menu-button:hover {{ background: rgb(24 25 28 / .85); }}
@@ -1142,26 +1147,43 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-profile-menu-item:hover {{ background: #35373c; }}
   .discord-profile-menu-icon {{ flex: 0 0 auto; width: 15px; height: 15px; color: #b5bac1; }}
   .discord-profile-body {{ position: relative; padding: 0 16px 16px; }}
-  .discord-profile-head {{ display: flex; align-items: center; gap: 8px; margin-top: -38px; }}
-  .discord-profile-avatar-wrap {{ position: relative; display: block; flex: 0 0 auto; width: 76px; height: 76px; }}
+  .discord-profile-head {{ display: flex; align-items: center; gap: 8px; height: 76px; margin-top: -38px; }}
+  .discord-profile-avatar-wrap {{ position: relative; display: block; flex: 0 0 auto; width: 76px; height: 76px; --status-avatar-size: 76px; --status-icon-size: 19px; --status-gap: 3.5px; --status-shape-width: 1; --status-notch-size: calc(var(--status-icon-size) + 2 * var(--status-gap)); --status-notch-width: calc(var(--status-icon-size) * var(--status-shape-width) + 2 * var(--status-gap)); --status-notch-rect: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2075%20100'%20preserveAspectRatio='none'%3E%3Crect%20width='75'%20height='100'%20rx='16'%20fill='%23000'/%3E%3C/svg%3E"); }}
+  .discord-profile-avatar-wrap.is-mobile {{ --status-shape-width: .665; }}
+  /* The status icon sits in a notch cut out of the avatar and its decoration,
+     so the gap shows the card behind them rather than a painted disc. The mask
+     covers the decoration's 1.2x canvas and the inner span the avatar's box. */
+  .discord-status-avatar-art {{ position: absolute; inset: -10%; display: block; -webkit-mask-image: linear-gradient(#000 0 0), radial-gradient(circle closest-side, #000 97%, transparent 100%); mask-image: linear-gradient(#000 0 0), radial-gradient(circle closest-side, #000 97%, transparent 100%); -webkit-mask-size: 100% 100%, var(--status-notch-width) var(--status-notch-size); mask-size: 100% 100%, var(--status-notch-width) var(--status-notch-size); -webkit-mask-position: 0 0, calc(1.1 * var(--status-avatar-size) - var(--status-notch-width)) calc(1.1 * var(--status-avatar-size) - var(--status-notch-size)); mask-position: 0 0, calc(1.1 * var(--status-avatar-size) - var(--status-notch-width)) calc(1.1 * var(--status-avatar-size) - var(--status-notch-size)); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-composite: xor; mask-composite: exclude; }}
+  .discord-profile-avatar-wrap.is-mobile .discord-status-avatar-art {{ -webkit-mask-image: linear-gradient(#000 0 0), var(--status-notch-rect); mask-image: linear-gradient(#000 0 0), var(--status-notch-rect); }}
+  .discord-status-avatar-art-inner {{ position: absolute; inset: 8.3333%; display: block; }}
   .discord-profile-avatar {{ display: block; width: 76px; height: 76px; border: 0; border-radius: 50%; object-fit: cover; background: #313338; }}
   .discord-profile-avatar-fallback {{ display: flex; align-items: center; justify-content: center; background: #5865f2; color: #fff; font-size: 28px; font-weight: 600; }}
   .discord-profile-avatar-decoration {{ position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; object-fit: contain; transform: translate(-50%, -50%) scale(1.2); pointer-events: none; }}
-  .discord-status-icon {{ position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; object-fit: contain; border: 2px solid #111214; border-radius: 50%; background: #111214; }}
-  /* Discord's custom-status bubble: a dark card beside the avatar with a tail
-     pointing back at it, a two-line clamp that expands on click, and a compact
-     square when the status is only an emoji. */
-  .discord-profile-status {{ position: relative; flex: 0 1 auto; width: fit-content; max-width: min(15rem, 100%); min-width: 0; margin-left: 4px; padding: 9px 13px; color: #f2f3f5; background: #232428; border: 1px solid rgb(255 255 255 / .06); border-radius: 18px; box-shadow: 0 6px 18px rgb(0 0 0 / .28); font-size: 13px; line-height: 1.42; }}
-  .discord-profile-status::before {{ position: absolute; top: 14px; left: -6px; width: 13px; height: 13px; background: inherit; border-bottom: 1px solid rgb(255 255 255 / .06); border-left: 1px solid rgb(255 255 255 / .06); border-radius: 0 0 0 4px; content: ""; transform: rotate(45deg); }}
+  .discord-status-icon {{ position: absolute; z-index: 2; right: calc((var(--status-notch-width) - var(--status-icon-size)) / 2); bottom: calc((var(--status-notch-size) - var(--status-icon-size)) / 2); width: var(--status-icon-size); height: var(--status-icon-size); object-fit: contain; }}
+  /* Discord's custom-status bubble: a flat surface-high card beside the avatar
+     whose rounded tail hooks onto the top-left corner and points back at the
+     avatar. Long text clamps to two lines with an ellipsis until the bubble is
+     clicked, and an emoji-only status becomes a compact square holding just the
+     emoji. */
+  /* Discord hangs the bubble off the avatar's bottom edge, not its top. */
+  .discord-profile-status {{ position: relative; isolation: isolate; align-self: flex-end; flex: 0 1 auto; width: fit-content; max-width: min(18rem, 100%); min-width: 0; margin-left: 4px; padding: 10px 12px; color: #dbdee1; background: #2b2d31; border-radius: 10px; font-size: 14px; line-height: 1.35; }}
+  /* Discord's tail is a thought bubble: one circle merged into the card's top
+     edge, and a second, smaller circle floating clear of it up and to the left. */
+  .discord-profile-status::before {{ position: absolute; z-index: -1; top: -11px; left: 8px; width: 26px; height: 26px; background: inherit; border-radius: 50%; content: ""; }}
+  .discord-profile-status::after {{ position: absolute; z-index: -1; top: -23px; left: -3px; width: 12px; height: 12px; background: inherit; border-radius: 50%; content: ""; }}
   .discord-profile-status.is-clamped {{ cursor: pointer; }}
-  .discord-profile-status.is-clamped:hover {{ background: #2b2d31; }}
+  .discord-profile-status.is-clamped:hover {{ background: #313338; }}
   .discord-profile-status:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; }}
   .discord-profile-status-text {{ display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }}
   .discord-profile-status.is-expanded .discord-profile-status-text {{ display: block; -webkit-line-clamp: unset; }}
-  .discord-profile-status-emoji {{ display: inline-block; width: 16px; height: 16px; margin-right: 6px; object-fit: contain; vertical-align: -.22em; }}
-  .discord-profile-status.is-emoji-only {{ display: grid; place-items: center; flex: 0 0 auto; width: 88px; height: 80px; padding: 0; border-radius: 20px; }}
-  .discord-profile-status.is-emoji-only .discord-profile-status-emoji {{ display: grid; place-items: center; width: 40px; height: 40px; margin: 0; font-size: 34px; line-height: 1; }}
-  .discord-profile-name {{ margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }}
+  .discord-profile-status-emoji {{ display: inline-block; width: 16px; height: 16px; margin-right: 6px; object-fit: contain; vertical-align: -.2em; }}
+  .discord-profile-status.is-emoji-only {{ display: grid; place-items: center; flex: 0 0 auto; width: 88px; height: 80px; padding: 0; border-radius: 12px; }}
+  .discord-profile-status.is-emoji-only::before {{ top: -13px; left: 12px; width: 30px; height: 30px; }}
+  .discord-profile-status.is-emoji-only::after {{ top: -28px; left: 2px; width: 13px; height: 13px; }}
+  .discord-profile-status.is-emoji-only .discord-profile-status-emoji {{ width: 40px; height: 40px; margin: 0; }}
+  .discord-profile-name {{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; color: #f2f3f5; font-size: 18px; font-weight: 700; }}
+  .discord-bot-tag {{ display: inline-flex; align-items: center; gap: 2px; padding: 2px 5px; color: #fff; background: #5865f2; border-radius: 4px; font-size: 10px; font-weight: 700; line-height: 1.2; letter-spacing: .02em; }}
+  .discord-bot-tag-check {{ flex: 0 0 auto; width: 10px; height: 10px; }}
   .discord-profile-username {{ display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; color: #b5bac1; }}
   .discord-profile-user-tag {{ min-width: 0; overflow-wrap: anywhere; }}
   .discord-profile-guild-tag {{ display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; color: #e3e5e8; background: #232428; border: 1px solid transparent; border-radius: 4px; font: inherit; font-size: 10px; font-weight: 700; line-height: 1.2; }}
@@ -1206,17 +1228,18 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-server-tag-invite:hover {{ background: #1a6334; text-decoration: none; }}
   .discord-server-tag-invite.is-join {{ background: #5865f2; }}
   .discord-server-tag-invite.is-join:hover {{ background: #4752c4; }}
-  .discord-profile-spotify {{ margin-top: 14px; padding: 10px 12px 11px; background: #232428; border-radius: 8px; }}
+  .discord-profile-spotify {{ margin-top: 14px; padding: 10px 12px 12px; background: #232428; border-radius: 10px; font-family: "gg sans", "Segoe UI", system-ui, -apple-system, sans-serif; }}
   .discord-profile-spotify-link {{ display: block; color: inherit; text-decoration: none; }}
-  .discord-profile-spotify-head {{ color: #b5bac1; font-size: 11px; font-weight: 700; }}
-  .discord-profile-spotify-body {{ display: flex; align-items: center; gap: 10px; margin-top: 9px; }}
-  .discord-profile-spotify-art {{ width: 56px; height: 56px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; }}
-  .discord-profile-spotify-copy {{ display: grid; flex: 1 1 auto; min-width: 0; gap: 3px; }}
-  .discord-profile-spotify-copy strong {{ overflow: hidden; color: #f2f3f5; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }}
-  .discord-profile-spotify-copy small {{ overflow: hidden; color: #b5bac1; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }}
-  .discord-profile-spotify-progress {{ display: flex; align-items: center; gap: 7px; margin-top: 4px; color: #949ba4; font-size: 10px; }}
+  .discord-profile-spotify-head {{ display: flex; align-items: center; gap: 5px; color: #dbdee1; font-size: 13px; font-weight: 600; }}
+  .discord-profile-spotify-head img {{ width: 15px; height: 15px; }}
+  .discord-profile-spotify-body {{ display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; }}
+  .discord-profile-spotify-art {{ width: 60px; height: 60px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; }}
+  .discord-profile-spotify-copy {{ display: grid; flex: 1 1 auto; min-width: 0; gap: 2px; }}
+  .discord-profile-spotify-copy strong {{ overflow: hidden; color: #f2f3f5; font-size: 14px; font-weight: 700; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }}
+  .discord-profile-spotify-copy small {{ overflow: hidden; color: #b5bac1; font-size: 13px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }}
+  .discord-profile-spotify-progress {{ display: flex; align-items: center; gap: 8px; margin-top: 8px; color: #b5bac1; font-family: "Space Mono", monospace; font-size: 12px; }}
   .discord-profile-spotify-track {{ position: relative; display: block; height: 4px; flex: 1 1 auto; overflow: hidden; background: #4e5058; border-radius: 999px; }}
-  .discord-profile-spotify-track > i {{ position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: #1db954; border-radius: 999px; transition: width .95s linear; }}
+  .discord-profile-spotify-track > i {{ position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: #dbdee1; border-radius: 999px; transition: width .95s linear; }}
   .discord-profile-about {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid #3f4147; }}
   .discord-profile-about h3 {{ margin-bottom: 5px; color: #b5bac1; font-size: 11px; text-transform: uppercase; }}
   .discord-profile-about p {{ white-space: pre-wrap; }}
@@ -1427,23 +1450,41 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     const name = String(raw || "").split(".").pop().trim().toLowerCase();
     return statusArt[name] ? name : "offline";
   }};
+  // The phone-shaped art only exists for the three live statuses, so a mobile
+  // presence falls back to the round dot when the art or status is missing.
+  const statusArtKey = (profile) => {{
+    const name = statusKey(profile.status);
+    return profile && profile.is_mobile && statusArt[name + "_mobile"] ? name + "_mobile" : name;
+  }};
   const statusDot = (profile) => {{
-    const art = statusArt[statusKey(profile.status)];
+    const art = statusArt[statusArtKey(profile)];
     if (!art) return "";
     const label = escapeHtml(art.label || "Offline");
     return '<img class="discord-status-icon" data-profile-status src="' + art.src + '" alt="' + label + '" title="' + label + '">';
   }};
-  const profileAvatar = (profile) => profile.avatar_url
-    ? '<span class="discord-profile-avatar-wrap"><img class="discord-profile-avatar" src="' + escapeHtml(profile.avatar_url) + '" alt="">'
+  // The wrap carries the notch shape: the avatar and its decoration are cut by
+  // one mask, so they lose the same piece where the status icon sits.
+  const profileAvatar = (profile, art) => '<span class="discord-profile-avatar-wrap'
+    + (statusArtKey(profile).indexOf("_mobile") > 0 ? " is-mobile" : "") + '">'
+    + '<span class="discord-status-avatar-art"><span class="discord-status-avatar-art-inner">' + art + '</span></span>'
+    + statusDot(profile) + '</span>';
+  const avatarArt = (profile) => profile.avatar_url
+    ? '<img class="discord-profile-avatar" src="' + escapeHtml(profile.avatar_url) + '" alt="">'
       + (profile.avatar_decoration_url ? '<img class="discord-profile-avatar-decoration" src="' + escapeHtml(profile.avatar_decoration_url) + '" alt="">' : '')
-      + statusDot(profile) + '</span>'
-    : '<span class="discord-profile-avatar-wrap"><span class="discord-profile-avatar discord-profile-avatar-fallback">' + escapeHtml((String(profile.display_name || '?').trim().charAt(0) || '?').toUpperCase()) + '</span>'
-      + statusDot(profile) + '</span>';
+    : '<span class="discord-profile-avatar discord-profile-avatar-fallback">' + escapeHtml((String(profile.display_name || '?').trim().charAt(0) || '?').toUpperCase()) + '</span>';
+  const renderProfileAvatar = (profile) => profileAvatar(profile, avatarArt(profile));
+  // Discord draws default emojis with Twemoji rather than the system emoji
+  // font, so the bubble matches Discord on every platform.
+  const twemojiUrl = (value) => 'https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/'
+    + Array.from(value)
+      .filter((character) => character.codePointAt(0) !== 0xFE0E && character.codePointAt(0) !== 0xFE0F)
+      .map((character) => character.codePointAt(0).toString(16))
+      .join('-') + '.svg';
   const profileStatusBubble = (profile) => {{
     const customStatus = profile.custom_status || {{}};
     const statusEmoji = customStatus.emoji_id
       ? '<img class="discord-profile-status-emoji" src="https://cdn.discordapp.com/emojis/' + encodeURIComponent(customStatus.emoji_id) + (customStatus.emoji_animated ? '.gif' : '.png') + '" alt="">'
-      : (customStatus.emoji_name ? '<span class="discord-profile-status-emoji">' + escapeHtml(customStatus.emoji_name) + '</span>' : '');
+      : (customStatus.emoji_name ? '<img class="discord-profile-status-emoji" src="' + twemojiUrl(customStatus.emoji_name) + '" alt="' + escapeHtml(customStatus.emoji_name) + '">' : '');
     const statusText = String(customStatus.text || '').trim();
     if (!statusText && !statusEmoji) return '';
     if (!statusText) return '<div class="discord-profile-status is-emoji-only">' + statusEmoji + '</div>';
@@ -1568,6 +1609,8 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       + (description ? '<p class="discord-server-tag-description">' + escapeHtml(description) + '</p>' : '')
       + button + '</div></div>';
   }};
+  // Inlined so a transcript opened from disk still shows the Spotify mark.
+  const spotifyMark = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#1DB954"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>');
   const clock = (seconds) => {{ const total = Math.max(0, Math.round(Number(seconds) || 0)); return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0'); }};
   const profileSpotify = (profile) => {{
     const spotify = (profile.activities || []).find((activity) => activity && activity.album_cover_url);
@@ -1576,7 +1619,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       ? {{ start: spotify.start, total: spotify.duration_seconds || (spotify.end - spotify.start) }}
       : null;
     const inner = '<div class="discord-profile-spotify">'
-      + '<div class="discord-profile-spotify-head">Listening to Spotify</div>'
+      + '<div class="discord-profile-spotify-head"><span>Listening to Spotify</span><img src="' + spotifyMark + '" alt=""></div>'
       + '<div class="discord-profile-spotify-body">'
       + '<img class="discord-profile-spotify-art" src="' + escapeHtml(spotify.album_cover_url) + '" alt="">'
       + '<div class="discord-profile-spotify-copy"><strong>' + escapeHtml(spotify.title || 'Spotify') + '</strong>'
@@ -1618,7 +1661,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     const banner = profile.banner_url
       ? '<img class="discord-profile-banner" src="' + escapeHtml(profile.banner_url) + '" alt="">'
       : '<div class="discord-profile-banner" style="background-color:' + (/^#[0-9a-f]+$/i.test(profile.banner_color || '') && profile.banner_color.length === 7 ? profile.banner_color : '#202225') + '"></div>';
-    const avatar = profileAvatar(profile);
+    const avatar = renderProfileAvatar(profile);
     const statusBubble = profileStatusBubble(profile);
     const guildTagInner = (profile.guild_badge_url ? '<img src="' + escapeHtml(profile.guild_badge_url) + '" alt="">' : '') + '<span>' + escapeHtml(profile.guild_tag) + '</span>';
     const guildTag = profile.guild_tag
@@ -1632,14 +1675,24 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       const label = badge.label ? ' alt="" aria-label="' + escapeHtml(badge.label) + '" title="' + escapeHtml(badge.label) + '"' : ' alt=""';
       return '<button type="button" class="discord-profile-badge-button" data-badge-key="' + escapeHtml(key) + '" aria-haspopup="dialog" aria-expanded="false"' + label + '><img class="discord-profile-badge" src="' + badge.src + '"></button>';
     }}).join('');
+    // Discord's bot pill: one APP tag beside the name, the tick inside it for a
+    // verified bot. Old transcripts carry no ``bot`` flag and simply show none.
+    const botTag = profile.bot
+      ? '<span class="discord-bot-tag" title="' + (profile.verified_bot ? 'Verified bot' : 'Bot') + '">'
+        + (profile.verified_bot ? '<svg class="discord-bot-tag-check" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9.4 16.6 4.8 12l-1.4 1.4 6.1 6.1L21 7.8l-1.4-1.4z"></path></svg>' : '')
+        + 'APP</span>'
+      : '';
     const spotify = profileSpotify(profile);
     // Discord's own ID icon, inlined because a transcript is a standalone file.
     const idIcon = '<svg class="discord-profile-menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M15.3 14.48c-.46.45-1.08.67-1.86.67h-1.39V9.2h1.39c.78 0 1.4.22 1.86.67.46.45.68 1.22.68 2.31 0 1.1-.22 1.86-.68 2.31Z"></path><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V5a3 3 0 0 0-3-3H5Zm1 15h2.04V7.34H6V17Zm4-9.66V17h3.44c1.46 0 2.6-.42 3.38-1.25.8-.83 1.2-2.02 1.2-3.58s-.4-2.75-1.2-3.58c-.79-.83-1.92-1.25-3.38-1.25H10Z"></path></svg>';
     const menu = '<div class="discord-profile-menu"><button type="button" class="discord-profile-menu-button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" data-profile-menu-button><span class="discord-profile-menu-dots" aria-hidden="true"><i></i><i></i><i></i></span></button><div class="discord-profile-menu-list" role="menu" hidden><button type="button" class="discord-profile-menu-item" role="menuitem" data-copy-user-id>' + idIcon + '<span data-copy-label>Copy User ID</span></button></div></div>';
     card.innerHTML = banner + menu + '<div class="discord-profile-body">'
       + '<div class="discord-profile-head">' + avatar + statusBubble + '</div>'
-      + '<h2 class="discord-profile-name">' + escapeHtml(profile.display_name) + '</h2>'
-      + '<p class="discord-profile-username"><span class="discord-profile-user-tag">' + escapeHtml(profile.username) + '</span>' + guildTag + '</p>'
+      + '<h2 class="discord-profile-name">' + escapeHtml(profile.display_name) + botTag + '</h2>'
+      + '<p class="discord-profile-username"><span class="discord-profile-user-tag">' + escapeHtml(profile.username)
+      // Bots still carry Discord's four-digit tag after the handle.
+      + (profile.bot && profile.discriminator ? '<span class="discord-profile-discriminator">#' + escapeHtml(profile.discriminator) + '</span>' : '')
+      + '</span>' + guildTag + '</p>'
       + (badges ? '<div class="discord-profile-badges">' + badges + '</div>' : '')
       + (profile.bio ? '<section class="discord-profile-about"><h3>About Me</h3><p>' + escapeHtml(profile.bio) + '</p></section>' : '')
       + '<div data-profile-spotify>' + spotify.html + '</div>'
@@ -1768,7 +1821,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       if (!next || !card.isConnected) return;
       const head = card.querySelector('.discord-profile-head');
       const wasExpanded = Boolean(head && head.querySelector('.discord-profile-status.is-expanded'));
-      if (head) head.innerHTML = profileAvatar(next) + profileStatusBubble(next);
+      if (head) head.innerHTML = renderProfileAvatar(next) + profileStatusBubble(next);
       bindStatusBubble(card, wasExpanded);
       const spotifyNode = card.querySelector('[data-profile-spotify]');
       const nextSpotify = profileSpotify(next);

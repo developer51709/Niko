@@ -41,6 +41,12 @@ MAX_MEDIA_BYTES = 8 * 1024 * 1024
 SEND_INTERVAL_SECONDS = 0.4
 SYNC_INTERVAL_SECONDS = 0.35
 
+# Which mentions typed in the message are allowed to ping. The composer stores
+# the enabled ones as a comma separated list; an empty list sends the copy
+# silently, and a row written before the option existed pings everything.
+MENTION_KINDS = ("everyone", "roles", "users")
+DEFAULT_MENTIONS = ",".join(MENTION_KINDS)
+
 # Content types the dashboard accepts for upload. The extension is chosen from
 # the bytes' reported type rather than the uploaded filename, so an attachment
 # always gets a filename Discord recognises.
@@ -75,14 +81,49 @@ def _media_url(filename: str) -> str:
     return f"attachment://{filename}"
 
 
+def normalise_mentions(value) -> str:
+    """Return the enabled mention kinds as a canonical comma separated list.
+
+    Accepts the stored string, the dashboard's list, or ``None`` for a document
+    written before the option existed — that row pings exactly as it used to.
+    """
+    if value is None:
+        return DEFAULT_MENTIONS
+    if isinstance(value, (list, tuple, set)):
+        parts = [str(item).strip().lower() for item in value]
+    else:
+        parts = [part.strip().lower() for part in str(value).split(",")]
+    enabled = {part for part in parts if part in MENTION_KINDS}
+    return ",".join(kind for kind in MENTION_KINDS if kind in enabled)
+
+
+def mention_overrides(value) -> discord.AllowedMentions:
+    """Build the send-time allow list from the stored mention overrides.
+
+    Everyone, roles and users are independent switches, so turning all three
+    off is how a broadcast reaches a server without pinging anybody.
+    """
+    enabled = {part for part in normalise_mentions(value).split(",") if part}
+    return discord.AllowedMentions(
+        everyone="everyone" in enabled,
+        roles="roles" in enabled,
+        users="users" in enabled,
+    )
+
+
 def build_broadcast_view(
     title: str,
     body: str,
     footer: str,
     accent: str,
     media: list[dict],
+    spoiler: bool = False,
 ) -> discord.ui.LayoutView:
-    """Build the Components v2 container shared by delivery and edits."""
+    """Build the Components v2 container shared by delivery and edits.
+
+    ``spoiler`` hides the whole container behind Discord's reveal, and each
+    image keeps its own flag so one picture can be spoilered on its own.
+    """
     view = discord.ui.LayoutView()
     items: list = [
         discord.ui.TextDisplay(content=f"# {title}"),
@@ -94,7 +135,10 @@ def build_broadcast_view(
         items.extend([
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.MediaGallery(*[
-                MediaGalleryItem(media=UnfurledMediaItem(url=_media_url(str(row["filename"]))))
+                MediaGalleryItem(
+                    media=UnfurledMediaItem(url=_media_url(str(row["filename"]))),
+                    spoiler=bool(row.get("spoiler")),
+                )
                 for row in gallery[:MAX_MEDIA_ITEMS]
             ]),
         ])
@@ -103,7 +147,9 @@ def build_broadcast_view(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=f"-# {footer}"),
         ])
-    view.add_item(discord.ui.Container(*items, accent_colour=accent_colour(accent)))
+    view.add_item(discord.ui.Container(
+        *items, accent_colour=accent_colour(accent), spoiler=bool(spoiler),
+    ))
     return view
 
 
@@ -252,12 +298,16 @@ async def _send_copy(
         view = build_broadcast_view(
             str(row["title"]), str(row["body"]), str(row["footer"] or ""),
             str(row["accent"] or DEFAULT_ACCENT), media,
+            spoiler=bool(row.get("spoiler")),
         )
+        # The allow list is applied at send time only: an edit cannot re-ping a
+        # server, so it is intentionally absent from ``message.edit`` below.
+        mentions = mention_overrides(row.get("allowed_mentions"))
         try:
             if files:
-                message = await channel.send(view=view, files=files)
+                message = await channel.send(view=view, files=files, allowed_mentions=mentions)
             else:
-                message = await channel.send(view=view)
+                message = await channel.send(view=view, allowed_mentions=mentions)
             return "sent", message.id, None
         except discord.RateLimited as exc:
             if attempt == 0:
@@ -465,6 +515,7 @@ async def sync_broadcast(bot, broadcast_id: str) -> None:
             view = build_broadcast_view(
                 str(row["title"]), str(row["body"]), str(row["footer"] or ""),
                 str(row["accent"] or DEFAULT_ACCENT), media,
+                spoiler=bool(row.get("spoiler")),
             )
             updated = False
             missing = False

@@ -1,6 +1,6 @@
-"""Owner-only controls: the beta locale sync, the update page, and the handoff door.
+"""Owner-only controls: the beta locale sync and the update page.
 
-Three kinds of endpoint live here, and only one of them is for the browser:
+Two kinds of endpoint live here:
 
 * ``/api/owner/...`` — signed-in owner only. What the staff workspace's Locales
   and Updates tabs read and trigger.
@@ -8,8 +8,6 @@ Three kinds of endpoint live here, and only one of them is for the browser:
   files to a production instance that is pulling an update. Guarded by
   ``BETA_UPDATE_TOKEN``; with no token configured these answer 404, so an
   instance without the feature is indistinguishable from one without the route.
-* ``/api/handoff/ready`` — called by a successor process to tell this one it is
-  live. Localhost and a one-run token only.
 """
 
 import hmac
@@ -287,21 +285,3 @@ def api_updates_file():
     return response
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Handoff
-# ──────────────────────────────────────────────────────────────────────────────
-@app.route("/api/handoff/ready", methods=["POST"])
-def api_handoff_ready():
-    """A successor says it is live. The predecessor lets go and exits."""
-    if handoff.is_candidate():
-        # The successor shares the listening socket, so its own app can receive
-        # this request; it is the predecessor that has to act on it.
-        return jsonify({"handoff": False, "role": "candidate"})
-    supplied = request.headers.get("X-Handoff-Token", "")
-    expected = handoff.token()
-    if not expected or not hmac.compare_digest(supplied, expected):
-        return jsonify({"error": "Forbidden"}), 403
-    if request.remote_addr not in {"127.0.0.1", "::1"}:
-        return jsonify({"error": "Forbidden"}), 403
-    threading.Thread(target=handoff.complete, args=(_discord_bot,), name="niko-retire", daemon=True).start()
-    return jsonify({"handoff": True})

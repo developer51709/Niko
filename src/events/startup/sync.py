@@ -11,13 +11,16 @@ A fingerprint of the tree is compared against the last successful sync.
 The fingerprint lives in the main database (sync_state table) so it survives
 restarts and redeploys — local files on hosts like Render are ephemeral and
 are wiped on every deployment.
+
+The same table keeps the application-command IDs Discord assigns, so messages
+can link a command (``</setup:id>``) instead of writing inline code.
 """
 
 import hashlib
 import json
 import os
 
-from utils import logging
+from utils import command_ids, logging
 from utils.command_localization import apply_command_localizations
 from utils.emoji_sync import sync_application_emojis
 
@@ -110,6 +113,10 @@ async def _db_store_fingerprint(bot, fingerprint: str) -> None:
 async def run_slash_sync(bot):
     # Translations must be attached before the tree is hashed and sent.
     apply_command_localizations(bot.tree)
+    # Command mentions need the IDs Discord assigns, and those do not change
+    # when the tree is edited. Load (or fetch) them before the fingerprint check
+    # so a boot that skips the sync still renders mentions.
+    await command_ids.ensure(bot)
     fingerprint = _command_fingerprint(bot)
     command_count = len(bot.tree.get_commands())
     try:
@@ -124,6 +131,7 @@ async def run_slash_sync(bot):
         # Persist only after Discord accepted the sync so a rate-limited
         # attempt is retried on the next boot instead of being skipped.
         await _db_store_fingerprint(bot, fingerprint)
+        await command_ids.save(bot, synced)
         logging.success("SlashSync", f"Synced {len(synced)} application command(s) globally.")
     except Exception as exc:
         logging.error("SlashSync", f"Startup slash sync failed: {exc}")

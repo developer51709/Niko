@@ -8,6 +8,7 @@ from .. import server as _server
 from flask import jsonify, request
 
 from utils.member_badges import boosting_badge_key, niko_badge_keys
+from utils.presence import is_mobile_presence
 
 globals().update({
     name: value
@@ -24,6 +25,7 @@ _MAX_PARALLEL_FETCHES = 5
 # ``web/public/assets/badges`` for the rest), so the API only ever sends keys
 # and never a Discord CDN URL. Discord's verified-bot tag is left out: it is
 # drawn as a pill next to the name, not as one of these square badges.
+_VERIFIED_BOT_FLAG = 1 << 16
 _PROFILE_BADGES = (
     ("staff", 1 << 0),
     ("partner", 1 << 1),
@@ -79,15 +81,36 @@ def _boosting_badge(member):
     return boosting_badge_key(getattr(member, "premium_since", None))
 
 
-def _profile_badges(user, member) -> list:
-    """The profile badges an account carries, in the order Discord lists them."""
-    # A member object repeats its user's flags, so combining both still yields
-    # one badge per flag even when only one of the two objects was loaded.
+def _discriminator(user, member):
+    """The four-digit tag Discord prints after a bot's handle, or ``None``.
+
+    Bots keep the legacy tag, while a migrated human account reports ``"0"`` —
+    that is a placeholder for "no tag", not a tag to draw.
+    """
+    for source in (user, member):
+        text = str(getattr(source, "discriminator", None) or "").strip()
+        if text and text != "0":
+            return text
+    return None
+
+
+def _public_flag_value(user, member) -> int:
+    """Every public flag either object carries, combined.
+
+    A member object repeats its user's flags, so combining both still yields one
+    badge per flag even when only one of the two objects was loaded.
+    """
     value = 0
     for source in (user, member):
         flags = _public_flags(source)
         if flags is not None:
             value |= flags
+    return value
+
+
+def _profile_badges(user, member) -> list:
+    """The profile badges an account carries, in the order Discord lists them."""
+    value = _public_flag_value(user, member)
     badges = [name for name, bit in _PROFILE_BADGES if value & bit]
     # The boosting badge follows the flag badges, the way Discord appends it.
     boosting = _boosting_badge(member)
@@ -520,6 +543,7 @@ async def _fetch_discord_user_profile(guild_id, user_id, viewer_id=None):
         decoration = getattr(member, "avatar_decoration", None)
     # Discord's badges first, then Niko's own role badges, the way the bot's
     # profile card lists them.
+    flags = _public_flag_value(user, member)
     badges = _profile_badges(user, member)
     try:
         badges.extend(await niko_badge_keys(_discord_bot, user_id))
@@ -553,9 +577,16 @@ async def _fetch_discord_user_profile(guild_id, user_id, viewer_id=None):
         # server is private or no longer available to Niko.
         "server_tag": await _guild_tag_server(primary_guild, viewer_id),
         "badges": badges,
+        # A bot's name carries Discord's APP pill, and a verified bot's pill
+        # holds the tick. Both are read here because the badge list above
+        # deliberately leaves the verified-bot flag out.
+        "bot": bool(getattr(user, "bot", False) or getattr(member, "bot", False)),
+        "verified_bot": bool(flags & _VERIFIED_BOT_FLAG),
+        # Bots still carry the four-digit tag Discord prints after the handle.
+        "discriminator": _discriminator(user, member),
         "nitro_badge": None,
         "booster_badge": None,
-        "is_mobile": False,
+        "is_mobile": is_mobile_presence(member),
         "is_streaming": False,
         "legacy_username_badge": False,
         "legacy_username": None,

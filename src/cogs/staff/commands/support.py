@@ -1,10 +1,11 @@
 """``.staff supportsetup``, ``supportupdate`` and ``getreport``."""
 
-import io
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
 
+from config.emojis import get_emoji
 from config.ids import SUPPORT_GUILD
 from cogs.staff.base import CMDS, StaffCommands
 from cogs.staff.support_server import (
@@ -18,7 +19,41 @@ from cogs.staff.support_setup import (
     _send_support_panels,
     bot_member_preflight,
 )
-from utils.error_reports import get_error_report
+from utils.error_reports import get_error_report, report_source_label
+
+
+def _inline(value, limit: int = 500) -> str:
+    """One short, markdown-safe value for a Discord text display."""
+    text = " ".join(str(value or "").split())
+    text = text.replace("`", "'")[:limit]
+    return text or "unknown"
+
+
+def _when(value) -> str:
+    try:
+        moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        return f"<t:{int(moment.timestamp())}:F> · <t:{int(moment.timestamp())}:R>"
+    except (TypeError, ValueError):
+        return _inline(value, 120) if value else "unknown"
+
+
+def _identity(value) -> str | None:
+    """Render both new structured identities and old ``Name (ID 1)`` strings."""
+    if not value:
+        return None
+    if isinstance(value, dict):
+        name = value.get("name") or value.get("username")
+        identifier = value.get("id")
+        if name and identifier:
+            return f"{_inline(name, 120)} (`{_inline(identifier, 40)}`)"
+        if name:
+            return _inline(name, 120)
+        if identifier:
+            return f"`{_inline(identifier, 40)}`"
+        return None
+    return _inline(value, 200)
 
 
 class SupportCommands:
@@ -123,20 +158,62 @@ class SupportCommands:
 
     @StaffCommands.staff.command(name="getreport", help=CMDS.help("staff.getreport"), hidden=True)
     async def get_report(self, ctx: commands.Context, code: str):
-        """Fetch an error report by its six-character code."""
+        """Show the headline of an error report in the current channel."""
         report = await get_error_report(code, self.bot)
         if report is None:
             return await ctx.send("No error report was found for that code.")
 
-        report_file = discord.File(
-            io.BytesIO(report.encode("utf-8")),
-            filename=f"error-report-{code.strip().upper()}.txt",
+        normalized = str(code or "").strip().upper()
+        exception = report.get("exception") or {}
+        context = report.get("context") or {}
+        name = _inline(exception.get("name") or exception.get("type") or "Exception", 160)
+        message = _inline(exception.get("message") or report.get("summary"), 900)
+        source = report_source_label(report.get("source"))
+
+        highlights = []
+        command = context.get("command")
+        event = context.get("event")
+        request_info = context.get("request")
+        if command:
+            highlights.append(f"**Command** · `{_inline(command, 180)}`")
+        if event:
+            highlights.append(f"**Event** · `{_inline(event, 180)}`")
+        if isinstance(request_info, dict):
+            method = _inline(request_info.get("method"), 20)
+            path = _inline(request_info.get("path"), 500)
+            highlights.append(f"**Request** · `{method} {path}`")
+        elif isinstance(request_info, str) and request_info:
+            highlights.append(f"**Request** · `{_inline(request_info, 500)}`")
+
+        user = _identity(context.get("user"))
+        if user:
+            highlights.append(f"**User** · {user}")
+        where = []
+        guild = _identity(context.get("guild"))
+        channel = _identity(context.get("channel"))
+        if guild:
+            where.append(guild)
+        if channel:
+            where.append(channel)
+        if where:
+            highlights.append("**Where** · " + " · ".join(where))
+
+        header = (
+            f"### {get_emoji('warning') or '⚠️'} Error report `{normalized}`\n"
+            f"**{name}** · {message}\n"
+            f"-# {source} · {_when(report.get('created_at'))}"
         )
-        try:
-            await ctx.author.send(
-                content=f"Error report `{code.strip().upper()}` attached.",
-                file=report_file,
-            )
-        except discord.Forbidden:
-            return await ctx.send("I couldn't DM you the report. Please enable DMs from this server and try again.")
-        await ctx.send(f"Sent error report `{code.strip().upper()}` to your DMs.")
+        body = "\n".join(highlights) if highlights else "No invocation details were captured."
+        body += (
+            "\n\n-# Full context, request data and traceback are on the staff "
+            "dashboard → Diagnostics."
+        )
+
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=header),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=body),
+            accent_colour=discord.Color.red(),
+        ))
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
