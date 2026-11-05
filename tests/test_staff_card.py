@@ -282,6 +282,34 @@ class StatusIconTests(unittest.TestCase):
             staff_card.status_icon_data_url("offline"),
         )
 
+    def test_mobile_presence_cuts_a_narrow_notch_for_the_phone(self):
+        """A phone-only presence gets the mobile art in a portrait notch."""
+        svg = staff_card.render_staff_card(member(status="online", is_mobile=True))
+        self.assertIn(staff_card.status_icon_data_url("online_mobile"), svg)
+        self.assertNotIn(staff_card.status_icon_data_url("online"), svg)
+        # The notch is cut out of the avatar, not painted over it, and the phone
+        # is narrower than the round dot it replaces.
+        self.assertIn('<mask id="staff-avatar-hole">', svg)
+        self.assertIn('<rect x="104" y="100" width="24" height="32" rx="8" fill="black"/>', svg)
+        self.assertIn('<g mask="url(#staff-avatar-hole)">', svg)
+
+    def test_every_mobile_status_icon_is_inlined(self):
+        for status in ("online", "idle", "dnd"):
+            icon = staff_card.status_icon_data_url(f"{status}_mobile")
+            self.assertTrue(icon.startswith("data:image/png;base64,"), status)
+
+    def test_a_desktop_presence_keeps_the_round_notch(self):
+        svg = staff_card.render_staff_card(member(status="online", is_mobile=False))
+        self.assertIn('<circle cx="116" cy="116" r="16" fill="black"/>', svg)
+        self.assertNotIn(staff_card.status_icon_data_url("online_mobile"), svg)
+
+    def test_hiding_the_status_leaves_the_avatar_whole(self):
+        """With the status off there is no notch to cut."""
+        svg = staff_card.render_staff_card(member(
+            card={"theme": "dark", "accent": "C8A882", "show_status": False},
+        ))
+        self.assertNotIn("staff-avatar-hole", svg)
+
     def test_icons_are_cached(self):
         first = staff_card.status_icon_data_url("online")
         self.assertIs(first, staff_card.status_icon_data_url("online"))

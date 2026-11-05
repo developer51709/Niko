@@ -4,10 +4,10 @@ Keeping this in a tiny module makes the process boundary obvious and makes the
 server startup easy to change without touching Discord event handling.
 
 The server object is kept rather than hidden inside ``app.run`` because the
-owner's update page needs three things a blocking ``app.run`` cannot offer: the
+owner's update page needs two things a blocking ``app.run`` cannot offer: the
 Flask app must be replaceable while the socket keeps accepting (an API update),
-the socket must be handable to a successor process (a bot update), and the
-accept loop must be stoppable without killing the process.
+and the listening socket must survive a restart of the process (a bot update) by
+being inherited instead of rebound — see :mod:`utils.handoff`.
 """
 
 from __future__ import annotations
@@ -47,9 +47,10 @@ def _flask_app():
 def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -> threading.Thread:
     """Serve Flask on a daemon thread.
 
-    ``fd`` is an inherited listening socket from the process that is handing
-    over. Using it means the successor accepts connections on the same socket,
-    with no gap and no rebinding, while the predecessor stops accepting.
+    ``fd`` is the listening socket this process inherited from the image it
+    replaced (an in-place restart, see :mod:`utils.handoff`). Using it means the
+    new image accepts connections on the same socket with no gap and no
+    rebinding: the port is never unbound, so nothing can race to rebind it.
 
     ``port`` exists for diagnostics and tests; the process uses ``PORT``.
     """
@@ -103,6 +104,12 @@ def replace_app(app) -> None:
         _server.app = app
 
 
+def serving() -> bool:
+    """Whether this process is answering HTTP right now."""
+    with _lock:
+        return _server is not None
+
+
 def listening_socket_fd() -> int:
     """A duplicate of the listening socket, safe to pass to a child process."""
     with _lock:
@@ -116,25 +123,3 @@ def listening_port() -> int:
         if _server is None:
             return int(os.environ.get("PORT", "5000"))
         return int(_server.port)
-
-
-def stop_serving() -> None:
-    """Stop accepting and close this process's copy of the listening socket.
-
-    A successor holding the same socket keeps the listener alive; the port is
-    never unbound.
-    """
-    global _server
-    with _lock:
-        server = _server
-        _server = None
-    if server is None:
-        return
-    try:
-        server.shutdown()
-    except Exception:
-        pass
-    try:
-        server.server_close()
-    except Exception:
-        pass

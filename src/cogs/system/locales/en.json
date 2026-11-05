@@ -56,31 +56,6 @@
     "error_title": "Error",
     "transformer_body": "Couldn't convert `{value}` to the expected type."
   },
-  "nitro": {
-    "ai_disabled_global": "Niko's AI is currently disabled by the bot owner.",
-    "ai_disabled_guild": "AI is disabled in this server.",
-    "ask_title": "Niko says…",
-    "ask_empty": "I couldn't come up with a reply just now — try again in a moment.",
-    "profile_level": "Level",
-    "profile_xp": "XP",
-    "profile_wallet": "Wallet",
-    "profile_bank": "Bank",
-    "profile_joined": "Joined",
-    "profile_account": "Account",
-    "profile_unknown": "unknown",
-    "vc_need_channel": "Join a voice channel or specify one with the `channel` option.",
-    "vc_need_perms": "I need the **Manage Channels** permission to set voice status.",
-    "vc_set_title": "Voice Status Set",
-    "vc_cleared_title": "Voice Status Cleared",
-    "forward_invalid_id": "Invalid message ID.",
-    "forward_title": "Message Forwarded",
-    "forward_failed": "Could not forward that message. Check that I have permission to send in the destination channel and the message exists.",
-    "sticker_none": "This server has no custom stickers yet.",
-    "sticker_title": "Server Stickers — {server}",
-    "sticker_not_found": "No sticker named **{name}** found. Use `/sticker list`.",
-    "stage_not_in_stage": "Niko must be in a Stage channel first.",
-    "stage_speaker": "Niko is now a speaker on Stage! ☕"
-  },
   "boosters": {
     "guild_only": "This command can only be used in a server.",
     "settings_failed": "I couldn't load the booster settings for this server. Please try again later.",
@@ -123,10 +98,6 @@
     "help": "-# 📌 **Need help?**\n-# Ask in the [support server]({support}) or check the [documentation]({docs})"
   },
   "commands": {
-    "☕ Ask Niko.name": "☕ Ask Niko",
-    "☕ Ask Niko.description": "Ask Niko to reply to this message",
-    "📊 User Profile.name": "📊 User Profile",
-    "📊 User Profile.description": "Show a quick profile card for this user",
     "boosterrole.clear-icon.description": "Remove your booster role's custom icon.",
     "boosterrole.color.args.hex_color": "A six-digit color such as #e88cba",
     "boosterrole.color.description": "Set a solid color for your booster role.",
@@ -141,19 +112,6 @@
     "boosterrole.share.args.member": "The member who should receive your role",
     "boosterrole.share.description": "Give another member your booster role.",
     "boosterrole.unshare.args.member": "The member who should lose your role",
-    "boosterrole.unshare.description": "Remove your booster role from another member.",
-    "forward.args.destination": "Channel to forward to",
-    "forward.args.message_id": "ID of the message to forward",
-    "forward.args.source": "Channel the message is in (defaults to current)",
-    "forward.description": "Forward a message (by ID) to another channel.",
-    "stage.description": "Stage channel controls.",
-    "stage.speak.description": "Make Niko a speaker on the current Stage channel.",
-    "sticker.description": "Manage and send guild stickers.",
-    "sticker.list.description": "List all stickers in this server.",
-    "sticker.send.args.name": "Name of the sticker to send",
-    "sticker.send.description": "Send a server sticker into this channel.",
-    "vcstatus.args.channel": "Voice channel to update (defaults to the one you're in)",
-    "vcstatus.args.status": "Text to display (leave blank to clear)",
-    "vcstatus.description": "Set or clear the text status shown in a voice channel."
+    "boosterrole.unshare.description": "Remove your booster role from another member."
   }
 }

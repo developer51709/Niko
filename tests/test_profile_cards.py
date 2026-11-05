@@ -326,19 +326,166 @@ class ProfilePopupPresenceTests(unittest.TestCase):
         styles = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
         self.assertIn('className="discord-profile-status is-emoji-only"', self.source)
         self.assertIn(".discord-profile-status.is-emoji-only {", styles)
+        # The bubble is Discord's flat surface-high card, hung off the avatar's
+        # bottom edge.
+        self.assertIn("align-self: flex-end", styles)
+        self.assertIn("background: #2b2d31; border-radius: 10px; font-size: 14px; line-height: 1.35;", styles)
+        # A default emoji is Twemoji's image, the artwork Discord draws.
+        self.assertIn("src={twemojiUrl(status.emoji_name)}", self.source)
+        # The tail is a thought bubble: a round bump merged into the top edge and
+        # a smaller round dot floating clear of it up and to the left.
+        self.assertIn("top: -11px; left: 8px; width: 26px; height: 26px; background: inherit; border-radius: 50%; content: \"\";", styles)
+        # Both circles are painted behind the bubble's content, so the part of
+        # the bump inside the card never covers the status emoji or its text.
+        self.assertIn("isolation: isolate;", styles)
+        self.assertIn(".discord-profile-status::before { position: absolute; z-index: -1;", styles)
+        self.assertIn(".discord-profile-status::after { position: absolute; z-index: -1;", styles)
+        self.assertIn(".discord-profile-status::after { position: absolute; z-index: -1; top: -23px; left: -3px; width: 12px; height: 12px; background: inherit; border-radius: 50%; content: \"\"; }", styles)
         # Long text shows two lines, then opens in full when the bubble is clicked.
         self.assertIn("-webkit-line-clamp: 2;", styles)
         self.assertIn(".discord-profile-status.is-expanded .discord-profile-status-text", styles)
         self.assertIn("setExpanded((current) => !current)", self.source)
 
     def test_the_popup_dot_uses_the_live_status(self):
-        self.assertIn("<DiscordStatusAvatar status={profileStatusKey(profile.status)}", self.source)
-        self.assertIn("label={profileStatusLabel(profile.status)}", self.source)
+        # The popup passes the mobile flag through, so the avatar picks the
+        # phone-shaped icon when the phone holds the presence.
+        self.assertIn("<DiscordStatusAvatar status={profileStatusKey(profile.status)} mobile={profile.is_mobile}", self.source)
+        self.assertIn("label={profileStatusLabel(profile.status, t)}", self.source)
         # Discord can report the status enum or a plain string; anything unknown
-        # reads as offline rather than as an empty dot.
-        for status, label in (("online", "Online"), ("idle", "Idle"), ("dnd", "Do Not Disturb"), ("offline", "Offline"), ("streaming", "Streaming")):
+        # reads as offline rather than as an empty dot. The wording lives in the
+        # catalogues, so this side only pins the key each status maps to.
+        for status, key in (("online", "status.online"), ("idle", "status.idle"), ("dnd", "status.dnd"), ("offline", "status.offline"), ("streaming", "status.streaming")):
             with self.subTest(status=status):
-                self.assertIn(f'{status}: "{label}"', self.source)
+                self.assertIn(f'{status}: "{key}"', self.source)
+
+    def test_the_popup_dot_and_banner_cutout_match_discords_sizing(self):
+        styles = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
+        # Discord's dot sits a touch smaller than its cutout: 19px in the 26px
+        # notch, i.e. a 3.5px ring of card around it on the 76px avatar.
+        self.assertIn(".discord-status-avatar.discord-profile-avatar-wrap-status-wrap { --status-icon-size: 19px; --status-gap: 3.5px; }", styles)
+        self.assertIn("--status-notch-size: calc(var(--status-icon-size) + 2 * var(--status-gap))", styles)
+        # The banner is cut away around the avatar: the hole is centred on it
+        # (16px padding + 38px radius, on the banner's bottom edge) and is the
+        # avatar's radius plus 4px of the popout's own background.
+        self.assertIn("radial-gradient(circle at 54px 100%, transparent calc(42px - .5px), #000 42px)", styles)
+        self.assertIn("mask-image: var(--profile-avatar-cutout)", styles)
+        # The row keeps the avatar's height, so a taller emoji-only bubble cannot
+        # push the picture out of the cutout.
+        self.assertIn("align-items: center; gap: 8px; height: 76px; margin-top: -38px;", styles)
+
+    def test_the_spotify_card_matches_discords_activity_card(self):
+        styles = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
+        # Discord's card: its own padding and radius, a 60px sleeve and the track
+        # line beside it with the label above.
+        self.assertIn(".discord-profile-spotify { margin-top: 14px; padding: 10px 12px 12px; background: #232428; border-radius: 10px;", styles)
+        self.assertIn(".discord-profile-spotify-art { width: 60px; height: 60px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; }", styles)
+        self.assertIn(".discord-profile-spotify-head { display: flex; align-items: center; gap: 5px; color: #dbdee1; font-size: 13px; font-weight: 600; }", styles)
+        self.assertIn("color: #f2f3f5; font-size: 14px; font-weight: 700;", styles)
+        # The card is set in Discord's face, not the site's Plus Jakarta Sans.
+        self.assertIn('font-family: "gg sans", "Segoe UI", system-ui, -apple-system, sans-serif;', styles)
+        # The played part of the bar is the card's light grey, not Spotify green.
+        self.assertIn("left: 0; background: #dbdee1; border-radius: 999px; transition: width .95s linear;", styles)
+        # The times are set in the monospaced face the devtools header uses.
+        self.assertIn('color: #b5bac1; font-family: "Space Mono", monospace; font-size: 12px;', styles)
+        # The mark follows the wording, the way Discord reads it.
+        self.assertIn('<span>Listening to Spotify</span><img src="/spotify.svg" alt="" />', self.source)
+
+
+def test_the_team_profile_page_shows_the_popup_status_bubble():
+    source = (ROOT / "web" / "src" / "pages" / "TeamPage.tsx").read_text(encoding="utf-8")
+    markdown = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
+
+    # The bubble and its status shape are shared with the user popups rather than
+    # redrawn for the team page.
+    assert "export function ProfileCustomStatus" in markdown
+    assert "export type DiscordCustomStatus" in markdown
+    assert 'import { ProfileCustomStatus, type DiscordCustomStatus } from "../components/DiscordMarkdown";' in source
+    # It sits in the avatar's row, bottom-aligned with it, exactly where the
+    # popups put it: avatar, then the bubble, then the name below.
+    header = source[source.index('<div className="team-profile-header">'):source.index('<div className="team-profile-identity">')]
+    assert '<StatusAvatar member={member} className="team-profile-avatar" />' in header
+    assert "<ProfileStatusBubble member={member} />" in header
+    assert ".team-profile-header{display:flex;align-items:flex-end;justify-content:flex-start;gap:8px;" in source
+    # A unicode emoji carries only its character; a custom one its id and name.
+    assert 'emoji.kind === "custom" ? emoji.name || null : emoji.value' in source
+    assert 'emoji_id: emoji?.kind === "custom" ? emoji.value : null' in source
+    # The old labelled status card is gone, so a status is never drawn twice.
+    assert '<div className="profile-custom-status">' not in source
+
+
+async def _no_niko_badges(*args, **kwargs):
+    return []
+
+
+class BotAppTagTests(unittest.TestCase):
+    """A bot's display name carries Discord's APP pill, tick included if verified."""
+
+    def setUp(self):
+        from webapp.routes import discord_text_routes
+
+        self.routes = discord_text_routes
+        self.previous = discord_text_routes._discord_bot
+
+    def tearDown(self):
+        self.routes._discord_bot = self.previous
+
+    def _profile(self, *, bot: bool, verified: bool, discriminator: str = "0071") -> dict:
+        user = SimpleNamespace(
+            name="app",
+            global_name="App Name",
+            bot=bot,
+            discriminator=discriminator,
+            # VERIFIED_BOT is the public flag Discord turns into the tick.
+            public_flags=SimpleNamespace(value=(1 << 16) if verified else 0),
+            display_avatar=SimpleNamespace(url="https://cdn.example/avatar.png"),
+            banner=None,
+            accent_color=None,
+            primary_guild=None,
+            avatar_decoration=None,
+            avatar_decoration_sku_id=None,
+        )
+        member = SimpleNamespace(
+            status=SimpleNamespace(name="online"),
+            activities=[],
+            _user=user,
+            guild=None,
+            nick=None,
+            premium_since=None,
+        )
+        self.routes._discord_bot = SimpleNamespace(guilds=[SimpleNamespace(get_member=lambda user_id: member)])
+        with patch.object(self.routes, "_presence_member", lambda user_id, bot: member), \
+                patch.object(self.routes, "niko_badge_keys", _no_niko_badges):
+            return asyncio.run(self.routes._fetch_discord_user_profile(None, "5"))
+
+    def test_a_bot_reports_itself_and_a_verified_bot_reports_the_tick(self):
+        verified = self._profile(bot=True, verified=True)
+        self.assertTrue(verified["bot"])
+        self.assertTrue(verified["verified_bot"])
+        # The tick rides inside the pill, never the square badge row.
+        self.assertNotIn("verified_bot", verified["badges"])
+
+    def test_an_unverified_bot_and_a_human_report_no_tick(self):
+        for bot in (True, False):
+            with self.subTest(bot=bot):
+                profile = self._profile(bot=bot, verified=False)
+                self.assertEqual(profile["bot"], bot)
+                self.assertFalse(profile["verified_bot"])
+
+    def test_a_bot_reports_its_four_digit_tag(self):
+        self.assertEqual(self._profile(bot=True, verified=True)["discriminator"], "0071")
+        # Discord writes "0" for a migrated account with no tag at all.
+        self.assertIsNone(self._profile(bot=False, verified=False, discriminator="0")["discriminator"])
+
+    def test_the_site_popup_draws_one_pill_with_the_tick_inside(self):
+        source = (ROOT / "web" / "src" / "components" / "DiscordMarkdown.tsx").read_text(encoding="utf-8")
+        styles = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('{profile.bot && <span className="discord-bot-tag"', source)
+        self.assertIn('{profile.verified_bot && <svg className="discord-bot-tag-check"', source)
+        self.assertIn(".discord-bot-tag {", styles)
+        self.assertIn(".discord-bot-tag-check {", styles)
+        # The tag rides inside the handle, so it never picks up the row's gap.
+        self.assertIn("{profile.bot && profile.discriminator && <span className=\"discord-profile-discriminator\">#{profile.discriminator}</span>}", source)
 
 
 if __name__ == "__main__":

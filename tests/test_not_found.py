@@ -3,12 +3,14 @@
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app, config, site_build  # noqa: E402
+from webapp.routes import public_routes  # noqa: E402
 
 SITE = "https://niko.sryze.cc"
 
@@ -99,6 +101,17 @@ def test_the_404_page_can_still_load_its_own_files(site):
 
         assert response.status_code == 200, path
         assert response.mimetype != "text/html", path
+
+
+def test_the_404_page_can_still_load_its_favicon(site):
+    # The favicon is drawn by a route rather than shipped as a file, so the
+    # unknown-host gate has to let /bot/ through or the page previews no icon.
+    with patch.object(public_routes, "_bot_avatar_url", return_value=""), \
+         patch.object(public_routes, "avatar_data_url", return_value=None):
+        response = app.test_client().get("/bot/favicon.svg", base_url="https://foo.niko.sryze.cc")
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/favicon.svg"
 
 
 def test_the_api_still_answers_on_an_unused_subdomain(site):

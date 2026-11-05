@@ -14,6 +14,28 @@ CMDS = command_texts(__package__)
 MAX_SLOWMODE_SECONDS = 21600
 
 
+async def set_everyone_send_messages(channel: discord.abc.GuildChannel,
+                                     guild: discord.Guild,
+                                     value: bool | None,
+                                     *, reason: str) -> None:
+    """Write the @everyone ``send_messages`` overwrite for a channel.
+
+    This goes through the channel *permission* endpoint (what
+    :meth:`~discord.abc.GuildChannel.set_permissions` calls), which Discord
+    covers with **Manage Roles**. Editing the channel itself instead would need
+    **Manage Channels**, and a bot that asks for Manage Channels just to lock a
+    channel is one of the most common reasons a bot review — top.gg's included —
+    is rejected. Keep the overwrite route here, never ``channel.edit(...)``.
+
+    ``value=None`` restores inheritance, which is what unlocking does; the rest
+    of the @everyone overwrite is preserved either way.
+    """
+    overwrite = channel.overwrites_for(guild.default_role)
+    overwrite.send_messages = value
+    await channel.set_permissions(
+        guild.default_role, overwrite=overwrite, reason=reason)
+
+
 class ChannelsMixin:
     """slowmode, lock, unlock commands."""
 
@@ -51,9 +73,8 @@ class ChannelsMixin:
         if channel is None:
             return await ctx.send(view=_cv2(msg(ctx, "cannot_manage_channel")))
         try:
-            overwrite = channel.overwrites_for(ctx.guild.default_role)
-            overwrite.send_messages = False
-            await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+            await set_everyone_send_messages(
+                channel, ctx.guild, False, reason=f"Locked by {ctx.author} ({ctx.author.id})")
         except discord.Forbidden:
             return await ctx.send(view=_cv2(msg(ctx, "cannot_manage_channel")))
         except discord.HTTPException as e:
@@ -71,9 +92,8 @@ class ChannelsMixin:
         if channel is None:
             return await ctx.send(view=_cv2(msg(ctx, "cannot_manage_channel")))
         try:
-            overwrite = channel.overwrites_for(ctx.guild.default_role)
-            overwrite.send_messages = None
-            await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+            await set_everyone_send_messages(
+                channel, ctx.guild, None, reason=f"Unlocked by {ctx.author} ({ctx.author.id})")
         except discord.Forbidden:
             return await ctx.send(view=_cv2(msg(ctx, "cannot_manage_channel")))
         except discord.HTTPException as e:

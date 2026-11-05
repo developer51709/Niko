@@ -85,7 +85,11 @@
     "act_not_banned": "Ese usuario no está baneado.",
     "act_unmute_failed": "No se pudo reactivar: {error}",
     "act_not_in_voice": "**{member}** no está en un canal de voz.",
-    "panel_footer": "-# **¿Necesitas ayuda?** Pregunta en el [servidor de soporte]({support}) o consulta la [documentación]({docs})"
+    "panel_footer": "-# **¿Necesitas ayuda?** Pregunta en el [servidor de soporte]({support}) o consulta la [documentación]({docs})",
+    "flag_explicit": "contenido explícito",
+    "flag_gore": "gore",
+    "flag_self_harm": "autolesión",
+    "flagged_media_note": "-# Esta imagen fue marcada por un filtro automático ({kind}) y no se pudo mostrar. [Más información]({link})"
   },
   "titles": {
     "Anti-Link": "Anti-enlaces",

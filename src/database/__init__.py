@@ -134,6 +134,7 @@ PRIMARY_KEYS: dict = {
     "donors": "user_id",
     "premium_users": "user_id",
     "prefix_config": "guild_id",
+    "guild_languages": "guild_id",
     "levels": ("guild_id", "user_id"),
     "level_config": "guild_id",
     "giveaways": "message_id",

@@ -32,6 +32,7 @@ but admin login intentionally remains unavailable.
 | POST | `/api/premium/webhook` | OxaPay white-label callback, verified with the HMAC-SHA512 merchant signature |
 | POST | `/api/donations/webhook` | OxaPay donation callback, verified the same way |
 | GET | `/bot/card.svg` | Live SVG profile card for the README; accepts `?theme=dark\|light` and `?accent=RRGGBB`, and is served `no-store` so every load shows current figures |
+| GET | `/bot/favicon.svg` | The website favicon: the bot's avatar on the app icon's rounded tile, inlined from a 128px CDN copy; redirects to the build's `/favicon.svg` when there is no avatar |
 
 `/api/commands` returns the registry the bot writes at startup. A command's
 `description`, and each entry in `parameters[].description`, is a

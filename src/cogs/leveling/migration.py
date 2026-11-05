@@ -36,7 +36,7 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from config.links import WEBSITE
+from config.links import DOCS, SUPPORT_SERVER, WEBSITE
 from utils import logging as log
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
@@ -362,15 +362,28 @@ class LevelMigration(commands.Cog):
         return guild.owner
 
     def _welcome_view(self, guild: discord.Guild, provider: str | None) -> discord.ui.LayoutView:
+        """The join DM: what Niko does here, and the shortest path to set it up.
+
+        The DM is the only message the inviter is guaranteed to read before they
+        close the tab, so it carries the wizard's name, what each major feature
+        needs from them, and both the dashboard and the docs. It stays well
+        inside Discord's 4,000-character component budget.
+        """
         view = discord.ui.LayoutView(timeout=DM_TIMEOUT_SECONDS)
         container = discord.ui.Container(
             discord.ui.Section(
                 discord.ui.TextDisplay(content=msg(guild, "title", guild=guild.name)),
-                discord.ui.TextDisplay(
-                    content=msg(guild, "settings", url=settings_url(guild.id))
-                ),
+                discord.ui.TextDisplay(content=msg(guild, "intro")),
                 accessory=discord.ui.Thumbnail(self.bot.user.display_avatar.url),
             ),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=msg(guild, "setup_title")),
+            discord.ui.TextDisplay(content=msg(guild, "setup_body")),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=msg(guild, "features_title")),
+            discord.ui.TextDisplay(content=msg(guild, "features")),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=msg(guild, "leveling_default")),
             accent_colour=discord.Colour(ACCENT_BRAND),
         )
 
@@ -383,6 +396,25 @@ class LevelMigration(commands.Cog):
                 _MigrateButton(self, guild, provider),
                 _DeclineButton(self, guild),
             ))
+
+        container.add_item(discord.ui.Separator(
+            visible=True, spacing=discord.SeparatorSpacing.small))
+        container.add_item(discord.ui.TextDisplay(
+            content=msg(guild, "settings", url=settings_url(guild.id))))
+        container.add_item(discord.ui.ActionRow(
+            discord.ui.Button(
+                label=msg(guild, "dashboard_button"),
+                style=discord.ButtonStyle.link,
+                url=settings_url(guild.id),
+            ),
+            discord.ui.Button(
+                label=msg(guild, "docs_button"),
+                style=discord.ButtonStyle.link,
+                url=DOCS,
+            ),
+        ))
+        container.add_item(discord.ui.TextDisplay(
+            content=msg(guild, "help", support=SUPPORT_SERVER, docs=DOCS)))
 
         view.add_item(container)
         return view

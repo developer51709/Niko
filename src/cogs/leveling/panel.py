@@ -57,6 +57,10 @@ msg = make_flat_msg(MESSAGES, {
 #  DEFAULTS
 # ───────────────────────────────────────────────────
 
+#: What a guild with no saved row reads as. It stays enabled so a server that
+#: was already earning XP before the opt-in default existed does not silently
+#: stop; a server invited after this change gets its own row on join (see
+#: ``Leveling.on_guild_join``) with :data:`NEW_GUILD_LEVEL_CONFIG`.
 DEFAULT_GUILD_LEVEL_CONFIG = {
     "xp_enabled":       True,
     "xp_multiplier":    1.0,
@@ -73,6 +77,11 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
     "card_bg_top":      None,   # RGB tuple or None for the default graphite
     "card_bg_bottom":   None,   # RGB tuple or None for default dark
 }
+
+#: Leveling is opt-in: a server that has just invited Niko starts with XP off so
+#: nobody collects levels before the admins have decided they want them. The
+#: ``/setup`` wizard or ``/leveling panel`` turns it on.
+NEW_GUILD_LEVEL_CONFIG = {**DEFAULT_GUILD_LEVEL_CONFIG, "xp_enabled": False}
 
 
 # ───────────────────────────────────────────────────

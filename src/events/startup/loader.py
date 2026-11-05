@@ -117,6 +117,15 @@ async def load_cogs(bot):
     except Exception as exc:
         logging.warning("Panel", f"Panel display settings not loaded: {exc}")
 
+    # Server language overrides are read before any cog answers, so the first
+    # reply in a server already uses the language that server picked.
+    try:
+        from utils import guild_language
+
+        await guild_language.load(bot)
+    except Exception as exc:
+        logging.warning("Language", f"Server languages not loaded: {exc}")
+
     for item in os.listdir("./src/cogs"):
         item_path = os.path.join("./src/cogs", item)
 

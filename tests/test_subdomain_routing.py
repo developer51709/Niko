@@ -289,6 +289,43 @@ def test_a_section_host_signs_in_without_leaving_the_site(subdomains, monkeypatc
     assert _redirect_uri_param(response) == "https://niko.sryze.cc/auth/callback"
 
 
+@pytest.mark.parametrize("client, hostname", [
+    ("", "discord.com"),
+    ("stable", "discord.com"),
+    ("canary", "canary.discord.com"),
+    ("PTB", "ptb.discord.com"),
+    ("nightly", "discord.com"),
+])
+def test_a_sign_in_can_choose_the_discord_build(monkeypatch, client, hostname):
+    """Canary and PTB keep their own sessions, so a second account can sign in."""
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    query = f"&client={client}" if client else ""
+    response = app.test_client().get(f"/auth/login?next=/dashboard{query}", base_url="https://niko.sryze.cc")
+    location = response.headers["Location"]
+
+    # Only the host changes: the client id, callback and state are the same
+    # request either way, so Discord still checks the registered callback.
+    assert location.startswith(f"https://{hostname}/oauth2/authorize?")
+    params = parse_qs(urlparse(location).query)
+    assert params["redirect_uri"][0] == "https://niko.sryze.cc/auth/callback"
+    assert params["response_type"] == ["code"]
+    assert params["state"]
+
+
+def test_a_resent_sign_in_keeps_the_chosen_build(subdomains, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
+    monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://niko.sryze.cc/auth/callback")
+    monkeypatch.setattr(config, "DISCORD_CLIENT_SECRET", "test-secret")
+
+    # A preview host hands the sign-in to the site that receives the callback;
+    # the build has to travel with it or the second leg would land on stable.
+    response = app.test_client().get("/auth/login?next=/dashboard&client=canary", base_url="https://preview.e2b.app")
+
+    assert response.headers["Location"] == "https://niko.sryze.cc/auth/login?next=%2Fdashboard&client=canary"
+
+
 def _state_param(response) -> str:
     return parse_qs(urlparse(response.headers["Location"]).query).get("state", [""])[0]
 

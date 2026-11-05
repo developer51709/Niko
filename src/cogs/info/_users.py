@@ -9,6 +9,7 @@ from ._badges import _get_badges, _get_discord_badges
 from ._messages import _divider, cv2_image, key_permission_names, msg
 
 from utils.command_locales import command_texts
+from utils.presence import is_mobile_presence
 
 CMDS = command_texts(__package__)
 
@@ -47,6 +48,10 @@ class UserMixin:
                 discord.Status.offline: ("status_offline", "Offline"),
             }
             sk, status_text = _status_map.get(target.status, ("status_offline", "Offline"))
+            # Only online, idle and DND have a phone-shaped counterpart, and a
+            # phone-only presence is the only case Discord swaps the dot for it.
+            if is_mobile_presence(target) and sk != "status_offline":
+                sk = f"{sk}_mobile"
             status_emoji = get_emoji(sk)
 
         # ── Badges ────────────────────────────────────────────────────────

@@ -546,6 +546,7 @@ class _PostPanelBtn(discord.ui.Button):
 class TicketSetupView(discord.ui.LayoutView):
     def __init__(self, guild_id: int, author: discord.Member, lang: str = "en"):
         super().__init__(timeout=None)
+        self.author_id = getattr(author, "id", None)
         title = MESSAGES.get(lang, {}).get("setup_title") \
                 or MESSAGES["en"]["setup_title"]
         desc = MESSAGES.get(lang, {}).get("setup_desc") \
@@ -565,6 +566,18 @@ class TicketSetupView(discord.ui.LayoutView):
             ),
         )
         self.add_item(container)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """`.ticket setup` posts this panel in the channel: only the admin who
+        opened it (or another server manager) may configure or post the panel."""
+        if interaction.user.id == self.author_id:
+            return True
+        permissions = getattr(interaction.user, "guild_permissions", None)
+        if permissions is not None and getattr(permissions, "manage_guild", False):
+            return True
+        await interaction.response.send_message(
+            msg(interaction, "panel_not_yours"), ephemeral=True)
+        return False
 
 
 # ───────────────────────────────────────────────────

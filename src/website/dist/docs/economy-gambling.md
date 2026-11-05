@@ -2,6 +2,11 @@
 
 Niko offers several gambling mini-games for members who want to try their luck.
 
+> **Whole-wallet bets**: wherever a bet is asked for, type `all` instead of a
+> number — `.slots play all`, `.blackjack play all`, `.coinflip all` — to wager
+> everything in your wallet at that moment. `all` works the same way for
+> `.pay <member> all`, which sends your whole balance.
+
 ## Available Games
 
 ### Slots

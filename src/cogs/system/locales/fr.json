@@ -56,31 +56,6 @@
     "error_title": "Erreur",
     "transformer_body": "Impossible de convertir `{value}` vers le type attendu."
   },
-  "nitro": {
-    "ai_disabled_global": "L'IA de Niko est actuellement désactivée par le propriétaire du bot.",
-    "ai_disabled_guild": "L'IA est désactivée sur ce serveur.",
-    "ask_title": "Niko dit…",
-    "ask_empty": "Je n'ai pas réussi à répondre à l'instant — réessaie dans un moment.",
-    "profile_level": "Niveau",
-    "profile_xp": "XP",
-    "profile_wallet": "Portefeuille",
-    "profile_bank": "Banque",
-    "profile_joined": "Arrivée",
-    "profile_account": "Compte",
-    "profile_unknown": "inconnu",
-    "vc_need_channel": "Rejoins un salon vocal ou précises-en un avec l'option `channel`.",
-    "vc_need_perms": "J'ai besoin de la permission **Gérer les salons** pour définir le statut vocal.",
-    "vc_set_title": "Statut vocal défini",
-    "vc_cleared_title": "Statut vocal effacé",
-    "forward_invalid_id": "ID de message invalide.",
-    "forward_title": "Message transféré",
-    "forward_failed": "Impossible de transférer ce message. Vérifie que j'ai la permission d'écrire dans le salon de destination et que le message existe.",
-    "sticker_none": "Ce serveur n'a encore aucun sticker personnalisé.",
-    "sticker_title": "Stickers du serveur — {server}",
-    "sticker_not_found": "Aucun sticker nommé **{name}** trouvé. Utilise `/sticker list`.",
-    "stage_not_in_stage": "Niko doit d'abord être dans un salon de conférence.",
-    "stage_speaker": "Niko est maintenant intervenant sur la conférence ! ☕"
-  },
   "boosters": {
     "guild_only": "Cette commande ne peut être utilisée que dans un serveur.",
     "settings_failed": "Je n'ai pas pu charger les réglages de boosteurs de ce serveur. Réessaie plus tard.",
@@ -123,10 +98,6 @@
     "help": "-# 📌 **Besoin d'aide ?**\n-# Demande dans le [serveur de support]({support}) ou consulte la [documentation]({docs})"
   },
   "commands": {
-    "☕ Ask Niko.name": "☕ Demander à Niko",
-    "☕ Ask Niko.description": "Demander à Niko de répondre à ce message",
-    "📊 User Profile.name": "📊 Profil utilisateur",
-    "📊 User Profile.description": "Afficher une carte de profil rapide pour cet utilisateur",
     "boosterrole.clear-icon.description": "Retirer l'icône personnalisée de ton rôle de boosteur.",
     "boosterrole.color.args.hex_color": "Une couleur à six chiffres comme #e88cba",
     "boosterrole.color.description": "Définir une couleur unie pour ton rôle de boosteur.",
@@ -141,19 +112,6 @@
     "boosterrole.share.args.member": "Le membre qui doit recevoir ton rôle",
     "boosterrole.share.description": "Donner ton rôle de boosteur à un autre membre.",
     "boosterrole.unshare.args.member": "Le membre qui doit perdre ton rôle",
-    "boosterrole.unshare.description": "Retirer ton rôle de boosteur à un autre membre.",
-    "forward.args.destination": "Salon vers lequel transférer",
-    "forward.args.message_id": "ID du message à transférer",
-    "forward.args.source": "Salon où se trouve le message (celui-ci par défaut)",
-    "forward.description": "Transférer un message (par ID) vers un autre salon.",
-    "stage.description": "Contrôles des salons de conférence.",
-    "stage.speak.description": "Faire de Niko un intervenant sur le salon de conférence actuel.",
-    "sticker.description": "Gérer et envoyer les stickers du serveur.",
-    "sticker.list.description": "Lister tous les stickers de ce serveur.",
-    "sticker.send.args.name": "Nom du sticker à envoyer",
-    "sticker.send.description": "Envoyer un sticker du serveur dans ce salon.",
-    "vcstatus.args.channel": "Salon vocal à mettre à jour (celui où tu es par défaut)",
-    "vcstatus.args.status": "Texte à afficher (laisse vide pour effacer)",
-    "vcstatus.description": "Définir ou effacer le texte de statut affiché dans un salon vocal."
+    "boosterrole.unshare.description": "Retirer ton rôle de boosteur à un autre membre."
   }
 }

@@ -21,10 +21,14 @@ from xml.etree import ElementTree
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import bot_card  # noqa: E402
+from webapp import config  # noqa: E402
+from webapp import social_preview  # noqa: E402
 from webapp.routes import public_routes  # noqa: E402
 from webapp.server import app  # noqa: E402
 
+ROOT = Path(__file__).resolve().parents[1]
 AVATAR = "https://cdn.discordapp.com/avatars/1/avatar.png"
+AVATAR_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="
 
 
 def profile(**overrides):
@@ -210,6 +214,66 @@ class BotCardRouteTests(unittest.TestCase):
         outside = clip.split("</g>", 1)[1]
         self.assertNotIn("fill=\"url(#niko-banner-bg)\"", outside)
         self.assertLess(outside.count("<rect"), 2)
+
+
+class BotFaviconTests(unittest.TestCase):
+    """The tab icon: the bot's face on the app icon's rounded tile."""
+
+    def get(self, avatar=AVATAR, data_url=AVATAR_DATA_URL):
+        with patch.object(public_routes, "_bot_avatar_url", return_value=avatar), \
+             patch.object(public_routes, "avatar_data_url", return_value=data_url) as inline:
+            return app.test_client().get("/bot/favicon.svg"), inline
+
+    def test_the_favicon_is_the_avatar_on_a_rounded_tile(self):
+        response, _ = self.get()
+        body = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/svg+xml")
+        # A favicon is its own document: it has to parse without the page.
+        ElementTree.fromstring(body)
+        self.assertIn('<clipPath id="niko-favicon">', body)
+        self.assertIn(f'rx="{bot_card.FAVICON_RADIUS}"', body)
+        self.assertIn(AVATAR_DATA_URL, body)
+        self.assertIn("max-age", response.headers["Cache-Control"])
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+
+    def test_the_browser_is_asked_for_a_tab_sized_copy(self):
+        _, inline = self.get()
+        self.assertEqual(inline.call_args.args[0], f"{AVATAR}?size={public_routes._FAVICON_AVATAR_SIZE}")
+
+    def test_without_an_avatar_the_builds_own_icon_is_served(self):
+        response, _ = self.get(avatar="", data_url=None)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/favicon.svg")
+
+    def test_only_the_discord_cdn_gets_a_size_parameter(self):
+        self.assertEqual(public_routes._favicon_avatar_url(f"{AVATAR}?size=1024"), f"{AVATAR}?size=128")
+        # The media proxy resizes by width/height, and other hosts are refused
+        # when the image is inlined, so both are left exactly as they came.
+        self.assertEqual(
+            public_routes._favicon_avatar_url("https://media.discordapp.net/a.png?width=64"),
+            "https://media.discordapp.net/a.png?width=64",
+        )
+        self.assertEqual(public_routes._favicon_avatar_url("https://example.com/a.png"), "https://example.com/a.png")
+        self.assertIsNone(public_routes._favicon_avatar_url(""))
+
+    def test_the_favicon_is_cut_out_rather_than_painted(self):
+        """A rounded fill over a square image still shows square corners."""
+        body = self.get()[0].get_data(as_text=True)
+        self.assertIn('clip-path="url(#niko-favicon)"', body)
+        self.assertIn('preserveAspectRatio="xMidYMid slice"', body)
+
+    def test_every_page_and_the_shell_link_the_route(self):
+        head = social_preview.render_head(config.WEB_DIST_DIR, "/", "https://discord.gg/example")
+        shell = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('href="/bot/favicon.svg"', head)
+        self.assertIn('href="/bot/favicon.svg"', shell)
+        # The generated letter mark must not be offered as an alternative icon,
+        # or a browser that prefers the PNG shows it instead.
+        self.assertNotIn("favicon-32.png", shell)
 
 
 if __name__ == "__main__":

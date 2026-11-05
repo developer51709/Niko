@@ -19,12 +19,25 @@ This module stages files from beta and then applies them area by area:
              reloaded, so the new file is what imports — no restart.
 ``utils``    the changed ``utils.*`` modules are dropped, every loaded extension
              is reloaded on top of them, and the dashboard is rebuilt.
+``database`` ``src/events/startup/database.py`` only: re-imported and its
+             ``init_database`` run again, which creates missing tables, adds
+             missing columns and repeats the idempotent migrations on the live
+             pool, so code applied later in the same run can use them. The
+             process keeps running.
 ``webapp``   every ``webapp.*`` module is re-imported and the new Flask app is
              swapped into the running server, so the API keeps its socket and
              its thread while the routes change underneath it.
+``events``   the gateway event modules (``src/events/on_*.py``) are re-imported and
+             the name ``bot.py``'s callbacks look up is rebound, so the next
+             message runs the new handler. Nothing restarts; the startup chain
+             under ``src/events/startup/`` is not part of this area, because it
+             runs once and reloading it would change nothing.
 ``bot``      ``src/bot.py`` and the startup chain: the only area Python cannot
-             reload into the same process, so it is handed to a successor (see
-             :mod:`utils.handoff`) while the gateway stays connected.
+             reload into the same process, so the process replaces its own image
+             with ``execve``, keeping its PID and its listening socket (see
+             :mod:`utils.handoff`). The port is never closed and a supervisor
+             never sees an exit, which is what keeps a hosted deployment from
+             recreating the instance and discarding the files just written.
 
 Every area is optional and applied in the order above, so selecting a cog fix
 and a website tweak does not touch the process at all.
@@ -32,7 +45,11 @@ and a website tweak does not touch the process at all.
 Safety:
 
 - Files are hashed against beta's manifest before they are written, and a bad
-  download leaves the previous file in place.
+  download leaves the previous file in place. A Python file that does not
+  compile is refused the same way.
+- The bot core is imported in a throwaway interpreter before the process is
+  restarted on it, so an update that cannot load is rolled back while the
+  running process is still serving.
 - Whatever is replaced is copied to ``data/updates/backups/<run>/`` first, and a
   failed reload restores that area's files from it.
 - Without ``BETA_INSTANCE_URL`` and ``BETA_UPDATE_TOKEN`` the page reports the
@@ -47,6 +64,7 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -80,13 +98,35 @@ AREAS: dict[str, dict] = {
     "cogs": {"label": "Cog extensions", "paths": ("src/cogs/",)},
     "utils": {"label": "Utilities", "paths": ("src/utils/",)},
     "webapp": {"label": "API & dashboard", "paths": ("src/webapp/",)},
+    "database": {
+        "label": "Database schema",
+        # The one file in the startup chain whose work can be repeated: its
+        # ``init_database`` creates tables with ``IF NOT EXISTS`` and adds only
+        # missing columns, so importing the new file and running it again applies
+        # a new table, column or backfill to the live pool. The rest of
+        # ``src/events/startup/`` only runs once and stays with the bot core.
+        "paths": ("src/events/startup/database.py",),
+    },
+    "events": {
+        "label": "Gateway events",
+        # ``bot.py`` imports these at start-up and calls them from the callbacks
+        # it registered, so they can be re-imported and the callback's global
+        # rebound without touching the process. The startup chain under
+        # ``src/events/startup/`` runs once and is not here: it belongs to the
+        # bot core, because reloading it would change nothing until a restart.
+        "paths": ("src/events/",),
+        "except_paths": ("src/events/startup/",),
+    },
     "bot": {
         "label": "Bot core",
-        "paths": ("src/bot.py", "src/api_server.py", "src/events/", "src/database/"),
+        "paths": ("src/bot.py", "src/api_server.py", "src/events/startup/", "src/database/"),
+        "except_paths": ("src/events/startup/database.py",),
     },
 }
 
-AREA_ORDER = ("support", "website", "cogs", "utils", "webapp", "bot")
+#: Apply order. The schema runs after the utilities it imports and before the
+#: code that reads the tables it creates.
+AREA_ORDER = ("support", "website", "cogs", "utils", "database", "webapp", "events", "bot")
 
 #: Files that never travel: bytecode, editor state, and the update's own data.
 SKIPPED_PARTS = {"__pycache__", ".pytest_cache", ".git", "node_modules"}
@@ -159,12 +199,22 @@ def area_for_path(relative: str) -> str | None:
     if not relative or relative.startswith("/") or ".." in Path(relative).parts:
         return None
     for name in AREA_ORDER:
+        matched = False
         for prefix in AREAS[name]["paths"]:
             if prefix.endswith("/"):
                 if relative.startswith(prefix):
-                    return name
+                    matched = True
+                    break
             elif relative == prefix:
-                return name
+                matched = True
+                break
+        if not matched:
+            continue
+        # An area can hand part of its tree to another one: the gateway events
+        # live in ``src/events/`` but their startup chain is bot-core only.
+        if any(relative.startswith(prefix) for prefix in AREAS[name].get("except_paths", ())):
+            continue
+        return name
     return None
 
 
@@ -189,7 +239,9 @@ def _files(area: str, root: Path = ROOT) -> list[str]:
             if not path.is_file():
                 continue
             relative = str(path.relative_to(root))
-            if not _ignored(relative):
+            # Ownership, not the prefix, decides: an area with an ``except_paths``
+            # must not list a file another area owns.
+            if not _ignored(relative) and area_for_path(relative) == area:
                 found.append(relative)
     return sorted(set(found))
 
@@ -280,7 +332,24 @@ def plan(areas=None) -> dict:
     total_changed = 0
     total_bytes = 0
     for name in chosen:
-        remote = (document.get("areas", {}).get(name) or {}).get("files") or {}
+        published = document.get("areas", {}).get(name)
+        if published is None:
+            # Beta does not publish this area at all — an older build, or a
+            # feature it does not have yet. That is *not* "every file here was
+            # deleted": reading it that way offered to remove this deployment's
+            # ``src/events/on_*.py`` and then failed to re-import the modules it
+            # had just deleted (ModuleNotFoundError: No module named
+            # 'events.on_message').
+            result[name] = {
+                "label": AREAS[name]["label"],
+                "changed": 0,
+                "bytes": 0,
+                "files": [],
+                "truncated": 0,
+                "available": False,
+            }
+            continue
+        remote = (published or {}).get("files") or {}
         # An additive area only ever adds: beta's copy of a file this deployment
         # already has is a difference in configuration, not in code.
         additive = bool(AREAS[name].get("additive"))
@@ -317,6 +386,7 @@ def plan(areas=None) -> dict:
             "bytes": size,
             "files": changes[:60],
             "truncated": max(0, count - 60),
+            "available": True,
         }
 
     return {
@@ -363,6 +433,22 @@ def _write(relative: str, body: bytes) -> None:
     os.replace(temporary, path)
 
 
+def _python_check(relative: str, body: bytes) -> None:
+    """Refuse a Python file that cannot compile, before it reaches the disk.
+
+    A reloaded module with a syntax error is caught by its area's rollback, but
+    the bot core has nothing to roll back to once the process has restarted: the
+    file would be live and the next boot would die before it could serve. Checking
+    the bytes first turns that into an ordinary failed download.
+    """
+    if Path(relative).suffix != ".py":
+        return
+    try:
+        compile(body, relative, "exec")
+    except SyntaxError as exc:
+        raise ValueError(f"{relative} has a syntax error: {exc.msg} (line {exc.lineno})") from exc
+
+
 def _drop_bytecode(relative: str) -> None:
     """Forget the compiled copy of a file that is about to be replaced.
 
@@ -374,7 +460,10 @@ def _drop_bytecode(relative: str) -> None:
     which is exactly the "the update only shows up after a restart" report. The
     source is what has to be compiled next, so the compiled copy goes.
     """
-    path = ROOT / relative
+    _drop_bytecode_path(ROOT / relative)
+
+
+def _drop_bytecode_path(path: Path) -> None:
     if path.suffix != ".py":
         return
     try:
@@ -406,12 +495,128 @@ def _stage_area(name: str, changes: list[dict], run_id: str) -> dict:
                     path.unlink()
                     removed += 1
                 continue
-            _write(relative, _download(relative, change["sha"]))
+            body = _download(relative, change["sha"])
+            _python_check(relative, body)
+            _write(relative, body)
             written += 1
     except Exception:
         _restore_area(name, changes, run_id)
         raise
     return {"written": written, "removed": removed, "backup": str(_backup_path(run_id, ".").parent)}
+
+
+#: Environment markers that describe *this* image, so a fresh child must start
+#: without them: the socket descriptor, and the ``NIKO_HANDOFF_*`` variables the
+#: predecessor's handoff set (stripped for a process that has not reloaded it).
+PROCESS_ENV_MARKERS = ("NIKO_RESTART_FD", "NIKO_HANDOFF_")
+#: Set in the probe child so ``src/bot.py`` stops right after its imports.
+PROBE_ENV = "NIKO_IMPORT_PROBE"
+#: Module the restart runs from. Reloaded from disk before it is used.
+HANDOFF_MODULE = "utils.handoff"
+
+
+def _set_package_attribute(name: str, module) -> None:
+    """Re-attach a module to its parent package after :func:`_purge` dropped it."""
+    parent_name, _, child = name.rpartition(".")
+    parent = sys.modules.get(parent_name) if parent_name else None
+    if parent is not None and module is not None:
+        setattr(parent, child, module)
+
+
+def _inplace_handoff():
+    """The handoff module the restart will run, loaded from the file on disk.
+
+    A process that has been up since before the in-place restart still holds the
+    predecessor's ``utils.handoff`` in memory: its ``schedule`` takes a bot and
+    hands the port to a successor, which is the arrangement that closes the
+    dashboard. The file on disk is imported before anything is probed, so the
+    restart runs the code the update is actually shipping, and a copy that still
+    cannot restart in place is refused with something the owner can act on instead
+    of an ``AttributeError``.
+    """
+    previous = sys.modules.get(HANDOFF_MODULE)
+    source = getattr(previous, "__file__", None)
+    if source:
+        _drop_bytecode_path(Path(source))
+    _purge([HANDOFF_MODULE])
+    importlib.invalidate_caches()
+    try:
+        # ``import_module``, not ``from utils import handoff``: the package
+        # attribute can still point at the copy that was in memory before the
+        # purge, and reading it would silently keep the stale module.
+        handoff = importlib.import_module(HANDOFF_MODULE)
+    except Exception:
+        if previous is not None:
+            sys.modules[HANDOFF_MODULE] = previous
+            _set_package_attribute(HANDOFF_MODULE, previous)
+        raise
+    if not getattr(handoff, "INHERITED_FD_ENV", None) or not callable(getattr(handoff, "adopt", None)):
+        if previous is not None:
+            sys.modules[HANDOFF_MODULE] = previous
+            _set_package_attribute(HANDOFF_MODULE, previous)
+        raise RuntimeError(
+            "This process is still running the previous successor handoff, and "
+            "utils/handoff.py on disk is that copy too. The bot core restarts in place "
+            "only with the current handoff: apply the Utilities area first (ticking it "
+            "together with the bot core in one run is fine), then retry."
+        )
+    return handoff
+
+
+def _serving(api_server) -> bool:
+    """Whether this process holds the dashboard's listening socket.
+
+    ``serving()`` is the current API. A process that booted before it existed
+    still has ``listening_socket_fd``, which is the same fact and what the restart
+    actually needs.
+    """
+    check = getattr(api_server, "serving", None)
+    if callable(check):
+        return bool(check())
+    try:
+        fd = api_server.listening_socket_fd()
+    except Exception:
+        return False
+    os.close(fd)
+    return True
+
+
+def _probe_bot() -> None:
+    """Import the bot core the update just wrote, in a throwaway interpreter.
+
+    The bot area is the one area without a fallback: it replaces the process
+    image, so a startup chain that cannot import takes the dashboard's port with
+    it. This runs ``src/bot.py`` in a child that stops right after its imports
+    (see ``NIKO_IMPORT_PROBE`` there) and raises if it cannot get that far, which
+    rolls the area back while the old process is still serving.
+
+    The child never inherits this process's restart markers — ``NIKO_RESTART_FD``
+    above all, or it would adopt the socket this process is answering on. They are
+    matched by prefix rather than read from ``utils.handoff``: a process that has
+    not reloaded that module yet still holds the predecessor's copy, which names
+    its variables differently (``NIKO_HANDOFF_*``) and has no
+    ``INHERITED_FD_ENV`` at all, and that staleness must not fail the update.
+    """
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith(PROCESS_ENV_MARKERS)
+    }
+    environment[PROBE_ENV] = "1"
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "src" / "bot.py")],
+            cwd=str(ROOT),
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("The new bot core did not finish importing within 90 seconds.") from exc
+    if result.returncode != 0:
+        detail = [line for line in (result.stderr or result.stdout or "").strip().splitlines() if line.strip()]
+        raise RuntimeError(f"The new bot core cannot import: {detail[-1] if detail else f'exit {result.returncode}'}")
 
 
 def _restore_area(name: str, changes: list[dict], run_id: str) -> None:
@@ -420,6 +625,10 @@ def _restore_area(name: str, changes: list[dict], run_id: str) -> None:
         backup = _backup_path(run_id, relative)
         path = ROOT / relative
         try:
+            # ``copy2`` keeps the backup's timestamp, which is exactly what makes
+            # a stale ``.pyc`` look current: the restored module would then be
+            # imported from the cancelled update's bytecode.
+            _drop_bytecode(relative)
             if backup.is_file():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(backup, path)
@@ -432,6 +641,27 @@ def _restore_area(name: str, changes: list[dict], run_id: str) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # Reloading
 # ──────────────────────────────────────────────────────────────────────────────
+def _forget_package_attribute(name: str, module) -> None:
+    """Drop the attribute a purged module leaves on its parent package.
+
+    ``from utils import maintenance`` does not consult ``sys.modules``: it reads
+    the ``maintenance`` attribute of the ``utils`` package and only imports the
+    file when that attribute is missing. Dropping the module alone therefore
+    left the attribute in place, so a rebuilt route kept the *old* module — which
+    is how a pulled update to ``utils.maintenance`` could keep answering with
+    the previous snapshot until the process was restarted.
+    """
+    parent_name, _, child = name.rpartition(".")
+    if not parent_name or module is None:
+        return
+    parent = sys.modules.get(parent_name)
+    if parent is not None and getattr(parent, child, None) is module:
+        try:
+            delattr(parent, child)
+        except AttributeError:
+            pass
+
+
 def _purge(prefixes) -> list[str]:
     """Drop cached imports so the next import reads the file on disk."""
     dropped = []
@@ -440,7 +670,8 @@ def _purge(prefixes) -> list[str]:
             continue
         for prefix in prefixes:
             if name == prefix or name.startswith(prefix + "."):
-                sys.modules.pop(name, None)
+                module = sys.modules.pop(name, None)
+                _forget_package_attribute(name, module)
                 dropped.append(name)
                 break
     importlib.invalidate_caches()
@@ -459,11 +690,11 @@ def _extensions_for(files) -> set[str]:
     return found
 
 
-def _run(coroutine):
+def _run(coroutine, timeout: float = 60):
     """Run one coroutine on the bot loop from this worker thread."""
     from .runtime import run_on_bot_loop
 
-    return run_on_bot_loop(coroutine, timeout=60)
+    return run_on_bot_loop(coroutine, timeout=timeout)
 
 
 def reload_cogs(bot, extensions) -> dict:
@@ -504,6 +735,191 @@ def reload_extensions(bot, names=None) -> dict:
         except Exception as exc:
             failed.append(f"{name}: {type(exc).__name__}: {exc}")
     return {"reloaded": reloaded, "failed": failed}
+
+
+def _event_modules(files) -> list[str]:
+    """``src/events/on_message.py`` → ``events.on_message``.
+
+    Only the modules that sit directly in the package: ``bot.py`` imports those
+    and calls them per event. ``events.startup`` is the oneshot startup chain and
+    is applied by the bot core instead.
+    """
+    names = set()
+    for relative in files or ():
+        if not isinstance(relative, str):
+            continue
+        parts = Path(relative).parts
+        if len(parts) == 3 and parts[:2] == ("src", "events") and parts[2].endswith(".py"):
+            module = parts[2][:-3]
+            if module != "__init__":
+                names.add(f"events.{module}")
+    return sorted(names)
+
+
+#: The startup module that owns the schema. Applied live by re-running it.
+SCHEMA_MODULE = "events.startup.database"
+
+
+def _module_source(name: str) -> Path:
+    return ROOT / "src" / Path(*name.split(".")).with_suffix(".py")
+
+
+def _import_schema_module():
+    """Re-import ``events.startup.database``, leaving the old module on failure."""
+    previous = sys.modules.get(SCHEMA_MODULE)
+    source = getattr(previous, "__file__", None)
+    if source:
+        _drop_bytecode_path(Path(source))
+    _purge([SCHEMA_MODULE])
+    try:
+        module = importlib.import_module(SCHEMA_MODULE)
+        init = getattr(module, "init_database", None)
+        if not callable(init):
+            raise RuntimeError("The new database module has no init_database().")
+    except Exception:
+        # The process must keep the module it was running, so the update can roll
+        # the file back onto working code.
+        if previous is not None:
+            sys.modules[SCHEMA_MODULE] = previous
+        raise
+    importlib.invalidate_caches()
+    # ``events.startup`` re-exports it: refresh that binding too, or a ready-time
+    # caller would still hold the old function.
+    package = sys.modules.get("events.startup")
+    if package is not None:
+        package.init_database = init
+    return module, init
+
+
+def reload_database(bot) -> dict:
+    """Re-import the schema module and run its setup against the live pool.
+
+    ``init_database`` is written to be run again: tables are created with ``IF
+    NOT EXISTS``, column migrations add only what is missing, and a pool is only
+    opened when there is none. Importing the new file and calling it is therefore
+    what makes a new table, a new column or a backfill live — the same function a
+    restart would run, without the restart. The music and error-report databases
+    are untouched because their own ``init`` returns early once ready.
+
+    The rest of the startup chain is still bot-core: it has no live entry point,
+    so reloading it would report an apply that changed nothing.
+    """
+    if bot is None:
+        raise RuntimeError("The bot is not running.")
+    if not _module_source(SCHEMA_MODULE).exists():
+        # A build that deleted it would break the next boot (bot.py imports it).
+        raise RuntimeError(
+            "src/events/startup/database.py was removed on beta; this deployment still imports it."
+        )
+    _module, init = _import_schema_module()
+    # Migrations touch every guild's rows, so this is given more room than a
+    # command-path call: a big database can take longer than a minute.
+    _run(init(bot), timeout=180)
+    return {}
+
+
+def _rebind_event_handlers(previous: dict, fresh: dict) -> list[str]:
+    """Point the running callbacks at the functions the new files define.
+
+    ``bot.py`` registers its Discord callbacks as closures over module-level
+    names, and the closure reads that name from ``bot.py``'s globals on every
+    dispatch. Re-importing ``events.on_message`` therefore only takes effect when
+    the global it calls is replaced — which is what this does, without touching
+    the gateway, the cogs or the dashboard. Any callable a host module imported
+    from a reloaded event module is refreshed, not just the two entry points, so
+    a new ``events/on_*.py`` helper is covered by the same rule.
+    """
+    owners = {}
+    for module in previous.values():
+        if module is None:
+            continue
+        for attribute, value in vars(module).items():
+            if callable(value) and getattr(value, "__module__", None) == module.__name__:
+                owners[id(value)] = (module.__name__, attribute)
+    if not owners:
+        return []
+    rebound = []
+    # ``python src/bot.py`` runs the entry point as ``__main__``; the module name
+    # is used by tests and embedders that import it.
+    for host_name in ("__main__", "bot"):
+        host = sys.modules.get(host_name)
+        if host is None:
+            continue
+        for attribute, value in list(vars(host).items()):
+            owner = owners.get(id(value))
+            if owner is None:
+                continue
+            module_name, source = owner
+            module = fresh.get(module_name)
+            if module is None:
+                continue
+            replacement = getattr(module, source, None)
+            if replacement is None or replacement is value:
+                continue
+            setattr(host, attribute, replacement)
+            rebound.append(f"{module_name}.{source}")
+    return rebound
+
+
+def reload_events(files=None) -> dict:
+    """Re-import the gateway event modules and rebind the callbacks onto them.
+
+    ``files`` is the area's changed paths, or ``None`` to re-import every event
+    module this process already holds (the rollback path). The modules are purged
+    only, never the process: an in-flight handler keeps its own frame and module
+    dictionary, and the next event is dispatched through the rebound name.
+
+    Module-level state in an event module starts again at its initial value
+    (``on_message``'s per-channel locks and AI semaphore), which is why those
+    values are limits rather than counters.
+    """
+    if files is None:
+        names = sorted(
+            name
+            for name in sys.modules
+            if isinstance(name, str)
+            and name.startswith("events.")
+            and not name.startswith("events.startup")
+        )
+    else:
+        names = _event_modules(files)
+    if not names:
+        return {"reloaded": [], "rebound": [], "failed": []}
+
+    # A file beta removed cannot be imported, and a module ``bot.py`` imports at
+    # boot cannot be unloaded: keep the loaded handler and say why. (This is the
+    # pathological case; an area beta simply does not publish is handled in
+    # :func:`plan`, which never offers the files as deletions.)
+    removed = [name for name in names if not _module_source(name).exists()]
+    failed = [f"{name}: the file was removed on beta; the loaded module stays until the next restart" for name in removed]
+    names = [name for name in names if name not in removed]
+    if not names:
+        return {"reloaded": [], "rebound": [], "failed": failed}
+
+    previous = {name: sys.modules.get(name) for name in names}
+    # A rewritten event file can arrive with the same size and timestamp as the
+    # one it replaces, and then the import below would run the previous build's
+    # compiled copy. Staging already drops it; this keeps the reload correct on
+    # its own and covers the rollback path, which restores files without staging.
+    for module in previous.values():
+        source = getattr(module, "__file__", None)
+        if source:
+            _drop_bytecode_path(Path(source))
+    _purge(names)
+    fresh, reloaded = {}, []
+    for name in names:
+        try:
+            fresh[name] = importlib.import_module(name)
+            reloaded.append(name)
+        except Exception as exc:
+            failed.append(f"{name}: {type(exc).__name__}: {exc}")
+            # Keep running the code this process already has: a file that does
+            # not import must not leave the gateway without its handler.
+            old = previous.get(name)
+            if old is not None:
+                sys.modules[name] = old
+    importlib.invalidate_caches()
+    return {"reloaded": reloaded, "rebound": _rebind_event_handlers(previous, fresh), "failed": failed}
 
 
 #: What the feed owns rather than defines: carried across a reload so an update
@@ -756,12 +1172,35 @@ def apply(areas, bot=None) -> dict:
                     # a bot that is still connecting — or absent entirely.
                     outcome["dashboard"] = reload_webapp(bot)
                     outcome["strategy"] = "rebuilt the dashboard app"
+                elif name == "database":
+                    # Import the new schema module and run it against the live
+                    # pool: tables are created with IF NOT EXISTS and migrations
+                    # only add what is missing, so re-running is how a change
+                    # takes effect without a restart.
+                    outcome.update(reload_database(bot))
+                    outcome["strategy"] = "re-ran the database schema setup"
+                elif name == "events":
+                    outcome.update(_reload_summary(reload_events(
+                        [change["path"] for change in current["areas"][name]["files"]]
+                    )))
+                    outcome["strategy"] = "re-imported the gateway event handlers"
                 elif name == "website":
                     outcome["strategy"] = "served from disk on the next request"
                 elif name == "bot":
-                    # The successor process imports everything afresh; the files
-                    # are already in place before it starts.
-                    outcome["strategy"] = "handing the process over"
+                    # Resolve the restart code first: it lives in the utils area,
+                    # and this process may still be holding the predecessor's.
+                    _inplace_handoff()
+                    # The files are in place; prove they import before this
+                    # process gives up the code that is currently serving.
+                    _probe_bot()
+                    import api_server
+
+                    if not _serving(api_server):
+                        # Restarting onto a process that is not serving would
+                        # trade the old bot for a site with no socket: refuse
+                        # instead, so the area rolls back and says why.
+                        raise RuntimeError("The dashboard is not serving; a bot-core restart would leave the site down.")
+                    outcome["strategy"] = "restarting this process in place"
                     handoff_needed = True
             except Exception as exc:
                 _restore_area(name, current["areas"][name]["files"], run_id)
@@ -786,7 +1225,7 @@ def apply(areas, bot=None) -> dict:
     if handoff_needed:
         from utils import handoff
 
-        handoff.schedule(bot)
+        handoff.schedule()
 
     result = {**current, "ok": all(item.get("ok", True) for item in results.values()), "run": run_id, "areas": results, "last": last_run()}
     # Last, and only when this run replaced API code: the rebuilt modules read
@@ -802,6 +1241,8 @@ def _reload_summary(result: dict) -> dict:
     summary = {}
     if result.get("reloaded"):
         summary["reloaded"] = result["reloaded"]
+    if result.get("rebound"):
+        summary["rebound"] = result["rebound"]
     if result.get("loaded"):
         summary["loaded"] = result["loaded"]
     if result.get("unloaded"):
@@ -830,6 +1271,14 @@ def _rebuild_after_rollback(name: str, bot) -> None:
     try:
         if name in {"utils", "webapp"} and bot is not None:
             reload_webapp(bot)
+        elif name == "events":
+            # Re-import from the files the rollback just restored and put the
+            # callbacks back on the code they were running.
+            reload_events(None)
+        elif name == "database":
+            # The schema work already ran and is idempotent; put the module back
+            # on the code the files were restored to.
+            _import_schema_module()
         elif name == "cogs" and bot is not None:
             for extension in list(getattr(bot, "extensions", {}) or {}):
                 if extension.startswith("cogs."):

@@ -1308,12 +1308,28 @@ class _WLRemoveRoleBtn(discord.ui.Button):
 #  PANEL BUILDER
 # ──────────────────────────────────────────────────
 
+class _SettingsPanelView(discord.ui.LayoutView):
+    """The panel itself, refused to everyone without Manage Server.
+
+    The panel is posted in the channel, so without this any member who can see
+    it could press a toggle. Every control already checks ``_may_manage`` in its
+    own callback; this is the view-level gate that also covers a control added
+    later, and the one that answers with the translated notice.
+    """
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if _may_manage(interaction):
+            return True
+        await _deny(interaction)
+        return False
+
+
 def _build_panel(self, guild_id: int, section: str = "overview", guild: discord.Guild = None) -> discord.ui.LayoutView:
     utils = self.utils()
     cfg = utils.get_guild_config(guild_id)
     lang = get_lang(guild)
 
-    view = discord.ui.LayoutView(timeout=300)
+    view = _SettingsPanelView(timeout=300)
     text = _section_text(cfg, section, guild, lang)
     container = discord.ui.Container(
         discord.ui.TextDisplay(content=text),

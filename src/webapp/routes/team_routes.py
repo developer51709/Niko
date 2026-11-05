@@ -116,6 +116,216 @@ def api_staff_error_reports():
         return jsonify({"error": "Error reports are temporarily unavailable."}), 503
 
 
+#: Deleting a report destroys the only copy of a traceback, so it sits above
+#: the staff roles that may change a report's review state.
+_REPORT_DELETE_ROLES = {"owner", "head_admin"}
+
+
+@app.route("/api/staff/error-reports/<code>", methods=["POST"])
+@require_auth
+@require_csrf
+def api_staff_error_report_status(code):
+    """Move a report to another review state. Any staff member may triage."""
+    role = _current_staff_role()
+    if not role:
+        return jsonify({"error": "This area is restricted to Niko staff."}), 403
+    if _discord_bot is None:
+        return jsonify({"error": "The Discord bot is not available."}), 503
+    try:
+        from utils.error_reports import REPORT_STATUSES, set_error_report_status
+    except Exception:
+        return jsonify({"error": "Error reports are temporarily unavailable."}), 503
+    body = request.get_json(silent=True) or {}
+    status = str(body.get("status") or "").strip().lower()
+    if status not in REPORT_STATUSES:
+        return jsonify({"error": "Choose one of the report review states."}), 400
+    user = session.get("user") or {}
+    try:
+        report = run_on_bot_loop(set_error_report_status(
+            code, status, user.get("id"),
+            user.get("global_name") or user.get("username"),
+            _discord_bot,
+        ))
+    except Exception:
+        return jsonify({"error": "Error reports are temporarily unavailable."}), 503
+    if not report:
+        return jsonify({"error": "That error report no longer exists."}), 404
+    return jsonify({"report": report})
+
+
+@app.route("/api/staff/error-reports/<code>/incident", methods=["POST"])
+@require_auth
+@require_csrf
+def api_staff_error_report_incident(code):
+    """Owner-only: publish a public incident and/or pause its affected target.
+
+    A report is private by default.  Publishing is therefore an explicit owner
+    decision, and enabling maintenance also publishes, because the status page
+    must never show a paused API or command without its incident notice.
+    """
+    role = _current_staff_role()
+    if role != "owner":
+        return jsonify({"error": "Public incidents and maintenance are restricted to the bot owner."}), 403
+    if _discord_bot is None:
+        return jsonify({"error": "The Discord bot is not available."}), 503
+    try:
+        from utils import maintenance
+        from utils.error_reports import (
+            DEFAULT_REPORT_SEVERITY,
+            REPORT_SEVERITIES,
+            get_error_report_item,
+            public_incident_label,
+            set_error_report_incident,
+        )
+        from ..api_maintenance import api_targets
+    except Exception:
+        return jsonify({"error": "Error reports are temporarily unavailable."}), 503
+
+    body = request.get_json(silent=True) or {}
+    requested_public = body.get("public_notice")
+    if requested_public is not None and not isinstance(requested_public, bool):
+        return jsonify({"error": "The public notice flag must be true or false."}), 400
+    severity = str(body.get("severity") or "").strip().lower()
+    if severity and severity not in REPORT_SEVERITIES:
+        return jsonify({"error": "Choose minor, major, or critical severity."}), 400
+    raw_maintenance = body.get("maintenance")
+    if raw_maintenance is not None and not isinstance(raw_maintenance, dict):
+        return jsonify({"error": "The maintenance change is malformed."}), 400
+    maintenance_change = raw_maintenance or {}
+    maintenance_enabled = bool(maintenance_change.get("enabled"))
+    kind = str(maintenance_change.get("kind") or "").strip().lower() if maintenance_change else ""
+    key = str(maintenance_change.get("key") or "").strip() if maintenance_change else ""
+    if maintenance_enabled and (kind not in {"api", "command"} or not key or len(key) > 160):
+        return jsonify({"error": "Choose an API or command to pause."}), 400
+
+    user = session.get("user") or {}
+    actor = user.get("id")
+    actor_name = user.get("global_name") or user.get("username")
+
+    async def apply():
+        item = await get_error_report_item(code, _discord_bot)
+        if item is None:
+            raise LookupError("That error report no longer exists.")
+        if item["report"].get("classification") == "user_error" and (
+            maintenance_enabled or requested_public
+        ):
+            raise ValueError(
+                "This is a user error, so it is support context only and cannot be published or put into maintenance."
+            )
+        resuming = bool(maintenance_change) and not maintenance_enabled
+        if (
+            requested_public is False
+            and not resuming
+            and item.get("maintenance_kind")
+            and item.get("maintenance_key")
+        ):
+            raise ValueError("Resume the linked maintenance target before removing the public notice.")
+
+        target_kind = None
+        target_key = None
+        if maintenance_enabled:
+            await maintenance.ensure_loaded(_discord_bot)
+            snapshot = maintenance.snapshot(_discord_bot, api_targets(app))
+            if kind == "command":
+                if not any(row["name"] == key for row in snapshot["commands"]):
+                    raise LookupError("That command does not exist on the bot.")
+            else:
+                if not any(row["endpoint"] == key for row in snapshot["apis"]):
+                    raise LookupError("That API endpoint does not exist.")
+            target_kind, target_key = kind, key
+            exception = item["report"].get("exception") or {}
+            summary = str(item["report"].get("summary") or "").strip()
+            reason = summary or str(exception.get("name") or "Service incident")
+            reason = reason[:maintenance.MAX_REASON]
+            await maintenance.set_maintenance(
+                kind, key, True, reason, actor, _discord_bot, report_code=item["code"],
+            )
+            try:
+                item = await set_error_report_incident(
+                    item["code"],
+                    public_notice=True,
+                    severity=severity or item.get("severity") or DEFAULT_REPORT_SEVERITY,
+                    maintenance_enabled=True,
+                    maintenance_kind=target_kind,
+                    maintenance_key=target_key,
+                    staff_id=actor,
+                    staff_name=actor_name,
+                    bot=_discord_bot,
+                )
+            except Exception:
+                # Do not leave an API or command paused with no incident record.
+                await maintenance.set_maintenance(kind, key, False, actor=actor, bot=_discord_bot)
+                raise
+        elif maintenance_change:
+            # A disable request can name the target, but the report's stored
+            # link is authoritative so a stale dashboard cannot unpause another
+            # target by accident.
+            target_kind = item.get("maintenance_kind") or (kind or None)
+            target_key = item.get("maintenance_key") or (key or None)
+            if target_kind and target_key:
+                await maintenance.set_maintenance(
+                    target_kind, target_key, False, actor=actor, bot=_discord_bot,
+                )
+            item = await set_error_report_incident(
+                item["code"],
+                public_notice=item.get("public_notice") if requested_public is None else requested_public,
+                severity=severity or item.get("severity") or DEFAULT_REPORT_SEVERITY,
+                maintenance_enabled=False,
+                maintenance_kind=target_kind,
+                maintenance_key=target_key,
+                staff_id=actor,
+                staff_name=actor_name,
+                bot=_discord_bot,
+            )
+        else:
+            item = await set_error_report_incident(
+                item["code"],
+                public_notice=requested_public if requested_public is not None else bool(item.get("public_notice")),
+                severity=severity or item.get("severity") or DEFAULT_REPORT_SEVERITY,
+                maintenance_enabled=None,
+                staff_id=actor,
+                staff_name=actor_name,
+                bot=_discord_bot,
+            )
+
+        if item is None:
+            raise LookupError("That error report no longer exists.")
+        item["public_state"] = public_incident_label(item.get("status"))
+        return item
+
+    try:
+        report = run_on_bot_loop(apply())
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
+    except Exception:
+        return jsonify({"error": "The incident could not be updated."}), 502
+    return jsonify({"report": report})
+
+
+@app.route("/api/staff/error-reports/<code>", methods=["DELETE"])
+@require_auth
+@require_csrf
+def api_staff_error_report_delete(code):
+    role = _current_staff_role()
+    if role not in _REPORT_DELETE_ROLES:
+        return jsonify({"error": "Deleting an error report is restricted to the owner and Head Admins."}), 403
+    if _discord_bot is None:
+        return jsonify({"error": "The Discord bot is not available."}), 503
+    try:
+        from utils.error_reports import delete_error_report
+    except Exception:
+        return jsonify({"error": "Error reports are temporarily unavailable."}), 503
+    try:
+        deleted = run_on_bot_loop(delete_error_report(code, _discord_bot))
+    except Exception:
+        return jsonify({"error": "Error reports are temporarily unavailable."}), 503
+    if not deleted:
+        return jsonify({"error": "That error report no longer exists."}), 404
+    return jsonify({"deleted": True, "code": str(code or "").strip().upper()})
+
+
 _GUILD_MANAGEMENT_ROLES = {"owner", "head_admin"}
 
 

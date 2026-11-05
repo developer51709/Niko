@@ -104,7 +104,7 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Info":          ["InfoCog", "Legal"],
     "Utility":       [
         "UtilityCog", "Snipe", "Define", "AFKCog", "Tags", "Highlights", "Reminders",
-        "Sticky", "Triggers", "DonationCog", "HelpCog",
+        "Sticky", "Triggers", "DonationCog", "HelpCog", "Setup",
     ],
     "AI":            ["AICog", "AIConfig"],
     "Moderation":    ["Moderation", "AutoMod", "ServerLogger"],
@@ -117,7 +117,7 @@ CATEGORY_COGS: dict[str, List[str]] = {
     "Notifier":      ["Notifier"],
     "VoiceMaster":   ["VoiceMaster"],
     "Image Tools":   ["ImageTools", "AiImageTools"],
-    "Customization": ["Customization", "PrefixConfig"],
+    "Customization": ["Customization", "LanguageConfig", "PrefixConfig"],
 }
 
 
@@ -149,7 +149,7 @@ async def _resolve_prefix(bot: commands.Bot, ctx_or_interaction) -> str:
 # ===================================================
 
 def _general_text(bot: commands.Bot, lang: str) -> str:
-    invite = f"https://discord.com/oauth2/authorize?client_id={bot.user.id}&scope=bot&permissions=8"
+    invite = links.invite_url(bot.user.id)
     return (
         f"{_ui(lang, 'general_title')}\n"
         f"{_ui(lang, 'general_intro')}\n\n"

@@ -4,7 +4,12 @@
     "memory_title": "Speicher für {name}",
     "guild_only": "Nikios Gedächtnis wird pro Server gespeichert — das funktioniert nur in einem Server.",
     "history_cleared": "Dein Gesprächsverlauf und Gedächtnis mit Niko in diesem Server wurden gelöscht.",
-    "history_empty": "Du hast in diesem Server noch keinen Gesprächsverlauf mit Niko."
+    "history_empty": "Du hast in diesem Server noch keinen Gesprächsverlauf mit Niko.",
+    "ask_no_text": "[kein Textinhalt]",
+    "ask_title": "Niko sagt…",
+    "ask_empty": "Mir ist gerade keine Antwort eingefallen — versuche es gleich noch einmal.",
+    "ai_disabled_global": "Nikós KI ist derzeit vom Bot-Betreiber deaktiviert.",
+    "ai_disabled_guild": "Die KI ist auf diesem Server deaktiviert."
   },
   "config": {
     "panel_heading": "### {ai} KI-Konfiguration",
@@ -73,6 +78,8 @@
     "provider_nothing": "Der Bildanbieter hat nichts zurückgegeben. Versuch es gleich noch einmal."
   },
   "commands": {
+    "☕ Ask Niko.name": "☕ Frag Niko",
+    "☕ Ask Niko.description": "Lass Niko auf diese Nachricht antworten",
     "ai-config.description": "Konfiguriere die KI-Einstellungen für diesen Server",
     "ai-config.help": "Konfiguriere die KI-Einstellungen für deinen Server.",
     "clearhistory.description": "Lösche deinen Gesprächsverlauf und das Gedächtnis mit Niko auf diesem Server",

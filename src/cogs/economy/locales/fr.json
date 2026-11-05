@@ -150,7 +150,14 @@
     "note_pay_to": "à {name}",
     "note_pay_from": "de {name}",
     "card_footer_vault": "-# Utilise `{prefix}deposit` / `{prefix}withdraw` pour gérer ton coffre.",
-    "card_footer_earn": "-# `{prefix}work` pour gagner, `{prefix}daily` pour ta récompense quotidienne, `{prefix}shop` pour dépenser."
+    "card_footer_earn": "-# `{prefix}work` pour gagner, `{prefix}daily` pour ta récompense quotidienne, `{prefix}shop` pour dépenser.",
+    "profile_level": "Niveau",
+    "profile_xp": "XP",
+    "profile_wallet": "Portefeuille",
+    "profile_bank": "Banque",
+    "profile_joined": "Arrivée",
+    "profile_account": "Compte",
+    "profile_unknown": "inconnu"
   },
   "jobs": {
     "current": "  ← **actuel**",
@@ -319,6 +326,8 @@
     "referral_50.name": "Ambassadeur"
   },
   "commands": {
+    "📊 User Profile.name": "📊 Profil utilisateur",
+    "📊 User Profile.description": "Afficher une carte de profil rapide pour cet utilisateur",
     "balance.args.member": "De qui consulter le portefeuille (toi par défaut)",
     "balance.description": "Consulter ta carte de portefeuille premium",
     "balance.help": "Consulter le solde de ton portefeuille",
@@ -329,7 +338,7 @@
     "bank.upgrade.description": "Payer pour améliorer ton coffre au palier suivant",
     "bank.withdraw.args.amount": "Combien de pièces retirer du coffre",
     "bank.withdraw.description": "Transférer des pièces du coffre vers ton portefeuille",
-    "coinflip.args.amount": "Combien de pièces parier",
+    "coinflip.args.amount": "Pièces à parier, ou « all » pour parier tout votre portefeuille",
     "coinflip.args.call": "Annonce : pile ou face (face par défaut)",
     "coinflip.description": "Lance une pièce — tout ou rien",
     "coinflip.help": "Lancer une pièce pour tout ou rien",
@@ -337,7 +346,7 @@
     "crime.help": "Tenter de voler quelques pièces en plus",
     "daily.description": "Réclamer ta récompense quotidienne avec bonus de série",
     "daily.help": "Réclamer ta récompense quotidienne",
-    "dice.args.amount": "Combien de pièces parier",
+    "dice.args.amount": "Pièces à parier, ou « all » pour parier tout votre portefeuille",
     "dice.args.target": "Plus petit lancer gagnant, de 1 à 99 (plus c'est dur, plus ça paie)",
     "dice.description": "Lance un dé — choisis un nombre et croise les doigts",
     "dice.help": "Lancer un dé et parier sur le résultat",
@@ -362,7 +371,7 @@
     "networth.args.member": "De qui calculer la fortune (toi par défaut)",
     "networth.description": "Résumé rapide de la fortune",
     "networth.help": "Calculer ta fortune totale",
-    "pay.args.amount": "Combien de pièces envoyer",
+    "pay.args.amount": "Pièces à envoyer, ou « all » pour envoyer tout votre portefeuille",
     "pay.args.member": "Qui reçoit les pièces",
     "pay.description": "Envoyer des pièces à un autre utilisateur",
     "pay.help": "Envoyer des pièces à un autre utilisateur",

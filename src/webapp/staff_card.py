@@ -107,9 +107,16 @@ def accent_hex(value, fallback: str = DEFAULT_ACCENT) -> str:
 
 
 def status_icon_data_url(status) -> str | None:
-    """Inline the website's status icon for ``status`` (``offline`` fallback)."""
+    """Inline the website's status icon for ``status`` (``offline`` fallback).
+
+    ``status`` may name a mobile icon (``online_mobile``), which is the same
+    phone-shaped art the website uses, so the card and the site agree.
+    """
     key = str(status or "").strip().lower()
-    key = key if key in STATUS_COLORS else "offline"
+    if key.endswith("_mobile") and key[: -len("_mobile")] in STATUS_COLORS:
+        key = key
+    else:
+        key = key if key in STATUS_COLORS else "offline"
     if key in _status_icon_cache:
         return _status_icon_cache[key]
     data_url = None
@@ -307,26 +314,41 @@ def _activity_card(activity: dict, palette: dict) -> str:
 
 
 def _avatar_block(avatar_data_url: str | None, accent: str, palette: dict,
-                  initials: str) -> str:
-    """Round avatar with a status ring, or an initial when there is no image."""
+                  initials: str, status_hole: str | None = None) -> str:
+    """Round avatar, or an initial when there is no image.
+
+    ``status_hole`` is the shape of the status notch. It is cut out of the
+    avatar with a mask rather than painted over, so the card's own background
+    shows through the gap the way it does on the website.
+    """
+    defs = ('<defs><clipPath id="staff-avatar-clip">'
+            '<circle cx="84" cy="84" r="42"/>'
+            "</clipPath>")
+    if status_hole:
+        defs += ('<mask id="staff-avatar-hole">'
+                 f'<rect width="{CARD_WIDTH}" height="{CARD_HEIGHT_WITH_ACTIVITY}" fill="white"/>'
+                 f'{status_hole}</mask>')
+    defs += "</defs>"
+
     if not avatar_data_url:
-        return (
+        body = (
             f'<circle cx="84" cy="84" r="42" fill="{palette["chip"]}" '
             f'stroke="{palette["line"]}" stroke-width="2"/>'
             + _text(84, 95, initials, fill=palette["muted"], size=26, weight=800,
                     anchor="middle")
         )
-    return (
-        '<defs><clipPath id="staff-avatar-clip">'
-        '<circle cx="84" cy="84" r="42"/>'
-        "</clipPath></defs>"
-        f'<circle cx="84" cy="84" r="42" fill="{palette["chip"]}"/>'
-        f'<image href="{escape(avatar_data_url)}" x="42" y="42" width="84" '
-        'height="84" preserveAspectRatio="xMidYMid slice" '
-        'clip-path="url(#staff-avatar-clip)"/>'
-        f'<circle cx="84" cy="84" r="42" fill="none" stroke="{accent}" '
-        'stroke-width="2" opacity="0.55"/>'
-    )
+    else:
+        body = (
+            f'<circle cx="84" cy="84" r="42" fill="{palette["chip"]}"/>'
+            f'<image href="{escape(avatar_data_url)}" x="42" y="42" width="84" '
+            'height="84" preserveAspectRatio="xMidYMid slice" '
+            'clip-path="url(#staff-avatar-clip)"/>'
+            f'<circle cx="84" cy="84" r="42" fill="none" stroke="{accent}" '
+            'stroke-width="2" opacity="0.55"/>'
+        )
+    if status_hole:
+        body = f'<g mask="url(#staff-avatar-hole)">{body}</g>'
+    return defs + body
 
 
 def _hidden_card(palette: dict, accent: str) -> str:
@@ -392,16 +414,27 @@ def render_staff_card(
     live = settings.get("show_status", True) if show_status is None else bool(show_status)
     raw_status = str(member.get("status") or "offline").strip().lower()
     status = raw_status if raw_status in STATUS_COLORS else "offline"
-    status_icon = status_icon_data_url(status) if live else None
+    # A phone-only presence draws the mobile icon, which is a phone rather than
+    # a dot: its notch is a narrower rectangle so the cutout hugs that shape.
+    mobile = bool(member.get("is_mobile")) and status != "offline"
+    status_icon = status_icon_data_url(f"{status}_mobile" if mobile else status) if live else None
+    status_hole = None
+    if live:
+        # The phone art fills its canvas, so the notch is a little larger than
+        # the 26px art to keep the same 3px gap the round dot gets.
+        status_hole = (
+            '<rect x="104" y="100" width="24" height="32" rx="8" fill="black"/>'
+            if mobile
+            else '<circle cx="116" cy="116" r="16" fill="black"/>'
+        )
 
     role_chip = f"NIKO STAFF \u00b7 {role_label.upper()}"
     chip_width = min(320, int(len(role_chip) * 7.2) + 24)
 
-    avatar = _avatar_block(avatar_data_url, accent_colour, palette, initials)
+    # The status lives on the profile picture only — the same treatment as the
+    # website — so the rest of the card stays free of status chrome.
+    avatar = _avatar_block(avatar_data_url, accent_colour, palette, initials, status_hole)
     if live:
-        # The status lives on the profile picture only — the same treatment as
-        # the website — so the rest of the card stays free of status chrome.
-        avatar += f'<circle cx="116" cy="116" r="16" fill="{palette["ring"]}"/>'
         if status_icon:
             avatar += f'<image href="{escape(status_icon)}" x="103" y="103" width="26" height="26"/>'
         else:

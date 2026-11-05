@@ -197,7 +197,7 @@ The API starts with the bot. The dashboard is available at `http://localhost:500
 | Community | `/poll` `/suggest` `/starboard` `/tag` `/birthday` `/highlight` `/notifier` |
 | AI | `@Niko` `/favor` `/memory` `/imagine` `/translate` `/define` |
 | Fun | `/hug` `/pat` `/boop` `/meme` `/cat` `/afk` `/snipe` |
-| Utility | `/remind` `/serverinfo` `/userinfo` `/avatar` `/prefix` |
+| Utility | `/remind` `/serverinfo` `/userinfo` `/avatar` `/prefix` `/language` |
 | Admin | `/reload` `/sync` `/emojisync` `/onboarding` `/voicemaster` `/trigger` |
 
 The dashboard's live command directory is the source of truth for the current build.

@@ -150,7 +150,14 @@
     "note_pay_to": "a {name}",
     "note_pay_from": "de {name}",
     "card_footer_vault": "-# Usa `{prefix}deposit` / `{prefix}withdraw` para gestionar tu bóveda.",
-    "card_footer_earn": "-# `{prefix}work` para ganar, `{prefix}daily` para tu recompensa, `{prefix}shop` para gastar."
+    "card_footer_earn": "-# `{prefix}work` para ganar, `{prefix}daily` para tu recompensa, `{prefix}shop` para gastar.",
+    "profile_level": "Nivel",
+    "profile_xp": "XP",
+    "profile_wallet": "Cartera",
+    "profile_bank": "Banco",
+    "profile_joined": "Se unió",
+    "profile_account": "Cuenta",
+    "profile_unknown": "desconocido"
   },
   "jobs": {
     "current": "  ← **actual**",
@@ -319,6 +326,8 @@
     "referral_50.name": "Embajador"
   },
   "commands": {
+    "📊 User Profile.name": "📊 Perfil",
+    "📊 User Profile.description": "Muestra una tarjeta rápida del perfil de este usuario",
     "balance.args.member": "De quién quieres ver la cartera (por defecto la tuya)",
     "balance.description": "Mira tu tarjeta premium de cartera",
     "balance.help": "Consulta tu wallet",
@@ -329,7 +338,7 @@
     "bank.upgrade.description": "Paga para mejorar tu caja fuerte al siguiente nivel",
     "bank.withdraw.args.amount": "Cuántas monedas sacar de la caja fuerte",
     "bank.withdraw.description": "Devuelve monedas de la caja fuerte a tu cartera",
-    "coinflip.args.amount": "Cuántas monedas apuestas",
+    "coinflip.args.amount": "Monedas a apostar, o «all» para apostar todo tu monedero",
     "coinflip.args.call": "Tu elección: cara o cruz (por defecto cara)",
     "coinflip.description": "Lanza una moneda — doble o nada",
     "coinflip.help": "Lanza una moneda",
@@ -337,7 +346,7 @@
     "crime.help": "Intenta robar unas monedas extra",
     "daily.description": "Reclama tu recompensa diaria con bonus de racha",
     "daily.help": "Reclama tu recompensa diaria",
-    "dice.args.amount": "Cuántas monedas apuestas",
+    "dice.args.amount": "Monedas a apostar, o «all» para apostar todo tu monedero",
     "dice.args.target": "Tirada mínima para ganar, de 1 a 99 (los objetivos más altos pagan más)",
     "dice.description": "Tira un dado — elige un número y cruza los dedos",
     "dice.help": "Lanza un dado",
@@ -362,7 +371,7 @@
     "networth.args.member": "De quién quieres calcular el patrimonio (por defecto el tuyo)",
     "networth.description": "Resumen rápido de tu patrimonio",
     "networth.help": "Calcula tu fortuna",
-    "pay.args.amount": "Cuántas monedas enviar",
+    "pay.args.amount": "Monedas a enviar, o «all» para enviar todo tu monedero",
     "pay.args.member": "Quién recibe las monedas",
     "pay.description": "Envía monedas a otro usuario",
     "pay.help": "Envía monedas a alguien",

@@ -7,7 +7,6 @@ import sys
 import json
 import datetime
 import asyncio
-import platform
 from contextvars import ContextVar
 from colorama import Fore, Style, init as colorama_init
 from utils.error_reports import save_error_report
@@ -174,7 +173,38 @@ class ErrorHandler(commands.Cog):
         return view
 
     @staticmethod
-    def _prefix_report_details(ctx: commands.Context) -> str:
+    def _user_context(user) -> dict | None:
+        if user is None:
+            return None
+        name = getattr(user, "global_name", None) or getattr(user, "name", None) or str(user)
+        return {
+            "id": str(getattr(user, "id", "") or ""),
+            "name": str(name),
+            "username": str(getattr(user, "name", "") or ""),
+        }
+
+    @staticmethod
+    def _guild_context(guild) -> dict | None:
+        if guild is None:
+            return None
+        return {
+            "id": str(getattr(guild, "id", "") or ""),
+            "name": str(getattr(guild, "name", "") or ""),
+            "shard_id": getattr(guild, "shard_id", None),
+        }
+
+    @staticmethod
+    def _channel_context(channel) -> dict | None:
+        if channel is None:
+            return None
+        return {
+            "id": str(getattr(channel, "id", "") or ""),
+            "name": str(getattr(channel, "name", None) or channel),
+            "type": str(getattr(channel, "type", "") or ""),
+        }
+
+    @staticmethod
+    def _prefix_report_details(ctx: commands.Context) -> dict:
         command = ctx.command
         guild = ctx.guild
         channel = ctx.channel
@@ -183,49 +213,44 @@ class ErrorHandler(commands.Cog):
         kwargs = getattr(ctx, "kwargs", {})
         arg_offset = 2 if command and command.cog else 1
         parsed_args = args[arg_offset:] if len(args) >= arg_offset else args
-        return (
-            "Invocation context\n"
-            "------------------\n"
-            f"Source: Prefix command\n"
-            f"Command: {command.qualified_name if command else '(unknown)'}\n"
-            f"Signature: {command.signature if command else '(unknown)'}\n"
-            f"Exact invocation: {getattr(message, 'content', '(unavailable)')}\n"
-            f"Parsed positional args: {parsed_args!r}\n"
-            f"Parsed keyword args: {kwargs!r}\n"
-            f"User: {ctx.author} (ID {ctx.author.id})\n"
-            f"Guild: {guild.name if guild else '(DM)'} (ID {guild.id if guild else 'n/a'})\n"
-            f"Channel: {getattr(channel, 'name', channel)} (ID {getattr(channel, 'id', 'n/a')})\n"
-            f"Message ID: {getattr(message, 'id', 'n/a')}\n"
-            f"Message created at: {getattr(message, 'created_at', 'n/a')}\n"
-            f"Shard ID: {getattr(guild, 'shard_id', 'n/a') if guild else 'n/a'}\n"
-            f"Bot user: {ctx.bot.user} (ID {getattr(ctx.bot.user, 'id', 'n/a')})\n"
-            f"Python: {platform.python_version()}\n"
-        )
+        return {
+            "command": command.qualified_name if command else "(unknown)",
+            "signature": str(command.signature) if command else "(unknown)",
+            "invocation": str(getattr(message, "content", "(unavailable)")),
+            "arguments": repr(parsed_args),
+            "keyword_arguments": repr(kwargs),
+            "user": ErrorHandler._user_context(ctx.author),
+            "guild": ErrorHandler._guild_context(guild),
+            "channel": ErrorHandler._channel_context(channel),
+            "message": {
+                "id": str(getattr(message, "id", "") or ""),
+                "created_at": str(getattr(message, "created_at", "") or ""),
+            },
+        }
 
     @staticmethod
-    def _slash_report_details(interaction: discord.Interaction) -> str:
+    def _slash_report_details(interaction: discord.Interaction) -> dict:
         command = interaction.command
         guild = interaction.guild
         channel = interaction.channel
+        arguments = getattr(interaction, "data", None)
         try:
-            arguments = json.dumps(interaction.data, ensure_ascii=False, indent=2, default=str)
+            # The interaction payload can contain resolved objects in unusual
+            # client versions; make sure the report remains JSON-serialisable.
+            arguments = json.loads(json.dumps(arguments, default=str))
         except Exception:
-            arguments = repr(getattr(interaction, 'data', None))
-        return (
-            "Invocation context\n"
-            "------------------\n"
-            f"Source: Slash command\n"
-            f"Command: {command.qualified_name if command else '(unknown)'}\n"
-            f"Interaction ID: {interaction.id}\n"
-            f"Interaction created at: {interaction.created_at}\n"
-            f"Exact command arguments (interaction payload):\n{arguments}\n"
-            f"User: {interaction.user} (ID {interaction.user.id})\n"
-            f"Guild: {guild.name if guild else '(DM)'} (ID {guild.id if guild else 'n/a'})\n"
-            f"Channel: {getattr(channel, 'name', channel)} (ID {getattr(channel, 'id', 'n/a')})\n"
-            f"Shard ID: {getattr(guild, 'shard_id', 'n/a') if guild else 'n/a'}\n"
-            f"Bot user: {interaction.client.user} (ID {getattr(interaction.client.user, 'id', 'n/a')})\n"
-            f"Python: {platform.python_version()}\n"
-        )
+            arguments = repr(arguments)
+        return {
+            "command": command.qualified_name if command else "(unknown)",
+            "interaction": {
+                "id": str(getattr(interaction, "id", "") or ""),
+                "created_at": str(getattr(interaction, "created_at", "") or ""),
+                "data": arguments,
+            },
+            "user": ErrorHandler._user_context(interaction.user),
+            "guild": ErrorHandler._guild_context(guild),
+            "channel": ErrorHandler._channel_context(channel),
+        }
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
@@ -243,7 +268,9 @@ class ErrorHandler(commands.Cog):
         if isinstance(error, PfxCommandNotFound):
             return
 
-        report_code, _ = await save_error_report(error, self._prefix_report_details(ctx), self.bot)
+        report_code, _ = await save_error_report(
+            error, self._prefix_report_details(ctx), self.bot, source="prefix"
+        )
         _ERROR_REPORT_CODE.set(report_code)
         if ctx.command and hasattr(ctx.command, "on_error"):
             # A command-local handler may use error_embed and include the same
@@ -474,7 +501,9 @@ class ErrorHandler(commands.Cog):
         if isinstance(error, (SlashCommandNotFound, CommandSignatureMismatch)):
             return
 
-        report_code, _ = await save_error_report(error, self._slash_report_details(interaction), self.bot)
+        report_code, _ = await save_error_report(
+            error, self._slash_report_details(interaction), self.bot, source="slash"
+        )
         _ERROR_REPORT_CODE.set(report_code)
         if interaction.command and interaction.command.on_error:
             return
@@ -579,8 +608,13 @@ class ErrorHandler(commands.Cog):
             return
         report_code, _ = await save_error_report(
             error,
-            f"Invocation context\n------------------\nSource: Gateway event\nEvent: {event}\nArguments: {args!r}\nKeyword arguments: {kwargs!r}\nBot user: {self.bot.user} (ID {getattr(self.bot.user, 'id', 'n/a')})\nPython: {platform.python_version()}",
+            {
+                "event": str(event),
+                "arguments": repr(args),
+                "keyword_arguments": repr(kwargs),
+            },
             self.bot,
+            source="event",
         )
         logging.error("error_handler", f"Unexpected error in event {event} (report {report_code}): {error}")
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)

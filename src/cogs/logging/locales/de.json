@@ -85,7 +85,11 @@
     "act_not_banned": "Dieser Nutzer ist nicht gebannt.",
     "act_unmute_failed": "Entstummen fehlgeschlagen: {error}",
     "act_not_in_voice": "**{member}** ist in keinem Sprachkanal.",
-    "panel_footer": "-# **Brauchst du Hilfe?** Frag im [Support-Server]({support}) oder schau in die [Dokumentation]({docs})"
+    "panel_footer": "-# **Brauchst du Hilfe?** Frag im [Support-Server]({support}) oder schau in die [Dokumentation]({docs})",
+    "flag_explicit": "explizite Inhalte",
+    "flag_gore": "Gewaltdarstellung",
+    "flag_self_harm": "Selbstverletzung",
+    "flagged_media_note": "-# Dieses Bild wurde von einem automatischen Filter markiert ({kind}) und konnte nicht angezeigt werden. [Mehr erfahren]({link})"
   },
   "titles": {
     "Anti-Link": "Anti-Link",

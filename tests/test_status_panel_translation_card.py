@@ -127,8 +127,9 @@ def test_the_snapshot_counts_the_other_languages_and_never_english(monkeypatch):
     # Most translated on the website first: that is what a reader wants to see.
     assert [row["label"] for row in snapshot["rows"]] == ["German", "French", "Russian"]
     assert snapshot["mode"] == "beta"
-    assert snapshot["age_seconds"] == 12
     assert snapshot["scanned_at"] == 1_700_000_000
+    # One timestamp reaches the card, so the snapshot carries one too.
+    assert "age_seconds" not in snapshot
 
 
 def test_the_snapshot_drops_the_card_when_webapp_cannot_answer(monkeypatch):
@@ -186,6 +187,53 @@ def test_collection_only_reads_coverage_while_the_switch_is_on(monkeypatch):
     assert calls == [True]
 
 
+def test_every_shipped_language_reaches_the_panel_card(monkeypatch):
+    async def probe(_url):
+        return True
+
+    async def database(_bot):
+        return "mongodb", True
+
+    monkeypatch.setattr(panel, "_probe_http", probe)
+    monkeypatch.setattr(panel, "_check_database", database)
+    monkeypatch.setattr(panel, "_load_bot_stats_file", lambda: {})
+    monkeypatch.setenv("PUBLIC_URL", "https://public.example")
+    monkeypatch.setitem(panel_settings._read(), "status_panel_translation_card", False)
+
+    status = asyncio.run(panel._collect_status(_status_bot()))
+    rows = [
+        {"label": f"Language {index}", "bot": 10.0, "site": 20.0}
+        for index in range(9)
+    ]
+    status["translations"] = {
+        "languages": 9,
+        "bot": 10.0,
+        "site": 20.0,
+        "rows": rows,
+        "mode": "local",
+        "scanned_at": 1_700_000_000,
+    }
+
+    view = panel._build_status_panel(_status_bot(), status)
+    card = next(
+        child
+        for child in view.children
+        if "Translation Coverage" in getattr(child.children[0], "content", "")
+    )
+    listed = [
+        getattr(item, "content", "")
+        for item in card.children
+        if getattr(item, "content", "").startswith("**Language")
+    ]
+
+    assert len(listed) == 9
+    assert "website 20% · bot 10%" in listed[0]
+    # The card's footer names the source once and states the scan time once.
+    footer = getattr(card.children[-1], "content", "")
+    assert footer.count("<t:") == 1
+    assert "from this build" in footer
+
+
 def test_the_panel_draws_the_card_between_the_health_block_and_the_footer():
     source = (ROOT / "src/cogs/staff/panels/status.py").read_text(encoding="utf-8")
 
@@ -201,6 +249,9 @@ def test_the_switch_is_reachable_from_the_locale_page():
     view = (ROOT / "web/src/components/staff/LocaleSyncView.tsx").read_text(encoding="utf-8")
 
     assert '@app.route("/api/owner/locales/panel", methods=["POST"])' in routes
-    assert '"status_panel": {"translation_card": panel_settings.show_translation_card()}' in routes
+    # The payload reads the module through a guard, so a deployment that has not
+    # received the utilities area yet still serves the page (with the switch off).
+    assert '"translation_card": bool(settings.show_translation_card()) if settings else False' in routes
+    assert "def _panel_settings():" in routes
     assert 'role="switch"' in view
     assert "setOwnerLocaleTranslationCard" in view

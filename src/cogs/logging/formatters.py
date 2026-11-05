@@ -14,7 +14,7 @@ import discord
 from discord.ext import commands
 from discord.ui.media_gallery import MediaGalleryItem
 
-from utils import logging
+from utils import flagged_media, logging
 from config import links
 from utils.ratelimit import log_channel_limiter
 from config.emojis import get_emoji
@@ -25,6 +25,9 @@ from utils.locales import load_locales
 # ── Constants ─────────────────────────────────────
 
 LOG_CONFIG_FILE = "data/logging_config.json"
+
+#: Discord renders at most ten images in one media gallery.
+MAX_GALLERY_ITEMS = 10
 
 # Each category owns a distinct emoji and accent colour, so a log channel
 # carrying several categories is scannable: the icon identifies the category
@@ -680,6 +683,7 @@ def _build_log_view(
     action_key: str | None = None,
     channel_id: int | None = None,
     media_urls: list[str | tuple[str, str]] | None = None,
+    media_flags: dict[int, str] | None = None,
     thumbnail_url: str | None = None,
     files: list[discord.File] | None = None,
     file_components: bool = True,
@@ -739,14 +743,21 @@ def _build_log_view(
         # re-uploaded asset (a replaced avatar) passes its attachment URI with a
         # caption saying which side of the change it is. Discord caps a gallery
         # at ten items, so a mass delete of images cannot make the send fail.
+        gallery = list(media_urls[:MAX_GALLERY_ITEMS])
         items = []
-        for entry in media_urls[:10]:
+        for entry in gallery:
             url, caption = entry if isinstance(entry, (tuple, list)) else (entry, None)
             if caption:
                 items.append(MediaGalleryItem(media=url, description=str(caption)[:256]))
             else:
                 items.append(MediaGalleryItem(media=url))
         children.append(discord.ui.MediaGallery(*items))
+        if media_flags:
+            # Items past the gallery's ten have no image to caption.
+            notes = _flagged_media_notes(
+                lang, {index: flag for index, flag in media_flags.items() if index < len(gallery)})
+            if notes:
+                children.append(discord.ui.TextDisplay(content=notes))
         children.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
 
     if files and file_components:
@@ -771,6 +782,72 @@ def _build_log_view(
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(container)
     return view
+
+
+def _flagged_media_notes(lang: str, flags: dict[int, str]) -> str:
+    """The subtext under a gallery: one line per image a placeholder stands in for.
+
+    A gallery item carries alt text, not a caption, so an image that was
+    replaced by a placeholder is explained underneath it instead, in the order
+    the images appear.
+    """
+    return "\n".join(
+        _t(
+            lang, "flagged_media_note",
+            kind=_t(lang, flagged_media.LABEL_KEYS.get(flag, "flag_explicit")),
+            link=flagged_media.learn_more_url(flag),
+        )
+        for _, flag in sorted(flags.items())
+    )
+
+
+def _apply_media_flags(
+    view: discord.ui.LayoutView, flags: dict[int, str], lang: str
+) -> bool:
+    """Swap in the placeholders for images that were flagged after an entry went out.
+
+    Discord scans media asynchronously, so an image can be cleared once its log
+    entry is already posted. The entry is rewritten the way the builder renders
+    it: the flagged gallery item takes the placeholder, and the note under the
+    gallery is redrawn from every placeholder the gallery now holds — a later
+    flag adds its line without repeating the ones already there.
+
+    Returns False when nothing changed, so an edit about something else never
+    rewrites the message.
+    """
+    container = next(
+        (item for item in view.children if isinstance(item, discord.ui.Container)), None)
+    if container is None:
+        return False
+    children = list(container.children)
+    gallery = next(
+        (child for child in children if isinstance(child, discord.ui.MediaGallery)), None)
+    if gallery is None:
+        return False
+
+    replaced: dict[int, str] = {}
+    changed = False
+    for index, item in enumerate(gallery.items):
+        existing = flagged_media.placeholder_flag(item.media.url)
+        flag = existing or flags.get(index)
+        if not flag:
+            continue
+        replaced[index] = flag
+        if existing is None:
+            item.media = flagged_media.placeholder_url(flag)
+            changed = True
+    if not changed:
+        return False
+
+    notes = _flagged_media_notes(lang, replaced)
+    container.clear_items()
+    for child in children:
+        if flagged_media.is_flagged_note(getattr(child, "content", None)):
+            continue
+        container.add_item(child)
+        if child is gallery and notes:
+            container.add_item(discord.ui.TextDisplay(content=notes))
+    return True
 
 
 # ── Settings Panel ────────────────────────────────

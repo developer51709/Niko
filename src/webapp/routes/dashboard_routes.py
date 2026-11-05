@@ -212,8 +212,7 @@ def api_guilds():
                 "blacklisted": blacklist_entry is not None,
                 "blacklist_reason": blacklist_entry.get("reason") if blacklist_entry else None,
                 "invite_url": (
-                    f"https://discord.com/oauth2/authorize?"
-                    f"{urlencode({'client_id': DISCORD_CLIENT_ID, 'permissions': '8', 'scope': 'bot applications.commands', 'guild_id': g['id']})}"
+                    bot_links.invite_url(DISCORD_CLIENT_ID, guild_id=g["id"])
                     if not installed else None
                 ),
             })

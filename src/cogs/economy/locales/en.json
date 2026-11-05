@@ -150,7 +150,14 @@
     "note_pay_to": "to {name}",
     "note_pay_from": "from {name}",
     "card_footer_vault": "-# Use `{prefix}deposit` / `{prefix}withdraw` to manage your vault.",
-    "card_footer_earn": "-# `{prefix}work` to earn, `{prefix}daily` for your daily reward, `{prefix}shop` to spend."
+    "card_footer_earn": "-# `{prefix}work` to earn, `{prefix}daily` for your daily reward, `{prefix}shop` to spend.",
+    "profile_level": "Level",
+    "profile_xp": "XP",
+    "profile_wallet": "Wallet",
+    "profile_bank": "Bank",
+    "profile_joined": "Joined",
+    "profile_account": "Account",
+    "profile_unknown": "unknown"
   },
   "jobs": {
     "current": "  ← **current**",
@@ -319,6 +326,8 @@
     "referral_50.name": "Ambassador"
   },
   "commands": {
+    "📊 User Profile.name": "📊 User Profile",
+    "📊 User Profile.description": "Show a quick profile card for this user",
     "balance.args.member": "Whose wallet to check (defaults to you)",
     "balance.description": "Check your premium wallet card",
     "balance.help": "Check your wallet balance",
@@ -329,7 +338,7 @@
     "bank.upgrade.description": "Pay to upgrade your vault to the next tier",
     "bank.withdraw.args.amount": "How many coins to take out of the vault",
     "bank.withdraw.description": "Move coins from the vault back to your wallet",
-    "coinflip.args.amount": "How many coins to bet",
+    "coinflip.args.amount": "Coins to bet, or \"all\" to bet your whole wallet",
     "coinflip.args.call": "Call it: heads or tails (defaults to heads)",
     "coinflip.description": "Flip a coin — double or nothing",
     "coinflip.help": "Flip a coin for double or nothing",
@@ -337,7 +346,7 @@
     "crime.help": "Try to steal some extra coins",
     "daily.description": "Claim your daily reward with streak bonus",
     "daily.help": "Claim your daily reward",
-    "dice.args.amount": "How many coins to bet",
+    "dice.args.amount": "Coins to bet, or \"all\" to bet your whole wallet",
     "dice.args.target": "Lowest roll that wins, from 1 to 99 (harder targets pay more)",
     "dice.description": "Roll a die — pick a number and hope for the best",
     "dice.help": "Roll a die and bet on the outcome",
@@ -362,7 +371,7 @@
     "networth.args.member": "Whose net worth to total up (defaults to you)",
     "networth.description": "Quick net worth summary",
     "networth.help": "Calculate your total fortune",
-    "pay.args.amount": "How many coins to send",
+    "pay.args.amount": "Coins to send, or \"all\" to send your whole wallet",
     "pay.args.member": "Who receives the coins",
     "pay.description": "Send coins to another user",
     "pay.help": "Send coins to another user",

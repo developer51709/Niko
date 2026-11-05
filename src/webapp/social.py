@@ -411,11 +411,9 @@ def _social_invite_url() -> str:
     application id, so the button lands on the same OAuth screen the site's own
     Add Niko button uses.
     """
-    return "https://discord.com/oauth2/authorize?" + urlencode({
-        "client_id": config.DISCORD_CLIENT_ID,
-        "permissions": "8",
-        "scope": "bot applications.commands",
-    })
+    from config.links import invite_url
+
+    return invite_url(config.DISCORD_CLIENT_ID)
 
 
 def _with_shell_state(shell: str, state: dict) -> str:

@@ -9,6 +9,7 @@ import time
 from cogs.staff.records import STAFF_ROLES
 from config.ids import OWNER_IDS, is_owner_id
 from flask import session
+from utils.presence import is_mobile_presence
 from . import database, runtime
 
 
@@ -234,6 +235,9 @@ def _staff_identity(user_id: str) -> dict:
         "avatar_decoration_url": decoration_url or (cached_identity or {}).get("avatar_decoration_url"),
         "status": status,
         "status_label": {"online": "Online", "idle": "Idle", "dnd": "Do Not Disturb", "offline": "Offline"}.get(status, status.title()),
+        # True when the phone is the client holding the presence, so every
+        # surface draws the mobile icon instead of the round dot.
+        "is_mobile": is_mobile_presence(member),
         "activities": activities,
         "custom_status": custom_status,
         # Keep the first activity for older clients while the richer fields

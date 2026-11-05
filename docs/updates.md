@@ -66,7 +66,9 @@ by area, and applies what is selected:
 | Cog extensions | `src/cogs/**` | The changed `cogs.<package>` modules are dropped from `sys.modules` (clearing the cached import) and only the affected extensions are reloaded. |
 | Utilities | `src/utils/**` | Changed `utils.*` modules are purged, every loaded extension is reloaded on top of them, and the dashboard app is rebuilt. |
 | API & dashboard | `src/webapp/**` | `webapp.*` is re-imported and the new Flask app is swapped into the running server (`server.app`). The listening socket, its thread and in-flight connections stay up. The swap is checked before it is reported: the new app must be the one on the server and must answer `/api/health`. |
-| Bot core | `src/bot.py`, `src/api_server.py`, `src/events/**`, `src/database/**` | A successor process is started on the inherited listening socket; see below. |
+| Database schema | `src/events/startup/database.py` | The module is re-imported and its `init_database` run again on the live pool: `CREATE TABLE IF NOT EXISTS`, missing columns and the idempotent migrations. The process keeps running. |
+| Gateway events | `src/events/on_*.py` | The modules are purged from `sys.modules`, re-imported, and the handler names `bot.py`'s callbacks look up are rebound onto the new functions. The next message runs the new code; nothing restarts. |
+| Bot core | `src/bot.py`, `src/api_server.py`, the rest of `src/events/startup/**`, `src/database/**` | The process replaces its own image in place, keeping its PID and listening socket; see below. |
 
 The API rebuild is transactional. The modules the running app was built from
 are snapshotted before `webapp.*` is dropped; if the new copy fails to import,
@@ -76,6 +78,36 @@ process whose modules were purged and whose route imports now read a file that
 does not load. The updater reloads its own module at the end of such a run for
 the same reason: `src/webapp/updates.py` is part of the area it replaces, and it
 is the one module that cannot be re-imported while it is executing.
+
+The gateway event modules get the same treatment without a reload of anything else.
+`bot.py` registers its Discord callbacks as closures over module-level names
+(`handle_ready`, `handle_message`) and reads that name from its own globals on
+every dispatch, so an event update purges `events.on_message` / `events.on_ready`,
+re-imports them from the new files, and rebinds every global that pointed at the
+old functions — including any other callable a host module imported from them.
+The gateway connection, the cogs and the dashboard are untouched; the very next
+message is handled by the new code. Module-level state in those modules (per-channel
+reply locks, the AI concurrency semaphore) starts again at its declared value,
+which is why they are limits and not counters. An event module that fails to
+import is put back from the old module object, so a bad pull cannot leave the
+gateway without its handler.
+
+The schema module is the exception in the startup chain. `events/startup/database.py`
+is re-imported and its `init_database` called again against the running pool, so
+a new table, a new column or a backfill is live immediately: the function is
+written for exactly that — tables are `IF NOT EXISTS`, migrations add only what
+is missing, and the pool is opened only when there is none. The music and
+error-report databases are skipped on the second run because their own `init`
+returns early once ready. The rest of `src/events/startup/**` still ships with the
+bot core: it runs once, on ready, so reloading it would change nothing until a
+restart.
+
+An area beta's build does not publish (an older deployment, or one without the
+feature) is reported as *not published*, never as “every file here was deleted”.
+That distinction matters: an update pulled from a beta build without the gateway
+events area used to offer to delete this deployment's `src/events/on_*.py`, and
+the reload then failed with `ModuleNotFoundError: No module named
+'events.on_message'`.
 
 Two smaller things are what make the new code the code that actually answers:
 
@@ -94,40 +126,61 @@ copied to `data/updates/backups/<run>/` first. A failed download or a failed
 reload restores that area from the backup and reports the error on the page; the
 last run is kept in `data/updates/last.json`.
 
-### The bot-core handoff
+### The bot-core restart
 
-Python cannot replace its own code, so `src/bot.py` needs a new interpreter. The
-handoff keeps both the site and the gateway up while that happens:
+Python cannot replace its own code, so `src/bot.py` needs a new interpreter.
+Handing the process over to a *child* is not good enough on a hosted service: the
+parent has to exit for the child to take the port, and a supervisor (Render,
+Railway, a systemd unit) treats that exit as a crash — it recreates the instance,
+throws away the files the update just wrote and leaves the dashboard down for the
+whole boot. So the process replaces its own image instead:
 
-1. The running process duplicates its listening socket and starts
-   `src/bot.py` with that socket inherited as an open file descriptor — no
-   rebinding and no gap — plus a one-run token and `NIKO_HANDOFF_ROLE=candidate`.
-2. The successor imports the new code, serves the API on the *same* socket — so
-   the site keeps answering during the overlap — loads its cogs and connects the
-   gateway.
-3. When its gateway is ready, the successor posts to
-   `/api/handoff/ready` on the predecessor. The predecessor stops accepting,
-   closes its gateway and exits; the successor keeps the socket, the session and
-   the cogs.
-4. The successor starts answering commands only after that acknowledgement, so
-   no command is handled twice. Expect one to two seconds where commands are not
-   answered; HTTP is never down.
+1. The running process duplicates its listening socket, marks the descriptor
+   inheritable and passes it as `NIKO_RESTART_FD`. **The port never closes**: the
+   kernel keeps the socket bound and listening across the exec, so connections
+   queue instead of being refused.
+2. `os.execve` keeps the PID. Nothing the host watches exits, so no restart of
+   the service is triggered and the written files stay on disk.
+3. The new image adopts the socket as soon as its imports finish, before cogs
+   load and before the gateway connects, so the site is answering again in about
+   a second. If the descriptor cannot be adopted it binds the port normally
+   rather than coming up without a site.
 
-If the successor never becomes ready, the predecessor stays exactly as it was
-and the page reports the failure. Files that were already written stay on disk,
-so a retry or a normal deploy picks them up.
+The exec closes the old image's gateway connection with it, so the two images
+never hold a Discord session at once, and the new one logs in again. Commands are
+unanswered for the few seconds the boot takes; HTTP is not interrupted. The
+gateway is not closed explicitly beforehand: `bot.close()` returns the running
+`asyncio.run`, and interpreter shutdown does not wait for the daemon thread that
+is about to exec — the process could exit before the image is replaced.
 
-The handoff is local to one machine: the successor must be able to inherit a
-file descriptor, so this is for a single-process deployment (the normal
-`python3 src/bot.py` layout), not for a container that is recreated per release.
+Because the bot area is the only one with no rollback (the running code is gone),
+the update *proves* the new files first: every Python file has to compile, and
+`src/bot.py` is run in a throwaway interpreter that stops right after its imports.
+If either check fails the area is rolled back and reported as failed, and nothing
+restarts — the old process keeps serving with its own code. The run is also
+refused when this process owns no listening socket, since there would be nothing
+for the site to come back on.
+
+The restart code itself lives in `src/utils/handoff.py`, which ships with the
+Utilities area, so it is re-imported from disk before the bot core is applied:
+a process that has been up since before the in-place restart still holds the
+previous successor handoff in memory, and restarting with that would hand the
+port to a child — the exact failure the in-place restart exists to avoid. If the
+file on disk is that copy too, the area is refused with a message saying to
+apply Utilities first (ticking both areas in one run does it in the right order)
+rather than failing with an `AttributeError` from the stale module.
 
 ## Limits worth knowing
 
 - A **new page** still needs a deploy: the feed can add strings and languages,
   not routes or components.
 - Python modules the bot core imported at startup (`utils.gateway`, `utils.analytics`,
-  …) keep their loaded copy until a bot-core handoff, even if a utilities update
-  rewrote the file. The page reports what it reloaded.
+  …) keep their loaded copy until a bot-core restart, even if a utilities update
+  rewrote the file. The page reports what it reloaded. Gateway event modules are
+  the exception: their handlers are rebound, so a change to `src/events/on_message.py`
+  is live on the next message, and the schema module's `init_database` is re-run so
+  a new table or column exists immediately. Any other startup module still waits
+  for a restart.
 - A website update replaces files, it does not rebuild them. Beta must have run
   its own build (the `dist/` folder is in the manifest) before production pulls
   it.
@@ -143,6 +196,13 @@ file descriptor, so this is for a single-process deployment (the normal
   build name in the shell against `/api/site/build`, see "Reloading a tab after
   a build" in `docs/dashboard.md`. Only a change to the bundle triggers it; a
   server-only update is picked up by the next request without a reload.
-- The handoff replaces the running process, so the supervisor that started it
-  must not restart it on a clean exit. `data/updates/handoff.json` records the
-  successor's pid and state if you need to trace one.
+- The bot-core restart replaces the process image, so it needs a Unix host and a
+  single-process layout (the normal `python3 src/bot.py` arrangement).
+  `data/updates/handoff.json` records the pid, port and state
+  (`restarting` / `restarted` / `failed`) if you need to trace one. Nothing is
+  written to that file for any other area.
+- A restart runs the new code from disk, but it cannot make it survive the
+  container being recreated: on a host with an ephemeral filesystem (Render) the
+  files pulled from beta are still lost the next time the service deploys or is
+  restarted by the platform. Deploy for durability; the in-place restart is what
+  lets an urgent bot fix land without waiting for one.

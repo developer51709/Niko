@@ -2,7 +2,8 @@
  * Generates the website favicon and the PWA app icons from one vector mark.
  *
  *   1. Writes the shared app mark to web/public/niko-app-icon.svg
- *   2. Writes the favicon as favicon.svg plus a 32px PNG fallback
+ *   2. Writes the favicon as favicon.svg — the icon `/bot/favicon.svg` falls
+ *      back to when the bot has no avatar to draw
  *   3. Rasterises the mark into web/public/icons/:
  *        niko-192.png            "any" launcher/shortcut icon
  *        niko-512.png            "any" store/splash icon
@@ -64,7 +65,6 @@ const ICONS = [
   { name: "niko-maskable-512.png", size: 512, svg: BLEED_SVG },
   { name: "apple-touch-icon.png", size: 180, svg: BLEED_SVG },
 ];
-const ROOT_ICONS = [{ name: "favicon-32.png", size: 32, svg: FAVICON_SVG }];
 
 async function writeEverywhere(targets, contents) {
   for (const target of targets) {
@@ -79,12 +79,13 @@ for (const name of ["favicon.svg", "niko-app-icon.svg"]) {
   await writeEverywhere([path.join(PUBLIC_DIR, name), path.join(MIRROR_DIR, name)], FAVICON_SVG);
 }
 
-for (const icon of [...ICONS, ...ROOT_ICONS]) {
+for (const icon of ICONS) {
   const png = await renderPng(icon.svg, icon.size);
-  const directory = ICONS.includes(icon) ? ICON_DIR : PUBLIC_DIR;
-  const mirrorDirectory = ICONS.includes(icon) ? path.join(MIRROR_DIR, "icons") : MIRROR_DIR;
-  await writeEverywhere([path.join(directory, icon.name), path.join(mirrorDirectory, icon.name)], png);
+  await writeEverywhere([
+    path.join(ICON_DIR, icon.name),
+    path.join(MIRROR_DIR, "icons", icon.name),
+  ], png);
   console.log(`  ${icon.name.padEnd(24)} ${icon.size}x${icon.size}`);
 }
 
-console.log(`Wrote the favicon and ${ICONS.length + ROOT_ICONS.length} PNG icons.`);
+console.log(`Wrote the favicon and ${ICONS.length} PNG icons.`);

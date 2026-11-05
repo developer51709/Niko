@@ -425,6 +425,23 @@ class TriggersView(discord.ui.LayoutView):
         self.current_page = 0
         self._build()
 
+    # ── permission gate ───────────────────────────────────────────────────────
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Only Manage Server may drive the panel.
+
+        ``.triggers`` posts the panel in the channel, so the buttons are visible
+        to everyone who can read it. Every button already re-checks here; the
+        view-level gate also covers the page arrows and any control added later.
+        """
+        permissions = getattr(interaction.user, "guild_permissions", None)
+        if permissions is not None and permissions.manage_guild:
+            return True
+        await interaction.response.send_message(
+            view=_permission_error_view(interaction), ephemeral=True
+        )
+        return False
+
     # ── error handler ─────────────────────────────────────────────────────────
 
     async def on_error(

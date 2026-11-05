@@ -7,6 +7,7 @@ one-line change in :data:`utils.locales.SUPPORTED_LANGUAGES`.
 
 from __future__ import annotations
 
+from utils import guild_language
 from utils.locales import FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES
 
 
@@ -39,10 +40,18 @@ def guild_of(source):
 def get_lang(source=None) -> str:
     """The shipped language code for a context, interaction, or guild.
 
-    Anything without a guild (a DM, a web request) is served English, which is
-    the same fallback a guild with an unsupported locale gets.
+    A server's own ``/language`` choice wins over Discord's locale, because
+    ``preferred_locale`` is only filled in when the server enabled Community.
+    Everything else falls back to the Discord locale, and anything without a
+    guild (a DM, a web request) is served English.
     """
-    return lang_from_locale(getattr(guild_of(source), "preferred_locale", None))
+    guild = guild_of(source)
+    if guild is None:
+        return FALLBACK_LANGUAGE
+    override = guild_language.language_for(getattr(guild, "id", None))
+    if override:
+        return override
+    return lang_from_locale(getattr(guild, "preferred_locale", None))
 
 
 def make_flat_msg(messages: dict, defaults: dict | None = None):
