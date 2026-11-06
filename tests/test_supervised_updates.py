@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from utils import handoff  # noqa: E402
 from webapp import updates  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def isolated_update_data(monkeypatch, tmp_path):
+    """Keep staging records out of the checkout's real ``data/updates``."""
+    monkeypatch.setattr(updates, "DATA_DIR", tmp_path / "updates")
 
 
 def _plan():
@@ -65,6 +72,44 @@ def test_supervised_bot_update_requests_supervisor_restart(monkeypatch):
     assert result["areas"]["bot"]["strategy"] == "requesting a supervised restart"
     assert requested
     assert scheduled == []
+
+
+def test_supervised_bot_update_records_the_last_good_restore_point(monkeypatch):
+    _prepare(monkeypatch)
+    seen = {}
+
+    def restart(**kwargs):
+        seen["pending"] = json.loads(
+            (updates.DATA_DIR / "pending.json").read_text(encoding="utf-8")
+        )
+        return {"ok": True, "accepted": True}
+
+    monkeypatch.setattr(updates.supervisor_control, "request_restart", restart)
+
+    result = updates.apply(["bot"], object())
+
+    assert result["ok"] is True
+    pending = seen["pending"]
+    assert pending["run_id"] == result["run"]
+    assert pending["area"] == "bot"
+    assert pending["backup_dir"] == f"data/updates/backups/{result['run']}"
+    assert pending["changes"] == [{"path": "src/bot.py", "status": "modified"}]
+    assert (updates.DATA_DIR / "pending.json").exists()
+
+
+def test_a_rejected_supervised_restart_clears_the_restore_point(monkeypatch):
+    _prepare(monkeypatch)
+    monkeypatch.setattr(
+        updates.supervisor_control,
+        "request_restart",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("control socket unavailable")),
+    )
+    monkeypatch.setattr(updates, "_restore_area", lambda name, files, run_id: None)
+
+    result = updates.apply(["bot"], object())
+
+    assert result["ok"] is False
+    assert not (updates.DATA_DIR / "pending.json").exists()
 
 
 def test_a_rejected_supervised_restart_rolls_the_bot_area_back(monkeypatch):

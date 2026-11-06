@@ -167,21 +167,3 @@ function extractHighlights(page: DocPage, query: string): string[] {
 
   return highlights;
 }
-
-// ── Tag cloud helper ──────────────────────────────────────────────────────────
-
-export function useTagCloud() {
-  const tags = useMemo(() => {
-    const tagCounts: Record<string, number> = {};
-    DOCS.forEach((doc) => {
-      doc.tags.forEach((tag) => {
-        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-      });
-    });
-    return Object.entries(tagCounts)
-      .map(([tag, count]) => ({ tag, count }))
-      .sort((a, b) => b.count - a.count);
-  }, []);
-
-  return tags;
-}

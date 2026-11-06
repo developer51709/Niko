@@ -1328,29 +1328,36 @@ export type StaffMaintenanceResponse = {
 
 /** One console line in the owner's live log, already ANSI-coloured. */
 export type OwnerLogEntry = {
-  id: number;
+  /** ``<process>/<LEVEL>:<byte offset>`` in the archive, or ``memory:<id>``. */
+  id: string;
   at: number;
   level: string;
   /** Name of the logger that emitted the line, e.g. ``pymongo.command``. */
   logger: string;
   /** Which ring holds the line: the main one, or a noisy library's own. */
   source?: "main" | "pymongo" | "urllib3" | "wavelink";
+  /** Process that wrote it: the supervisor, the database, the dashboard, or the bot. */
+  process?: "supervisor" | "db" | "web" | "api" | "bot";
   line: string;
 };
 
 export type OwnerLogsResponse = {
   lines: OwnerLogEntry[];
-  head: number;
-  next: number;
-  first: number | null;
-  /** Changes whenever the bot starts a new buffer (restart or update). */
+  /** Composite cursor at the newest line in the buffers this view reads. */
+  head: string;
+  /** Opaque cursor to send back on the next poll. */
+  next: string;
+  first: string | null;
+  /** Identifies the archive (or in-memory ring); a change means a new buffer. */
   token: string;
   capacity: number;
   /** Capacity of each noisy-library ring; absent on an older backend. */
   noise_capacity?: number;
   truncated: boolean;
-  /** The page's cursor belongs to an earlier process or module load. */
+  /** The page's cursor belongs to an earlier archive or module load. */
   reset: boolean;
+  /** More lines are waiting in the selected buffers than this response carried. */
+  has_more?: boolean;
   unavailable?: boolean;
 };
 

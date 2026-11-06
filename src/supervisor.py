@@ -19,9 +19,13 @@ import argparse
 import asyncio
 import contextlib
 import fcntl
+import hmac
+import importlib.util
 import json
 import logging
 import os
+import secrets
+import shutil
 import signal
 import socket
 import stat
@@ -36,6 +40,7 @@ import aiohttp
 from aiohttp import web
 from multidict import CIMultiDict
 
+from console_format import ConsoleFormatter
 from supervisor_protocol import (
     CONTROL_FD_ENV,
     CONTROL_SOCKET_ENV,
@@ -84,7 +89,73 @@ class Options:
     max_restarts: int = 0
     proxy_timeout: float = 300.0
     status_public: bool = False
+    #: Where the updater records the files a supervised restart is about to
+    #: boot, and the root those paths are relative to.
+    pending_update_file: Path = ROOT / "data" / "updates" / "pending.json"
+    update_root: Path = ROOT
+    #: When true (the default), the supervisor runs the dashboard in its own
+    #: child process and the bot in another.  The dashboard child is the public
+    #: one.  Set ``NIKO_SPLIT_WEB=0`` or pass ``--no-split-web`` to run the old
+    #: combined child instead.
+    split_web: bool = True
+    web_child_script: Path = ROOT / "src" / "web_child.py"
+    #: When true, the database runs in its own child too.  It defaults to the
+    #: split layout; the combined fallback keeps the historical in-process pool.
+    split_db: bool = True
+    db_child_script: Path = ROOT / "src" / "db_child.py"
+    #: Shared console store the owner's logs page reads.  Supervised processes
+    #: append to it so a restart no longer starts an empty console.  ``None``
+    #: keeps it beside the status file, which is what isolates test instances.
+    log_store: Path | None = None
+    log_store_bytes: int = 5 * 1024 * 1024
+    log_store_backups: int = 3
     log_level: str = "INFO"
+
+    def child_specs(self) -> list["ChildSpec"]:
+        bot = ChildSpec(
+            name="bot",
+            script=self.child_script,
+            args=list(self.child_args),
+            primary=not self.split_web,
+        )
+        children: list[ChildSpec] = []
+        if self.split_db:
+            # The database starts first: the bot child waits for its port so a
+            # restart never races the pool it is about to use.
+            children.append(ChildSpec(name="db", script=self.db_child_script))
+        if self.split_web:
+            children.append(ChildSpec(name="web", script=self.web_child_script, primary=True))
+        children.append(bot)
+        return children
+
+
+@dataclass
+class ChildSpec:
+    """One process the supervisor owns.
+
+    ``primary`` marks the child that owns public traffic; its readiness is the
+    service's readiness.  In split mode the web child is primary and the bot
+    child is restarted without touching it.  In the combined fallback mode the
+    bot child is both the gateway and the dashboard, so it is primary.
+    """
+
+    name: str
+    script: Path
+    args: list[str] = field(default_factory=list)
+    primary: bool = False
+
+
+@dataclass
+class ChildSlot:
+    """Per-child bookkeeping that outlives each individual process."""
+
+    spec: ChildSpec
+    state: str = "starting"
+    restarts: int = 0
+    failures: int = 0
+    last_error: str | None = None
+    last_stop_reason: str | None = None
+    restart_requested: bool = False
 
 
 @dataclass
@@ -93,6 +164,7 @@ class Child:
     reader: asyncio.StreamReader
     writer: asyncio.StreamWriter
     started_at: float
+    name: str = "bot"
     api_port: int | None = None
     state: str = "process_started"
     ready: bool = False
@@ -131,13 +203,26 @@ class Supervisor:
         self.consecutive_failures = 0
         self.last_stop_reason: str | None = None
 
-        self._child: Child | None = None
+        self._log_store_path = Path(
+            options.log_store or (options.status_file.parent / "logs")
+        )
+        self._log_store: Any = None
+        self._log_handler: logging.Handler | None = None
+        self._specs = options.child_specs()
+        self._slots: dict[str, ChildSlot] = {
+            spec.name: ChildSlot(spec=spec) for spec in self._specs
+        }
+        self._children: dict[str, Child] = {}
         self._history: list[dict[str, Any]] = []
         self._lock_fd: int | None = None
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self._control_server: asyncio.AbstractServer | None = None
         self._session: aiohttp.ClientSession | None = None
+        #: Only the supervisor and its children know this value.  It is what
+        #: makes the loopback-only update entry point unusable by anything else
+        #: on the host, including a reverse-proxied public request.
+        self._internal_token = secrets.token_urlsafe(32)
         self._supervise_task: asyncio.Task | None = None
         self._shutdown_event = asyncio.Event()
         self._restart_signal = asyncio.Event()
@@ -146,11 +231,85 @@ class Supervisor:
         self._shutdown_future: asyncio.Task | None = None
         self._startup_done = False
 
+    # ── Children ──────────────────────────────────────────────────────────
+
+    @property
+    def _child(self) -> Child | None:
+        """The primary child: the one public traffic is proxied to."""
+        for slot in self._slots.values():
+            if slot.spec.primary:
+                return self._children.get(slot.spec.name)
+        return None
+
+    def _child_named(self, name: str | None) -> Child | None:
+        if name is None:
+            return None
+        return self._children.get(name)
+
+    @property
+    def _bot_child(self) -> Child | None:
+        return self._children.get("bot")
+
+    def _slot_of(self, child: Child) -> ChildSlot:
+        return self._slots[child.name]
+
+    def _refresh_state(self) -> None:
+        """Derive supervisor state from the children.
+
+        Readiness is the primary child's: the public surface is what Render's
+        health check cares about.  A bot child that is still booting must not
+        make the platform restart a service whose dashboard is answering.
+        """
+        if self._stopping:
+            self.state = "stopped"
+            self.ready = False
+            return
+        primary = self._primary_slot()
+        primary_ready = bool(
+            primary is not None
+            and self._children.get(primary.spec.name) is not None
+            and self._children[primary.spec.name].ready
+        )
+        states = {
+            slot.spec.name: self._children.get(slot.spec.name)
+            for slot in self._slots.values()
+        }
+        ready_children = [child for child in states.values() if child is not None and child.ready]
+        if primary_ready:
+            others_ready = all(
+                child is not None and child.ready
+                for name, child in states.items()
+                if name != (primary.spec.name if primary is not None else None)
+            )
+            self.state = "active" if others_ready else "degraded"
+            self.ready = True
+            return
+        if ready_children:
+            self.state = "degraded"
+            self.ready = False
+            return
+        if all(slot.state == "failed" for slot in self._slots.values()):
+            self.state = "failed"
+        elif any(slot.state == "draining" for slot in self._slots.values()):
+            self.state = "draining"
+        elif any(child is not None for child in states.values()):
+            self.state = "starting"
+        else:
+            self.state = "restarting"
+        self.ready = False
+
+    def _primary_slot(self) -> ChildSlot | None:
+        for slot in self._slots.values():
+            if slot.spec.primary:
+                return slot
+        return next(iter(self._slots.values()), None)
+
     # ── Public server and status ──────────────────────────────────────────
 
     async def run(self) -> None:
         try:
             self._prepare_paths()
+            self._install_log_store()
             self._acquire_lock()
             self._remove_stale_socket()
             self._install_signal_handlers()
@@ -200,14 +359,13 @@ class Supervisor:
         # Wake the supervision loop's child wait before waiting for that loop.
         # Awaiting the loop first would deadlock while it waits for an exit that
         # only this shutdown path can trigger.
-        child = self._child
-        if child is not None:
+        children = list(self._children.values())
+        for child in children:
             await self._terminate_child(child, "supervisor shutdown")
         if self._supervise_task is not None:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._supervise_task
-        child = self._child
-        if child is not None:
+        for child in list(self._children.values()):
             await self._cleanup_child(child)
         # A draining/stopped event from the child must not overwrite the final
         # supervisor state during an intentional shutdown.
@@ -216,6 +374,50 @@ class Supervisor:
         await self._cleanup_resources()
         self._write_status()
         LOG.info("supervisor stopped")
+
+    def _install_log_store(self) -> None:
+        """Mirror the supervisor's own log records into its process buffer."""
+        try:
+            from log_store import LogArchive
+
+            self._log_store = LogArchive(
+                self._log_store_path,
+                max_bytes=self.options.log_store_bytes,
+                backups=self.options.log_store_backups,
+            )
+        except Exception as error:
+            self._log_store = None
+            LOG.warning("owner log archive unavailable: %s", error)
+            return
+
+        store = self._log_store
+
+        class _StoreHandler(logging.Handler):
+            def __init__(self) -> None:
+                super().__init__(level=logging.NOTSET)
+                # Same rendering as the terminal (and as the bot's own store
+                # lines), so the owner's logs page shows one consistent style.
+                self.setFormatter(ConsoleFormatter())
+
+            def emit(self, record: logging.LogRecord) -> None:
+                try:
+                    store.append(
+                        level=record.levelname,
+                        logger=record.name,
+                        line=self.format(record),
+                        process="supervisor",
+                        at=record.created,
+                    )
+                except Exception:
+                    pass
+
+        self._log_handler = _StoreHandler()
+        logging.getLogger().addHandler(self._log_handler)
+
+    def _remove_log_handler(self) -> None:
+        if self._log_handler is not None:
+            logging.getLogger().removeHandler(self._log_handler)
+            self._log_handler = None
 
     def _prepare_paths(self) -> None:
         for path in (
@@ -277,6 +479,10 @@ class Supervisor:
         app.router.add_get("/health", self._health)
         app.router.add_get("/ready", self._ready)
         app.router.add_get("/supervisor/status", self._public_status)
+        # Recovery path: beta can force an update over the supervisor's own
+        # public listener even when the dashboard child is down.  It is hidden
+        # (404) unless BETA_UPDATE_TOKEN is configured.
+        app.router.add_post("/supervisor/update", self._force_update)
         app.router.add_route("*", "/{tail:.*}", self._proxy)
 
         self._runner = web.AppRunner(app, access_log=None)
@@ -331,105 +537,278 @@ class Supervisor:
             raise web.HTTPNotFound()
         return web.json_response(self._status_snapshot())
 
+    async def _force_update(self, request: web.Request) -> web.Response:
+        """Run a beta-initiated update without relying on the dashboard child.
+
+        The update itself still runs in the bot child (it owns the modules and
+        the Discord connection), but the supervisor answers on its own public
+        socket, so a crashed or crash-looping dashboard child cannot lock the
+        owner out of the recovery path.  ``BETA_UPDATE_TOKEN`` is the shared
+        secret beta already uses; no new trust relationship is introduced.
+        """
+        expected = (os.environ.get("BETA_UPDATE_TOKEN") or "").strip()
+        supplied = request.headers.get("X-Update-Token", "")
+        # Bytes, not str: a non-ASCII header must fail auth like any other wrong
+        # token instead of raising inside compare_digest.
+        if not expected or not hmac.compare_digest(
+            supplied.encode("utf-8", "replace"), expected.encode("utf-8", "replace")
+        ):
+            # Same response as an unconfigured instance: a caller cannot probe
+            # whether this deployment has the recovery path enabled.
+            raise web.HTTPNotFound()
+
+        if request.content_length is not None and request.content_length > 16 * 1024:
+            return web.json_response({"error": "request body is too large"}, status=413)
+        raw = await request.read()
+        if len(raw) > 16 * 1024:
+            return web.json_response({"error": "request body is too large"}, status=413)
+        try:
+            body = json.loads(raw) if raw else {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return web.json_response({"error": "expected a JSON object"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "expected a JSON object"}, status=400)
+        areas = body.get("areas")
+        if areas is not None and (
+            not isinstance(areas, list)
+            or not all(isinstance(name, str) for name in areas)
+        ):
+            return web.json_response(
+                {"error": "areas must be a list of area names"}, status=400
+            )
+
+        if self._stopping:
+            return web.json_response({"error": "supervisor is shutting down"}, status=503)
+        child = self._bot_child
+        if (
+            child is None
+            or child.api_port is None
+            or child.exit_event.is_set()
+            or not child.ready
+        ):
+            return web.json_response(
+                {
+                    "error": "the bot child is not ready; no update can run",
+                    "retry_after": 5,
+                },
+                status=503,
+                headers={"Retry-After": "5"},
+            )
+        session = self._session
+        if session is None:
+            return web.json_response({"error": "supervisor is starting"}, status=503)
+
+        LOG.warning(
+            "forced update requested by beta (areas=%s)",
+            ",".join(areas) if areas else "all",
+        )
+        payload = {"areas": areas} if areas is not None else {}
+        try:
+            # Applying a bot-core change downloads every file it needs before
+            # requesting a restart, so the read side is deliberately generous.
+            timeout = aiohttp.ClientTimeout(total=900.0, connect=5.0, sock_read=900.0)
+            async with session.post(
+                f"http://127.0.0.1:{child.api_port}/api/updates/force",
+                json=payload,
+                headers={
+                    "X-Supervisor-Token": self._internal_token,
+                    "Accept": "application/json",
+                },
+                timeout=timeout,
+            ) as response:
+                data = await response.json(content_type=None)
+                status = response.status
+        except asyncio.TimeoutError:
+            return web.json_response(
+                {
+                    "error": "the bot child did not finish the update within 15 "
+                    "minutes; it may still be running"
+                },
+                status=504,
+            )
+        except Exception as exc:
+            LOG.warning("forced update could not reach the bot child: %s", exc)
+            return web.json_response(
+                {"error": "the bot child did not answer the update request"},
+                status=502,
+            )
+        if not isinstance(data, dict):
+            return web.json_response(
+                {"error": "the bot child returned an invalid update response"},
+                status=502,
+            )
+        return web.json_response(data, status=status)
+
     # ── Child supervision ─────────────────────────────────────────────────
 
     async def _supervise(self) -> None:
+        """Supervise every child concurrently.
+
+        Each child owns its restart budget, readiness and exit history, so a
+        dashboard restart never stops the gateway and a bot crash never takes
+        the dashboard down with it.
+        """
+        try:
+            await asyncio.gather(
+                *(
+                    asyncio.create_task(
+                        self._supervise_child(slot),
+                        name=f"supervise-{slot.spec.name}",
+                    )
+                    for slot in self._slots.values()
+                )
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            LOG.exception("supervision loop crashed")
+            self.last_error = "supervision loop crashed; see supervisor logs"
+            self.state = "failed"
+            self._write_status()
+
+    async def _supervise_child(self, slot: ChildSlot) -> None:
+        name = slot.spec.name
         try:
             while not self._shutdown_event.is_set():
-                if self._child is None:
-                    if self.state == "failed" and not self._restart_signal.is_set():
+                child = self._children.get(name)
+                if child is None:
+                    if slot.state == "failed" and not slot.restart_requested:
                         await self._wait_for_wake()
                         if self._shutdown_event.is_set():
                             break
-                    if self._restart_signal.is_set():
-                        self._restart_signal.clear()
-                    if self._restart_pending:
-                        self._restart_pending = False
-                        self.consecutive_failures = 0
+                    if slot.restart_requested:
+                        slot.restart_requested = False
+                        slot.failures = 0
+                    slot.state = "starting"
+                    self._refresh_state()
+                    self._record("child_starting", child=name)
+                    self._write_status()
                     try:
-                        await self._start_child()
+                        await self._start_child(slot)
                     except Exception as exc:
-                        self.restart_count += 1
-                        self.consecutive_failures += 1
-                        self.last_error = f"spawn failed: {type(exc).__name__}: {exc}"
-                        LOG.error("%s", self.last_error)
-                        self._record("spawn_failed", error=self.last_error)
-                        if not self._allow_restart():
-                            self.state = "failed"
+                        slot.restarts += 1
+                        slot.failures += 1
+                        slot.state = "restarting"
+                        slot.last_error = (
+                            f"{name} spawn failed: {type(exc).__name__}: {exc}"
+                        )
+                        self.last_error = slot.last_error
+                        LOG.error("%s", slot.last_error)
+                        self._record("spawn_failed", child=name, error=slot.last_error)
+                        self._refresh_state()
+                        self._write_status()
+                        if not self._allow_restart(slot):
+                            slot.state = "failed"
+                            self._refresh_state()
                             self._write_status()
                             await self._wait_for_wake()
                         else:
-                            self.state = "restarting"
-                            self._write_status()
-                            await self._backoff()
+                            await self._backoff(slot)
                         continue
+                    self._refresh_state()
+                    self._write_status()
                     continue
 
-                child = self._child
                 await child.exit_event.wait()
                 await self._cleanup_child(child)
                 if self._shutdown_event.is_set():
                     break
 
+                # An update's bot that never became ready is the one case we can
+                # repair without the app's help: the updater recorded what it
+                # replaced, so restore those files before booting again.  A
+                # dashboard child carries no bot area and is not a rollback
+                # trigger.
+                if name == "bot" and child.ready_at is None and not child.restart_requested:
+                    self._rollback_pending_update()
+
                 if child.restart_requested:
-                    self.last_stop_reason = child.stop_reason or "control restart"
-                    self.consecutive_failures = 0
-                    self.state = "restarting"
-                    self.ready = False
-                    self._record("child_restarting", reason=self.last_stop_reason)
+                    slot.last_stop_reason = child.stop_reason or "control restart"
+                    slot.failures = 0
+                    slot.state = "restarting"
+                    self.last_stop_reason = slot.last_stop_reason
+                    self._refresh_state()
+                    self._record("child_restarting", child=name, reason=slot.last_stop_reason)
                     self._write_status()
                     continue
 
-                self.restart_count += 1
-                self.consecutive_failures += 1
-                self.last_error = (
-                    f"child exited with code {child.returncode}"
+                slot.restarts += 1
+                slot.failures += 1
+                slot.last_error = (
+                    f"{name} exited with code {child.returncode}"
                     + (f" ({child.stop_reason})" if child.stop_reason else "")
                 )
-                self.last_stop_reason = child.stop_reason or "child exit"
-                self.state = "restarting"
-                self.ready = False
+                slot.last_stop_reason = child.stop_reason or "child exit"
+                slot.state = "restarting"
+                self.restart_count += 1
+                self.consecutive_failures = slot.failures
+                self.last_error = slot.last_error
+                self.last_stop_reason = slot.last_stop_reason
+                self._refresh_state()
                 self._record(
                     "child_exited",
+                    child=name,
                     returncode=child.returncode,
-                    restart_count=self.restart_count,
+                    restart_count=slot.restarts,
                     reason=child.stop_reason,
                 )
                 self._write_status()
-                if not self._allow_restart():
-                    self.state = "failed"
-                    self.last_error = (
-                        f"restart limit reached after {self.consecutive_failures} failures"
+                if not self._allow_restart(slot):
+                    slot.state = "failed"
+                    slot.last_error = (
+                        f"{name} restart limit reached after {slot.failures} failures"
                     )
+                    self.last_error = slot.last_error
+                    self._record("child_failed", child=name, error=slot.last_error)
+                    self._refresh_state()
                     self._write_status()
                     await self._wait_for_wake()
                     continue
-                await self._backoff()
+                await self._backoff(slot)
         except asyncio.CancelledError:
             raise
         except Exception:
-            LOG.exception("supervision loop crashed")
-            self.state = "failed"
-            self.last_error = "supervision loop crashed; see supervisor logs"
+            LOG.exception("supervision loop for %s crashed", name)
+            slot.state = "failed"
+            slot.last_error = f"{name} supervision loop crashed"
+            self.last_error = slot.last_error
+            self._refresh_state()
             self._write_status()
 
-    async def _start_child(self) -> None:
+    async def _await_sibling_port(self, name: str, timeout: float) -> int | None:
+        """Wait briefly for a sibling child to report its loopback port.
+
+        Children start concurrently, and the bot needs the database child's
+        port before it can attach its pool.  The port is also discoverable over
+        the control socket afterwards, so a timeout here only means "ask the
+        supervisor later" rather than a failure.
+        """
+        deadline = time.monotonic() + max(0.0, timeout)
+        while not self._shutdown_event.is_set():
+            child = self._children.get(name)
+            if child is not None and child.api_port:
+                return child.api_port
+            if time.monotonic() >= deadline:
+                return None
+            await asyncio.sleep(0.05)
+        return None
+
+    async def _start_child(self, slot: ChildSlot) -> None:
         if self._shutdown_event.is_set():
             return
-        self.state = "starting"
-        self.ready = False
-        self._record("child_starting")
-        self._write_status()
-
+        if slot.spec.name == "bot" and self.options.split_db:
+            await self._await_sibling_port(
+                "db", min(15.0, self.options.startup_timeout / 2)
+            )
         parent_sock, child_sock = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         parent_sock.setblocking(False)
         child_sock.set_inheritable(True)
-        env = self._child_environment(child_sock.fileno())
+        env = self._child_environment(child_sock.fileno(), slot)
         command = [
             sys.executable,
             "-u",
-            str(self.options.child_script),
-            *self.options.child_args,
+            str(slot.spec.script),
+            *slot.spec.args,
         ]
         proc: asyncio.subprocess.Process | None = None
         try:
@@ -463,6 +842,7 @@ class Supervisor:
             reader=reader,
             writer=writer,
             started_at=started,
+            name=slot.spec.name,
             last_heartbeat=started,
             last_event_at=started,
         )
@@ -482,18 +862,32 @@ class Supervisor:
         child.wait_task = asyncio.create_task(
             self._wait_child(child), name=f"child-wait-{proc.pid}"
         )
-        self._child = child
-        self._record("child_started", pid=child.pid)
-        LOG.info("child started pid=%s", child.pid)
+        self._children[child.name] = child
+        slot.state = "process_started"
+        self._record("child_started", child=child.name, pid=child.pid)
+        LOG.info("child %s started pid=%s", child.name, child.pid)
         self._write_status()
 
-    def _child_environment(self, control_fd: int) -> dict[str, str]:
+    def _child_environment(
+        self,
+        control_fd: int,
+        slot: ChildSlot | None = None,
+    ) -> dict[str, str]:
+        slot = slot or self._primary_slot()
+        assert slot is not None
         env = dict(os.environ)
         for key in (
             "NIKO_RESTART_FD",
             "NIKO_HANDOFF_ROLE",
             "NIKO_CHILD_PORT",
             "NIKO_IMPORT_PROBE",
+            "NIKO_CHILD_NAME",
+            "NIKO_WEB_ROLE",
+            "NIKO_INTERNAL_TOKEN",
+            "NIKO_BOT_API_PORT",
+            "NIKO_DB_API_PORT",
+            "NIKO_SPLIT_WEB",
+            "NIKO_SPLIT_DB",
             CONTROL_FD_ENV,
             CONTROL_SOCKET_ENV,
             PUBLIC_PORT_ENV,
@@ -507,12 +901,34 @@ class Supervisor:
         env.update(
             {
                 SUPERVISED_ENV: "1",
+                "NIKO_CHILD_NAME": slot.spec.name,
                 CONTROL_FD_ENV: str(control_fd),
                 CONTROL_SOCKET_ENV: str(self.options.control_socket.resolve()),
                 PUBLIC_PORT_ENV: str(self.public_port or self.options.public_port),
+                "NIKO_SPLIT_WEB": "1" if self.options.split_web else "0",
+                "NIKO_SPLIT_DB": "1" if self.options.split_db else "0",
+                "NIKO_LOG_STORE": str(self._log_store_path.resolve()),
+                "NIKO_LOG_STORE_BYTES": str(self.options.log_store_bytes),
+                "NIKO_LOG_STORE_BACKUPS": str(self.options.log_store_backups),
                 "PYTHONUNBUFFERED": "1",
             }
         )
+        if slot.spec.name in {"bot", "db"}:
+            # Only the children that answer loopback calls need the supervisor's
+            # credential: the bot runs updates and reads the database, the
+            # database child serves it.  The dashboard child never gets it.
+            env["NIKO_INTERNAL_TOKEN"] = self._internal_token
+        if slot.spec.name == "bot" and self.options.split_db:
+            db = self._children.get("db")
+            if db is not None and db.api_port:
+                env["NIKO_DB_API_PORT"] = str(db.api_port)
+        if slot.spec.name == "web":
+            # The dashboard child forwards live-bot routes to the bot child's
+            # loopback API.  It has no gateway of its own.
+            env["NIKO_WEB_ROLE"] = "1"
+            bot = self._children.get("bot")
+            if bot is not None and bot.api_port:
+                env["NIKO_BOT_API_PORT"] = str(bot.api_port)
         return env
 
     async def _wait_child(self, child: Child) -> None:
@@ -584,35 +1000,45 @@ class Supervisor:
         elif event == "draining":
             child.state = "draining"
             child.ready = False
-            self.ready = False
-            self.state = "draining"
+            self._slot_of(child).state = "draining"
         elif event in {"ready", "degraded"}:
             child.ready = True
             child.ready_at = time.monotonic()
             child.state = event
             child.readiness = payload.get("checks") if isinstance(payload.get("checks"), dict) else None
-            self.state = "active" if event == "ready" else "degraded"
-            self.ready = True
-            self._record("child_ready", state=event, reasons=payload.get("reasons") or [])
+            self._slot_of(child).state = event
+            self._record(
+                "child_ready",
+                child=child.name,
+                state=event,
+                reasons=payload.get("reasons") or [],
+            )
+            # The release the pending update delivered is now serving, so it is
+            # no longer a rollback candidate.  Only the bot child carries the
+            # bot area; a dashboard child becoming ready says nothing about it.
+            if child.name == "bot":
+                self._confirm_pending_update()
         elif event in {"readiness_failed", "error"}:
             reason = str(payload.get("reason") or payload.get("message") or event)
             child.last_error = reason
             child.readiness = payload.get("checks") if isinstance(payload.get("checks"), dict) else None
             child.ready = False
-            self.ready = False
+            self._slot_of(child).last_error = reason
             self.last_error = reason
-            self._record("child_not_ready", reason=reason)
+            self._record("child_not_ready", child=child.name, reason=reason)
+            self._refresh_state()
             await self._terminate_child(child, "readiness failed")
             return
         elif event == "stopped":
             child.state = "stopped"
             child.ready = False
-            self.ready = False
+            self._slot_of(child).state = "stopped"
         else:
             LOG.debug("unknown child event: %s", event)
             return
 
-        self._record(f"child_{event}", state=child.state)
+        self._record(f"child_{event}", child=child.name, state=child.state)
+        self._refresh_state()
         self._write_status()
 
     async def _watchdog(self, child: Child) -> None:
@@ -630,13 +1056,15 @@ class Supervisor:
                     LOG.warning("%s", self.last_error)
                     await self._terminate_child(child, "heartbeat timeout")
                     return
+                slot = self._slot_of(child)
                 if (
                     child.ready_at is not None
                     and now - child.ready_at >= self.options.restart_reset_after
-                    and self.consecutive_failures
+                    and slot.failures
                 ):
+                    slot.failures = 0
                     self.consecutive_failures = 0
-                    self._record("failure_counter_reset")
+                    self._record("failure_counter_reset", child=child.name)
             elif child.ready_at is None and now - child.started_at > self.options.startup_timeout:
                 # A child that has already been ready is not still starting.
                 # Its draining/restarting `ready=False` must not be reported as
@@ -658,7 +1086,9 @@ class Supervisor:
         if child.stop_reason is None:
             child.stop_reason = reason
         if child.proc.returncode is None:
-            LOG.warning("stopping child pid=%s: %s", child.pid, reason)
+            # An operator-initiated shutdown is expected, not a fault.
+            emit = LOG.info if reason == "supervisor shutdown" else LOG.warning
+            emit("stopping child pid=%s: %s", child.pid, reason)
             self._kill_group(child, signal.SIGTERM)
             try:
                 await asyncio.wait_for(child.exit_event.wait(), timeout=self.options.shutdown_timeout)
@@ -679,9 +1109,12 @@ class Supervisor:
             pass
 
     async def _cleanup_child(self, child: Child) -> None:
-        if self._child is child:
-            self._child = None
-        self.ready = False
+        if self._children.get(child.name) is child:
+            self._children.pop(child.name, None)
+        slot = self._slots.get(child.name)
+        if slot is not None and slot.state not in {"failed", "restarting"}:
+            slot.state = "stopped"
+        self._refresh_state()
         for task in (child.monitor_task, child.watchdog_task):
             if task is not None:
                 task.cancel()
@@ -730,12 +1163,12 @@ class Supervisor:
                         break
                     line = bytes(buffer[:newline])
                     del buffer[: newline + 1]
-                    self._log_child_line(child, stream_name, line)
+                    self._log_child_line(line)
                 if len(buffer) >= 64 * 1024:
-                    self._log_child_line(child, stream_name, bytes(buffer), truncated=True)
+                    self._log_child_line(bytes(buffer), truncated=True)
                     buffer.clear()
             if buffer:
-                self._log_child_line(child, stream_name, bytes(buffer))
+                self._log_child_line(bytes(buffer))
         except asyncio.CancelledError:
             raise
         except (ConnectionError, OSError):
@@ -743,8 +1176,6 @@ class Supervisor:
 
     def _log_child_line(
         self,
-        child: Child,
-        stream_name: str,
         line: bytes,
         *,
         truncated: bool = False,
@@ -755,20 +1186,31 @@ class Supervisor:
         if len(text) > 4096:
             text = text[:4096] + "…[truncated]"
         suffix = " [line truncated]" if truncated else ""
-        LOG.info("[child:%s:%s] %s%s", child.pid, stream_name, text, suffix)
+        # The child already rendered its own console line in the bot's style
+        # (clock, level, module); re-prefixing it would stack a second
+        # timestamp on top.  Pass it through untouched, like the bot's own
+        # terminal output.  The child writes its records to the shared store
+        # itself, so this line is terminal-only.
+        print(f"{text}{suffix}", file=sys.stderr, flush=True)
 
-    async def _backoff(self) -> None:
-        exponent = max(0, self.consecutive_failures - 1)
+    async def _backoff(self, slot: ChildSlot | None = None) -> None:
+        failures = slot.failures if slot is not None else self.consecutive_failures
+        exponent = max(0, failures - 1)
         delay = min(
             self.options.restart_backoff_initial * (2**exponent),
             self.options.restart_backoff_max,
         )
-        self._record("restart_backoff", seconds=round(delay, 3))
+        self._record(
+            "restart_backoff",
+            child=slot.spec.name if slot is not None else None,
+            seconds=round(delay, 3),
+        )
         await self._wait_for_wake(delay)
 
-    def _allow_restart(self) -> bool:
+    def _allow_restart(self, slot: ChildSlot | None = None) -> bool:
         limit = self.options.max_restarts
-        return limit <= 0 or self.consecutive_failures <= limit
+        failures = slot.failures if slot is not None else self.consecutive_failures
+        return limit <= 0 or failures <= limit
 
     async def _wait_for_wake(self, timeout: float | None = None) -> None:
         shutdown_task = asyncio.create_task(self._shutdown_event.wait())
@@ -849,6 +1291,16 @@ class Supervisor:
             return {"ok": True, "pong": True, "protocol": PROTOCOL_VERSION}
         if command == "status":
             return {"ok": True, "status": self._status_snapshot()}
+        if command == "route":
+            bot = self._bot_child
+            db = self._children.get("db")
+            return {
+                "ok": True,
+                "split_web": self.options.split_web,
+                "split_db": self.options.split_db,
+                "bot_api_port": bot.api_port if bot is not None else None,
+                "db_api_port": db.api_port if db is not None else None,
+            }
         if command == "restart":
             if self._stopping:
                 return {"ok": False, "error": "supervisor is shutting down"}
@@ -857,46 +1309,84 @@ class Supervisor:
             except (TypeError, ValueError):
                 return {"ok": False, "error": "delay must be a number"}
             reason = str(payload.get("reason") or "control restart")
-            self._request_restart(delay, reason)
+            targets = self._restart_targets(payload.get("child") or payload.get("target"))
+            if targets is None:
+                return {
+                    "ok": False,
+                    "error": f"unknown child: {payload.get('child') or payload.get('target')}",
+                }
+            self._request_restart(delay, reason, targets)
+            child = self._child
             return {
                 "ok": True,
                 "accepted": True,
                 "delay": delay,
-                "child_pid": self._child.pid if self._child else None,
+                "children": [slot.spec.name for slot in targets],
+                "child_pid": child.pid if child else None,
             }
         if command == "shutdown":
             asyncio.create_task(self.shutdown())
             return {"ok": True, "accepted": True}
         return {"ok": False, "error": f"unknown control command: {command or '<empty>'}"}
 
-    def _request_restart(self, delay: float, reason: str) -> None:
+    def _restart_targets(self, target: Any) -> list[ChildSlot] | None:
+        """Resolve a control restart target: ``None``/``all`` means every child."""
+        if target in (None, "", "all", "*"):
+            return list(self._slots.values())
+        names = [str(target)] if isinstance(target, str) else [str(item) for item in target]
+        selected: list[ChildSlot] = []
+        for name in names:
+            slot = self._slots.get(name)
+            if slot is None:
+                return None
+            selected.append(slot)
+        return selected
+
+    def _request_restart(
+        self,
+        delay: float,
+        reason: str,
+        targets: list[ChildSlot] | None = None,
+    ) -> None:
+        slots = list(targets) if targets is not None else list(self._slots.values())
+
         async def request_after_delay() -> None:
             if delay:
                 await asyncio.sleep(delay)
             if self._shutdown_event.is_set():
                 return
-            child = self._child
-            if child is None:
-                self._restart_pending = True
+            wake = False
+            for slot in slots:
+                child = self._children.get(slot.spec.name)
+                if child is None:
+                    slot.restart_requested = True
+                    wake = True
+                    continue
+                child.restart_requested = True
+                child.stop_reason = reason
+                await self._terminate_child(child, reason)
+            if wake:
                 self._restart_signal.set()
-                return
-            child.restart_requested = True
-            child.stop_reason = reason
-            await self._terminate_child(child, reason)
 
         asyncio.create_task(request_after_delay(), name="control-restart")
 
     # ── Reverse proxy ─────────────────────────────────────────────────────
 
     async def _proxy(self, request: web.Request) -> web.StreamResponse:
+        # Discord interactions must reach the gateway child directly: they are
+        # signed for that process's application key and carry a hard deadline.
+        # Everything else belongs to the primary (dashboard) child.
         child = self._child
+        if request.path.startswith("/api/discord/interactions"):
+            child = self._bot_child or self._child
         if (
             self._stopping
             or child is None
             or child.api_port is None
             or child.exit_event.is_set()
         ):
-            return self._unavailable("bot child is not serving")
+            name = child.name if child is not None else "child"
+            return self._unavailable(f"{name} child is not serving")
 
         if request.headers.get("Upgrade"):
             return web.json_response(
@@ -938,10 +1428,10 @@ class Supervisor:
         except asyncio.CancelledError:
             raise
         except (aiohttp.ClientError, asyncio.TimeoutError, ConnectionError, OSError) as exc:
-            self.last_error = f"proxy error: {type(exc).__name__}: {exc}"
-            self._record("proxy_error", error=self.last_error)
+            self.last_error = f"proxy error ({child.name}): {type(exc).__name__}: {exc}"
+            self._record("proxy_error", child=child.name, error=self.last_error)
             self._write_status()
-            return self._unavailable("bot child request failed")
+            return self._unavailable(f"{child.name} child request failed")
 
     def _proxy_request_headers(self, request: web.Request) -> dict[str, str]:
         connection_tokens = {
@@ -1004,19 +1494,20 @@ class Supervisor:
             return False, "child has exited"
         if child.api_port is None:
             return False, "child api is not listening"
-        if child.state == "draining" or self.state == "draining":
+        if child.state == "draining":
             return False, "child is draining"
         if not child.ready:
-            return False, f"child state: {child.state}"
+            return False, f"{child.name} child state: {child.state}"
         if time.monotonic() - child.last_heartbeat > self.options.heartbeat_timeout:
             return False, "child heartbeat is stale"
         return True, "ready"
 
-    def _child_summary(self) -> dict[str, Any] | None:
-        child = self._child
+    def _child_summary(self, child: Child | None = None) -> dict[str, Any] | None:
+        child = self._child if child is None else child
         if child is None:
             return None
         return {
+            "name": child.name,
             "pid": child.pid,
             "state": child.state,
             "ready": child.ready,
@@ -1028,6 +1519,22 @@ class Supervisor:
             "returncode": child.returncode,
         }
 
+    def _children_summary(self) -> dict[str, Any]:
+        summary: dict[str, Any] = {}
+        for name, slot in self._slots.items():
+            child = self._children.get(name)
+            summary[name] = {
+                "primary": slot.spec.primary,
+                "state": child.state if child is not None else slot.state,
+                "ready": bool(child is not None and child.ready),
+                "restarts": slot.restarts,
+                "consecutive_failures": slot.failures,
+                "last_error": (child.last_error if child is not None else slot.last_error),
+                "pid": child.pid if child is not None else None,
+                "api_port": child.api_port if child is not None else None,
+            }
+        return summary
+
     def _status_snapshot(self) -> dict[str, Any]:
         return {
             "protocol": PROTOCOL_VERSION,
@@ -1038,14 +1545,137 @@ class Supervisor:
             "control_socket": str(self.options.control_socket),
             "started_at": self.started_at,
             "uptime_seconds": round(time.monotonic() - self.started_monotonic, 3),
+            "split_web": self.options.split_web,
+            "split_db": self.options.split_db,
             "child": self._child_summary(),
+            "children": self._children_summary(),
             "restart_count": self.restart_count,
             "child_starts": self.child_starts,
             "consecutive_failures": self.consecutive_failures,
             "last_error": self.last_error,
             "last_stop_reason": self.last_stop_reason,
+            "pending_update": self._pending_summary(),
             "history": list(self._history),
         }
+
+    # ── Last-good rollback ────────────────────────────────────────────────
+
+    def _pending_update(self) -> dict[str, Any] | None:
+        try:
+            payload = json.loads(self.options.pending_update_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _pending_summary(self) -> dict[str, Any] | None:
+        pending = self._pending_update()
+        if pending is None:
+            return None
+        return {
+            "run_id": pending.get("run_id"),
+            "area": pending.get("area"),
+            "requested_at": pending.get("requested_at"),
+            "changes": len(pending.get("changes") or ()),
+        }
+
+    def _retire_pending_update(self, suffix: str) -> None:
+        path = self.options.pending_update_file
+        if not path.exists():
+            return
+        target = path.with_name(f"{path.name}.{suffix}-{int(time.time())}")
+        with contextlib.suppress(OSError):
+            path.replace(target)
+
+    def _confirm_pending_update(self) -> None:
+        pending = self._pending_update()
+        if pending is None:
+            return
+        self._record("update_confirmed", run=pending.get("run_id"), area=pending.get("area"))
+        self._retire_pending_update("confirmed")
+
+    def _update_path(self, relative: str) -> Path | None:
+        """Resolve an updater path, refusing anything outside the update root."""
+        if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+            return None
+        root = self.options.update_root.resolve()
+        candidate = (root / relative).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return None
+        return candidate
+
+    def _forget_bytecode(self, target: Path) -> None:
+        """A restored source must not keep importing the failed release's .pyc."""
+        if target.suffix != ".py":
+            return
+        try:
+            cached = Path(importlib.util.cache_from_source(str(target)))
+        except (NotImplementedError, ValueError):
+            return
+        with contextlib.suppress(OSError):
+            cached.unlink()
+
+    def _rollback_pending_update(self) -> bool:
+        """Restore the files an update replaced, after its child failed to boot.
+
+        The updater writes ``pending.json`` just before asking for a supervised
+        restart.  If the replacement never becomes ready, this copies the run's
+        backups back (and removes files the update had added), then lets the
+        supervision loop start a last-good child.  Everything is a plain file
+        operation, so the supervisor still imports no application code.
+        """
+        pending = self._pending_update()
+        if pending is None:
+            return False
+        run_id = pending.get("run_id")
+        backup_dir = str(pending.get("backup_dir") or "")
+        restored = 0
+        removed = 0
+        try:
+            for change in pending.get("changes") or ():
+                if not isinstance(change, dict):
+                    continue
+                relative = str(change.get("path") or "")
+                target = self._update_path(relative)
+                backup = self._update_path(f"{backup_dir}/{relative}") if backup_dir else None
+                if target is None or backup is None:
+                    raise ValueError(f"unsafe path in pending update: {relative!r}")
+                if backup.is_file():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(backup, target)
+                    self._forget_bytecode(target)
+                    restored += 1
+                elif str(change.get("status") or "") == "added" and target.is_file():
+                    target.unlink()
+                    self._forget_bytecode(target)
+                    removed += 1
+        except Exception as exc:
+            self.last_error = f"last-good rollback failed: {type(exc).__name__}: {exc}"
+            LOG.error("%s", self.last_error)
+            self._record("rollback_failed", run=run_id, error=self.last_error)
+            self._retire_pending_update("failed")
+            self._write_status()
+            return False
+
+        self.last_error = f"update {run_id} did not boot; restored the last-good files"
+        self.last_stop_reason = f"rolled back update {run_id}"
+        self._record(
+            "rollback_applied",
+            run=run_id,
+            area=pending.get("area"),
+            restored=restored,
+            removed=removed,
+        )
+        LOG.warning(
+            "rolled back update %s: %s file(s) restored, %s added file(s) removed",
+            run_id,
+            restored,
+            removed,
+        )
+        self._retire_pending_update("rolledback")
+        self._write_status()
+        return True
 
     def _record(self, event: str, **fields: Any) -> None:
         item = {
@@ -1099,6 +1729,11 @@ class Supervisor:
             with contextlib.suppress(OSError):
                 os.close(self._lock_fd)
             self._lock_fd = None
+        self._remove_log_handler()
+        if self._log_store is not None:
+            with contextlib.suppress(Exception):
+                self._log_store.close()
+            self._log_store = None
         if self._startup_done:
             self._write_status()
 
@@ -1109,6 +1744,38 @@ def parse_args(argv: list[str] | None = None) -> Options:
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "5000")))
     parser.add_argument("--child", type=Path, default=ROOT / "src" / "bot.py")
     parser.add_argument("--child-arg", action="append", default=[])
+    split_default = (os.environ.get("NIKO_SPLIT_WEB") or "").strip().lower()
+    parser.add_argument(
+        "--split-web",
+        dest="split_web",
+        action="store_true",
+        default=split_default not in {"0", "false", "no", "off"},
+        help="run the dashboard and the bot as separate children (default)",
+    )
+    parser.add_argument(
+        "--no-split-web",
+        dest="split_web",
+        action="store_false",
+        help="run the bot and dashboard in one child (fallback)",
+    )
+    parser.add_argument("--web-child", type=Path, default=ROOT / "src" / "web_child.py")
+    parser.add_argument(
+        "--split-db",
+        dest="split_db",
+        action="store_true",
+        default=None,
+        help="run the database in its own child (default: follow --split-web)",
+    )
+    parser.add_argument(
+        "--no-split-db",
+        dest="split_db",
+        action="store_false",
+        help="keep the database pool inside the bot child (combined fallback)",
+    )
+    parser.add_argument("--db-child", type=Path, default=ROOT / "src" / "db_child.py")
+    parser.add_argument("--log-store", type=Path, default=None)
+    parser.add_argument("--log-store-bytes", type=int, default=5 * 1024 * 1024)
+    parser.add_argument("--log-store-backups", type=int, default=3)
     parser.add_argument("--status-file", type=Path, default=ROOT / "data" / "run" / "supervisor.json")
     parser.add_argument("--control-socket", type=Path, default=ROOT / "data" / "run" / "supervisor.sock")
     parser.add_argument("--lock-file", type=Path, default=ROOT / "data" / "run" / "supervisor.lock")
@@ -1120,9 +1787,24 @@ def parse_args(argv: list[str] | None = None) -> Options:
     parser.add_argument("--restart-reset-after", type=float, default=60.0)
     parser.add_argument("--max-restarts", type=int, default=0)
     parser.add_argument("--proxy-timeout", type=float, default=300.0)
+    parser.add_argument(
+        "--pending-update-file",
+        type=Path,
+        default=ROOT / "data" / "updates" / "pending.json",
+    )
+    parser.add_argument("--update-root", type=Path, default=ROOT)
     parser.add_argument("--status-public", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
+    split_db = args.split_db
+    if split_db is None:
+        env_value = (os.environ.get("NIKO_SPLIT_DB") or "").strip().lower()
+        if env_value in {"0", "false", "no", "off"}:
+            split_db = False
+        elif env_value in {"1", "true", "yes", "on"}:
+            split_db = True
+        else:
+            split_db = args.split_web
     return Options(
         public_host=args.host,
         public_port=args.port,
@@ -1139,18 +1821,49 @@ def parse_args(argv: list[str] | None = None) -> Options:
         restart_reset_after=args.restart_reset_after,
         max_restarts=args.max_restarts,
         proxy_timeout=args.proxy_timeout,
+        pending_update_file=args.pending_update_file,
+        update_root=args.update_root,
+        split_web=args.split_web,
+        web_child_script=args.web_child,
+        split_db=split_db,
+        db_child_script=args.db_child,
+        log_store=args.log_store,
+        log_store_bytes=args.log_store_bytes,
+        log_store_backups=args.log_store_backups,
         status_public=args.status_public,
         log_level=args.log_level,
     )
 
 
+def _load_shared_env() -> None:
+    """Read ``src/.env`` the way the bot child does.
+
+    The force-update endpoint needs ``BETA_UPDATE_TOKEN`` in the supervisor's own
+    environment.  Hosted deployments set it in the process environment, while a
+    self-hosted install follows the setup guide and keeps it in ``src/.env``;
+    loading that file keeps both arrangements working without exporting the
+    secret a second time.
+    """
+    try:
+        from dotenv import load_dotenv
+    except Exception:
+        return
+    load_dotenv(ROOT / "src" / ".env")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _load_shared_env()
     options = parse_args(argv)
-    logging.basicConfig(
-        level=getattr(logging, str(options.log_level).upper(), logging.INFO),
-        format="%(asctime)s %(levelname)s supervisor: %(message)s",
-        stream=sys.stderr,
-    )
+    level = getattr(logging, str(options.log_level).upper(), logging.INFO)
+    # Same formatter as the bot, so supervised output and the bot's own lines
+    # line up in one console.  The root logger captures everything so the
+    # shared console store keeps DEBUG/INFO history the terminal was configured
+    # to hide, exactly like the application's own logger; only the stream
+    # handler is filtered.
+    console = logging.StreamHandler(sys.stderr)
+    console.setFormatter(ConsoleFormatter())
+    console.setLevel(level)
+    logging.basicConfig(level=logging.DEBUG, handlers=[console])
     supervisor = Supervisor(options)
     try:
         asyncio.run(supervisor.run())

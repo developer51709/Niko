@@ -1,6 +1,6 @@
 # Supervisor Runtime Migration — Design Review
 
-> **Status:** Temporary design review and delivery plan. Part 1's isolated supervisor harness is implemented in `src/supervisor.py`, and Part 2's supervised real-child mode, readiness, and updater integration are implemented behind `NIKO_SUPERVISED=1`; default production runtime behavior is unchanged. A real-token managed preview has exercised gateway readiness, proxy traffic, control restarts, crash recovery, Discord OAuth, the staff guild directory, guild settings, and live slash commands. The beta-feed cold update and rollback are now exercised end to end on one machine against a loopback feed (`tests/supervisor/test_beta_update_gate.py`), so no second host is needed for that gate, and killing the child at every boot stage is covered (`tests/supervisor/test_boot_stage_kills.py`). What remains before rollout is one confirmation run on a real production-like staging instance and recording it in the runbook. See [`supervisor-part-1.md`](supervisor-part-1.md) and [`supervisor-part-2.md`](supervisor-part-2.md).
+> **Status:** Temporary design review and delivery plan. Part 1's isolated supervisor harness is implemented in `src/supervisor.py`, and Part 2's supervised real-child mode, readiness, and updater integration are implemented behind `NIKO_SUPERVISED=1`; default production runtime behavior is unchanged. A real-token managed preview has exercised gateway readiness, proxy traffic, control restarts, crash recovery, Discord OAuth, the staff guild directory, guild settings, and live slash commands. The beta-feed cold update and rollback are now exercised end to end on one machine against a loopback feed (`tests/supervisor/test_beta_update_gate.py`), so no second host is needed for that gate, and killing the child at every boot stage is covered (`tests/supervisor/test_boot_stage_kills.py`). Part 3 is implemented on top of that: `NIKO_STRICT_DB` refuses a silent SQLite fallback, a bot update that cannot boot is rolled back to its last-good files by the supervisor, hostile update inputs have named tests, and [`supervisor-incident-runbook.md`](supervisor-incident-runbook.md) documents triage. What remains is the 24-hour soak, the real staging drills (Mongo outage, tunnel loss, supervisor kill), and the confirmation run on a production-like instance. Part 4 is now the default: the supervisor runs the dashboard (`src/web_child.py`) and the bot (`src/bot.py`) as independent children unless `NIKO_SPLIT_WEB=0` / `--no-split-web` is set, restarts and fails them separately, targets updates at the affected child, and serves a per-process, per-level log archive that survives restarts and includes the supervisor's own lines. The live-bot API is still bridged to the bot child over loopback; that bridge is the 4A seam, and replacing it with the state mirror/RPC contract is the remaining work in this part. See [`supervisor-part-4.md`](supervisor-part-4.md), [`supervisor-part-1.md`](supervisor-part-1.md) and [`supervisor-part-2.md`](supervisor-part-2.md).
 > **Date:** 2026-11-06
 > **Purpose:** Give the team a concrete architecture, a failure inventory, and a gated multi-part plan before any major runtime changes.
 > **Audience:** Bot, webapp, and deployment maintainers.
@@ -386,7 +386,7 @@ Set a stable `SESSION_SECRET` in production. If it is unset, Flask generates a r
 
 | ID | Breaking point | Impact | Required mitigation | Verification |
 | --- | --- | --- | --- | --- |
-| O-01 | Child logs are lost or mixed | Hard diagnosis | Supervisor forwards stdout/stderr with PID/role prefix; per-child log files; candidate logs retained | Restart/candidate log test |
+| O-01 | Child logs are lost or mixed | Hard diagnosis | Supervisor forwards stdout/stderr verbatim, in the bot's console style (levels, modules, colour); the shared store tags each child's own records with its process | Restart/candidate log test |
 | O-02 | Owner live-log page only sees one child | Missing candidate/crash evidence | Expose supervisor/child log source; keep per-child buffers; do not pretend prewarm logs are active | UI check |
 | O-03 | No restart history | Cannot diagnose crash loops | Persist state, exit code, boot duration, restart count, readiness failure reason | Restart after forced crash |
 | O-04 | Health is green while bot is degraded | Silent user impact | Separate `/health`, `/ready`, `/status`; alert on readiness, failed critical cogs, missed heartbeats | Fault injection |
@@ -899,7 +899,7 @@ No stage automatically enables the next. Production stays on the current direct 
 
 - `NIKO_SUPERVISED` — supervisor-managed child lifecycle. Default: off until Part 2 staging gate.
 - `NIKO_SUPERVISOR_PROXY` — proxy vs FD mode, if both are retained. Default: whichever the ADR chooses.
-- `NIKO_SPLIT_WEB` — separate web and bot children. Default: off until Part 4B gate.
+- `NIKO_SPLIT_WEB` — separate web and bot children. Default: on; set `0` for the combined child.
 - `NIKO_WARM_STANDBY` — candidate prewarm. Default: off; requires MongoDB and the lifecycle audit.
 - `NIKO_STRICT_DB` — refuse silent Mongo → SQLite fallback. Default: off in local/dev, on in supervised staging/production.
 
@@ -925,7 +925,7 @@ Flags must be readable in `/status` and logs without exposing secrets. An invali
 
 **Part 4**
 
-- Disable `NIKO_SPLIT_WEB` and return to the combined child.
+- Set `NIKO_SPLIT_WEB=0` (or pass `--no-split-web`) and return to the combined child.
 - If the web child is unhealthy, route to a maintenance response rather than a partially functional dashboard.
 - Keep the bot child online while the web child is repaired or rolled back.
 

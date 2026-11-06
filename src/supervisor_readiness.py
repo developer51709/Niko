@@ -42,6 +42,23 @@ def critical_steps() -> tuple[str, ...]:
     return _comma_list(os.environ.get("NIKO_CRITICAL_STARTUP_STEPS"), DEFAULT_CRITICAL_STEPS)
 
 
+def strict_backend() -> bool:
+    """Whether this deployment refuses to run on anything but MongoDB.
+
+    ``database.create_pool`` refuses the fallback at startup; this check also
+    covers a pool that was created before the flag was set or replaced by a
+    hot-reloaded module.  A backend mismatch is fatal to readiness, because
+    serving traffic from an empty SQLite file looks like an outage with data
+    loss rather than a database problem.
+    """
+    return (os.environ.get("NIKO_STRICT_DB") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _startup_error_rows(bot) -> list[tuple[str, str]]:
     """Normalise the two startup error formats the bot has used over time."""
     rows: list[tuple[str, str]] = []
@@ -71,6 +88,8 @@ async def _ping_database(bot) -> tuple[bool, str]:
         return False, "database pool is not attached"
 
     backend = getattr(pool, "db_type", "unknown")
+    if strict_backend() and backend != "mongodb":
+        return False, f"{backend} (NIKO_STRICT_DB requires mongodb)"
     try:
         if backend == "mongodb":
             client = getattr(pool, "client", None)

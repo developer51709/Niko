@@ -2334,6 +2334,13 @@ async def init_database(bot):
     logging.info("DB", f"Opening database: {DATABASE_PATH}")
     try:
         if getattr(bot, "cxn", None) is None:
+            # With the database child in front, the pool has exactly one owner.
+            # Opening a local one here would put a second writer on the same
+            # database; fail instead and let readiness report it.
+            if (os.getenv("NIKO_SPLIT_DB") or "").strip() == "1":
+                raise RuntimeError(
+                    "the database child is not attached; refusing to open a second pool"
+                )
             bot.cxn = await database.create_pool(DATABASE_PATH)
         if getattr(bot.cxn, "db_type", None) == "sqlite":
             logging.warning(

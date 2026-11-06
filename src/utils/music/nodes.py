@@ -12,6 +12,7 @@ twin and a non-SSL twin of the same server count as one physical node).
 """
 
 import asyncio
+import contextlib
 import time as _time
 
 import aiohttp
@@ -102,6 +103,50 @@ async def _probe_node(
         except Exception as exc:
             log.info("Lavalink", f"Probe rejected {host}:{port} — {type(exc).__name__}: {exc}")
     return None
+
+
+async def close_pool() -> None:
+    """Close every Lavalink node, including what ``wavelink.Pool.close`` leaves.
+
+    ``Node.close`` disconnects the websocket but keeps the node's private
+    aiohttp session open, and it cancels the websocket keep-alive task without
+    awaiting it.  Left alone, those are reported at interpreter exit as
+    "Unclosed client session" and "Task exception was never retrieved".
+    """
+    try:
+        import wavelink
+    except Exception:
+        return
+
+    nodes = list(wavelink.Pool.nodes.values())
+    if not nodes:
+        return
+
+    # Grab the keep-alive tasks before cleanup drops the websocket reference.
+    keep_alive: list[asyncio.Task] = []
+    for node in nodes:
+        task = getattr(getattr(node, "_websocket", None), "keep_alive_task", None)
+        if task is not None:
+            keep_alive.append(task)
+
+    try:
+        await wavelink.Pool.close()
+    except Exception as exc:
+        log.debug("Lavalink", f"Could not close the node pool cleanly: {exc!r}")
+
+    # Awaiting a finished task retrieves the exception it stored, which is what
+    # stops asyncio from printing it as unretrieved during loop shutdown.
+    for task in keep_alive:
+        if not task.done():
+            task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
+
+    for node in nodes:
+        session = getattr(node, "_session", None)
+        if session is not None and not session.closed:
+            with contextlib.suppress(Exception):
+                await session.close()
 
 
 async def find_responsive_nodes(nodes: list[dict]) -> list[dict]:

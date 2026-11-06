@@ -193,6 +193,8 @@ class GateSupervisor:
             "0",
             "--child",
             str(stage / GATE_CHILD),
+            # The gate drives one stage child; split mode has its own suite.
+            "--no-split-web",
             "--status-file",
             str(self.status_path),
             "--control-socket",

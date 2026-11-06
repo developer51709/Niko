@@ -105,15 +105,13 @@ def _staff_card_accent(member: dict) -> int | None:
 def _bot_avatar_url() -> str:
     """The bot's own avatar, used as the thumbnail of its own pages.
 
-    An empty string is fine: the preview module falls back to the site icon, so
-    a server without a live gateway still previews.
+    ``runtime.public_bot_identity`` resolves it from the gateway here, from the
+    bot child in the split dashboard, or from the last startup record while the
+    bot is restarting.  An empty string is fine: the preview module falls back
+    to the site icon, so a server without a live gateway still previews.
     """
-    bot = runtime._discord_bot
-    user = getattr(bot, "user", None) if bot is not None else None
-    if user is None:
-        return ""
     try:
-        return str(user.display_avatar.url)
+        return str(runtime.public_bot_identity().get("bot_avatar_url") or "")
     except Exception:
         return ""
 

@@ -305,57 +305,11 @@
   border-color: var(--accent-dark);
 }
 
-.docs-tags-cloud {
-  padding: 18px 0 21px;
-  border-bottom: 1px solid var(--line);
-}
-
-.tags-cloud-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 10px;
-  color: var(--accent-dark);
-  font: 10px "Space Mono", monospace;
-  text-transform: uppercase;
-  letter-spacing: .09em;
-}
-
-.tags-cloud-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tag-cloud-item,
 .doc-tag,
 .doc-tag-pill {
   color: var(--muted);
   background: var(--surface-muted);
   border: 1px solid var(--docs-card-line);
-}
-
-.tag-cloud-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 9px;
-  border-radius: 4px;
-  font-size: 11px !important;
-}
-
-.tag-cloud-item:hover {
-  color: var(--accent-dark);
-  background: var(--docs-accent-soft);
-  border-color: var(--filter-border);
-}
-
-.tag-cloud-item .tag-count {
-  padding: 1px 4px;
-  color: var(--accent-dark);
-  background: var(--surface-raised);
-  border-radius: 3px;
-  font: 9px "Space Mono", monospace;
 }
 
 .docs-results-header {

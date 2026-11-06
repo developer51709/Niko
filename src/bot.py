@@ -67,7 +67,7 @@ bot = commands.AutoShardedBot(
     shard_count=_shard_count,
 )
 bot.remove_command("help")
-bot.cxn: database.SQLitePool | database.MongoPool | None = None
+bot.cxn: "database.SQLitePool | database.MongoPool | database.remote.RemotePool | None" = None
 
 # ── REST egress failover ─────────────────────────────────────────────────────
 # Webshare is the only egress fallback: it arms itself the moment Discord
@@ -205,11 +205,52 @@ async def on_message(msg: discord.Message):
 if __name__ == "__main__":
     import signal
 
+    # The supervisor is the supported entry point.  This path still works for
+    # local debugging, but it owns the public port itself and has none of the
+    # supervisor's health checks, restart policy, or last-good rollback.  A
+    # handoff restart re-executes this file, so it stays quiet: the operator
+    # already ran the supervisor (or chose this path) once.
+    if not SUPERVISED and not os.getenv("NIKO_RESTART_FD"):
+        logging.warning(
+            "Startup",
+            "Direct start detected: the supervisor is the main entry point.\n"
+            "  Start Niko with: python3 src/supervisor.py\n"
+            "  This path skips the supervisor's public port, /health and /ready, "
+            "crash recovery, restart budget and last-good rollback. Use it only "
+            "for local debugging; see docs/supervisor-part-2.md.",
+        )
+
+    # The supervisor (and some hosts) deliver SIGTERM more than once while the
+    # process is still draining.  The second delivery must not repeat the log
+    # line or run cleanup against half-closed resources.
+    _shutdown_started = False
+
     async def _shutdown(signal_name: str):
+        global _shutdown_started
+        if _shutdown_started:
+            return
+        _shutdown_started = True
         logging.info("Shutdown", f"Received {signal_name}, closing bot...")
         _report("draining", reason=signal_name)
         # Persist the commands recorded since the last periodic flush.
         await analytics.stop_flush_task()
+        # Client.close() does not unload cogs, so their HTTP sessions and
+        # background tasks would outlive the loop and surface as "Unclosed
+        # client session" / "Task exception was never retrieved".  Run the
+        # normal unload hook while the loop can still await the cleanup.
+        for cog in list(bot.cogs.values()):
+            unload = getattr(cog, "cog_unload", None)
+            if unload is None:
+                continue
+            try:
+                result = unload()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as exc:
+                logging.debug(
+                    "Shutdown",
+                    f"{type(cog).__name__}.cog_unload failed: {exc}",
+                )
         if bot.proxy_manager is not None:
             try:
                 await bot.proxy_manager.close()
@@ -257,20 +298,37 @@ if __name__ == "__main__":
 
         logging.info("Startup", "Starting bot...")
 
-        # Load the shared registry before Discord login so owner-managed proxy
-        # workers are available for the first REST call. It is optional: without
-        # MongoDB the bot keeps its normal egress.
-        if os.getenv("MONGODB_URL"):
+        # The database lives in its own child in the split layout.  Attaching
+        # it before login means commands, caches and the proxy registry all see
+        # the same pool, and restarting the bot never closes the database.
+        # ``connect_remote_pool`` waits for the child to finish connecting.
+        split_db = SUPERVISED and (os.getenv("NIKO_SPLIT_DB") or "").strip() == "1"
+        if split_db:
+            from database.remote import connect_remote_pool
+
+            bot.cxn = await connect_remote_pool()
+            # Modules without a bot reference (onboarding, tickets, AI memory)
+            # resolve the shared pool through this module-level handle.
+            database._shared_pool = bot.cxn
+            logging.info(
+                "Database",
+                f"Attached to the database child ({bot.cxn.db_type}).",
+            )
+        elif os.getenv("MONGODB_URL"):
             try:
                 bot.cxn = await database.create_pool(DATABASE_PATH)
             except Exception as e:
                 logging.warning("Database", f"Could not connect the shared database before login: {e}")
-            else:
-                try:
-                    from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
-                    await initialize_proxy_worker_registry(bot)
-                except Exception as e:
-                    logging.warning("DiscordProxy", f"Could not preload proxy workers: {e}")
+
+        # Load the shared registry before Discord login so owner-managed proxy
+        # workers are available for the first REST call. It is optional: without
+        # MongoDB the bot keeps its normal egress.
+        if bot.cxn is not None and getattr(bot.cxn, "db_type", None) == "mongodb":
+            try:
+                from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
+                await initialize_proxy_worker_registry(bot)
+            except Exception as e:
+                logging.warning("DiscordProxy", f"Could not preload proxy workers: {e}")
         if bot.discord_proxy is not None:
             bot.discord_proxy.attach(bot)
         if bot.proxy_manager is not None:

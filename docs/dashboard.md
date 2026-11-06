@@ -1,7 +1,7 @@
 # Dashboard maintenance guide
 
 The dashboard is a React + Vite frontend backed by the Flask API that runs
-inside the Discord bot process. It is deliberately small: the UI has a typed
+inside the bot child, behind the supervisor's public port. It is deliberately small: the UI has a typed
 API client, a single page router, and a shared stylesheet instead of a large
 component framework. That makes manual edits predictable for future
 contributors.
@@ -9,10 +9,12 @@ contributors.
 ## Architecture
 
 ```text
-Discord bot process
-  ├─ Discord gateway / cogs
-  └─ Flask API + static file server :5000
-       └─ src/website/dist  ← npm run build
+supervisor (public :5000, /health, /ready, restarts)
+  ├─ bot child
+  │   ├─ Discord gateway / cogs
+  │   └─ Flask API + static file server
+  │        └─ src/website/dist  ← npm run build
+  └─ web child (default): the same Flask API without the gateway
 
 web/src  ← edit this source, never generated dist files
 ```

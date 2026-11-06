@@ -35,7 +35,7 @@
   "common.working": "Traitement…",
   "logs.kicker": "Console du propriétaire",
   "logs.title": "Journaux en direct",
-  "logs.body": "La console du bot telle qu’elle s’écrit, couleur pour couleur. Le tampon contient la sortie de ce processus depuis son démarrage (ou depuis la dernière mise à jour à chaud) ; le niveau ci-dessous ne filtre que cette page.",
+  "logs.body": "La console du bot telle qu'elle est écrite, couleur par couleur. Sous le superviseur, le bot, le tableau de bord et le superviseur écrivent dans une console commune : un redémarrage ne l'efface pas ; les menus de niveau et de processus ne filtrent que cette page.",
   "logs.level": "Niveau de journalisation",
   "logs.hidePymongo": "Masquer pymongo",
   "logs.hidePymongoHint": "Garde la sortie de débogage de MongoDB hors de la console.",
@@ -52,5 +52,11 @@
   "logs.error": "Le journal en direct n’a pas pu être lu.",
   "logs.jump": "Aller au plus récent",
   "logs.unavailable": "Ce processus n’écrit pas encore dans le tampon de journaux.",
-  "logs.truncated": "Les lignes les plus anciennes ont quitté le tampon."
+  "logs.truncated": "Les lignes les plus anciennes ont quitté le tampon.",
+  "logs.process": "Processus",
+  "logs.processAll": "Tous les processus",
+  "logs.processSupervisor": "Superviseur",
+  "logs.processDashboard": "Tableau de bord",
+  "logs.processDatabase": "Base de données",
+  "logs.processBot": "Bot"
 }

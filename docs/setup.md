@@ -18,7 +18,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure Environment Variables
-Copy `env.example` from the repository root to `src/.env` (loaded by `src/bot.py`) or set the variables in whatever secret store your host provides. The template lists every variable, grouped and commented; the ones worth knowing about first are below.
+Copy `env.example` from the repository root to `src/.env` (loaded by the bot child, `src/bot.py`) or set the variables in whatever secret store your host provides. The template lists every variable, grouped and commented; the ones worth knowing about first are below.
 - `DISCORD_BOT_TOKEN`: Your bot's secret token.
 - `DISCORD_PUBLIC_KEY` *(optional)*: Your application's **Public Key** from the Developer Portal. Required by the Interactions Endpoint URL (see below); the bot also reads it from the application object when it is unset, and caches what it read.
 - `DEVELOPMENT` *(optional)*: Set to `true`, `1`, `yes` or `on` for the public beta deployment. It selects the dedicated development status rotation in `src/config/status.py` and forces the command prefix to `!`, overriding server settings; leave unset or false for production behavior. Development instances also stop awarding XP and stop recording message activity (`src/config/environment.py`), so running one against production's MongoDB cannot overwrite live levels or double-count the dashboard.
@@ -31,10 +31,16 @@ Copy `env.example` from the repository root to `src/.env` (loaded by `src/bot.py
 - `TOPGG_WEBHOOK_TOKEN` *(optional)*: The webhook authorization token from your top.gg listing. Required to credit vote rewards (coins, streaks and voting badges) and send the thank-you DM. Leave it unset to disable the vote webhook.
 - `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` *(optional)*: Application credentials from a [Twitch developer app](https://dev.twitch.tv/console/apps). Used for the notifier's Twitch tracking and for Twitch profile cards on the team page. Leave them unset to disable Twitch support; every other notifier platform still works without credentials.
 
-### 4. Run the Bot
+### 4. Run Niko
+The main entry point is the supervisor:
+
 ```bash
-python src/bot.py
+python src/supervisor.py
 ```
+
+It owns the public port (`5000`, or `PORT`), serves `/health` and `/ready`, and runs the database (`src/db_child.py`), the dashboard (`src/web_child.py`) and the bot (`src/bot.py`) as separate children by default, so restarting one never closes the database or interrupts the other. Set `NIKO_SPLIT_DB=0`/`--no-split-db` to keep the database pool in the bot child, and `NIKO_SPLIT_WEB=0`/`--no-split-web` for the combined single-child layout. It also owns restarts, the status file, and the update/rollback path.
+
+`python src/bot.py` remains available as a local-debug fallback, but it bypasses the public port, health checks, crash recovery, restart budget and last-good rollback, so it prints a warning in the console. Do not use it as the deployment command.
 
 ### 5. Serve interactions from your own endpoint *(optional)*
 Discord can POST every slash command, button, select and modal to this bot

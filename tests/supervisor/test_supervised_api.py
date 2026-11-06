@@ -54,6 +54,57 @@ def test_supervised_restart_replaces_the_child_cleanly(supervisor):
     assert handle.request("/health").status_code == 200
 
 
+def test_a_stalled_child_api_gets_a_bounded_503(supervisor):
+    """A child that stops answering must not hang the public port.
+
+    This is the local stand-in for a lost tunnel or a wedged upstream: the
+    process still holds its listening socket, so requests connect and then get
+    no response. The supervisor must cut them off at ``--proxy-timeout`` and
+    keep its own health surface usable.
+    """
+    handle = supervisor(
+        "normal",
+        startup_timeout=30.0,
+        heartbeat_timeout=10.0,
+        shutdown_timeout=5.0,
+        args=["--child", str(API_CHILD), "--proxy-timeout", "1"],
+    )
+    handle.wait_ready(timeout=35)
+    pid = handle.status()["child"]["pid"]
+
+    os.kill(pid, signal.SIGSTOP)
+    try:
+        started = time.monotonic()
+        response = handle.request("/api/health", timeout=10)
+        elapsed = time.monotonic() - started
+
+        assert response.status_code == 503
+        assert response.json()["reason"] == "bot child request failed"
+        assert response.json()["retry_after"] == 1
+        assert elapsed < 5.0, elapsed
+        assert handle.request("/health").status_code == 200
+        assert handle.request("/ready").status_code == 200
+    finally:
+        os.kill(pid, signal.SIGCONT)
+
+
+def test_killing_the_supervisor_takes_the_real_child_with_it(supervisor):
+    handle = _start(supervisor)
+    first = handle.wait_ready(timeout=35)
+    child_pid = first["child"]["pid"]
+
+    os.kill(handle.pid, signal.SIGKILL)
+    handle.process.wait(timeout=10)
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if not psutil.pid_exists(child_pid):
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError("the real child outlived the supervisor")
+
+
 def test_the_real_api_child_recovers_from_a_sigkill(supervisor):
     handle = _start(supervisor, backoff_initial=0.5, backoff_max=0.5)
     first = handle.wait_ready(timeout=35)

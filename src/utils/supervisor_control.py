@@ -63,13 +63,23 @@ def request(command: str, *, timeout: float = 5.0, **fields):
     return response
 
 
-def request_restart(reason: str = "control restart", delay: float = 2.0) -> dict:
-    """Ask the supervisor to stop this child after ``delay`` seconds.
+def request_restart(
+    reason: str = "control restart",
+    delay: float = 2.0,
+    child: str | list[str] | None = None,
+) -> dict:
+    """Ask the supervisor to stop one child (or every child) after ``delay``.
 
     The delay leaves time for the HTTP update response to flush.  The supervisor
-    answers immediately; stopping happens in its own task.
+    answers immediately; stopping happens in its own task.  ``child`` names the
+    target(s) when the deployment runs the dashboard, the bot and the database
+    separately: a webapp update restarts only ``web``, a bot update ``bot`` and
+    the database child that serves its new database code.
     """
-    response = request("restart", reason=reason, delay=max(0.0, float(delay)))
+    fields: dict = {"reason": reason, "delay": max(0.0, float(delay))}
+    if child:
+        fields["child"] = child
+    response = request("restart", **fields)
     if not response.get("ok"):
         raise RuntimeError(str(response.get("error") or "the supervisor refused the restart"))
     return response

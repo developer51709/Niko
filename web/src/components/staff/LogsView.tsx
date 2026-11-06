@@ -6,17 +6,20 @@ import { Select, selectOptions } from "../dashboard/Select";
 import { Switch } from "../dashboard/Switch";
 
 /**
- * The owner's live view of the bot console.
+ * The owner's live view of every process's console.
  *
- * The bot keeps the rendered console lines in memory (see
- * ``utils/logging.LogBufferHandler``) and this page polls for the ones appended
- * since its cursor. Nothing is read from disk and nothing is re-rendered here:
- * the ANSI codes the terminal would draw are parsed into coloured spans, so a
- * line looks the same in the browser as it does on the host.
+ * The supervisor and each child keep independent append-only files, split by
+ * level (see ``log_store.LogArchive``), so a busy bot can never roll the
+ * dashboard's lines out and a DEBUG flood can never roll the ERROR lines away.
+ * This page polls for the lines appended since its cursor in the process and
+ * level it is showing. Nothing is re-rendered here: the ANSI codes the terminal
+ * would draw are parsed into coloured spans, so a line looks the same in the
+ * browser as it does on the host.
  *
- * The level menu filters what this page shows only. The bot's own console level
- * stays whatever the deployment configured, so an owner can read DEBUG lines
- * the terminal is hiding without changing what every other log handler does.
+ * The level menu selects a minimum: the archive is asked for that level's
+ * buffer and every more severe one, so the bot's own console level stays
+ * whatever the deployment configured while an owner can still read DEBUG lines
+ * the terminal is hiding.
  */
 
 const POLL_MS = 1200;
@@ -66,6 +69,8 @@ const capBySource = (entries: OwnerLogEntry[]): OwnerLogEntry[] => {
   }
   return kept.reverse();
 };
+
+const PROCESS_VALUES = ["all", "supervisor", "db", "web", "bot"] as const;
 
 const LEVELS = selectOptions([
   ["DEBUG", "DEBUG"],
@@ -202,6 +207,17 @@ export function LogsView() {
   const { t } = useStrings("staff");
   const [entries, setEntries] = useState<OwnerLogEntry[]>([]);
   const [level, setLevel] = useState("INFO");
+  const [process, setProcess] = useState("all");
+  const processOptions = useMemo(
+    () => selectOptions(PROCESS_VALUES.map((value) => {
+      if (value === "all") return [value, t("logs.processAll")];
+      if (value === "supervisor") return [value, t("logs.processSupervisor")];
+      if (value === "db") return [value, t("logs.processDatabase")];
+      if (value === "web") return [value, t("logs.processDashboard")];
+      return [value, t("logs.processBot")];
+    })),
+    [t],
+  );
   // MongoDB logs every operation at DEBUG, which buries the bot's own debug
   // lines. Start quiet; the switch is there when the database is the suspect.
   const [hidePymongo, setHidePymongo] = useState(true);
@@ -217,12 +233,23 @@ export function LogsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pinned, setPinned] = useState(true);
-  const cursorRef = useRef(0);
+  const cursorRef = useRef("");
   const tokenRef = useRef("");
   const scrollerRef = useRef<HTMLDivElement>(null);
   // A poll can take longer than the interval; without this guard two reads
   // would race for the same cursor and append the same lines twice.
   const busyRef = useRef(false);
+
+  // A different process or level is a different set of buffers: the composite
+  // cursor names the old ones, so clear the console and let the next poll fill
+  // it from the start of the new view.
+  useEffect(() => {
+    cursorRef.current = "";
+    tokenRef.current = "";
+    setEntries([]);
+    setLoading(true);
+    setError("");
+  }, [process, level]);
 
   useEffect(() => {
     let active = true;
@@ -235,7 +262,7 @@ export function LogsView() {
         // A fresh page may be behind more lines than one response carries;
         // keep reading until the cursor reaches the buffer head.
         for (let page = 0; page < 20; page += 1) {
-          const data = await getOwnerLogs(cursorRef.current, controller.signal);
+          const data = await getOwnerLogs(cursorRef.current, { process, level }, controller.signal);
           if (!active) return;
           setUnavailable(Boolean(data.unavailable));
           setCapacity(data.capacity);
@@ -246,7 +273,7 @@ export function LogsView() {
           const replaced = Boolean(data.token && tokenRef.current && data.token !== tokenRef.current);
           if (data.token) tokenRef.current = data.token;
           if (data.reset || replaced) {
-            cursorRef.current = 0;
+            cursorRef.current = "";
             setEntries([]);
             continue;
           }
@@ -254,7 +281,7 @@ export function LogsView() {
             setEntries((current) => capBySource([...current, ...data.lines]));
           }
           cursorRef.current = data.next;
-          if (data.next >= data.head || data.lines.length === 0) break;
+          if (!data.has_more || data.lines.length === 0) break;
         }
         setError("");
       } catch (reason) {
@@ -278,19 +305,21 @@ export function LogsView() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [t]);
+  }, [t, process, level]);
 
   const threshold = LEVEL_WEIGHT[level] ?? LEVEL_WEIGHT.INFO;
   const visible = useMemo(
     () => entries.filter((entry) => {
       if ((LEVEL_WEIGHT[entry.level] ?? LEVEL_WEIGHT.INFO) < threshold) return false;
+      const owner = entry.process ?? "bot";
+      if (process !== "all" && owner !== process && !(process === "web" && owner === "api")) return false;
       const source = sourceOf(entry);
       if (hidePymongo && source === "pymongo") return false;
       if (hideUrllib3 && source === "urllib3") return false;
       if (hideWavelink && source === "wavelink") return false;
       return true;
     }),
-    [entries, threshold, hidePymongo, hideUrllib3, hideWavelink],
+    [entries, threshold, process, hidePymongo, hideUrllib3, hideWavelink],
   );
 
   // Follow the newest id, not the count: once the client cap is reached the
@@ -301,7 +330,7 @@ export function LogsView() {
     if (!pinned) return;
     const node = scrollerRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [latestId, pinned, level, hidePymongo, hideUrllib3, hideWavelink]);
+  }, [latestId, pinned, level, process, hidePymongo, hideUrllib3, hideWavelink]);
 
   const onScroll = () => {
     const node = scrollerRef.current;
@@ -339,6 +368,16 @@ export function LogsView() {
               options={LEVELS}
               value={level}
               onChange={(next) => { setLevel(next); setPinned(true); }}
+            />
+          </label>
+          <label className="bot-logs-level">
+            <span className="form-label">{t("logs.process")}</span>
+            <Select
+              ariaLabel={t("logs.process")}
+              placeholder={null}
+              options={processOptions}
+              value={process}
+              onChange={(next) => { setProcess(next); setPinned(true); }}
             />
           </label>
           <div className="bot-logs-filter">

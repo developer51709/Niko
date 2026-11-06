@@ -36,6 +36,25 @@ def write_bot_stats(bot):
             "version":       VERSION,
             "uptime_since":  datetime.datetime.utcnow().isoformat(),
         }
+        # The dashboard child has no gateway; this record is its fallback
+        # identity while the bot child is restarting.  The live bot child API is
+        # still preferred, so a changed profile picture reaches the site first.
+        user = getattr(bot, "user", None)
+        if user is not None:
+            try:
+                payload["bot_avatar_url"] = str(user.display_avatar.url)
+            except Exception:
+                payload["bot_avatar_url"] = None
+            name = str(getattr(user, "name", "") or "") or None
+            payload["bot_name"] = name
+            payload["bot_display_name"] = str(getattr(user, "display_name", "") or "") or name
+            payload["bot_discriminator"] = str(getattr(user, "discriminator", "") or "") or None
+            flags = getattr(user, "public_flags", None)
+            try:
+                flag_value = int(getattr(flags, "value", flags) or 0)
+            except (TypeError, ValueError):
+                flag_value = 0
+            payload["bot_verified"] = bool(flag_value & (1 << 16))
         with open("data/bot_stats.json", "w") as f:
             json.dump(payload, f)
     except Exception as exc:

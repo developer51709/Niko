@@ -25,6 +25,8 @@ Additional test knobs:
     FAKE_CHILD_STAGE_HOLD       stage name to stop at (after reporting it)
     FAKE_CHILD_STAGE_HOLD_ONCE  marker path: only the first child holds, later
                                 runs boot normally, so recovery can be tested
+    FAKE_CHILD_EFFECT_DIR       directory: append one line per boot to
+                                ``boots.log``, modelling a startup side effect
 """
 
 from __future__ import annotations
@@ -58,6 +60,10 @@ class FakeHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header(
+            "X-Fake-Child",
+            os.environ.get("NIKO_CHILD_NAME", "bot"),
+        )
         for key, value in headers or []:
             self.send_header(key, value)
         self.end_headers()
@@ -143,6 +149,20 @@ class FakeHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         body = self._read_body()
         path = self.path.split("?", 1)[0]
+        if path == "/api/updates/force":
+            try:
+                payload = json.loads(body or b"{}")
+            except json.JSONDecodeError:
+                payload = {}
+            self._write_json(
+                200,
+                {
+                    "ok": True,
+                    "areas": payload.get("areas"),
+                    "supervisor_token": bool(self.headers.get("X-Supervisor-Token")),
+                },
+            )
+            return
         if path in {"/echo", "/upload"}:
             self._write_json(
                 200,
@@ -256,6 +276,13 @@ def main(argv: list[str] | None = None) -> int:
         stage("gateway_ready")
         reporter.send("ready", critical_checks=1)
         stage("ready")
+
+        effects = os.environ.get("FAKE_CHILD_EFFECT_DIR")
+        if effects:
+            directory = Path(effects)
+            directory.mkdir(parents=True, exist_ok=True)
+            with (directory / "boots.log").open("a", encoding="utf-8") as handle:
+                handle.write(f"{os.getpid()}\n")
 
         if mode == "hang-after-ready":
             # Keep serving HTTP, but stop sending heartbeats.  The supervisor's

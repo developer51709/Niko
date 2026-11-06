@@ -18,38 +18,13 @@ import threading
 import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from colorama import Fore, Style, init as colorama_init
+from console_format import ConsoleFormatter
 from utils.ai.debugging import send_debug_report
-
-colorama_init(autoreset=True)
 
 LOG_LEVEL = {
     "AI_DEBUG": logging.ERROR,
     "FILE": logging.DEBUG,
     "WEBHOOK": logging.WARNING
-}
-
-# -----------------------------------
-# Colors
-# -----------------------------------
-GRAY = Fore.LIGHTBLACK_EX
-CYAN = Fore.CYAN
-BOLD = Style.BRIGHT
-
-LEVEL_COLORS = {
-    "DEBUG":   Fore.CYAN,
-    "INFO":    Fore.MAGENTA,
-    "SUCCESS": Fore.GREEN,
-    "WARNING": Fore.YELLOW,
-    "ERROR":   Fore.RED,
-}
-
-LEVEL_LABELS = {
-    "DEBUG":   "DEBUG",
-    "INFO":    "INFO",
-    "SUCCESS": "SUCCESS",
-    "WARNING": "WARNING",
-    "ERROR":   "ERROR",
 }
 
 # -----------------------------------
@@ -63,29 +38,6 @@ def _success_method(self, message, *args, **kwargs):
         self._log(SUCCESS_LEVEL, message, args, **kwargs)
 
 logging.Logger.success = _success_method
-
-
-# -----------------------------------
-# Console formatter (colourised)
-# -----------------------------------
-class ConsoleFormatter(logging.Formatter):
-    _LEVEL_WIDTH  = 7    # longest label is "WARNING" / "SUCCESS" = 7
-    _MODULE_WIDTH = 18   # module name column
-
-    def format(self, record):
-        level  = record.levelname.upper()
-        module = record.name
-        time   = self.formatTime(record, "%H:%M:%S")
-
-        level_color = LEVEL_COLORS.get(level, "")
-        label       = LEVEL_LABELS.get(level, level)
-
-        time_part   = f"{GRAY}{time}{Style.RESET_ALL}"
-        level_part  = f"{level_color}{Style.BRIGHT}{label:<{self._LEVEL_WIDTH}}{Style.RESET_ALL}"
-        module_part = f"{BOLD}{CYAN}{module:<{self._MODULE_WIDTH}}{Style.RESET_ALL}"
-        msg_part    = f"{level_color}{record.getMessage()}{Style.RESET_ALL}"
-
-        return f"  {time_part}  {level_part}  {module_part}  {msg_part}"
 
 
 # -----------------------------------
@@ -104,6 +56,27 @@ def _noisy_source(name: str) -> str | None:
         if name == library or name.startswith(f"{library}."):
             return library
     return None
+
+
+class _QuietSuccessfulRequests(logging.Filter):
+    """Drop routine 2xx/3xx Werkzeug access lines, keep request failures.
+
+    The dashboard polls the owner log feed every 1.2 seconds, so logging every
+    successful request would make the feed read as its own access log and push
+    the bot's real output out of the ring.  The filter is installed on the
+    ``werkzeug`` logger once here so every process that serves Flask (the bot
+    child and the dashboard child) gets the same behaviour.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = getattr(record, "args", ())
+        for value in args if isinstance(args, tuple) else ():
+            try:
+                status = int(value)
+            except (TypeError, ValueError):
+                continue
+            return status >= 400
+        return True
 
 
 class LogBufferHandler(logging.Handler):
@@ -144,6 +117,17 @@ class LogBufferHandler(logging.Handler):
         self._seq = 0
         self._lock = threading.Lock()
         self._formatter = ConsoleFormatter()
+        # Supervised processes share one archive, split by process and level, so
+        # the owner's page keeps its history across restarts and can read one
+        # process's ERROR buffer without the others.  Unset in a direct run,
+        # where the in-memory ring is enough.
+        try:
+            from log_store import store_from_environment
+
+            self._store = store_from_environment()
+        except Exception:
+            self._store = None
+        self.process = (os.getenv("NIKO_CHILD_NAME") or "bot").strip() or "bot"
 
     def emit(self, record: logging.LogRecord):
         try:
@@ -170,6 +154,20 @@ class LogBufferHandler(logging.Handler):
                 self._lines.append(entry)
             else:
                 self._noise[source].append(entry)
+        store = getattr(self, "_store", None)
+        if store is not None:
+            try:
+                store.append(
+                    level=record.levelname,
+                    logger=record.name,
+                    line=line,
+                    process=self.process,
+                    source=source,
+                    at=record.created,
+                )
+            except Exception:
+                # The console must never fail because the shared copy did.
+                pass
 
     def snapshot(self, since: int = 0, limit: int = 2000) -> dict:
         """Return buffered lines after ``since``, oldest first.
@@ -360,6 +358,14 @@ root.handlers = [_console_handler]
 # line the console's environment level hides is still available on the page.
 log_buffer = LogBufferHandler()
 root.addHandler(log_buffer)
+
+# Werkzeug access lines: a successful request is not application output.  Keep
+# failures (4xx/5xx), which are the ones worth seeing, and hide the rest before
+# they reach the console, the shared store, or the owner's live feed.
+_werkzeug_logger = logging.getLogger("werkzeug")
+_werkzeug_logger.setLevel(logging.INFO)
+if not any(isinstance(item, _QuietSuccessfulRequests) for item in _werkzeug_logger.filters):
+    _werkzeug_logger.addFilter(_QuietSuccessfulRequests())
 
 # AI debugging handler
 # uses the send_debug_report function to send logs to the AI debug channel

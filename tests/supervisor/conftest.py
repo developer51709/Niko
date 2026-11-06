@@ -187,6 +187,12 @@ def supervisor(tmp_path: Path):
             "0",
             "--child",
             str(FAKE_CHILD),
+            # These harnesses describe the combined child; tests that exercise
+            # split mode append their own --split-web, which wins.  The
+            # database child is opt-in for the same reason: the fake children
+            # have no pool, and a real one would need a real database.
+            "--no-split-web",
+            "--no-split-db",
             "--status-file",
             str(status_path),
             "--control-socket",
@@ -207,6 +213,13 @@ def supervisor(tmp_path: Path):
             str(reset_after),
             "--max-restarts",
             str(max_restarts),
+            # Keep last-good rollback state inside this test's own run directory:
+            # a real pending update in the checkout must never be restored by a
+            # test supervisor.
+            "--pending-update-file",
+            str(run_dir / "pending-update.json"),
+            "--update-root",
+            str(run_dir),
             "--log-level",
             "WARNING",
             *(args or []),

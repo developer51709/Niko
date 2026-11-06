@@ -13,6 +13,7 @@ Two kinds of endpoint live here:
 import hmac
 import inspect
 import logging
+import os
 import threading
 import time
 
@@ -273,7 +274,10 @@ def _token_ok() -> bool:
     if not expected:
         return False
     supplied = request.headers.get("X-Update-Token", "")
-    return hmac.compare_digest(supplied, expected)
+    # Compare bytes so a non-ASCII header cannot turn a failed auth into a 500.
+    return hmac.compare_digest(
+        supplied.encode("utf-8", "replace"), expected.encode("utf-8", "replace")
+    )
 
 
 def _source_manifest() -> dict:
@@ -322,5 +326,67 @@ def api_updates_file():
     response = send_from_directory(str(updates.ROOT), relative)
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.route("/api/updates/force", methods=["POST"])
+def api_updates_force():
+    """Run an update because production's supervisor asked for one.
+
+    This is the loopback-only half of the recovery path: the supervisor owns the
+    public listener and forwards a token-authenticated beta request here, even
+    when the dashboard child is down.  It is available only in the bot child
+    (and the combined fallback), never in the dashboard child, and only when the
+    supervisor has set the per-run internal token.
+    """
+    internal = (os.environ.get("NIKO_INTERNAL_TOKEN") or "").strip()
+    supplied = request.headers.get("X-Supervisor-Token", "")
+    if (
+        not internal
+        or os.environ.get("NIKO_WEB_ROLE") == "1"
+        or not hmac.compare_digest(
+            supplied.encode("utf-8", "replace"), internal.encode("utf-8", "replace")
+        )
+    ):
+        return jsonify({"error": "Not found"}), 404
+
+    body = request.get_json(silent=True) or {}
+    areas = body.get("areas")
+    if areas is not None:
+        if (
+            not isinstance(areas, list)
+            or not areas
+            or not all(isinstance(name, str) for name in areas)
+        ):
+            return jsonify({"error": "areas must be a non-empty list of area names."}), 400
+        unknown = [name for name in areas if name not in set(updates.AREA_ORDER)]
+        if unknown:
+            return jsonify({"error": f"Unknown areas: {', '.join(unknown)}"}), 400
+    if _discord_bot is None:
+        return jsonify({"error": "The bot is not ready; the update cannot run."}), 503
+
+    log.warning(
+        "Forced update requested by the supervisor (areas=%s).",
+        ",".join(areas) if areas else "all",
+    )
+    result = updates.apply(areas, _discord_bot)
+    result["handoff"] = handoff.last()
+    return jsonify(result), (200 if result.get("ok") else 409)
+
+
+@app.route("/api/updates/push", methods=["POST"])
+def api_updates_push():
+    """Beta side: ask production's supervisor to apply an update now.
+
+    Guarded by the same shared ``BETA_UPDATE_TOKEN`` beta already uses to serve
+    its source files.  ``PRODUCTION_INSTANCE_URL`` names the production origin;
+    nothing in the request body can redirect it.
+    """
+    if not _token_ok():
+        return jsonify({"error": "Not found"}), 404
+    body = request.get_json(silent=True) or {}
+    result = updates.push_to_production(body.get("areas"))
+    if result.get("ok"):
+        return jsonify(result), 200
+    return jsonify(result), result.get("status") or 502
 
 

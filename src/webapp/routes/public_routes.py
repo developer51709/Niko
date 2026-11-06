@@ -8,6 +8,7 @@ from config import links as bot_links
 from utils import logging
 from .. import developer_portal, leaderboard_cache
 from .. import locale_feed
+from .. import runtime
 from .. import server as _server
 from .. import site_build
 from .. import status as status_source
@@ -459,39 +460,18 @@ def api_bot_emojis():
 
 @app.route("/api/config")
 def api_public_config():
-    bot_avatar_url = None
-    bot_name = None
-    bot_display_name = None
-    bot_discriminator = None
-    bot_verified = False
-    user = getattr(_discord_bot, "user", None) if _discord_bot is not None else None
-    if user is not None:
-        try:
-            bot_avatar_url = str(user.display_avatar.url)
-        except Exception:
-            bot_avatar_url = None
-        # The identity Discord prints above the bot's messages: the global
-        # display name when it has one, otherwise the username.
-        bot_name = str(getattr(user, "name", "") or "") or None
-        bot_display_name = str(getattr(user, "display_name", "") or "") or bot_name
-        # Older accounts carry a four-digit tag; migrated ones report "0" and
-        # Discord shows no discriminator at all.
-        bot_discriminator = str(getattr(user, "discriminator", "") or "") or None
-        # Bit 16 of a user's public flags is Discord's verified-bot check — the
-        # tick Discord draws inside the APP tag beside a verified bot's name.
-        flags = getattr(user, "public_flags", None)
-        try:
-            flag_value = int(getattr(flags, "value", flags) or 0)
-        except (TypeError, ValueError):
-            flag_value = 0
-        bot_verified = bool(flag_value & (1 << 16))
+    # The identity is resolved through the same accessor the favicon uses: the
+    # local gateway when this process owns one, otherwise the bot child's API,
+    # then the startup record.  Keeping the rest of this response local is what
+    # lets the public pages still know the application id while the bot boots.
+    identity = runtime.public_bot_identity()
     config = {
         "application_id": DISCORD_CLIENT_ID,
-        "bot_avatar_url": bot_avatar_url,
-        "bot_name": bot_name,
-        "bot_display_name": bot_display_name,
-        "bot_discriminator": bot_discriminator,
-        "bot_verified": bot_verified,
+        "bot_avatar_url": identity.get("bot_avatar_url"),
+        "bot_name": identity.get("bot_name"),
+        "bot_display_name": identity.get("bot_display_name"),
+        "bot_discriminator": identity.get("bot_discriminator"),
+        "bot_verified": bool(identity.get("bot_verified")),
         "invite_url": bot_links.invite_url(DISCORD_CLIENT_ID),
         "oauth_available": oauth_enabled(),
     }

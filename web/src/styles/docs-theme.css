@@ -87,36 +87,6 @@
 .site-content .docs-page .clear-search-btn { color: #d5d9df; font-weight: 700; }
 .site-content .docs-page .clear-search-btn:hover { background: rgba(255, 255, 255, .1); color: #f4f5f7; }
 
-/* ---- Popular topics --------------------------------------------------- */
-.site-content .docs-page .docs-tags-cloud { padding: 18px 0 0; border-bottom: 0; }
-.site-content .docs-page .tags-cloud-title {
-  margin-bottom: 9px;
-  color: #8b95a3;
-  font: 700 9px "Space Mono", monospace;
-  letter-spacing: .13em;
-}
-.site-content .docs-page .tag-cloud-item {
-  padding: 5px 10px;
-  color: #b4bac3;
-  background: rgba(255, 255, 255, .045);
-  border: 1px solid rgba(226, 234, 246, .1);
-  border-radius: 999px;
-  font-size: 11px !important;
-  transition: color .16s, background .16s, border-color .16s;
-}
-.site-content .docs-page .tag-cloud-item:hover {
-  color: #f4f5f7;
-  background: rgba(255, 255, 255, .1);
-  border-color: rgba(213, 220, 229, .3);
-}
-.site-content .docs-page .tag-cloud-item .tag-count {
-  padding: 1px 5px;
-  color: #9aa3b0;
-  background: rgba(255, 255, 255, .08);
-  border-radius: 999px;
-  font: 700 9px "Space Mono", monospace;
-}
-
 /* ---- Category strip -------------------------------------------------- */
 .site-content .docs-page .docs-category-filters {
   top: 76px;
