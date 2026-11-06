@@ -1063,6 +1063,39 @@ class MongoPool:
         await self._db[table].delete_many(filter_dict)
 
 
+def named_pool(pool, name: str):
+    """A pool for another database on the same backend and cluster.
+
+    The database child owns the connection, so a feature that needs its own
+    database (the music store, error reports) asks the existing pool for a
+    named pool instead of opening a second client.  A local SQLite pool has no
+    cluster to share, so callers fall back to their own file.
+    """
+    factory = getattr(pool, "database", None)
+    if callable(factory):
+        return factory(name)
+    client = getattr(pool, "client", None)
+    if client is None or getattr(pool, "db_type", None) != "mongodb":
+        raise RuntimeError(f"{getattr(pool, 'db_type', 'unknown')} has no named databases")
+    return MongoPool(client, name)
+
+
+#: Values accepted as "on" for the strict-backend flag.
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def strict_backend() -> bool:
+    """Whether a missing or unreachable MongoDB must fail instead of falling back.
+
+    A supervised production instance must never silently start on an empty
+    local SQLite file because MongoDB was briefly unreachable: every guild's
+    configuration would appear to have reset. ``NIKO_STRICT_DB=1`` turns that
+    fallback into a startup failure, which the supervisor's readiness loop and
+    restart budget then handle as an outage rather than a silent data split.
+    """
+    return (os.getenv("NIKO_STRICT_DB") or "").strip().lower() in _TRUTHY
+
+
 async def create_pool(db_path: str) -> Union[SQLitePool, MongoPool]:
     """Create the shared database pool.
 
@@ -1074,9 +1107,18 @@ async def create_pool(db_path: str) -> Union[SQLitePool, MongoPool]:
     to SQLite: a single transient ping timeout during a production restart
     must never silently switch the bot to an empty local database (which
     would look like "all config resets on deploy").
+
+    With ``NIKO_STRICT_DB`` set there is no fallback at all: a deployment that
+    requires MongoDB refuses to start on SQLite.
     """
     global _shared_pool
     mongo_url = os.getenv("MONGODB_URL")
+    strict = strict_backend()
+    if strict and not mongo_url:
+        raise RuntimeError(
+            "NIKO_STRICT_DB is set but MONGODB_URL is not configured; "
+            "refusing to fall back to local SQLite."
+        )
     if mongo_url:
         from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -1107,6 +1149,11 @@ async def create_pool(db_path: str) -> Union[SQLitePool, MongoPool]:
                         f"MongoDB connection attempt {attempt}/{attempts} failed: {e}. Retrying…",
                     )
                     await asyncio.sleep(2)
+                elif strict:
+                    raise RuntimeError(
+                        f"MongoDB is unreachable after {attempts} attempts and "
+                        f"NIKO_STRICT_DB is set; refusing to fall back to SQLite ({e})."
+                    ) from e
                 else:
                     print(f"Failed to connect to MongoDB after {attempts} attempts: {e}. Falling back to SQLite.")
 

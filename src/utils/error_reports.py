@@ -26,7 +26,7 @@ from typing import Any
 
 import aiosqlite
 
-from database import MongoPool, SQLitePool
+from database import SQLitePool, named_pool
 from utils import logging
 
 
@@ -165,9 +165,8 @@ class ErrorReportDatabase:
             main = getattr(bot, "cxn", None) if bot is not None else None
             if main is not None and getattr(main, "db_type", None) == "mongodb":
                 try:
-                    client = main.client
                     base = os.getenv("MONGODB_DATABASE", "discord_bot")
-                    self.pool = MongoPool(client, f"{base}_error_reports")
+                    self.pool = named_pool(main, f"{base}_error_reports")
                 except Exception as error:
                     logging.warning(
                         "ErrorReports",

@@ -102,6 +102,24 @@ async def _check_database(bot):
         return backend, False
 
 
+def _local_api_base() -> str:
+    """The API this process is actually serving on.
+
+    ``PORT`` is the supervisor's public port in supervised mode and is removed
+    from the child environment; the child's Flask server binds an ephemeral
+    loopback port instead.  Asking ``api_server`` for the bound port keeps the
+    panel aligned in both modes, and its own fallback still covers the case
+    where the API is not serving yet.
+    """
+    try:
+        import api_server
+
+        port = api_server.listening_port()
+    except Exception:
+        port = int(os.environ.get("PORT", "5000"))
+    return f"http://127.0.0.1:{port}"
+
+
 def _percent(value) -> str:
     """A percentage without a trailing ``.0`` — the panel has no room to waste."""
     text = f"{float(value or 0):.1f}"
@@ -250,8 +268,7 @@ async def _collect_status(bot) -> dict:
         status["database_ok"] = db_ok
     except Exception:
         pass
-    port = os.environ.get("PORT", "5000")
-    local_base = f"http://127.0.0.1:{port}"
+    local_base = _local_api_base()
     try:
         status["api_ok"] = await _probe_http(f"{local_base}/api/health")
     except Exception:

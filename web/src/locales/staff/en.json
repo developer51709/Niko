@@ -35,7 +35,7 @@
   "common.working": "Working…",
   "logs.kicker": "Owner console",
   "logs.title": "Live logs",
-  "logs.body": "The bot's console as it is written, colour for colour. The buffer holds this process's output since it started — or since the last in-place update — and the level below filters only this page.",
+  "logs.body": "The bot's console as it is written, colour for colour. Under the supervisor the bot, the dashboard and the supervisor write to one console, so a restart does not clear it; the level and process menus filter only this page.",
   "logs.level": "Log level",
   "logs.hidePymongo": "Hide pymongo",
   "logs.hidePymongoHint": "Keeps MongoDB's debug output out of the console.",
@@ -52,5 +52,11 @@
   "logs.error": "The live log could not be read.",
   "logs.jump": "Jump to latest",
   "logs.unavailable": "This process is not writing to the log buffer yet.",
-  "logs.truncated": "Older lines have rolled out of the buffer."
+  "logs.truncated": "Older lines have rolled out of the buffer.",
+  "logs.process": "Process",
+  "logs.processAll": "All processes",
+  "logs.processSupervisor": "Supervisor",
+  "logs.processDashboard": "Dashboard",
+  "logs.processDatabase": "Database",
+  "logs.processBot": "Bot"
 }

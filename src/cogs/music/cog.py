@@ -36,6 +36,7 @@ from utils.music import (
     msg,
 )
 from utils.music.database import MusicDatabase
+from utils.music.nodes import close_pool
 from cogs.music.views import _build_np_view, _fill
 from utils.prefix_manager import resolve_prefix
 
@@ -539,6 +540,9 @@ class MusicSystem(commands.Cog):
         self.bot        = bot
         self.connected  = False
         self._connecting = False
+        # Set during unload so node-closed events do not schedule reconnects or
+        # top-ups while the process is shutting down.
+        self._closing = False
         # Labels of Lavalink nodes currently in the pool (host:port).
         self._node_labels: list[str] = []
         # Owner-saved nodes by identifier (host:port). The public status page
@@ -586,12 +590,16 @@ class MusicSystem(commands.Cog):
         self._rescan_task = asyncio.create_task(self._node_rescan_loop())
 
     async def cog_unload(self):
+        self._closing = True
         if self._rescan_task and not self._rescan_task.done():
             self._rescan_task.cancel()
             try:
                 await self._rescan_task
             except asyncio.CancelledError:
                 pass
+        # Close the nodes and their HTTP sessions; wavelink's own close leaves
+        # each node's aiohttp session open for the process to warn about.
+        await close_pool()
 
     async def _node_rescan_loop(self):
         await self.bot.wait_until_ready()
@@ -962,7 +970,7 @@ class MusicSystem(commands.Cog):
 
     async def startup_connect(self, *, retry_delay: float = 0):
         """Rescan candidates and top up the pool without restarting healthy nodes."""
-        if self._connecting:
+        if self._closing or self._connecting:
             return
         self._connecting = True
         try:
@@ -1203,6 +1211,8 @@ class MusicSystem(commands.Cog):
     async def on_wavelink_node_closed(self, node: wavelink.Node, disconnected: list):
         """Handle node loss: keep playing while other nodes remain; only
         re-run the full connect cycle when every node is gone."""
+        if self._closing:
+            return
         try:
             remaining = [
                 n for n in wavelink.Pool.nodes.values()

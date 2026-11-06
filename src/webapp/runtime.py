@@ -5,11 +5,27 @@ import asyncio
 import json
 import os
 import sys
+import time
 from flask import request, url_for
 from . import config
 
 
 _discord_bot = None
+
+#: The bot's public identity, as the dashboard's config and favicon need it.
+#: The dashboard child has no gateway, so it asks the bot child; a short cache
+#: keeps that from becoming a request on every page and favicon hit.
+_IDENTITY_FIELDS = (
+    "bot_avatar_url",
+    "bot_name",
+    "bot_display_name",
+    "bot_discriminator",
+    "bot_verified",
+)
+_IDENTITY_TTL = 15.0
+_IDENTITY_MISS_TTL = 3.0
+_identity_cache: tuple[float, dict] | None = None
+_identity_route = None
 
 # Delivery jobs (staff broadcasts) outlive the request that starts them, so the
 # futures are kept referenced until they finish. Losing the reference would let
@@ -130,6 +146,98 @@ def save_json(path: str, data):
     with open(temporary, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(temporary, path)
+
+
+def _user_identity(user) -> dict:
+    """The fields the website prints for the bot, from a Discord user object."""
+    if user is None:
+        return {}
+    try:
+        avatar = str(user.display_avatar.url)
+    except Exception:
+        avatar = None
+    name = str(getattr(user, "name", "") or "") or None
+    display_name = str(getattr(user, "display_name", "") or "") or name
+    discriminator = str(getattr(user, "discriminator", "") or "") or None
+    flags = getattr(user, "public_flags", None)
+    try:
+        flag_value = int(getattr(flags, "value", flags) or 0)
+    except (TypeError, ValueError):
+        flag_value = 0
+    return {
+        "bot_avatar_url": avatar,
+        "bot_name": name,
+        "bot_display_name": display_name,
+        "bot_discriminator": discriminator,
+        # Bit 16 is Discord's verified-bot tick, drawn beside the bot's name.
+        "bot_verified": bool(flag_value & (1 << 16)),
+    }
+
+
+def _identity_from_bot_child() -> dict:
+    """Ask the bot child's own /api/config for the live identity.
+
+    The split dashboard deliberately has no gateway object, but the bot child
+    does.  Reading its loopback API is what keeps the navbar avatar and the
+    favicon live without forwarding the whole public config (which must keep
+    answering while the bot restarts).
+    """
+    if (os.environ.get("NIKO_SUPERVISED") or "").strip() != "1":
+        return {}
+    global _identity_route
+    try:
+        import requests
+        from web_bridge import BotRoute
+
+        if _identity_route is None:
+            _identity_route = BotRoute()
+        port = _identity_route.port()
+        if not port:
+            return {}
+        response = requests.get(f"http://127.0.0.1:{port}/api/config", timeout=2.0)
+        if response.status_code != 200:
+            return {}
+        payload = response.json()
+    except Exception:
+        # A restarted bot child gets a new port; drop the old one so the next
+        # lookup asks the supervisor instead of retrying a dead address.
+        if _identity_route is not None:
+            _identity_route.invalidate()
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {field: payload.get(field) for field in _IDENTITY_FIELDS if field in payload}
+
+
+def public_bot_identity() -> dict:
+    """The bot's name, avatar and verified badge for this process.
+
+    A process with the gateway reads its user directly.  The dashboard child
+    asks the bot child, and if that child is restarting it falls back to the
+    identity recorded in ``data/bot_stats.json`` when the bot last became ready.
+    """
+    global _identity_cache
+    bot = _discord_bot
+    if bot is not None:
+        return _user_identity(getattr(bot, "user", None))
+
+    now = time.monotonic()
+    if _identity_cache is not None:
+        cached_at, cached = _identity_cache
+        ttl = _IDENTITY_TTL if cached else _IDENTITY_MISS_TTL
+        if now - cached_at < ttl:
+            return dict(cached)
+
+    identity = _identity_from_bot_child()
+    if not identity:
+        stats = load_json(config.BOT_STATS, {})
+        identity = {
+            field: stats.get(field)
+            for field in _IDENTITY_FIELDS
+            if stats.get(field) is not None
+        }
+    _identity_cache = (now, identity)
+    return dict(identity)
 
 
 def bot_guild_ids() -> set:

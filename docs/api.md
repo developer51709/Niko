@@ -1,19 +1,26 @@
 # Niko API
 
-The API is served by the bot process on the same origin as the React dashboard.
-`src/api_server.py` starts the Flask server in a daemon thread before Discord
-connects. This means the preview, dashboard, and bot cannot drift into separate
-services or require a second workflow.
+The API and the React dashboard are served through the supervisor
+(`src/supervisor.py`), which owns the public origin and starts the dashboard in
+its own child by default (`src/web_child.py`); live-bot routes are bridged to
+the bot child over loopback. The database runs in its own child
+(`src/db_child.py`) and is reached only over its authenticated loopback API. With
+`--no-split-web` (or `NIKO_SPLIT_WEB=0`) the combined child returns:
+`src/api_server.py` starts the Flask server in a daemon thread inside
+`src/bot.py`. Either way, the preview, dashboard, and bot share one deployment
+and one origin.
 
 ## Run and build
 
 ```bash
 npm run build
-python3 src/bot.py
+python3 src/supervisor.py
 ```
 
-The bot serves port `5000` (or the `PORT` environment value). The React source
-is in `web/`; the generated browser files are in `src/website/dist/`.
+The supervisor serves port `5000` (or the `PORT` environment value). Starting
+`src/bot.py` directly still works for local debugging, but it bypasses the
+supervisor and prints a warning. The React source is in `web/`; the generated
+browser files are in `src/website/dist/`.
 Set `DISCORD_CLIENT_SECRET` in the environment to enable the OAuth-protected
 dashboard routes. Without it, public pages and public API endpoints still work,
 but admin login intentionally remains unavailable.

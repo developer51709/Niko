@@ -6,7 +6,7 @@ import { Icon } from "../components/Icon";
 import { DocSearchBar } from "../components/DocSearchBar";
 import { DocFilters } from "../components/DocFilters";
 import { DocCard } from "../components/DocCard";
-import { useDocSearch, useTagCloud } from "../hooks/useDocSearch";
+import { useDocSearch } from "../hooks/useDocSearch";
 import { useStrings } from "../i18n";
 import { DOC_SECTIONS, DOCS } from "../data/docs";
 import type { DocCategory } from "../types";
@@ -24,14 +24,11 @@ export function DocsPage() {
     filters,
     setQuery,
     setCategory,
-    toggleTag,
     clearFilters,
     results,
     hasActiveFilters,
     resultCount,
   } = useDocSearch();
-
-  const tagCloud = useTagCloud();
 
   // Handle URL hash for deep linking
   useEffect(() => {
@@ -219,28 +216,6 @@ export function DocsPage() {
             </div>
           )}
         </div>
-
-        {/* Tags Cloud */}
-        {tagCloud.length > 0 && !hasActiveFilters && (
-          <div className="docs-tags-cloud">
-            <div className="tags-cloud-title">
-              <Icon name="spark" size={14} />
-              <span>{t("topics.title")}</span>
-            </div>
-            <div className="tags-cloud-list">
-              {tagCloud.slice(0, 15).map(({ tag, count }) => (
-                <button
-                  key={tag}
-                  className="tag-cloud-item"
-                  onClick={() => toggleTag(tag)}
-                >
-                  #{tag}
-                  <span className="tag-count">{count}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Category Filters */}
         <div className="docs-category-filters">

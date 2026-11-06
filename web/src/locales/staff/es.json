@@ -35,7 +35,7 @@
   "common.working": "Procesando…",
   "logs.kicker": "Consola del propietario",
   "logs.title": "Registros en vivo",
-  "logs.body": "La consola del bot tal como se escribe, color a color. El búfer guarda la salida de este proceso desde su inicio (o desde la última actualización en caliente); el nivel de abajo solo filtra esta página.",
+  "logs.body": "La consola del bot tal como se escribe, color a color. Bajo el supervisor, el bot, el panel y el supervisor escriben en una consola común, así que un reinicio no la borra; los menús de nivel y de proceso solo filtran esta página.",
   "logs.level": "Nivel de registro",
   "logs.hidePymongo": "Ocultar pymongo",
   "logs.hidePymongoHint": "Mantiene la salida de depuración de MongoDB fuera de la consola.",
@@ -52,5 +52,11 @@
   "logs.error": "No se pudo leer el registro en vivo.",
   "logs.jump": "Ir a lo más reciente",
   "logs.unavailable": "Este proceso todavía no escribe en el búfer de registros.",
-  "logs.truncated": "Las líneas más antiguas han salido del búfer."
+  "logs.truncated": "Las líneas más antiguas han salido del búfer.",
+  "logs.process": "Proceso",
+  "logs.processAll": "Todos los procesos",
+  "logs.processSupervisor": "Supervisor",
+  "logs.processDashboard": "Panel",
+  "logs.processDatabase": "Base de datos",
+  "logs.processBot": "Bot"
 }

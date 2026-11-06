@@ -14,7 +14,8 @@ visible to the bot owner only.
 | Variable | Where | What it does |
 | --- | --- | --- |
 | `BETA_INSTANCE_URL` | production | Origin of the beta instance, e.g. `https://beta.example.com`. Powers the live translation feed *and* the update feed. |
-| `BETA_UPDATE_TOKEN` | both instances | Shared secret. Beta only serves its source files to a caller with the same value. Without it, `/api/updates/*` answers 404. |
+| `BETA_UPDATE_TOKEN` | both instances | Shared secret. Beta only serves its source files to a caller with the same value, and production's supervisor accepts the same value on its force-update route. Without it, both answer 404. |
+| `PRODUCTION_INSTANCE_URL` | beta | Origin of the production instance, for the recovery push. Without it, beta's `/api/updates/push` is unavailable. |
 | `LOCALE_FEED_TTL` | production | Seconds before the translation manifest is re-read (default 15). |
 
 Generate a token once and set it on both sides:
@@ -175,6 +176,47 @@ file on disk is that copy too, the area is refused with a message saying to
 apply Utilities first (ticking both areas in one run does it in the right order)
 rather than failing with an `AttributeError` from the stale module.
 
+## Forcing an update from beta (recovery)
+
+The update page lives on production, so it is unreachable when production's
+dashboard is down. The supervisor owns the public port independently of the
+dashboard child and accepts a token-authenticated push on
+`POST /supervisor/update`. Beta also wraps it in `POST /api/updates/push`, so the
+owner can trigger it from the instance that is still up:
+
+```bash
+# On beta: ask production to pull and apply the selected areas.
+curl -fsS -X POST https://beta.example.com/api/updates/push \
+  -H "X-Update-Token: $BETA_UPDATE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"areas": ["website", "webapp"]}'
+
+# Directly against production's supervisor when beta's dashboard is also down.
+curl -fsS -X POST https://niko.example.com/supervisor/update \
+  -H "X-Update-Token: $BETA_UPDATE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"areas": ["website", "webapp"]}'
+```
+
+Omit `areas` to let production apply every area that differs, which is the same
+choice the owner page offers. The production supervisor reads
+`BETA_UPDATE_TOKEN` from its process environment or from `src/.env` (the file the
+bot child already uses).
+
+What the recovery path guarantees — and what it does not:
+
+- It works while the **dashboard** child is down or crash-looping. The supervisor
+  answers on its own socket and forwards the request to the bot child, which runs
+  the existing updater.
+- It needs the **bot** child healthy enough to report ready. If the gateway child
+  is down too, production answers `503`; the supervisor's crash/backoff and
+  last-good rollback are the path back from there.
+- The files still come from `BETA_INSTANCE_URL` over TLS and are hash-checked
+  against beta's manifest. The pushed request cannot name a different host or
+  supply code, so the token grants "apply now", not arbitrary execution.
+- A missing or wrong token answers `404`, exactly like an instance that does not
+  have the feature, so the route is not discoverable.
+
 ## Limits worth knowing
 
 - A **new page** still needs a deploy: the feed can add strings and languages,
@@ -199,14 +241,16 @@ rather than failing with an `AttributeError` from the stale module.
   and a deployment restart. This is the Shared modules area, and it applies
   first in every run.
 - Updates are pulled on demand by the owner; nothing polls beta and applies
-  changes by itself.
+  changes by itself. The authenticated beta push is the one exception, and it
+  only tells production to run the same pull now.
 - A visitor who already has the site open is not sent a new bundle. Their tab
   keeps the one it loaded and is offered a reload by the update notice — the
   build name in the shell against `/api/site/build`, see "Reloading a tab after
   a build" in `docs/dashboard.md`. Only a change to the bundle triggers it; a
   server-only update is picked up by the next request without a reload.
-- The bot-core restart replaces the process image, so it needs a Unix host and a
-  single-process layout (the normal `python3 src/bot.py` arrangement).
+- The bot-core restart replaces the process image, so it needs a Unix host.
+  Under the supervisor the bot child is restarted in place; when Niko is run
+  directly as `python3 src/bot.py`, the in-place handoff does the same job.
   `data/updates/handoff.json` records the pid, port and state
   (`restarting` / `restarted` / `failed`) if you need to trace one. Nothing is
   written to that file for any other area.

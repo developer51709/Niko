@@ -6,7 +6,8 @@ To pull the latest changes:
 git pull origin main
 pip install -r requirements.txt
 ```
-Restart the bot process after updating.
+Restart Niko after updating (`python3 src/supervisor.py`); the supervisor restarts
+its children on their own when a dashboard or bot update only affects one area.
 
 ## Backing Up Data
 - **JSON Data**: Regularly back up the `data/` folder.
@@ -202,7 +203,7 @@ While a proxy is already active, another limit rotates to a different proxy inst
 
 ## Monitoring
 - Check the console logs for errors.
-- Ensure the bot process is kept alive using a process manager like PM2 or systemd (if not on Replit).
+- Run `python3 src/supervisor.py` under a process manager like PM2 or systemd (if not on Replit); the supervisor keeps the bot and dashboard children alive and restarts them after a crash.
 - On Replit, use the "Workflows" or "Logs" tab to monitor status.
 
 ## Troubleshooting

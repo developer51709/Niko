@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -25,7 +26,7 @@ from utils import handoff
 from events.on_ready import handle_ready
 from events.on_message import handle_message
 import database
-from api_server import start_api_server
+import api_server
 from config.status import STATUS_DEVICE
 
 # ── Update preflight ────────────────────────────────────────────────────────
@@ -41,6 +42,13 @@ if os.getenv("NIKO_IMPORT_PROBE"):
 TOKEN         = os.getenv("DISCORD_BOT_TOKEN")
 DATABASE_PATH = "data/database.db"
 DEBUG_MODE    = os.getenv("DEBUG_MODE", "").lower() in ("true", "1", "yes")
+SUPERVISED    = os.getenv("NIKO_SUPERVISED", "").strip() == "1"
+
+#: Supervisor lifecycle reporter, created only in supervised mode.  Keeping it
+#: at module scope lets the on_ready callback report readiness after the full
+#: startup chain has run, not merely when Discord's gateway is connected.
+_reporter = None
+_heartbeat_task = None
 
 # ── Intents ──────────────────────────────────────────────────────────────────
 intents = discord.Intents.default()
@@ -59,7 +67,7 @@ bot = commands.AutoShardedBot(
     shard_count=_shard_count,
 )
 bot.remove_command("help")
-bot.cxn: database.SQLitePool | database.MongoPool | None = None
+bot.cxn: "database.SQLitePool | database.MongoPool | database.remote.RemotePool | None" = None
 
 # ── REST egress failover ─────────────────────────────────────────────────────
 # Webshare is the only egress fallback: it arms itself the moment Discord
@@ -104,8 +112,33 @@ bot.tree.interaction_check = _slash_gate
 
 
 # ── Events ───────────────────────────────────────────────────────────────────
+def _report(event: str, **fields) -> None:
+    """Send a lifecycle event when running under the supervisor."""
+    reporter = _reporter
+    if reporter is not None:
+        reporter.send(event, **fields)
+
+
+async def _heartbeat_loop(reporter, interval: float = 3.0) -> None:
+    """Heartbeat from the bot loop so a blocked loop is visible to the supervisor."""
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            if not reporter.heartbeat():
+                return
+    except asyncio.CancelledError:
+        raise
+
+
 @bot.event
 async def on_ready():
+    # READY means the gateway shards are connected; it does not mean the
+    # database, cogs and startup chain are ready to serve traffic.
+    _report(
+        "gateway_ready",
+        shard_count=int(getattr(bot, "shard_count", 0) or 0),
+        ready_shards=len(getattr(bot, "shards", None) or {}),
+    )
     try:
         # A reconnect can replace discord.py's aiohttp session; re-attaching is
         # idempotent and keeps worker routing available on the new session.
@@ -116,8 +149,22 @@ async def on_ready():
         # starts before startup finishes and is idempotent across reconnects.
         analytics.start_flush_task(bot)
         await handle_ready(bot)
+        if _reporter is not None:
+            from supervisor_readiness import evaluate
+
+            snapshot = await evaluate(bot)
+            state = snapshot["state"]
+            if state == "not_ready":
+                _report(
+                    "readiness_failed",
+                    reason="; ".join(snapshot["reasons"]),
+                    checks=snapshot["checks"],
+                )
+            else:
+                _report(state, reasons=snapshot["reasons"], checks=snapshot["checks"])
     except Exception as e:
         logging.error("on_ready", f"An error occurred: {e}")
+        _report("readiness_failed", reason=f"on_ready failed: {type(e).__name__}: {e}")
 
 
 # ── Usage analytics ──────────────────────────────────────────────────────────
@@ -156,13 +203,54 @@ async def on_message(msg: discord.Message):
 
 # ── Entry-point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import asyncio
     import signal
 
+    # The supervisor is the supported entry point.  This path still works for
+    # local debugging, but it owns the public port itself and has none of the
+    # supervisor's health checks, restart policy, or last-good rollback.  A
+    # handoff restart re-executes this file, so it stays quiet: the operator
+    # already ran the supervisor (or chose this path) once.
+    if not SUPERVISED and not os.getenv("NIKO_RESTART_FD"):
+        logging.warning(
+            "Startup",
+            "Direct start detected: the supervisor is the main entry point.\n"
+            "  Start Niko with: python3 src/supervisor.py\n"
+            "  This path skips the supervisor's public port, /health and /ready, "
+            "crash recovery, restart budget and last-good rollback. Use it only "
+            "for local debugging; see docs/supervisor-part-2.md.",
+        )
+
+    # The supervisor (and some hosts) deliver SIGTERM more than once while the
+    # process is still draining.  The second delivery must not repeat the log
+    # line or run cleanup against half-closed resources.
+    _shutdown_started = False
+
     async def _shutdown(signal_name: str):
+        global _shutdown_started
+        if _shutdown_started:
+            return
+        _shutdown_started = True
         logging.info("Shutdown", f"Received {signal_name}, closing bot...")
+        _report("draining", reason=signal_name)
         # Persist the commands recorded since the last periodic flush.
         await analytics.stop_flush_task()
+        # Client.close() does not unload cogs, so their HTTP sessions and
+        # background tasks would outlive the loop and surface as "Unclosed
+        # client session" / "Task exception was never retrieved".  Run the
+        # normal unload hook while the loop can still await the cleanup.
+        for cog in list(bot.cogs.values()):
+            unload = getattr(cog, "cog_unload", None)
+            if unload is None:
+                continue
+            try:
+                result = unload()
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as exc:
+                logging.debug(
+                    "Shutdown",
+                    f"{type(cog).__name__}.cog_unload failed: {exc}",
+                )
         if bot.proxy_manager is not None:
             try:
                 await bot.proxy_manager.close()
@@ -174,43 +262,92 @@ if __name__ == "__main__":
             pass
 
     async def main():
+        global _reporter, _heartbeat_task
+
+        if SUPERVISED:
+            from supervisor_protocol import ChildReporter, install_parent_death_signal
+
+            _reporter = ChildReporter.from_environment()
+            install_parent_death_signal()
+            _report("process_started")
+            _heartbeat_task = asyncio.create_task(
+                _heartbeat_loop(_reporter), name="supervisor-heartbeat"
+            )
+
+        try:
+            await _run()
+        finally:
+            task = _heartbeat_task
+            _heartbeat_task = None
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+            _report("stopped")
+
+    async def _run():
         if not TOKEN:
             logging.error(
                 "Startup",
                 "Missing bot token.\n\nSet DISCORD_BOT_TOKEN in the environment variables."
             )
+            _report("readiness_failed", reason="DISCORD_BOT_TOKEN is not set")
             return
 
         logging.info("Startup", "Starting bot...")
 
-        # Load the shared registry before Discord login so owner-managed proxy
-        # workers are available for the first REST call. It is optional: without
-        # MongoDB the bot keeps its normal egress.
-        if os.getenv("MONGODB_URL"):
+        # The database lives in its own child in the split layout.  Attaching
+        # it before login means commands, caches and the proxy registry all see
+        # the same pool, and restarting the bot never closes the database.
+        # ``connect_remote_pool`` waits for the child to finish connecting.
+        split_db = SUPERVISED and (os.getenv("NIKO_SPLIT_DB") or "").strip() == "1"
+        if split_db:
+            from database.remote import connect_remote_pool
+
+            bot.cxn = await connect_remote_pool()
+            # Modules without a bot reference (onboarding, tickets, AI memory)
+            # resolve the shared pool through this module-level handle.
+            database._shared_pool = bot.cxn
+            logging.info(
+                "Database",
+                f"Attached to the database child ({bot.cxn.db_type}).",
+            )
+        elif os.getenv("MONGODB_URL"):
             try:
                 bot.cxn = await database.create_pool(DATABASE_PATH)
             except Exception as e:
                 logging.warning("Database", f"Could not connect the shared database before login: {e}")
-            else:
-                try:
-                    from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
-                    await initialize_proxy_worker_registry(bot)
-                except Exception as e:
-                    logging.warning("DiscordProxy", f"Could not preload proxy workers: {e}")
+
+        # Load the shared registry before Discord login so owner-managed proxy
+        # workers are available for the first REST call. It is optional: without
+        # MongoDB the bot keeps its normal egress.
+        if bot.cxn is not None and getattr(bot.cxn, "db_type", None) == "mongodb":
+            try:
+                from webapp.routes.proxy_worker_routes import initialize_proxy_worker_registry
+                await initialize_proxy_worker_registry(bot)
+            except Exception as e:
+                logging.warning("DiscordProxy", f"Could not preload proxy workers: {e}")
         if bot.discord_proxy is not None:
             bot.discord_proxy.attach(bot)
         if bot.proxy_manager is not None:
             bot.proxy_manager.attach(bot)
 
-        # A bot-core update restarts this process with its listening socket
-        # already open (see utils.handoff). Adopting it here — before the cogs
-        # load and before the gateway connects — is what keeps the dashboard
-        # answering through the restart; binding the port normally is the
-        # fallback when there is no socket to inherit.
-        if handoff.adopt(bot):
+        # A supervised child binds only loopback and reports the ephemeral
+        # port; the supervisor owns the public socket.  A direct process keeps
+        # the historical inherited-socket / PORT behaviour unchanged.
+        if SUPERVISED:
+            api_server.start_api_server(bot, host="127.0.0.1", port=0)
+            _report("api_listening", host="127.0.0.1", port=api_server.listening_port())
+            logging.info(
+                "Startup",
+                f"Supervised dashboard API listening on 127.0.0.1:{api_server.listening_port()}",
+            )
+        elif handoff.adopt(bot):
             logging.info("Startup", "Dashboard API resumed on the inherited socket.")
         else:
-            start_api_server(bot)
+            api_server.start_api_server(bot)
             logging.info("Startup", "Dashboard API started alongside the bot.")
 
         device_choice = STATUS_DEVICE
@@ -242,7 +379,14 @@ if __name__ == "__main__":
             from events.startup.loader import load_cogs
             from events.startup.economy import preload_economy_cache
             await init_database(bot)
+            _report("db_ready", backend=getattr(getattr(bot, "cxn", None), "db_type", None))
             await load_cogs(bot)
+            cogs = list(getattr(bot, "cog_status", None) or ())
+            _report(
+                "cogs_loaded",
+                total=len(cogs),
+                failed=sum(1 for cog in cogs if cog.get("state") == "failed"),
+            )
             await preload_economy_cache(bot)
             # on_ready skips these three steps; they already ran before the
             # gateway connected.

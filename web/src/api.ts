@@ -116,8 +116,14 @@ export const setStaffMaintenance = (
 // ── Owner localization & updates (staff settings) ───────────────────────────
 /** Which languages the live site can render right now, and where they came from. */
 export const getOwnerLocales = () => api<OwnerLocales>("/api/owner/locales");
-export const getOwnerLogs = (since: number, signal?: AbortSignal) =>
-  api<OwnerLogsResponse>(`/api/owner/logs?since=${encodeURIComponent(String(since))}`, { signal });
+export const getOwnerLogs = (
+  since: string,
+  view: { process: string; level: string },
+  signal?: AbortSignal,
+) => {
+  const query = new URLSearchParams({ since, process: view.process, level: view.level });
+  return api<OwnerLogsResponse>(`/api/owner/logs?${query.toString()}`, { signal });
+};
 /** Pull beta's catalogues immediately instead of waiting for the next poll. */
 export const syncOwnerLocales = (csrfToken?: string) => api<OwnerLocales>("/api/owner/locales/sync", {
   method: "POST",

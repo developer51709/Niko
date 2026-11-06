@@ -1,5 +1,6 @@
 """Regression checks for opt-in image and voice AI context."""
 
+import logging
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,24 @@ def test_api_logging_filters_successful_polling_noise():
     assert "class _QuietSuccessfulRequests" in source
     assert "return status >= 400" in source
     assert "werkzeug_logger.addFilter" in source
+
+
+def test_successful_werkzeug_access_lines_are_filtered_for_every_flask_process():
+    from utils import logging as bot_logging
+
+    quiet = bot_logging._QuietSuccessfulRequests()
+    assert quiet.filter(
+        logging.LogRecord("werkzeug", logging.INFO, __file__, 1, '"GET / HTTP/1.1" %s %s', ('"GET / HTTP/1.1"', 200, "-"), None)
+    ) is False
+    assert quiet.filter(
+        logging.LogRecord("werkzeug", logging.INFO, __file__, 1, '"GET / HTTP/1.1" %s %s', ('"GET / HTTP/1.1"', 500, "-"), None)
+    ) is True
+    # Installed at import so the dashboard child, which serves Flask without
+    # api_server, gets the same quiet access log.
+    assert any(
+        isinstance(item, bot_logging._QuietSuccessfulRequests)
+        for item in logging.getLogger("werkzeug").filters
+    )
 
 
 def test_groq_request_uses_vision_content_and_transcription_model():

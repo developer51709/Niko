@@ -78,6 +78,8 @@ from pathlib import Path
 
 import requests
 
+from utils import supervisor_control
+
 from . import locale_feed
 
 #: Repository root: ``src/webapp/updates.py`` → three levels up.
@@ -155,6 +157,10 @@ SKIPPED_SUFFIXES = {".pyc", ".pyo", ".swp", ".tmp"}
 _MANIFEST_TTL = 10.0
 _manifest_cache: dict = {"at": 0.0, "document": None, "error": None}
 _lock = threading.Lock()
+#: One apply at a time, including between the owner page and a beta push.  The
+#: contention check used to sit after ``plan()``, so two callers that both
+#: started planning before either set ``_running`` could apply concurrently.
+_apply_gate = threading.Lock()
 _running = {
     "active": False,
     "areas": [],
@@ -212,6 +218,85 @@ def token() -> str:
 
 def configured() -> bool:
     return bool(beta_base() and token())
+
+
+def production_base() -> str:
+    """Origin of the production instance, as configured on beta."""
+    return (os.environ.get("PRODUCTION_INSTANCE_URL") or "").strip().rstrip("/")
+
+
+def push_to_production(areas=None) -> dict:
+    """Ask production's supervisor to apply an update, even if its site is down.
+
+    Beta is the only side that knows both the production origin and the shared
+    token, so this is the recovery action when the owner cannot open production's
+    dashboard.  The update itself still runs on production and still pulls from
+    beta; the request only tells it to run now.
+    """
+    base = production_base()
+    secret = token()
+    if not base:
+        return {
+            "ok": False,
+            "configured": False,
+            "error": "PRODUCTION_INSTANCE_URL is not set on this instance.",
+        }
+    if not secret:
+        return {
+            "ok": False,
+            "configured": False,
+            "error": "BETA_UPDATE_TOKEN is not set on this instance.",
+        }
+
+    payload: dict = {}
+    if areas is not None:
+        if isinstance(areas, str):
+            areas = [areas]
+        if not isinstance(areas, list) or not areas or not all(
+            isinstance(name, str) for name in areas
+        ):
+            return {"ok": False, "error": "areas must be a non-empty list of area names."}
+        unknown = [name for name in areas if name not in set(AREA_ORDER)]
+        if unknown:
+            return {"ok": False, "error": f"Unknown areas: {', '.join(unknown)}"}
+        payload["areas"] = list(areas)
+
+    try:
+        response = requests.post(
+            f"{base}/supervisor/update",
+            json=payload,
+            headers={"X-Update-Token": secret, "Accept": "application/json"},
+            # Do not follow a redirect with the shared token attached; the
+            # configured origin is the only host that may receive it.
+            allow_redirects=False,
+            # Applying a bot-core change can take minutes; a lost response does
+            # not mean production stopped, so the timeout is reported as such.
+            timeout=(5.0, 600.0),
+        )
+    except requests.Timeout:
+        return {
+            "ok": False,
+            "sent": True,
+            "production": base,
+            "error": "production did not answer within 10 minutes; the update may still be running there.",
+        }
+    except requests.RequestException as exc:
+        return {
+            "ok": False,
+            "production": base,
+            "error": f"could not reach production: {type(exc).__name__}: {exc}",
+        }
+
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"error": response.text[:300]}
+    return {
+        "ok": response.status_code == 200 and isinstance(data, dict) and bool(data.get("ok")),
+        "status": response.status_code,
+        "production": base,
+        "result": data,
+    }
 
 
 def area_for_path(relative: str) -> str | None:
@@ -435,6 +520,43 @@ def _backup_path(run_id: str, relative: str) -> Path:
     return DATA_DIR / "backups" / run_id / relative
 
 
+def _pending_file() -> Path:
+    """Where a supervised restart records what it replaced.
+
+    Written just before the restart request. If the replacement child never
+    becomes ready, the supervisor reads this and restores those files, so a
+    release that cannot boot is not a dead end.
+    """
+    return DATA_DIR / "pending.json"
+
+
+def _mark_pending(run_id: str, area: str, changes: list[dict]) -> None:
+    """Record the files a supervised restart is about to boot from."""
+    payload = {
+        "run_id": run_id,
+        "area": area,
+        "requested_at": int(time.time()),
+        "backup_dir": str(Path("data/updates/backups") / run_id),
+        "changes": [
+            {"path": change["path"], "status": change.get("status") or "modified"}
+            for change in changes
+        ],
+    }
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    pending = _pending_file()
+    temporary = pending.with_name(f".{pending.name}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    os.replace(temporary, pending)
+
+
+def _clear_pending() -> None:
+    """Forget a pending restart after this process rolled the update back."""
+    try:
+        _pending_file().unlink()
+    except FileNotFoundError:
+        pass
+
+
 def _download(relative: str, expected: str) -> bytes:
     response = requests.get(
         f"{beta_base()}/api/updates/file",
@@ -532,13 +654,40 @@ def _stage_area(name: str, changes: list[dict], run_id: str) -> dict:
 
 
 #: Environment markers that describe *this* image, so a fresh child must start
-#: without them: the socket descriptor, and the ``NIKO_HANDOFF_*`` variables the
-#: predecessor's handoff set (stripped for a process that has not reloaded it).
-PROCESS_ENV_MARKERS = ("NIKO_RESTART_FD", "NIKO_HANDOFF_")
+#: without them: the inherited fds, and the ``NIKO_HANDOFF_*`` / supervisor
+#: variables the predecessor set (stripped for a process that has not reloaded
+#: the module that names them).
+PROCESS_ENV_MARKERS = (
+    "NIKO_RESTART_FD",
+    "NIKO_HANDOFF_",
+    "NIKO_SUPERVISOR_",
+    "NIKO_SUPERVISED",
+)
 #: Set in the probe child so ``src/bot.py`` stops right after its imports.
 PROBE_ENV = "NIKO_IMPORT_PROBE"
 #: Module the restart runs from. Reloaded from disk before it is used.
 HANDOFF_MODULE = "utils.handoff"
+
+
+def _split_web() -> bool:
+    """Whether the supervisor runs the dashboard as its own child.
+
+    Under ``NIKO_SPLIT_WEB=1`` a webapp update has two halves: this process
+    (where the updater runs) rebuilds its Flask app, and the dashboard child is
+    restarted by the supervisor so it loads the new modules too.  The bot child
+    is never restarted for a dashboard-only change.
+    """
+    return (os.environ.get("NIKO_SPLIT_WEB") or "").strip() == "1"
+
+
+def _split_db() -> bool:
+    """Whether the database runs in its own child.
+
+    Database code (``src/database/``) is bot-core code, so a bot restart picks
+    it up.  The database child imported those modules at its own boot, so it has
+    to be restarted with the bot for the new translation layer to take effect.
+    """
+    return _split_web() and (os.environ.get("NIKO_SPLIT_DB") or "").strip() == "1"
 
 
 def _set_package_attribute(name: str, module) -> None:
@@ -1236,6 +1385,27 @@ def last_run() -> dict | None:
 
 
 def apply(areas, bot=None) -> dict:
+    """Stage and apply the selected areas, or refuse if one is already running."""
+    # Keep the lock in a local: a webapp/utils update reloads this module at the
+    # end of the run, so the module-level name would point at a new lock by the
+    # time the finally block releases it.
+    gate = _apply_gate
+    if not gate.acquire(blocking=False):
+        return {
+            "ok": False,
+            "configured": configured(),
+            "error": "An update is already being applied.",
+            "areas": {},
+            "total_changed": 0,
+            "last": last_run(),
+        }
+    try:
+        return _apply_locked(areas, bot)
+    finally:
+        gate.release()
+
+
+def _apply_locked(areas, bot=None) -> dict:
     """Stage and apply the selected areas, then report what each one did."""
     chosen = _selected(areas)
     # A new shared module is a precondition for the areas that import it, not a
@@ -1266,6 +1436,10 @@ def apply(areas, bot=None) -> dict:
     started = int(time.time())
     results: dict[str, dict] = {}
     handoff_needed = False
+    supervised_restart_needed = False
+    # A split deployment serves the dashboard from its own child, so new webapp
+    # code needs that child replaced.  The bot keeps running.
+    web_restart_needed = False
 
     try:
         for index, name in enumerate(chosen):
@@ -1322,7 +1496,11 @@ def apply(areas, bot=None) -> dict:
                     # routes that read it, so an API update is not held back by
                     # a bot that is still connecting — or absent entirely.
                     outcome["dashboard"] = reload_webapp(bot)
-                    outcome["strategy"] = "rebuilt the dashboard app"
+                    if _split_web() and supervisor_control.is_supervised():
+                        web_restart_needed = True
+                        outcome["strategy"] = "rebuilt the dashboard app; the dashboard child will restart"
+                    else:
+                        outcome["strategy"] = "rebuilt the dashboard app"
                 elif name == "database":
                     # Import the new schema module and run it against the live
                     # pool: tables are created with IF NOT EXISTS and migrations
@@ -1350,11 +1528,10 @@ def apply(areas, bot=None) -> dict:
                 elif name == "website":
                     outcome["strategy"] = "served from disk on the next request"
                 elif name == "bot":
-                    # Resolve the restart code first: it lives in the utils area,
-                    # and this process may still be holding the predecessor's.
-                    _inplace_handoff()
-                    # The files are in place; prove they import before this
-                    # process gives up the code that is currently serving.
+                    # The files are in place; prove they import before the old
+                    # process is stopped.  A supervised child must not run the
+                    # in-place handoff: the supervisor owns the public socket
+                    # and is the only component allowed to replace this child.
                     _probe_bot()
                     import api_server
 
@@ -1363,8 +1540,19 @@ def apply(areas, bot=None) -> dict:
                         # trade the old bot for a site with no socket: refuse
                         # instead, so the area rolls back and says why.
                         raise RuntimeError("The dashboard is not serving; a bot-core restart would leave the site down.")
-                    outcome["strategy"] = "restarting this process in place"
-                    handoff_needed = True
+                    if supervisor_control.is_supervised():
+                        if not supervisor_control.socket_path():
+                            raise RuntimeError(
+                                "This is a supervised child but no supervisor control socket is configured."
+                            )
+                        outcome["strategy"] = "requesting a supervised restart"
+                        supervised_restart_needed = True
+                    else:
+                        # Resolve the restart code from disk for the direct-run
+                        # fallback; this process may hold the predecessor's.
+                        _inplace_handoff()
+                        outcome["strategy"] = "restarting this process in place"
+                        handoff_needed = True
             except Exception as exc:
                 _restore_area(name, current["areas"][name]["files"], run_id)
                 outcome = {"ok": False, "error": f"{type(exc).__name__}: {exc}", "rolled_back": True}
@@ -1382,6 +1570,7 @@ def apply(areas, bot=None) -> dict:
         "finished_at": int(time.time()),
         "areas": results,
         "handoff": handoff_needed,
+        "supervised_restart": supervised_restart_needed,
     }
     _record(run)
 
@@ -1389,6 +1578,60 @@ def apply(areas, bot=None) -> dict:
         from utils import handoff
 
         handoff.schedule()
+    elif supervised_restart_needed:
+        # Ask after the run is persisted.  The supervisor answers immediately
+        # and stops this child after a short delay, leaving time for this HTTP
+        # response to flush; a rejection is rolled back while the old process is
+        # still healthy.
+        try:
+            # The supervisor needs to know what this restart replaced: if the
+            # replacement never becomes ready, it restores these files and
+            # boots the last-good release instead of restarting into a crash.
+            _mark_pending(run_id, "bot", current["areas"]["bot"]["files"])
+            supervisor_control.request_restart(
+                reason="bot update applied",
+                delay=float(os.environ.get("NIKO_SUPERVISED_RESTART_DELAY", "2.0") or 2.0),
+                # With split children this must name the bot: restarting the
+                # dashboard as well would be the interference this split exists
+                # to remove.  The database child is restarted with it because
+                # it holds the freshly updated database modules.
+                child=(
+                    ["bot", "db"]
+                    if _split_db()
+                    else ("bot" if _split_web() else None)
+                ),
+            )
+        except Exception as exc:
+            _clear_pending()
+            _restore_area("bot", current["areas"]["bot"]["files"], run_id)
+            _rebuild_after_rollback("bot", bot)
+            results["bot"].update({
+                "ok": False,
+                "error": f"{type(exc).__name__}: {exc}",
+                "rolled_back": True,
+            })
+            run.update({
+                "ok": False,
+                "error": f"supervised restart was not requested: {type(exc).__name__}: {exc}",
+                "finished_at": int(time.time()),
+            })
+            _record(run)
+
+    if web_restart_needed and not handoff_needed:
+        try:
+            supervisor_control.request_restart(
+                reason="webapp update applied",
+                delay=float(os.environ.get("NIKO_SUPERVISED_RESTART_DELAY", "2.0") or 2.0),
+                child="web",
+            )
+        except Exception as exc:
+            # The new code is on disk and the bot child already reloaded it;
+            # only the dashboard child is still serving the previous modules.
+            # Say so rather than claiming the update fully applied.
+            results["webapp"].update({
+                "ok": False,
+                "error": f"the dashboard child was not restarted: {type(exc).__name__}: {exc}",
+            })
 
     result = {**current, "ok": all(item.get("ok", True) for item in results.values()), "run": run_id, "areas": results, "last": last_run()}
     # Last, and only when this run replaced API code: the rebuilt modules read

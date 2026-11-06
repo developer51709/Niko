@@ -92,6 +92,7 @@ async def handle_ready(bot):
         # previous failed run so other code can trust the bot object.
         try:
             bot.startup_errors = []
+            bot.startup_step_errors = {}
             bot.last_startup_error = None
         except Exception:
             pass
@@ -134,6 +135,10 @@ def _record_all_startup_errors(bot, step_errors: list[tuple[str, BaseException]]
         return
 
     bot.startup_errors = [error for _, error in step_errors]
+    bot.startup_step_errors = {
+        step_name: f"{type(error).__name__}: {error}"
+        for step_name, error in step_errors
+    }
     bot.last_startup_error = step_errors[-1][1]
 
 

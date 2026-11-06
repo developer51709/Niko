@@ -19,7 +19,7 @@ import os
 
 import aiosqlite
 
-from database import MongoPool, SQLitePool
+from database import SQLitePool, named_pool
 from utils import logging
 
 MUSIC_DB_PATH = "data/music.db"
@@ -109,12 +109,12 @@ class MusicDatabase:
             pool = None
             main = getattr(bot, "cxn", None) if bot is not None else None
             if main is not None and main.db_type == "mongodb":
-                # Same cluster, separate database within it — reuses the main
-                # pool's motor client so we don't open a second connection pool.
+                # Same cluster, separate database within it — the database
+                # child owns the connection, so this asks it for a named pool
+                # instead of opening a second client.
                 try:
-                    client = main.client
                     base   = os.getenv("MONGODB_DATABASE", "discord_bot")
-                    pool   = MongoPool(client, f"{base}_music")
+                    pool   = named_pool(main, f"{base}_music")
                 except Exception as e:
                     logging.warning("MusicDB", f"Mongo music database failed ({e}); using SQLite.")
                     pool = None

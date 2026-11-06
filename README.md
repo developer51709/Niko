@@ -30,11 +30,11 @@ Moderation, music, progression, tickets, social feeds, and AI — in one polishe
 
 ## Overview
 
-Niko is a self-hosted Discord bot built for communities that want thoughtful moderation, engaging social features, and a dashboard that actually reflects how their server is doing. It runs as a single Python process: the bot, the Flask API, and the generated React dashboard share one deployment, one database, and one event loop.
+Niko is a self-hosted Discord bot built for communities that want thoughtful moderation, engaging social features, and a dashboard that actually reflects how their server is doing. It runs under a small supervisor process that owns the public port, the health endpoints, and the update/rollback path; the bot, the Flask API, and the generated React dashboard share one deployment, one database, and one event loop.
 
 The result is a companion that feels native to Discord — fast slash commands, polished Components v2 panels, live profile popouts, and transcripts that look like Discord's own — without giving up the control of self-hosting.
 
-> **Quick start:** set `DISCORD_BOT_TOKEN`, run `python src/bot.py`, and open the dashboard on port `5000`.
+> **Quick start:** set `DISCORD_BOT_TOKEN`, run `python src/supervisor.py`, and open the dashboard on port `5000`. Starting `src/bot.py` directly is only a local-debug fallback and prints a warning.
 
 ---
 
@@ -88,7 +88,7 @@ The result is a companion that feels native to Discord — fast slash commands, 
 | Layer | Technology |
 |---|---|
 | Bot runtime | Python 3.10+, discord.py 2.7+ |
-| Web API | Flask, served in the bot process |
+| Web API | Flask in the `web_child` dashboard process, proxied by the supervisor |
 | Dashboard | React 18, TypeScript, Vite 6 |
 | Music | Lavalink / wavelink |
 | AI | OpenAI-compatible API |
@@ -102,7 +102,9 @@ The result is a companion that feels native to Discord — fast slash commands, 
 
 ```text
 src/
-├── bot.py                  # Bot entry point and gateway lifecycle
+├── supervisor.py           # Main entry point: public port, health, restarts, rollback
+├── web_child.py            # Dashboard child: Flask without the gateway (default)
+├── bot.py                  # Bot child: gateway lifecycle, cogs, Flask API
 ├── api_server.py           # Starts the Flask API beside the bot
 ├── cogs/                   # Feature modules (moderation, economy, music, ...)
 │                           #   each cog keeps its strings in locales/{en,de,es}.json
@@ -177,10 +179,12 @@ npm run build
 ### 4. Run Niko
 
 ```bash
-python src/bot.py
+python src/supervisor.py
 ```
 
-The API starts with the bot. The dashboard is available at `http://localhost:5000` (or your configured `PORT`), and the same process serves the generated site from `src/website/dist/`.
+The supervisor owns `http://localhost:5000` (or your configured `PORT`) and starts three independent children by default: `src/db_child.py` owns the database pool and serves it over an authenticated loopback API, `src/web_child.py` serves the dashboard and the API surface from `src/website/dist/`, and `src/bot.py` runs the gateway and cogs. It keeps the public port and `/health` up while any child restarts, exposes `/ready` and the status file, and performs the update/rollback path; a dashboard update never interrupts the gateway, and a bot restart never closes the database. Set `NIKO_SPLIT_WEB=0` (or pass `--no-split-web`) to run the old combined single-child layout instead, or `NIKO_SPLIT_DB=0` to keep the pool inside the bot child.
+
+`python src/bot.py` still works as a local-debug fallback, but it bypasses all of the above and therefore prints a warning in the console. Use it only when you deliberately want a single process without the supervisor.
 
 ---
 

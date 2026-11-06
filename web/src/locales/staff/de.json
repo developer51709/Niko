@@ -35,7 +35,7 @@
   "common.working": "Wird ausgeführt…",
   "logs.kicker": "Owner-Konsole",
   "logs.title": "Live-Logs",
-  "logs.body": "Die Bot-Konsole, wie sie geschrieben wird — Farbe für Farbe. Der Puffer enthält die Ausgabe dieses Prozesses seit seinem Start (oder seit dem letzten In-Place-Update); die Stufe unten filtert nur diese Seite.",
+  "logs.body": "Die Konsole des Bots, wie sie geschrieben wird – Farbe für Farbe. Unter dem Supervisor schreiben Bot, Dashboard und Supervisor in eine gemeinsame Konsole, sodass ein Neustart sie nicht leert; die Menüs für Stufe und Prozess filtern nur diese Seite.",
   "logs.level": "Log-Stufe",
   "logs.hidePymongo": "pymongo ausblenden",
   "logs.hidePymongoHint": "Hält MongoDBs Debug-Ausgabe aus der Konsole.",
@@ -52,5 +52,11 @@
   "logs.error": "Das Live-Log konnte nicht gelesen werden.",
   "logs.jump": "Zum Neuesten springen",
   "logs.unavailable": "Dieser Prozess schreibt noch nicht in den Log-Puffer.",
-  "logs.truncated": "Ältere Zeilen sind aus dem Puffer gerollt."
+  "logs.truncated": "Ältere Zeilen sind aus dem Puffer gerollt.",
+  "logs.process": "Prozess",
+  "logs.processAll": "Alle Prozesse",
+  "logs.processSupervisor": "Supervisor",
+  "logs.processDashboard": "Dashboard",
+  "logs.processDatabase": "Datenbank",
+  "logs.processBot": "Bot"
 }
