@@ -598,7 +598,23 @@ async def set_auto_sync(enabled: bool, actor=None, bot=None) -> bool:
     return bool(enabled)
 
 
-def _load_settings_at_start(bot) -> None:
+def _bot_loop(bot, loop=None):
+    """The loop the bot runs on, or ``None`` if it is not available yet.
+
+    Before Discord's login the client's ``loop`` attribute is a sentinel whose
+    every attribute access raises ``AttributeError`` ("loop attribute cannot be
+    accessed in non-async contexts"), so it must be type-checked rather than
+    probed or compared with ``None``.  The API server already runs on the bot's
+    loop and passes it in; the fallback keeps a direct ``start_sync_loop`` call
+    working once the client has logged in.
+    """
+    candidate = loop if loop is not None else getattr(bot, "loop", None)
+    if isinstance(candidate, asyncio.AbstractEventLoop) and not candidate.is_closed():
+        return candidate
+    return None
+
+
+def _load_settings_at_start(bot, loop=None) -> None:
     """Wait for the first database read before the poller can fire.
 
     The API (and this thread) starts before the startup schema pass, so the
@@ -608,26 +624,25 @@ def _load_settings_at_start(bot) -> None:
     """
     if bot is None:
         return
-    loop = getattr(bot, "loop", None)
-    if loop is None or loop.is_closed():
-        return
     deadline = time.monotonic() + 20.0
     last_error = None
     while time.monotonic() < deadline:
-        try:
-            # This runs on the feed thread, never the event loop, so waiting for
-            # the coroutine cannot block the loop it needs to execute on.
-            asyncio.run_coroutine_threadsafe(load_settings(bot), loop).result(timeout=5)
-        except Exception as exc:
-            last_error = exc
-        if _settings["loaded"]:
-            return
+        target = _bot_loop(bot, loop)
+        if target is not None:
+            try:
+                # This runs on the feed thread, never the event loop, so waiting
+                # for the coroutine cannot block the loop it executes on.
+                asyncio.run_coroutine_threadsafe(load_settings(bot), target).result(timeout=5)
+            except Exception as exc:
+                last_error = exc
+            if _settings["loaded"]:
+                return
         time.sleep(0.5)
     if last_error is not None:
         log.warning("Could not read the automatic locale sync setting: %s", last_error)
 
 
-def start_sync_loop(bot=None) -> None:
+def start_sync_loop(bot=None, loop=None) -> None:
     """Keep a running bot's wording current, on a timer.
 
     Two sources, one loop each: this instance's own files (a translator saving
@@ -648,7 +663,7 @@ def start_sync_loop(bot=None) -> None:
         return
 
     def run() -> None:
-        _load_settings_at_start(bot)
+        _load_settings_at_start(bot, loop)
         while True:
             try:
                 _refresh()
