@@ -130,6 +130,22 @@ async def _heartbeat_loop(reporter, interval: float = 3.0) -> None:
         raise
 
 
+async def _report_readiness() -> None:
+    """Send the supervisor what this child can and cannot serve right now."""
+    from supervisor_readiness import evaluate
+
+    snapshot = await evaluate(bot)
+    state = snapshot["state"]
+    if state == "not_ready":
+        _report(
+            "readiness_failed",
+            reason="; ".join(snapshot["reasons"]),
+            checks=snapshot["checks"],
+        )
+    else:
+        _report(state, reasons=snapshot["reasons"], checks=snapshot["checks"])
+
+
 @bot.event
 async def on_ready():
     # READY means the gateway shards are connected; it does not mean the
@@ -148,20 +164,17 @@ async def on_ready():
         # The staff analytics tab reads these counters, so the periodic writer
         # starts before startup finishes and is idempotent across reconnects.
         analytics.start_flush_task(bot)
+        # The supervised entrypoint initialises the database, cogs and economy
+        # cache before the gateway connects, so READY is the moment the child
+        # can serve.  The remaining startup steps (presence, command feed,
+        # stats files) are not readiness checks and are slow enough on a cold
+        # container to run past the supervisor's startup timeout; report first,
+        # then finish them and report again with their outcome.
+        if _reporter is not None and getattr(bot, "_pre_gateway_initialized", False):
+            await _report_readiness()
         await handle_ready(bot)
         if _reporter is not None:
-            from supervisor_readiness import evaluate
-
-            snapshot = await evaluate(bot)
-            state = snapshot["state"]
-            if state == "not_ready":
-                _report(
-                    "readiness_failed",
-                    reason="; ".join(snapshot["reasons"]),
-                    checks=snapshot["checks"],
-                )
-            else:
-                _report(state, reasons=snapshot["reasons"], checks=snapshot["checks"])
+            await _report_readiness()
     except Exception as e:
         logging.error("on_ready", f"An error occurred: {e}")
         _report("readiness_failed", reason=f"on_ready failed: {type(e).__name__}: {e}")

@@ -9,6 +9,7 @@ JSON document path), so no external database is needed.
 from __future__ import annotations
 
 import asyncio
+import time
 
 import aiohttp
 import aiosqlite
@@ -181,6 +182,39 @@ class _FakeMongoPool:
 
     def collection(self, name: str) -> _FakeCollection:
         return self.client["discord_bot"][name]
+
+
+def test_the_child_heartbeats_while_the_pool_is_still_connecting(monkeypatch):
+    """A cold MongoDB connect must not look like a hung child to the supervisor."""
+    beats: list[float] = []
+    events: list[str] = []
+
+    class Reporter:
+        def heartbeat(self) -> bool:
+            beats.append(time.monotonic())
+            return True
+
+        def send(self, event, **fields):
+            events.append(event)
+
+    async def slow_pool(_path):
+        await asyncio.sleep(0.15)
+        raise RuntimeError("database is not reachable")
+
+    monkeypatch.setenv(db_child.TOKEN_ENV, "test-token")
+    monkeypatch.setattr(db_child.database, "create_pool", slow_pool)
+    monkeypatch.setattr(db_child.bot_logging, "error", lambda *args, **kwargs: None)
+
+    original = db_child._heartbeat_loop
+
+    async def fast_heartbeat(reporter, interval=3.0):
+        await original(reporter, interval=0.01)
+
+    monkeypatch.setattr(db_child, "_heartbeat_loop", fast_heartbeat)
+
+    assert asyncio.run(db_child._serve(Reporter())) == 1
+    assert "readiness_failed" in events
+    assert beats, "the child sent no heartbeat while create_pool was pending"
 
 
 def test_legacy_sql_round_trips_through_the_database_child(tmp_path):

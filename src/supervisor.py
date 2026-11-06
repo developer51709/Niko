@@ -80,7 +80,10 @@ class Options:
     status_file: Path = ROOT / "data" / "run" / "supervisor.json"
     control_socket: Path = ROOT / "data" / "run" / "supervisor.sock"
     lock_file: Path = ROOT / "data" / "run" / "supervisor.lock"
-    startup_timeout: float = 60.0
+    #: A cold Render container imports the app, opens MongoDB and loads 30+
+    #: cogs before the child can report ready; 60s killed a healthy bot on its
+    #: first boot after a deploy.
+    startup_timeout: float = 120.0
     heartbeat_timeout: float = 12.0
     shutdown_timeout: float = 8.0
     restart_backoff_initial: float = 1.0
@@ -1004,6 +1007,11 @@ class Supervisor:
         elif event in {"ready", "degraded"}:
             child.ready = True
             child.ready_at = time.monotonic()
+            # Becoming ready is proof the child is alive, and its first
+            # heartbeat tick may still be seconds away.  Counting the silence
+            # before it as a missed heartbeat killed a child the instant it
+            # reported itself ready.
+            child.last_heartbeat = child.last_event_at
             child.state = event
             child.readiness = payload.get("checks") if isinstance(payload.get("checks"), dict) else None
             self._slot_of(child).state = event
@@ -1779,7 +1787,7 @@ def parse_args(argv: list[str] | None = None) -> Options:
     parser.add_argument("--status-file", type=Path, default=ROOT / "data" / "run" / "supervisor.json")
     parser.add_argument("--control-socket", type=Path, default=ROOT / "data" / "run" / "supervisor.sock")
     parser.add_argument("--lock-file", type=Path, default=ROOT / "data" / "run" / "supervisor.lock")
-    parser.add_argument("--startup-timeout", type=float, default=60.0)
+    parser.add_argument("--startup-timeout", type=float, default=120.0)
     parser.add_argument("--heartbeat-timeout", type=float, default=12.0)
     parser.add_argument("--shutdown-timeout", type=float, default=8.0)
     parser.add_argument("--restart-backoff-initial", type=float, default=1.0)
