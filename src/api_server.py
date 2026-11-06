@@ -44,7 +44,12 @@ def _flask_app():
     return app
 
 
-def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -> threading.Thread:
+def start_api_server(
+    bot=None,
+    fd: int | None = None,
+    port: int | None = None,
+    host: str = "0.0.0.0",
+) -> threading.Thread:
     """Serve Flask on a daemon thread.
 
     ``fd`` is the listening socket this process inherited from the image it
@@ -52,7 +57,9 @@ def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -
     new image accepts connections on the same socket with no gap and no
     rebinding: the port is never unbound, so nothing can race to rebind it.
 
-    ``port`` exists for diagnostics and tests; the process uses ``PORT``.
+    ``port`` and ``host`` exist for tests and for the supervised child, which
+    binds an ephemeral loopback port behind the supervisor's proxy.  A direct
+    process keeps the historical ``PORT`` / ``0.0.0.0`` behaviour.
     """
     from webapp import configure_bot, locale_feed
 
@@ -66,8 +73,8 @@ def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -
         # feed, which takes no bot argument; its default still runs the loop.
         locale_feed.start_sync_loop()
 
-    port = int(port or os.environ.get("PORT", "5000"))
-    server = make_server("0.0.0.0", port, _flask_app(), threaded=True, fd=fd)
+    port = int(os.environ.get("PORT", "5000") if port is None else port)
+    server = make_server(host, port, _flask_app(), threaded=True, fd=fd)
 
     def serve() -> None:
         # Flask/Werkzeug logs every successful request at INFO. The dashboard
@@ -94,6 +101,20 @@ def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -
             "Dashboard API adopted the listening socket from the predecessor."
         )
     return _thread
+
+
+def stop_api_server(timeout: float = 5.0) -> None:
+    """Stop the daemon server. Intended for tests and clean supervised shutdown."""
+    global _server, _thread
+    with _lock:
+        server, thread = _server, _thread
+        _server = None
+        _thread = None
+    if server is not None:
+        server.shutdown()
+        server.server_close()
+    if thread is not None and thread is not threading.current_thread():
+        thread.join(timeout=timeout)
 
 
 def replace_app(app) -> None:
@@ -127,4 +148,6 @@ def listening_port() -> int:
     with _lock:
         if _server is None:
             return int(os.environ.get("PORT", "5000"))
-        return int(_server.port)
+        # Werkzeug sets ``server_port`` to the port actually bound, including
+        # when the caller asked for port 0 and the kernel chose one.
+        return int(getattr(_server, "server_port", None) or _server.port)

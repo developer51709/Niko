@@ -1,0 +1,335 @@
+from __future__ import annotations
+
+import os
+import signal
+import stat
+import sys
+import time
+from pathlib import Path
+
+import psutil
+import requests
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+
+from supervisor import Options, Supervisor  # noqa: E402
+from supervisor_protocol import CONTROL_SOCKET_ENV  # noqa: E402
+
+
+def test_child_environment_carries_the_control_socket_path(tmp_path):
+    options = Options(control_socket=tmp_path / "supervisor.sock")
+    supervisor = Supervisor(options)
+
+    env = supervisor._child_environment(9)
+
+    assert env[CONTROL_SOCKET_ENV] == str(options.control_socket.resolve())
+    assert env["NIKO_SUPERVISED"] == "1"
+    assert "PORT" not in env
+
+
+def test_health_and_readiness_are_separate(supervisor):
+    handle = supervisor("normal")
+    handle.wait_ready()
+
+    health = handle.request("/health")
+    ready = handle.request("/ready")
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"
+    assert ready.status_code == 200
+    assert ready.json()["ready"] is True
+
+    status = handle.status()
+    assert status["state"] == "active"
+    assert status["child"]["ready"] is True
+    assert status["child"]["api_port"]
+
+
+def test_health_stays_available_while_the_child_restarts(supervisor):
+    handle = supervisor(
+        "normal",
+        env={"FAKE_CHILD_BOOT_DELAY": "0.4"},
+    )
+    handle.wait_ready()
+    old_pid = handle.status()["child"]["pid"]
+
+    reply = handle.control("restart", reason="test restart")
+    assert reply["ok"] is True
+
+    handle.wait_status(
+        lambda payload: payload["state"] == "starting"
+        and (payload["child"] is None or not payload["child"]["ready"]),
+        timeout=5,
+    )
+    assert handle.request("/health").status_code == 200
+    assert handle.request("/ready").status_code == 503
+
+    new_status = handle.wait_for_new_child(old_pid, timeout=10)
+    assert new_status["child"]["pid"] != old_pid
+    handle.wait_ready()
+    assert handle.request("/health").status_code == 200
+    assert handle.request("/ready").status_code == 200
+    final_status = handle.status()
+    assert final_status["child_starts"] >= 2
+    # A draining long-running child must not be recorded as a startup timeout.
+    assert final_status["last_error"] is None
+
+
+def test_a_crash_is_restarted_without_losing_the_public_server(supervisor):
+    marker = Path("/tmp") / f"niko-supervisor-crash-{os.getpid()}-{time.time_ns()}"
+    marker.unlink(missing_ok=True)
+    handle = supervisor(
+        "normal",
+        env={
+            "FAKE_CHILD_CRASH_ONCE": str(marker),
+            "FAKE_CHILD_READY_DELAY": "0.05",
+        },
+    )
+    first = handle.wait_for_child(timeout=5)
+    first_status = handle.wait_status(
+        lambda payload: payload["child"] is None
+        or payload["child"]["pid"] != first["child"]["pid"],
+        timeout=10,
+    )
+    assert first_status["restart_count"] >= 1
+    assert handle.request("/health").status_code == 200
+    handle.wait_ready()
+    assert handle.status()["child_starts"] >= 2
+    marker.unlink(missing_ok=True)
+
+
+def test_health_stays_available_while_the_child_hangs_before_listening(supervisor):
+    handle = supervisor(
+        "hang-before-api",
+        startup_timeout=0.5,
+        heartbeat_timeout=2.0,
+        backoff_initial=0.2,
+        backoff_max=0.2,
+    )
+    status = handle.wait_for_child(timeout=5)
+    assert status["child"]["ready"] is False
+    assert handle.request("/health").status_code == 200
+    assert handle.request("/ready").status_code == 503
+
+    handle.wait_status(lambda payload: payload["restart_count"] >= 1, timeout=5)
+    assert handle.request("/health").status_code == 200
+
+
+def test_readiness_failure_is_replaced_while_health_stays_up(supervisor):
+    handle = supervisor(
+        "fail-readiness",
+        shutdown_timeout=0.2,
+        backoff_initial=0.2,
+        backoff_max=0.2,
+    )
+    handle.wait_for_child(timeout=5)
+    status = handle.wait_status(lambda payload: payload["restart_count"] >= 1, timeout=8)
+    assert status["last_error"]
+    assert handle.request("/health").status_code == 200
+    assert handle.request("/ready").status_code == 503
+
+
+def test_heartbeat_timeout_replaces_a_hung_child(supervisor):
+    handle = supervisor(
+        "hang-after-ready",
+        heartbeat_timeout=0.4,
+        startup_timeout=3.0,
+    )
+    handle.wait_ready()
+    first_pid = handle.status()["child"]["pid"]
+
+    handle.wait_status(
+        lambda payload: payload["restart_count"] >= 1,
+        timeout=8,
+    )
+    assert handle.request("/health").status_code == 200
+    new_status = handle.wait_status(
+        lambda payload: bool(payload["child"]) and payload["child"]["pid"] != first_pid,
+        timeout=8,
+    )
+    assert new_status["child_starts"] >= 2
+
+
+def test_ignore_sigterm_child_is_escalated_and_replaced(supervisor):
+    handle = supervisor(
+        "ignore-sigterm",
+        shutdown_timeout=0.2,
+    )
+    handle.wait_ready()
+    old_pid = handle.status()["child"]["pid"]
+    started = time.monotonic()
+    assert handle.control("restart")["ok"] is True
+    handle.wait_for_new_child(old_pid, timeout=8)
+    handle.wait_ready()
+    assert time.monotonic() - started >= 0.2
+    assert handle.status()["child_starts"] >= 2
+
+
+def test_control_socket_is_private_and_rejects_unknown_commands(supervisor):
+    handle = supervisor("normal")
+    handle.wait_ready()
+    mode = stat.S_IMODE(handle.control_path.stat().st_mode)
+    assert mode == 0o600
+
+    ping = handle.control("ping")
+    assert ping == {"ok": True, "pong": True, "protocol": 1}
+
+    unknown = handle.control("not-a-command")
+    assert unknown["ok"] is False
+    assert "unknown control command" in unknown["error"]
+
+    # Detailed status is local-control-only by default.
+    assert handle.request("/supervisor/status").status_code == 404
+    status = handle.control("status")
+    assert status["ok"] is True
+    assert status["status"]["state"] == "active"
+
+
+def test_second_supervisor_fails_closed(supervisor):
+    handle = supervisor("normal")
+    handle.wait_ready()
+
+    duplicate = handle.duplicate()
+    assert duplicate.returncode != 0
+    assert "another supervisor owns" in duplicate.stderr
+    assert handle.request("/health").status_code == 200
+
+
+def test_proxy_forwards_hosts_and_overwrites_spoofed_forwarding_headers(supervisor):
+    handle = supervisor("normal")
+    handle.wait_ready()
+
+    response = handle.request(
+        "/echo?mode=forwarded",
+        headers={
+            "Host": "public.example",
+            "X-Forwarded-Host": "evil.example",
+            "X-Forwarded-For": "203.0.113.9",
+            "X-Forwarded-Proto": "https",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["path"] == "/echo?mode=forwarded"
+    echoed = response.json()["headers"]
+    assert echoed["Host"] == "public.example"
+    assert echoed["X-Forwarded-Host"] == "public.example"
+    assert echoed["X-Forwarded-For"] == "127.0.0.1"
+    assert echoed["X-Forwarded-Proto"] == "http"
+
+
+def test_proxy_preserves_cookies_redirects_downloads_ranges_and_uploads(supervisor):
+    handle = supervisor("normal")
+    handle.wait_ready()
+
+    cookies = handle.request("/cookies")
+    assert cookies.status_code == 200
+    set_cookies = cookies.raw.headers.getlist("Set-Cookie")
+    assert len(set_cookies) == 2
+    assert any("first=one" in value for value in set_cookies)
+    assert any("second=two" in value for value in set_cookies)
+
+    redirect = handle.request("/redirect", allow_redirects=False)
+    assert redirect.status_code == 302
+    assert redirect.headers["Location"] == "/landing"
+
+    download = handle.request("/download")
+    assert download.status_code == 200
+    assert len(download.content) == 40960
+    assert download.headers["Content-Type"] == "application/octet-stream"
+
+    ranged = handle.request("/range", headers={"Range": "bytes=10-19"})
+    assert ranged.status_code == 206
+    assert ranged.headers["Content-Range"] == "bytes 10-19/1024"
+    assert len(ranged.content) == 10
+
+    uploaded = handle.request(
+        "/upload",
+        method="POST",
+        files={"file": ("hello.txt", b"hello supervisor", "text/plain")},
+    )
+    assert uploaded.status_code == 200
+    body = uploaded.json()
+    assert body["body_length"] > 0
+    assert body["headers"]["Content-Type"].startswith("multipart/form-data; boundary=")
+
+
+def test_proxy_returns_503_when_the_child_is_gone(supervisor):
+    handle = supervisor(
+        "normal",
+        backoff_initial=0.5,
+        backoff_max=0.5,
+    )
+    handle.wait_ready()
+    child_pid = handle.status()["child"]["pid"]
+    os.kill(child_pid, signal.SIGKILL)
+
+    handle.wait_status(
+        lambda payload: payload["child"] is None
+        or payload["child"]["pid"] != child_pid,
+        timeout=5,
+    )
+    response = handle.request("/echo")
+    assert response.status_code == 503
+    assert response.json()["retry_after"] == 1
+    assert handle.request("/health").status_code == 200
+
+
+def test_log_flood_is_drained_without_blocking_the_health_endpoint(supervisor):
+    handle = supervisor("normal", env={"FAKE_CHILD_LOG_FLOOD": "1"})
+    handle.wait_ready()
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        assert handle.request("/health").status_code == 200
+        time.sleep(0.05)
+
+
+def test_sigterm_stops_the_child_and_writes_a_stopped_status(supervisor):
+    handle = supervisor("normal")
+    handle.wait_ready()
+    child_pid = handle.status()["child"]["pid"]
+
+    handle.process.send_signal(signal.SIGTERM)
+    assert handle.process.wait(timeout=10) == 0
+    assert not psutil.pid_exists(child_pid)
+
+    final = handle.status()
+    assert final["state"] == "stopped"
+    assert final["child"] is None
+
+
+def test_sigkill_supervisor_kills_the_whole_child_process_group(supervisor):
+    handle = supervisor("leak-child")
+    handle.wait_ready()
+    child = psutil.Process(handle.status()["child"]["pid"])
+    descendants = [child, *child.children(recursive=True)]
+    assert descendants
+
+    handle.process.kill()
+    handle.process.wait(timeout=5)
+
+    gone, alive = psutil.wait_procs(descendants, timeout=5)
+    assert not alive, [process.pid for process in alive]
+    assert gone
+
+
+def test_one_hundred_restarts_do_not_leak_processes_or_descriptors(supervisor):
+    handle = supervisor(
+        "crash-after-api",
+        startup_timeout=1.0,
+        backoff_initial=0.001,
+        backoff_max=0.002,
+    )
+    handle.wait_for_child(timeout=5)
+    baseline_fds = psutil.Process(handle.pid).num_fds()
+
+    status = handle.wait_status(
+        lambda payload: payload.get("child_starts", 0) >= 100,
+        timeout=30,
+    )
+    assert status["restart_count"] >= 99
+    after_fds = psutil.Process(handle.pid).num_fds()
+    assert after_fds <= baseline_fds + 12
+
+    handle.stop()
+    time.sleep(0.2)
+    assert handle.descendants() == []

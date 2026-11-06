@@ -1,6 +1,6 @@
 # Supervisor Runtime Migration — Design Review
 
-> **Status:** Temporary design review and delivery plan. Nothing in this document is implemented.
+> **Status:** Temporary design review and delivery plan. Part 1's isolated supervisor harness is implemented in `src/supervisor.py`, and Part 2's supervised real-child mode, readiness, and updater integration are implemented behind `NIKO_SUPERVISED=1`; default production runtime behavior is unchanged. A real-token managed preview has exercised gateway readiness, proxy traffic, control restarts, crash recovery, Discord OAuth, the staff guild directory, guild settings, and live slash commands. The beta-feed cold update and rollback are now exercised end to end on one machine against a loopback feed (`tests/supervisor/test_beta_update_gate.py`), so no second host is needed for that gate, and killing the child at every boot stage is covered (`tests/supervisor/test_boot_stage_kills.py`). What remains before rollout is one confirmation run on a real production-like staging instance and recording it in the runbook. See [`supervisor-part-1.md`](supervisor-part-1.md) and [`supervisor-part-2.md`](supervisor-part-2.md).
 > **Date:** 2026-11-06
 > **Purpose:** Give the team a concrete architecture, a failure inventory, and a gated multi-part plan before any major runtime changes.
 > **Audience:** Bot, webapp, and deployment maintainers.

@@ -36,8 +36,18 @@ def test_public_website_health_uses_configured_public_url():
 def test_website_health_is_independent_of_local_api_health():
     source = (ROOT / "src/cogs/staff/panels/status.py").read_text(encoding="utf-8")
     assert 'status["api_ok"] = await _probe_http(f"{local_base}/api/health")' in source
+    assert "local_base = _local_api_base()" in source
     assert 'if api_ok:' not in source
     assert "**Website** — {website_text}" in source
+
+
+def test_local_api_probe_uses_the_actual_bound_port(monkeypatch):
+    import api_server
+
+    monkeypatch.delenv("PORT", raising=False)
+    monkeypatch.setattr(api_server, "listening_port", lambda: 43210)
+
+    assert owner._local_api_base() == "http://127.0.0.1:43210"
 
 
 def test_status_collection_probes_public_domain_even_if_local_api_is_down(monkeypatch):

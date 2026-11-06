@@ -6,6 +6,8 @@ The most useful entry points for the current web stack are:
 - [API reference](api.md)
 - [Setup](setup.md)
 - [Maintenance](maintenance.md)
+- [Supervisor Part 1](supervisor-part-1.md)
+- [Supervisor Part 2](supervisor-part-2.md)
 - [AI provider compatibility](ai-providers.md)
 - [Intent verification](intent-verification.md)
 - [Discovery listing](discovery/README.md)

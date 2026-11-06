@@ -78,6 +78,8 @@ from pathlib import Path
 
 import requests
 
+from utils import supervisor_control
+
 from . import locale_feed
 
 #: Repository root: ``src/webapp/updates.py`` → three levels up.
@@ -532,9 +534,15 @@ def _stage_area(name: str, changes: list[dict], run_id: str) -> dict:
 
 
 #: Environment markers that describe *this* image, so a fresh child must start
-#: without them: the socket descriptor, and the ``NIKO_HANDOFF_*`` variables the
-#: predecessor's handoff set (stripped for a process that has not reloaded it).
-PROCESS_ENV_MARKERS = ("NIKO_RESTART_FD", "NIKO_HANDOFF_")
+#: without them: the inherited fds, and the ``NIKO_HANDOFF_*`` / supervisor
+#: variables the predecessor set (stripped for a process that has not reloaded
+#: the module that names them).
+PROCESS_ENV_MARKERS = (
+    "NIKO_RESTART_FD",
+    "NIKO_HANDOFF_",
+    "NIKO_SUPERVISOR_",
+    "NIKO_SUPERVISED",
+)
 #: Set in the probe child so ``src/bot.py`` stops right after its imports.
 PROBE_ENV = "NIKO_IMPORT_PROBE"
 #: Module the restart runs from. Reloaded from disk before it is used.
@@ -1266,6 +1274,7 @@ def apply(areas, bot=None) -> dict:
     started = int(time.time())
     results: dict[str, dict] = {}
     handoff_needed = False
+    supervised_restart_needed = False
 
     try:
         for index, name in enumerate(chosen):
@@ -1350,11 +1359,10 @@ def apply(areas, bot=None) -> dict:
                 elif name == "website":
                     outcome["strategy"] = "served from disk on the next request"
                 elif name == "bot":
-                    # Resolve the restart code first: it lives in the utils area,
-                    # and this process may still be holding the predecessor's.
-                    _inplace_handoff()
-                    # The files are in place; prove they import before this
-                    # process gives up the code that is currently serving.
+                    # The files are in place; prove they import before the old
+                    # process is stopped.  A supervised child must not run the
+                    # in-place handoff: the supervisor owns the public socket
+                    # and is the only component allowed to replace this child.
                     _probe_bot()
                     import api_server
 
@@ -1363,8 +1371,19 @@ def apply(areas, bot=None) -> dict:
                         # trade the old bot for a site with no socket: refuse
                         # instead, so the area rolls back and says why.
                         raise RuntimeError("The dashboard is not serving; a bot-core restart would leave the site down.")
-                    outcome["strategy"] = "restarting this process in place"
-                    handoff_needed = True
+                    if supervisor_control.is_supervised():
+                        if not supervisor_control.socket_path():
+                            raise RuntimeError(
+                                "This is a supervised child but no supervisor control socket is configured."
+                            )
+                        outcome["strategy"] = "requesting a supervised restart"
+                        supervised_restart_needed = True
+                    else:
+                        # Resolve the restart code from disk for the direct-run
+                        # fallback; this process may hold the predecessor's.
+                        _inplace_handoff()
+                        outcome["strategy"] = "restarting this process in place"
+                        handoff_needed = True
             except Exception as exc:
                 _restore_area(name, current["areas"][name]["files"], run_id)
                 outcome = {"ok": False, "error": f"{type(exc).__name__}: {exc}", "rolled_back": True}
@@ -1382,6 +1401,7 @@ def apply(areas, bot=None) -> dict:
         "finished_at": int(time.time()),
         "areas": results,
         "handoff": handoff_needed,
+        "supervised_restart": supervised_restart_needed,
     }
     _record(run)
 
@@ -1389,6 +1409,30 @@ def apply(areas, bot=None) -> dict:
         from utils import handoff
 
         handoff.schedule()
+    elif supervised_restart_needed:
+        # Ask after the run is persisted.  The supervisor answers immediately
+        # and stops this child after a short delay, leaving time for this HTTP
+        # response to flush; a rejection is rolled back while the old process is
+        # still healthy.
+        try:
+            supervisor_control.request_restart(
+                reason="bot update applied",
+                delay=float(os.environ.get("NIKO_SUPERVISED_RESTART_DELAY", "2.0") or 2.0),
+            )
+        except Exception as exc:
+            _restore_area("bot", current["areas"]["bot"]["files"], run_id)
+            _rebuild_after_rollback("bot", bot)
+            results["bot"].update({
+                "ok": False,
+                "error": f"{type(exc).__name__}: {exc}",
+                "rolled_back": True,
+            })
+            run.update({
+                "ok": False,
+                "error": f"supervised restart was not requested: {type(exc).__name__}: {exc}",
+                "finished_at": int(time.time()),
+            })
+            _record(run)
 
     result = {**current, "ok": all(item.get("ok", True) for item in results.values()), "run": run_id, "areas": results, "last": last_run()}
     # Last, and only when this run replaced API code: the rebuilt modules read

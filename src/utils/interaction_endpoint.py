@@ -132,6 +132,11 @@ def verify_signature(key_hex: str, signature_hex: str, timestamp: str, body: byt
     return True
 
 
+def public_key_configured() -> bool:
+    """Whether the HTTP interactions endpoint can verify a Discord request."""
+    return bool(_public_key)
+
+
 async def install_interaction_endpoint(bot) -> str | None:
     """Resolve the public key and arm the interactions endpoint.
 

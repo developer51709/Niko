@@ -121,6 +121,9 @@ def test_the_probe_does_not_read_the_loaded_handoff_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "utils.handoff", SimpleNamespace(schedule=lambda bot: None))
     monkeypatch.setenv("NIKO_RESTART_FD", "9")
     monkeypatch.setenv("NIKO_HANDOFF_ROLE", "successor")
+    monkeypatch.setenv("NIKO_SUPERVISED", "1")
+    monkeypatch.setenv("NIKO_SUPERVISOR_CONTROL_FD", "10")
+    monkeypatch.setenv("NIKO_SUPERVISOR_CONTROL_SOCKET", "/tmp/supervisor.sock")
     monkeypatch.setenv("KEEP_ME", "1")
     captured = {}
 
@@ -135,6 +138,9 @@ def test_the_probe_does_not_read_the_loaded_handoff_module(monkeypatch):
     environment = captured["env"]
     assert "NIKO_RESTART_FD" not in environment
     assert "NIKO_HANDOFF_ROLE" not in environment
+    assert "NIKO_SUPERVISED" not in environment
+    assert "NIKO_SUPERVISOR_CONTROL_FD" not in environment
+    assert "NIKO_SUPERVISOR_CONTROL_SOCKET" not in environment
     assert environment["NIKO_IMPORT_PROBE"] == "1"
     assert environment["KEEP_ME"] == "1"
 
