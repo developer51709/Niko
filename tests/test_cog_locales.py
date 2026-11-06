@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -307,3 +309,27 @@ def test_a_namespaced_catalogue_requires_its_namespace(temporary_package):
         load_locales(package)
     with pytest.raises(LocaleError):
         load_locales(package, "missing")
+
+
+def test_a_burst_of_lookups_reuses_one_mtime_signature(temporary_package, monkeypatch):
+    """Every key lookup asks for the catalogues; a burst must not stat constantly.
+
+    Serializing the command tree resolves thousands of translations, and one
+    ``stat`` round per language per lookup blocked the bot's event loop for
+    about half a minute on Render.  A burst shares one signature, while the disk
+    watcher still reads a fresh one so an edit is never missed.
+    """
+    from utils import locales
+
+    package = temporary_package({"messages": {"hello": "Hello"}})
+    folder = locales.locales_path(package)
+    locales.reload_locales(package)
+    stale = locales._signature(folder)
+
+    monkeypatch.setattr(locales, "_SIGNATURE_TTL", 600.0)
+    path = folder / "de.json"
+    stamp = time.time() + 10
+    os.utime(path, (stamp, stamp))
+
+    assert locales._signature(folder) == stale, "the burst reuses the cached signature"
+    assert locales._signature(folder, fresh=True) != stale, "the watcher sees the edit"

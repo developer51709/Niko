@@ -139,6 +139,12 @@ async def _report_readiness() -> None:
     from supervisor_readiness import evaluate
 
     snapshot = await evaluate(bot)
+    if snapshot["state"] == "not_ready":
+        # A CPU-starved boot can miss one database ping or see a shard in the
+        # middle of a forced reconnect.  A single failed check is not an outage;
+        # give it a moment before asking the supervisor to replace the child.
+        await asyncio.sleep(5)
+        snapshot = await evaluate(bot)
     state = snapshot["state"]
     if state == "not_ready":
         _report(

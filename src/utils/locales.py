@@ -50,6 +50,7 @@ import json
 import logging
 import sys
 import threading
+import time
 from importlib import util as importlib_util
 from pathlib import Path
 from typing import Any, Iterator
@@ -127,12 +128,28 @@ def _load_language(package: str, lang: str) -> dict[str, Any]:
     return data
 
 
-def _signature(folder: Path) -> tuple[float, ...]:
+#: How long a folder's mtime signature is reused.  Every string lookup asks for
+#: the catalogues, so a fingerprint of ~300 commands used to stat nine files tens
+#: of thousands of times and block the bot loop for half a minute on Render.  The
+#: watcher reads a fresh signature (``catalogue_signature``), so an edit is still
+#: noticed on its next tick; only a burst of lookups shares one stat round.
+_SIGNATURE_TTL = 0.5
+_SIGNATURES: dict[str, tuple[float, tuple[float, ...]]] = {}
+
+
+def _signature(folder: Path, *, fresh: bool = False) -> tuple[float, ...]:
     """The mtimes of a folder's catalogue files, or ``-1`` when one is absent."""
-    return tuple(
+    key = str(folder)
+    if not fresh:
+        cached = _SIGNATURES.get(key)
+        if cached is not None and time.monotonic() - cached[0] < _SIGNATURE_TTL:
+            return cached[1]
+    mtimes = tuple(
         (folder / f"{lang}.json").stat().st_mtime if (folder / f"{lang}.json").is_file() else -1.0
         for lang in SUPPORTED_LANGUAGES
     )
+    _SIGNATURES[key] = (time.monotonic(), mtimes)
+    return mtimes
 
 
 def _catalogues(package: str) -> dict[str, dict[str, Any]]:
@@ -421,8 +438,11 @@ def reload_locales(package: str | None = None) -> None:
     global _OVERLAY_REVISION
     if package is None:
         _CACHE.clear()
+        _SIGNATURES.clear()
     else:
-        _CACHE.pop(str(locales_path(package)), None)
+        key = str(locales_path(package))
+        _CACHE.pop(key, None)
+        _SIGNATURES.pop(key, None)
     with _OVERLAY_LOCK:
         _OVERLAY_REVISION += 1
         _RESOLVED.clear()
@@ -439,7 +459,9 @@ def catalogue_packages() -> Iterator[Path]:
 
 def catalogue_signature() -> tuple:
     """Every catalogue file's identity, for noticing an edit on this machine."""
-    return tuple((str(folder), _signature(folder)) for folder in catalogue_packages())
+    return tuple(
+        (str(folder), _signature(folder, fresh=True)) for folder in catalogue_packages()
+    )
 
 
 def refresh_from_disk() -> bool:
