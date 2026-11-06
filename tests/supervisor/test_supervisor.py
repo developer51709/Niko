@@ -150,6 +150,52 @@ def test_heartbeat_timeout_replaces_a_hung_child(supervisor):
     assert new_status["child_starts"] >= 2
 
 
+def test_a_starting_child_is_not_expected_to_send_heartbeats(supervisor):
+    """Boot is bounded by the startup window, not by the heartbeat clock.
+
+    The child sends no heartbeats until it reports ready, and startup work can
+    hold that back for minutes on a slow host.  A short heartbeat timeout must
+    not replace it while it is still starting.
+    """
+    handle = supervisor(
+        "normal",
+        env={"FAKE_CHILD_READY_DELAY": "1.2"},
+        heartbeat_timeout=0.3,
+        startup_timeout=5.0,
+    )
+    payload = handle.wait_ready(timeout=10)
+
+    assert payload["restart_count"] == 0
+    assert payload["child_starts"] == 1
+
+
+def test_a_ready_child_settles_for_the_grace_window_before_heartbeats_count(supervisor):
+    """A slow host gets time to finish booting after its first ready.
+
+    The child stops heartbeating as soon as it reports ready, which is what a
+    throttled Render container looks like while its startup chain still runs.
+    It must survive until the grace window expires, then be replaced.
+    """
+    handle = supervisor(
+        "hang-after-ready",
+        heartbeat_timeout=0.3,
+        ready_grace=1.5,
+        startup_timeout=5.0,
+    )
+    handle.wait_ready()
+    first_pid = handle.status()["child"]["pid"]
+
+    time.sleep(0.7)
+    assert handle.status()["child"]["pid"] == first_pid
+    assert handle.status()["restart_count"] == 0
+
+    new_status = handle.wait_status(
+        lambda payload: bool(payload["child"]) and payload["child"]["pid"] != first_pid,
+        timeout=8,
+    )
+    assert new_status["restart_count"] >= 1
+
+
 def test_ignore_sigterm_child_is_escalated_and_replaced(supervisor):
     handle = supervisor(
         "ignore-sigterm",

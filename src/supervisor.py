@@ -81,10 +81,22 @@ class Options:
     control_socket: Path = ROOT / "data" / "run" / "supervisor.sock"
     lock_file: Path = ROOT / "data" / "run" / "supervisor.lock"
     #: A cold Render container imports the app, opens MongoDB and loads 30+
-    #: cogs before the child can report ready; 60s killed a healthy bot on its
-    #: first boot after a deploy.
-    startup_timeout: float = 120.0
-    heartbeat_timeout: float = 12.0
+    #: cogs before the child can report ready, and a slow shared CPU can stretch
+    #: that past 60s.  The watchdog only applies this before the first ready,
+    #: so a generous value costs nothing on a healthy boot and stops the
+    #: kill/restart loop on a cold one.
+    startup_timeout: float = 900.0
+    #: Heartbeats only gate children that are already serving.  Boot work
+    #: blocks the child's event loop for seconds at a time (gateway handshake,
+    #: presence, banner, AI warm-up); a 12s window killed a bot that had just
+    #: come online, and the restart loop repeated it forever.
+    heartbeat_timeout: float = 60.0
+    #: A child that has just reported ready is still finishing its startup
+    #: chain (caches, presence, command feed) and may stall for many seconds at
+    #: a time on a throttled shared CPU.  Missed heartbeats are ignored for
+    #: this long after the first ready, so a slow host settles instead of being
+    #: replaced again and again.  The heartbeat window resumes afterwards.
+    ready_grace: float = 900.0
     shutdown_timeout: float = 8.0
     restart_backoff_initial: float = 1.0
     restart_backoff_max: float = 30.0
@@ -1049,6 +1061,18 @@ class Supervisor:
         self._refresh_state()
         self._write_status()
 
+    def _settling(self, child: Child, now: float | None = None) -> bool:
+        """True while a freshly ready child may still be finishing its boot.
+
+        On a slow shared host the startup chain keeps the event loop busy for
+        seconds after the first ``ready``; heartbeats cannot be sent while it
+        is blocked, so the watchdog must not treat that silence as a hang.
+        """
+        if child.ready_at is None or self.options.ready_grace <= 0:
+            return False
+        moment = time.monotonic() if now is None else now
+        return moment - child.ready_at < self.options.ready_grace
+
     async def _watchdog(self, child: Child) -> None:
         interval = max(0.05, min(0.25, self.options.heartbeat_timeout / 4.0))
         while not child.exit_event.is_set():
@@ -1057,7 +1081,7 @@ class Supervisor:
                 return
             now = time.monotonic()
             if child.ready:
-                if now - child.last_heartbeat > self.options.heartbeat_timeout:
+                if not self._settling(child, now) and now - child.last_heartbeat > self.options.heartbeat_timeout:
                     self.last_error = (
                         f"child heartbeat missed by {now - child.last_heartbeat:.2f}s"
                     )
@@ -1506,7 +1530,7 @@ class Supervisor:
             return False, "child is draining"
         if not child.ready:
             return False, f"{child.name} child state: {child.state}"
-        if time.monotonic() - child.last_heartbeat > self.options.heartbeat_timeout:
+        if not self._settling(child) and time.monotonic() - child.last_heartbeat > self.options.heartbeat_timeout:
             return False, "child heartbeat is stale"
         return True, "ready"
 
@@ -1787,8 +1811,9 @@ def parse_args(argv: list[str] | None = None) -> Options:
     parser.add_argument("--status-file", type=Path, default=ROOT / "data" / "run" / "supervisor.json")
     parser.add_argument("--control-socket", type=Path, default=ROOT / "data" / "run" / "supervisor.sock")
     parser.add_argument("--lock-file", type=Path, default=ROOT / "data" / "run" / "supervisor.lock")
-    parser.add_argument("--startup-timeout", type=float, default=120.0)
-    parser.add_argument("--heartbeat-timeout", type=float, default=12.0)
+    parser.add_argument("--startup-timeout", type=float, default=900.0)
+    parser.add_argument("--heartbeat-timeout", type=float, default=60.0)
+    parser.add_argument("--ready-grace", type=float, default=900.0)
     parser.add_argument("--shutdown-timeout", type=float, default=8.0)
     parser.add_argument("--restart-backoff-initial", type=float, default=1.0)
     parser.add_argument("--restart-backoff-max", type=float, default=30.0)
@@ -1823,6 +1848,7 @@ def parse_args(argv: list[str] | None = None) -> Options:
         lock_file=args.lock_file,
         startup_timeout=args.startup_timeout,
         heartbeat_timeout=args.heartbeat_timeout,
+        ready_grace=args.ready_grace,
         shutdown_timeout=args.shutdown_timeout,
         restart_backoff_initial=args.restart_backoff_initial,
         restart_backoff_max=args.restart_backoff_max,

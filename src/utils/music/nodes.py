@@ -38,6 +38,21 @@ def node_identifier(node: dict) -> str:
     return f"{node['host']}:{node['port']}"
 
 
+async def wait_for_bot_startup(bot) -> None:
+    """Hold node discovery until the bot itself has finished starting.
+
+    Discovery probes ~30 public Lavalink servers.  A voice connection is not
+    possible before the bot is serving, and on a throttled shared host the
+    probes compete with cog loading, cache warm-up and the dashboard for the
+    little CPU there is, so they wait for the startup chain instead of running
+    alongside it.
+    """
+    await bot.wait_until_ready()
+    startup_complete = getattr(bot, "startup_complete", None)
+    if startup_complete is not None:
+        await startup_complete.wait()
+
+
 def _dedupe_nodes(nodes: list[dict]) -> list[dict]:
     seen: set[tuple[str, int, bool]] = set()
     unique: list[dict] = []

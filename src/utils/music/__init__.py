@@ -23,6 +23,7 @@ from utils.music.constants import (
     _MAX_CONNECT_NODES,
     _MAX_PROBERS,
     _PROBE_TIMEOUT,
+    _START_DISCOVERY_DELAY,
 )
 from utils.music.format import _fmt_dur, _progress_bar, _source_colour
 from utils.music.messages import MESSAGES, msg
@@ -52,6 +53,7 @@ __all__ = [
     "_MAX_CONNECT_NODES",
     "_MAX_PROBERS",
     "_PROBE_TIMEOUT",
+    "_START_DISCOVERY_DELAY",
     "_fmt_dur",
     "_progress_bar",
     "_source_colour",

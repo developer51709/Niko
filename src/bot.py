@@ -68,6 +68,10 @@ bot = commands.AutoShardedBot(
 )
 bot.remove_command("help")
 bot.cxn: "database.SQLitePool | database.MongoPool | database.remote.RemotePool | None" = None
+#: Set when the startup chain has finished (successfully or not).  Optional
+#: work such as Lavalink node discovery waits for this so probing public nodes
+#: cannot compete with cog loading, caches and the dashboard on a slow host.
+bot.startup_complete = asyncio.Event()
 
 # ── REST egress failover ─────────────────────────────────────────────────────
 # Webshare is the only egress fallback: it arms itself the moment Discord
@@ -164,20 +168,22 @@ async def on_ready():
         # The staff analytics tab reads these counters, so the periodic writer
         # starts before startup finishes and is idempotent across reconnects.
         analytics.start_flush_task(bot)
-        # The supervised entrypoint initialises the database, cogs and economy
-        # cache before the gateway connects, so READY is the moment the child
-        # can serve.  The remaining startup steps (presence, command feed,
-        # stats files) are not readiness checks and are slow enough on a cold
-        # container to run past the supervisor's startup timeout; report first,
-        # then finish them and report again with their outcome.
-        if _reporter is not None and getattr(bot, "_pre_gateway_initialized", False):
-            await _report_readiness()
+        # Readiness is reported only after the whole startup chain has run.
+        # Everything in on_ready (presence, command feed, stats, caches) is part
+        # of booting, and a failure in it surfaces through handle_ready's
+        # recorded errors.  Until this returns the supervisor treats the child
+        # as starting: it does not expect heartbeats, only that the process is
+        # still alive, and its startup window is what bounds a hung boot.
         await handle_ready(bot)
         if _reporter is not None:
             await _report_readiness()
     except Exception as e:
         logging.error("on_ready", f"An error occurred: {e}")
         _report("readiness_failed", reason=f"on_ready failed: {type(e).__name__}: {e}")
+    finally:
+        # Optional startup work (Lavalink discovery) waits for this marker; it
+        # is set even when the chain failed so music still comes up afterwards.
+        bot.startup_complete.set()
 
 
 # ── Usage analytics ──────────────────────────────────────────────────────────
