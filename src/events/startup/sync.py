@@ -16,6 +16,7 @@ The same table keeps the application-command IDs Discord assigns, so messages
 can link a command (``</setup:id>``) instead of writing inline code.
 """
 
+import asyncio
 import hashlib
 import json
 import os
@@ -117,7 +118,10 @@ async def run_slash_sync(bot):
     # when the tree is edited. Load (or fetch) them before the fingerprint check
     # so a boot that skips the sync still renders mentions.
     await command_ids.ensure(bot)
-    fingerprint = _command_fingerprint(bot)
+    # Serializing every command resolves its translations, which is CPU and
+    # file-system work: on a slow host it blocked the event loop long enough to
+    # stall the Discord gateway heartbeat (and, in turn, readiness).
+    fingerprint = await asyncio.to_thread(_command_fingerprint, bot)
     command_count = len(bot.tree.get_commands())
     try:
         if await _db_stored_fingerprint(bot) == fingerprint:

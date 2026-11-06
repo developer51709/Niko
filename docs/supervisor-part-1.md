@@ -86,7 +86,15 @@ The supervisor considers a child ready only when:
 1. It is the current child and has not exited.
 2. It reported a valid loopback `api_listening.port`.
 3. It reported `ready`.
-4. Its last heartbeat is within `--heartbeat-timeout`.
+4. Its last heartbeat is within `--heartbeat-timeout`, once the `--ready-grace`
+   settling window since the first `ready` has elapsed. A cold shared host
+   finishes its startup chain after reporting ready and blocks the child's
+   event loop for seconds at a time, so heartbeats are not expected during
+   that window.
+
+A child that has not reported `ready` is not expected to heartbeat at all:
+startup failures normally exit the process, which the supervisor sees
+immediately, and a boot that never finishes is bounded by `--startup-timeout`.
 
 The real bot will add database, critical-cog, startup-error, and shard checks in
 Part 2; Part 1 proves the transport and state machine without those dependencies.

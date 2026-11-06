@@ -20,6 +20,7 @@ from utils.music import (
     MAX_QUEUE_SHOW,
     SOURCE_COLOURS,
     _CONNECT_TIMEOUT,
+    _START_DISCOVERY_DELAY,
     _MAX_CONNECT_NODES,
     _SPOTIFY_ALBUM_RE,
     _SPOTIFY_PLAYLIST_RE,
@@ -36,7 +37,7 @@ from utils.music import (
     msg,
 )
 from utils.music.database import MusicDatabase
-from utils.music.nodes import close_pool
+from utils.music.nodes import close_pool, wait_for_bot_startup
 from cogs.music.views import _build_np_view, _fill
 from utils.prefix_manager import resolve_prefix
 
@@ -602,8 +603,11 @@ class MusicSystem(commands.Cog):
         await close_pool()
 
     async def _node_rescan_loop(self):
-        await self.bot.wait_until_ready()
-        delay = 0.0
+        # Discovery is optional during startup: it waits for the bot's own
+        # startup chain to finish, then gives the post-ready background work
+        # (command feed, presence) a head start before probing public nodes.
+        await wait_for_bot_startup(self.bot)
+        delay = _START_DISCOVERY_DELAY
         while not self.bot.is_closed():
             if delay:
                 await asyncio.sleep(delay)

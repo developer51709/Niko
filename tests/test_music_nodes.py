@@ -33,6 +33,30 @@ class HardcodedCatalogTests(unittest.TestCase):
         assert '"password":' in source
 
 
+class StartupDeferralTests(unittest.IsolatedAsyncioTestCase):
+    async def test_node_discovery_waits_for_the_startup_chain(self):
+        """Probing ~30 public nodes must not compete with the bot's own boot."""
+        complete = asyncio.Event()
+
+        class _Bot:
+            def __init__(self):
+                self.ready_waits = 0
+
+            async def wait_until_ready(self):
+                self.ready_waits += 1
+
+            startup_complete = complete
+
+        bot = _Bot()
+        waiter = asyncio.create_task(music_cog.wait_for_bot_startup(bot))
+        await asyncio.sleep(0.05)
+        assert not waiter.done()
+
+        complete.set()
+        await asyncio.wait_for(waiter, timeout=1.0)
+        assert bot.ready_waits == 1
+
+
 class _FakeResponse:
     def __init__(self, status, payload=None):
         self.status = status

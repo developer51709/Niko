@@ -68,6 +68,10 @@ bot = commands.AutoShardedBot(
 )
 bot.remove_command("help")
 bot.cxn: "database.SQLitePool | database.MongoPool | database.remote.RemotePool | None" = None
+#: Set when the startup chain has finished (successfully or not).  Optional
+#: work such as Lavalink node discovery waits for this so probing public nodes
+#: cannot compete with cog loading, caches and the dashboard on a slow host.
+bot.startup_complete = asyncio.Event()
 
 # ── REST egress failover ─────────────────────────────────────────────────────
 # Webshare is the only egress fallback: it arms itself the moment Discord
@@ -130,6 +134,28 @@ async def _heartbeat_loop(reporter, interval: float = 3.0) -> None:
         raise
 
 
+async def _report_readiness() -> None:
+    """Send the supervisor what this child can and cannot serve right now."""
+    from supervisor_readiness import evaluate
+
+    snapshot = await evaluate(bot)
+    if snapshot["state"] == "not_ready":
+        # A CPU-starved boot can miss one database ping or see a shard in the
+        # middle of a forced reconnect.  A single failed check is not an outage;
+        # give it a moment before asking the supervisor to replace the child.
+        await asyncio.sleep(5)
+        snapshot = await evaluate(bot)
+    state = snapshot["state"]
+    if state == "not_ready":
+        _report(
+            "readiness_failed",
+            reason="; ".join(snapshot["reasons"]),
+            checks=snapshot["checks"],
+        )
+    else:
+        _report(state, reasons=snapshot["reasons"], checks=snapshot["checks"])
+
+
 @bot.event
 async def on_ready():
     # READY means the gateway shards are connected; it does not mean the
@@ -148,23 +174,22 @@ async def on_ready():
         # The staff analytics tab reads these counters, so the periodic writer
         # starts before startup finishes and is idempotent across reconnects.
         analytics.start_flush_task(bot)
+        # Readiness is reported only after the whole startup chain has run.
+        # Everything in on_ready (presence, command feed, stats, caches) is part
+        # of booting, and a failure in it surfaces through handle_ready's
+        # recorded errors.  Until this returns the supervisor treats the child
+        # as starting: it does not expect heartbeats, only that the process is
+        # still alive, and its startup window is what bounds a hung boot.
         await handle_ready(bot)
         if _reporter is not None:
-            from supervisor_readiness import evaluate
-
-            snapshot = await evaluate(bot)
-            state = snapshot["state"]
-            if state == "not_ready":
-                _report(
-                    "readiness_failed",
-                    reason="; ".join(snapshot["reasons"]),
-                    checks=snapshot["checks"],
-                )
-            else:
-                _report(state, reasons=snapshot["reasons"], checks=snapshot["checks"])
+            await _report_readiness()
     except Exception as e:
         logging.error("on_ready", f"An error occurred: {e}")
         _report("readiness_failed", reason=f"on_ready failed: {type(e).__name__}: {e}")
+    finally:
+        # Optional startup work (Lavalink discovery) waits for this marker; it
+        # is set even when the chain failed so music still comes up afterwards.
+        bot.startup_complete.set()
 
 
 # ── Usage analytics ──────────────────────────────────────────────────────────

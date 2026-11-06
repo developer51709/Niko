@@ -19,6 +19,9 @@ _MAX_CONNECT_NODES = 3        # Lavalink nodes to keep in the pool (load-balance
 _PROBE_TIMEOUT    = 3.0       # node health probe timeout (seconds)
 _CONNECT_TIMEOUT  = 20.0      # wavelink Pool.connect timeout (seconds)
 _MAX_PROBERS      = 8         # concurrent node probes at startup
+# Discovery is not on the startup critical path: it waits for the bot's
+# startup chain, then lets post-ready work settle before probing ~30 nodes.
+_START_DISCOVERY_DELAY = 15.0
 
 SOURCE_COLOURS = {
     "youtube":    discord.Colour(0xFF0000),

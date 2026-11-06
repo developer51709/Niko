@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import hmac
 import json
 import os
@@ -442,12 +443,25 @@ async def _serve(reporter) -> int:
         )
         return 2
 
+    # Start the heartbeat before the pool: a cold MongoDB connect can take
+    # longer than the supervisor's heartbeat timeout (three 6s attempts plus
+    # backoff), and a starting child that never beats looks like a hung one.
+    heartbeat = (
+        asyncio.create_task(_heartbeat_loop(reporter), name="db-heartbeat")
+        if reporter is not None
+        else None
+    )
+
     try:
         pool = await database.create_pool(DATABASE_PATH)
     except Exception as exc:
         reason = f"database is unavailable: {type(exc).__name__}: {exc}"
         bot_logging.error("Database", reason)
         _report(reporter, "readiness_failed", reason=reason)
+        if heartbeat is not None:
+            heartbeat.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await heartbeat
         return 1
 
     backend = getattr(pool, "db_type", "unknown")
@@ -465,12 +479,6 @@ async def _serve(reporter) -> int:
         "Database", f"Database child listening on 127.0.0.1:{port} ({backend})"
     )
     _report(reporter, "ready", checks={"database": True, "backend": backend})
-
-    heartbeat = (
-        asyncio.create_task(_heartbeat_loop(reporter), name="db-heartbeat")
-        if reporter is not None
-        else None
-    )
 
     stopping = asyncio.Event()
     loop = asyncio.get_running_loop()

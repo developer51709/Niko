@@ -142,6 +142,13 @@ def _record_all_startup_errors(bot, step_errors: list[tuple[str, BaseException]]
     bot.last_startup_error = step_errors[-1][1]
 
 
+#: Synchronous steps that are heavy enough to stall the loop while they run:
+#: writing the command catalogue resolves every translation.  They execute in a
+#: worker thread so the Discord gateway and supervisor heartbeats keep flowing
+#: during startup.
+_THREADED_STEPS = {"write_commands"}
+
+
 async def _run_startup_step(bot, step_name: str, description: str, step: Any) -> None:
     """Run one startup step and surface its outcome clearly.
 
@@ -149,6 +156,10 @@ async def _run_startup_step(bot, step_name: str, description: str, step: Any) ->
     Background-only steps are scheduled as tasks and are not treated as failures
     if scheduling succeeds.
     """
+    if step_name in _THREADED_STEPS:
+        await asyncio.to_thread(step, bot)
+        return
+
     if step_name in {"run_emoji_sync", "run_slash_sync"}:
         try:
             task = asyncio.create_task(step(bot))
