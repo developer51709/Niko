@@ -59,6 +59,7 @@ class Bot:
 
 def leaderboard_client(rows, *, bot, total=None):
     client = app.test_client()
+    client.environ_base["HTTP_SEC_FETCH_SITE"] = "same-origin"
     patches = [
         patch.object(
             routes,

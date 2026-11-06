@@ -61,14 +61,15 @@ by area, and applies what is selected:
 
 | Area | What it covers | How it is applied |
 | --- | --- | --- |
-| Shared modules | new `src/config/**` files | Written before anything is reloaded, because a module an area imports has to exist first. Only *additions* travel: an existing config file keeps this deployment's own ids, links and copy, and a file beta dropped is never deleted. Applied with every run, whether or not the owner ticked it. |
+| Shared modules | new `src/config/**` files and `src/config/links.py` | Written before anything is reloaded, because a module an area imports has to exist first. Existing config files keep this deployment's own ids and copy, and a file beta dropped is never deleted — except `links.py`, which always carries the production URLs and is replaced in full. Applied with every run, whether or not the owner ticked it. |
 | Website build | `src/website/dist/**` | Files replaced in place. Flask serves that folder from disk, so the next request is the new site. Nothing restarts. |
 | Cog extensions | `src/cogs/**` | The changed `cogs.<package>` modules are dropped from `sys.modules` (clearing the cached import) and only the affected extensions are reloaded. |
 | Utilities | `src/utils/**` | Changed `utils.*` modules are purged, every loaded extension is reloaded on top of them, and the dashboard app is rebuilt. |
 | API & dashboard | `src/webapp/**` | `webapp.*` is re-imported and the new Flask app is swapped into the running server (`server.app`). The listening socket, its thread and in-flight connections stay up. The swap is checked before it is reported: the new app must be the one on the server and must answer `/api/health`. |
 | Database schema | `src/events/startup/database.py` | The module is re-imported and its `init_database` run again on the live pool: `CREATE TABLE IF NOT EXISTS`, missing columns and the idempotent migrations. The process keeps running. |
 | Gateway events | `src/events/on_*.py` | The modules are purged from `sys.modules`, re-imported, and the handler names `bot.py`'s callbacks look up are rebound onto the new functions. The next message runs the new code; nothing restarts. |
-| Bot core | `src/bot.py`, `src/api_server.py`, the rest of `src/events/startup/**`, `src/database/**` | The process replaces its own image in place, keeping its PID and listening socket; see below. |
+| Startup writers | `src/events/startup/writers.py` | The writers and the banner that reads their version are re-imported, `events.startup`'s exports are refreshed, and the ready handler is rebound. The writers then run once so `bot_stats.json` and `commands.json` are current. No restart and no cog reload. |
+| Bot core | `src/bot.py`, `src/api_server.py`, the remaining `src/events/startup/**`, `src/database/**` | The process replaces its own image in place, keeping its PID and listening socket; see below. |
 
 The API rebuild is transactional. The modules the running app was built from
 are snapshotted before `webapp.*` is dropped; if the new copy fails to import,
@@ -92,15 +93,19 @@ which is why they are limits and not counters. An event module that fails to
 import is put back from the old module object, so a bad pull cannot leave the
 gateway without its handler.
 
-The schema module is the exception in the startup chain. `events/startup/database.py`
-is re-imported and its `init_database` called again against the running pool, so
-a new table, a new column or a backfill is live immediately: the function is
-written for exactly that — tables are `IF NOT EXISTS`, migrations add only what
-is missing, and the pool is opened only when there is none. The music and
-error-report databases are skipped on the second run because their own `init`
-returns early once ready. The rest of `src/events/startup/**` still ships with the
-bot core: it runs once, on ready, so reloading it would change nothing until a
-restart.
+The schema module and the startup writers are the exceptions in the startup
+chain. `events/startup/database.py` is re-imported and its `init_database` called
+again against the running pool, so a new table, a new column or a backfill is
+live immediately: the function is written for exactly that — tables are `IF NOT
+EXISTS`, migrations add only what is missing, and the pool is opened only when
+there is none. The music and error-report databases are skipped on the second
+run because their own `init` returns early once ready. `events/startup/writers.py`
+is imported by `events.on_ready` and called on every READY, so it can be
+re-imported and the ready handler rebound without a restart; the updater runs
+the writers once so the exported stats and command data are current immediately
+(keeping the process uptime marker intact, since no restart happened). The rest
+of `src/events/startup/**` still ships with the bot core: it runs once at boot,
+so reloading it would change nothing until a restart.
 
 An area beta's build does not publish (an older deployment, or one without the
 feature) is reported as *not published*, never as “every file here was deleted”.
@@ -178,17 +183,21 @@ rather than failing with an `AttributeError` from the stale module.
   …) keep their loaded copy until a bot-core restart, even if a utilities update
   rewrote the file. The page reports what it reloaded. Gateway event modules are
   the exception: their handlers are rebound, so a change to `src/events/on_message.py`
-  is live on the next message, and the schema module's `init_database` is re-run so
-  a new table or column exists immediately. Any other startup module still waits
-  for a restart.
+  is live on the next message; the schema module's `init_database` is re-run so
+  a new table or column exists immediately; and the startup writers are
+  re-imported and run so their exported data is current. Any other startup module
+  still waits for a restart.
 - A website update replaces files, it does not rebuild them. Beta must have run
   its own build (the `dist/` folder is in the manifest) before production pulls
   it.
-- `src/config/**` never *replaces* anything: it holds the guild ids, links and
-  status copy a deployment was configured with, so beta cannot repoint
-  production's links. A **new** config module does travel, because code that
-  imports it would otherwise fail its reload with `ModuleNotFoundError` — that
-  is the Shared modules area, and it applies first in every run.
+- `src/config/**` mostly never *replaces* anything: it holds the guild ids and
+  status copy a deployment was configured with. A **new** config module does
+  travel, because code that imports it would otherwise fail its reload with
+  `ModuleNotFoundError`. `src/config/links.py` is the exception: it always
+  contains the production URLs (beta reads `PUBLIC_URL` from its environment),
+  so its changes are pulled in full rather than requiring a manual GitHub pull
+  and a deployment restart. This is the Shared modules area, and it applies
+  first in every run.
 - Updates are pulled on demand by the owner; nothing polls beta and applies
   changes by itself.
 - A visitor who already has the site open is not sent a new bundle. Their tab

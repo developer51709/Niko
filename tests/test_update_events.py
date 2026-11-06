@@ -4,8 +4,9 @@
 start-up; that callback reads the handler's name from bot.py's globals on every
 dispatch, so re-importing the module and rebinding the name is enough for the next
 message to run the new file. These checks pin that split: the event modules are
-their own area, the startup chain is not, and a broken event file leaves the
-running handler in place.
+their own area, the startup writers and schema have their own areas, the rest of
+the startup chain is not, and a broken event file leaves the running handler in
+place.
 """
 
 import sys
@@ -28,10 +29,10 @@ def test_the_event_modules_are_their_own_area():
     assert updates.area_for_path("src/events/__init__.py") == "events"
 
 
-def test_the_startup_chain_stays_with_the_bot_core():
-    # It runs once, on ready: re-importing it would change nothing until a
-    # restart, so it must not be advertised as a live area. The schema module is
-    # the exception and has its own area.
+def test_the_remaining_startup_chain_stays_with_the_bot_core():
+    # Apart from the schema and the ready-time writers, the startup chain runs
+    # once at boot: re-importing it would change nothing until a restart, so it
+    # must not be advertised as a live area.
     assert updates.area_for_path("src/events/startup/loader.py") == "bot"
     assert updates.area_for_path("src/events/startup/status.py") == "bot"
     assert updates.area_for_path("src/bot.py") == "bot"
