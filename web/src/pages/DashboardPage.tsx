@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, getAuth, getBoosterSettings, getConfig, getDashboardAccess, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getMyReferrals, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
+import { ApiError, getAuth, getBoosterSettings, getConfig, getDashboardAccess, getDeveloperMe, getGuildBlacklistAppealStatus, getGuilds, getLevels, getMyAchievements, getMyEconomy, getMyReferrals, getOverview, getResources, getStats, getUserOverview, getStaffMe } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { AiView, CustomizationSettings, ModerationView, OnboardingView, TicketsView } from "../components/dashboard/SettingsViews";
 import { ServerSettingsView } from "../components/dashboard/ServerSettingsView";
@@ -241,6 +241,7 @@ export function DashboardPage() {
   const [refreshToken, setRefreshToken] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [staffRole, setStaffRole] = useState<string | null>(null);
+  const [developerAccess, setDeveloperAccess] = useState(false);
   // The personal tabs share one account-wide snapshot; it stays current while a
   // personal page is open and pauses as soon as the reader moves to a server.
   const personalOverview = useLiveResource<UserOverview>("personal-overview", getUserOverview, {
@@ -265,11 +266,16 @@ export function DashboardPage() {
         return getDashboardAccess().then((access) => {
           setBlacklist(access);
           if (access.blacklisted) return null;
-          return Promise.all([loadGuilds(t), getStaffMe().catch(() => null)]).then(([available, staffStatus]) => {
+          return Promise.all([
+            loadGuilds(t),
+            getStaffMe().catch(() => null),
+            getDeveloperMe().catch(() => null),
+          ]).then(([available, staffStatus, developerStatus]) => {
             setGuilds(available.guilds);
             setGuildsError(available.error);
             setGuildsExpired(available.expired);
             setStaffRole(staffStatus?.role || null);
+            setDeveloperAccess(Boolean(developerStatus?.access.enabled));
           });
         });
       })
@@ -334,11 +340,16 @@ export function DashboardPage() {
         const access = await getDashboardAccess();
         setBlacklist(access);
         if (!access.blacklisted) {
-          const [available, staffStatus] = await Promise.all([loadGuilds(t), getStaffMe().catch(() => null)]);
+          const [available, staffStatus, developerStatus] = await Promise.all([
+            loadGuilds(t),
+            getStaffMe().catch(() => null),
+            getDeveloperMe().catch(() => null),
+          ]);
           setGuilds(available.guilds);
           setGuildsError(available.error);
           setGuildsExpired(available.expired);
           setStaffRole(staffStatus?.role || null);
+          setDeveloperAccess(Boolean(developerStatus?.access.enabled));
         }
       }
       personalOverview.refresh();
@@ -364,7 +375,7 @@ export function DashboardPage() {
     content = <UserSection key={route.tab} tab={route.tab} user={auth.user!} overview={personalOverview.data} guilds={guilds} guildsUnavailable={guildsError} csrfToken={auth.csrf_token} refreshToken={refreshToken} onServers={goServers} onManage={openGuild} />;
   }
 
-  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} userTab={route.tab} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onUserTabChange={changeUserTab} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole}>
+  return <DashboardShell user={auth.user!} guilds={guilds} selectedGuild={selectedGuild} view={route.view as DashboardView} section={route.section} userTab={route.tab} stats={stats} onHome={goHome} onServers={goServers} onGuildChange={changeGuild} onSectionChange={changeSection} onUserTabChange={changeUserTab} onRefresh={refreshDashboard} refreshing={refreshing} staffRole={staffRole} developerAccess={developerAccess}>
     {content}
   </DashboardShell>;
 }

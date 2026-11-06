@@ -45,7 +45,9 @@ exactly as it did before, reading local files only.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import logging
 import os
 import re
 import threading
@@ -104,6 +106,16 @@ _bot: dict = {
 
 #: The background poller is started once per process (:func:`start_sync_loop`).
 _loop: dict = {"started": False}
+
+#: Key in the existing ``sync_state`` key/value table. The owner's manual mode
+#: is a property of this deployment, so it lives in the database rather than on
+#: a disk production does not have.
+_AUTO_SYNC_KEY = "locale_auto_sync"
+
+#: The owner's choice, read once at startup and kept in step by the dashboard.
+_settings = {"auto": True, "loaded": False}
+
+log = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -326,6 +338,10 @@ def _refresh(force: bool = False, pull_bot: bool = True) -> None:
     """
     if not BETA_INSTANCE_URL:
         return
+    # Manual mode: only an explicit sync (``force=True``) may contact beta.
+    # Without this, opening any page still refreshed the feed in the background.
+    if not force and not auto_sync_enabled():
+        return
     now = time.monotonic()
     with _lock:
         cached = _beta["manifest"] is not None
@@ -530,13 +546,97 @@ def _watch_local_files() -> None:
         time.sleep(FEED_TTL)
 
 
-def start_sync_loop() -> None:
+def auto_sync_enabled() -> bool:
+    """Whether the background poller may read beta without being asked."""
+    return bool(_settings["auto"])
+
+
+async def load_settings(bot) -> bool:
+    """Read the owner's automatic-sync choice from the database.
+
+    ``loaded`` stays false when the table is not ready yet: this can run before
+    the startup schema pass on a fresh process, and the feed thread retries the
+    read rather than silently running automatic until the next restart.
+    """
+    pool = getattr(bot, "cxn", None)
+    if pool is None:
+        # No database means no stored choice; stop the startup retry rather
+        # than delaying the first poll forever.
+        _settings["loaded"] = True
+        return bool(_settings["auto"])
+    try:
+        stored = await pool.fetchval(
+            "SELECT value FROM sync_state WHERE key = $1", _AUTO_SYNC_KEY
+        )
+    except Exception as exc:
+        log.warning("Could not read the automatic locale sync setting: %s", exc)
+        return bool(_settings["auto"])
+    auto = True
+    if stored is not None:
+        auto = str(stored).strip().lower() in {"1", "true", "yes", "on"}
+    _settings["auto"] = auto
+    _settings["loaded"] = True
+    return auto
+
+
+async def set_auto_sync(enabled: bool, actor=None, bot=None) -> bool:
+    """Store automatic syncing on or off; the poller reads the new value next."""
+    pool = getattr(bot, "cxn", None)
+    if pool is None:
+        raise RuntimeError("The database is not available.")
+
+    # Delete-then-insert: both database backends accept those statements, and
+    # the default (no row) is automatic sync, so only manual mode needs a row.
+    await pool.execute("DELETE FROM sync_state WHERE key = $1", _AUTO_SYNC_KEY)
+    if not enabled:
+        await pool.execute(
+            "INSERT INTO sync_state (key, value) VALUES ($1, $2)", _AUTO_SYNC_KEY, "0"
+        )
+    _settings["auto"] = bool(enabled)
+    _settings["loaded"] = True
+    log.info("Automatic locale sync turned %s by %s", "on" if enabled else "off", actor)
+    return bool(enabled)
+
+
+def _load_settings_at_start(bot) -> None:
+    """Wait for the first database read before the poller can fire.
+
+    The API (and this thread) starts before the startup schema pass, so the
+    ``sync_state`` table can still be a moment away. Retry inside a short
+    deadline instead of treating that as "automatic": a process restarted in
+    manual mode must not poll beta just because it booted quickly.
+    """
+    if bot is None:
+        return
+    loop = getattr(bot, "loop", None)
+    if loop is None or loop.is_closed():
+        return
+    deadline = time.monotonic() + 20.0
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            # This runs on the feed thread, never the event loop, so waiting for
+            # the coroutine cannot block the loop it needs to execute on.
+            asyncio.run_coroutine_threadsafe(load_settings(bot), loop).result(timeout=5)
+        except Exception as exc:
+            last_error = exc
+        if _settings["loaded"]:
+            return
+        time.sleep(0.5)
+    if last_error is not None:
+        log.warning("Could not read the automatic locale sync setting: %s", last_error)
+
+
+def start_sync_loop(bot=None) -> None:
     """Keep a running bot's wording current, on a timer.
 
     Two sources, one loop each: this instance's own files (a translator saving
     ``fr.json`` on beta) and beta's feed (production reading beta). Either way a
     cog that captured its tables at import serves the new wording on its next
     reply — no restart, no deploy.
+
+    The beta half honours the owner's automatic-sync choice; manual mode leaves
+    that loop idle until :func:`sync` is called by the page's Sync now button.
     """
     with _lock:
         if _loop["started"]:
@@ -548,6 +648,7 @@ def start_sync_loop() -> None:
         return
 
     def run() -> None:
+        _load_settings_at_start(bot)
         while True:
             try:
                 _refresh()

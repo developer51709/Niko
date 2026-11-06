@@ -1,3 +1,15 @@
 {
-  "reports.unavailable": "Rapports d’erreur indisponibles."
+  "reports.unavailable": "Rapports d’erreur indisponibles.",
+  "reports.statusSaved": "Statut du rapport mis à jour.",
+  "reports.statusFailed": "Le statut du rapport n’a pas pu être enregistré.",
+  "reports.deleteTitle": "Supprimer ce rapport d’erreur ?",
+  "reports.deleteBody": "Le rapport {code} et sa trace seront définitivement supprimés. Cette action est irréversible.",
+  "reports.delete": "Supprimer le rapport",
+  "reports.cancel": "Conserver le rapport",
+  "reports.deleted": "Rapport d’erreur supprimé.",
+  "reports.deleteFailed": "Le rapport n’a pas pu être supprimé.",
+  "reports.maintenanceUnavailable": "Cibles de maintenance indisponibles.",
+  "reports.incidentSaved": "Réglages de l’incident enregistrés.",
+  "reports.maintenanceEnabled": "Maintenance activée et l’incident publié.",
+  "reports.incidentFailed": "Les réglages de l’incident n’ont pas pu être enregistrés."
 }

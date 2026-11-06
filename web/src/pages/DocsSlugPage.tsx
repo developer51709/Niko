@@ -1,4 +1,5 @@
 import { isValidElement, useEffect } from "react";
+import { DiscordCodeBlock } from "../components/DiscordCodeBlock";
 import { DiscordMarkdown } from "../components/DiscordMarkdown";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
@@ -112,6 +113,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
       // content is not rendered a second time as plain paragraphs below it.
       if (trimmed.startsWith("```")) {
         flushList();
+        const language = trimmed.slice(3).trim().split(/\s+/)[0] || "";
         const codeContent: string[] = [];
         let j = i + 1;
         while (j < lines.length && lines[j].trim() !== "```") {
@@ -119,9 +121,7 @@ export function DocsSlugPage({ slug }: DocsSlugPageProps) {
           j += 1;
         }
         elements.push(
-          <pre key={`code-${i}`} className="doc-code-block">
-            <code>{codeContent.join("\n")}</code>
-          </pre>
+          <DiscordCodeBlock key={`code-${i}`} code={codeContent.join("\n")} language={language} />
         );
         i = j + 1; // skip past the closing fence
         continue;

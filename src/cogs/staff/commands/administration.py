@@ -77,12 +77,13 @@ class AdministrationCommands:
         view.add_item(container)
         await ctx.send(view=view)
 
-    #: The release ``.staff announce`` announces. The docs page and the changelog
-    #: entry are named in one place, so the buttons can never point at a page that
-    #: was renamed or retired alongside the update.
-    UPDATE_TITLE = "Niko now speaks German & Spanish 🇩🇪🇪🇸"
-    UPDATE_DOCS_URL = f"{links.DOCS}/language-support"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/multi-language-everywhere"
+    #: The release ``.staff announce`` announces. The docs page, the portal and
+    #: the changelog entry are named in one place, so the buttons can never point
+    #: at a page that was renamed or retired alongside the update.
+    UPDATE_TITLE = "Niko now has a developer API 🛠️"
+    UPDATE_DOCS_URL = f"{links.WEBSITE}/developers"
+    UPDATE_PORTAL_URL = f"{links.WEBSITE}/dashboard/developer"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/developer-api-and-portal"
 
     @StaffCommands.staff.command(name="announce", help=CMDS.help("announce"), hidden=True)
     async def announce(self, ctx, topic: str = ""):
@@ -114,35 +115,49 @@ class AdministrationCommands:
             ),
             discord.ui.TextDisplay(
                 content=(
-                    "**Niko now speaks German and Spanish — everywhere.** Set your server's language "
-                    "in Discord and the bot answers in it: replies, panels, error messages, the "
-                    "`.help` menu, and every command's own help line. English stays the default, and "
-                    "a line that has not been translated yet falls back to it instead of breaking.\n\n"
-                    "**Discord's own command list follows each member.** Slash command descriptions, "
-                    "subcommand descriptions and argument hints now arrive translated, so a member "
-                    "whose Discord client is in German sees German in the `/` picker even when the "
-                    "server itself is English. Context menus rename themselves too — *Translate* "
-                    "becomes **Übersetzen**, *Roleplay* becomes **Rollenspiel**.\n\n"
-                    "**The website follows the visitor.** The commands page picks the language of the "
-                    "browser that opens it and now shows argument descriptions as well, so "
-                    "`/pay` explains both `member` and `amount` in German or Spanish.\n\n"
-                    "**Built to keep growing.** Every cog keeps its wording in `locales/en.json`, "
-                    "`de.json` and `es.json` next to the code. That is what let this land in one pass, "
-                    "and what makes the next language a folder to translate instead of a refactor.\n\n"
-                    "-# The bot stays free. Everything above ships for every server."
+                    "**Niko is a platform now, not just a bot.** There is a documented API, a portal to "
+                    "run integrations from, and a reference that answers the questions before the first "
+                    "line of code.\n\n"
+                    "**`/api/v1` covers the data integrations actually need.** Economy standings and "
+                    "profiles, server leveling leaderboards and member XP, Discord user profiles, warning "
+                    "cases, and the user and server blacklist — each endpoint behind a scope, so a key "
+                    "can only read what it was approved for.\n\n"
+                    "**Warnings arrive instead of being polled.** Register a bot application and Niko "
+                    "posts warning events to your HTTPS endpoint with an `X-Niko-Signature` HMAC-SHA256 "
+                    "header, an at-least-once delivery id to deduplicate on, and a **Send test event** "
+                    "button that reports the last delivery's status.\n\n"
+                    "**The portal is the workspace.** `/dashboard/developer` holds your scopes, "
+                    "applications, API keys, webhook settings and request log. Registration is a form "
+                    "with the required Discord Developer Portal screenshot, the owner reviews it with "
+                    "the scopes you asked for, and keys start with `niko_dev_` — hashed at rest, shown "
+                    "exactly once, and revoked the moment you ask.\n\n"
+                    "**The documentation answers the next question.** `/developers` walks through the "
+                    "quickstart, authentication, versioning, permissions, every endpoint with request "
+                    "and response examples, signature verification, rate limits and appeals, "
+                    "maintenance windows, error codes and the developer policies.\n\n"
+                    "**Access is invite-only for now.** Approved developers get the portal; anyone can "
+                    "read the documentation today and open a support ticket when their integration is "
+                    "ready.\n\n"
+                    "-# The bot stays free. The API ships for approved integrations at no cost."
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# Read the language guide, or see the full breakdown below."
+                content="-# Read the documentation, open the portal, or see the full breakdown below."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
                 discord.ui.Button(
-                    label="Language docs",
+                    label="Developer docs",
                     style=discord.ButtonStyle.link,
                     url=self.UPDATE_DOCS_URL,
-                    emoji=get_emoji("link")
+                    emoji=get_emoji("docs")
+                ),
+                discord.ui.Button(
+                    label="Open the portal",
+                    style=discord.ButtonStyle.link,
+                    url=self.UPDATE_PORTAL_URL,
+                    emoji=get_emoji("website")
                 ),
                 discord.ui.Button(
                     label="What's new",

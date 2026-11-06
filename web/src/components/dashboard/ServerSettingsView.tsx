@@ -7,6 +7,7 @@ import { useStrings } from "../../i18n";
 import type { GuildConfig, GuildResources, ServerConfig } from "../../types";
 import { ChannelSelect } from "./ChannelSelect";
 import { DashHeading } from "./DashboardViews";
+import { SectionTitle } from "./SectionTitle";
 import { Switch } from "./Switch";
 
 // Only the in-flight flag belongs in state now: every result is announced with a
@@ -33,13 +34,6 @@ function StringOptionList({ label, hint, options, placeholder, onChange, disable
     </div>
     <button type="button" className="button button-muted button-small settings-option-add" onClick={() => onChange([...options, ""])} disabled={disabled}>＋ {t("server.addOption")}</button>
     <small>{hint}</small>
-  </div>;
-}
-
-function SectionTitle({ label, title, detail, icon }: { label: string; title: string; detail: string; icon: string }) {
-  return <div className="panel-heading settings-section-title">
-    <div><span className="panel-kicker">{label}</span><h3>{title}</h3><p>{detail}</p></div>
-    <span className="panel-icon"><Icon name={icon} /></span>
   </div>;
 }
 

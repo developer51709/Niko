@@ -56,6 +56,11 @@ type Props = {
   staffTabs?: ShellTab[];
   activeStaffTab?: string;
   onStaffTabChange?: (id: string) => void;
+  /** Hidden for everyone until the owner grants developer access. */
+  developerAccess?: boolean;
+  developerTabs?: ShellTab[];
+  activeDeveloperTab?: string;
+  onDeveloperTabChange?: (id: string) => void;
   children: ReactNode;
 };
 
@@ -78,6 +83,10 @@ export function DashboardShell({
   staffTabs = [],
   activeStaffTab,
   onStaffTabChange,
+  developerAccess = false,
+  developerTabs = [],
+  activeDeveloperTab,
+  onDeveloperTabChange,
   children,
 }: Props) {
   const { t } = useStrings("dashboard");
@@ -92,6 +101,7 @@ export function DashboardShell({
   const staffPage: "workspace" | "email" | null = path.startsWith("/dashboard/staff/email")
     ? "email"
     : path === "/dashboard/staff" ? "workspace" : null;
+  const developerPage = path === "/dashboard/developer" || path.startsWith("/dashboard/developer/");
 
   useEffect(() => {
     if (!sidebarOpen) {
@@ -164,8 +174,8 @@ export function DashboardShell({
       {personalSections.map(([id, label, icon]) => (
         <button
           key={id}
-          className={view === "overview" && !staffPage && userTab === id ? "active" : ""}
-          aria-current={view === "overview" && !staffPage && userTab === id ? "page" : undefined}
+          className={view === "overview" && !staffPage && !developerPage && userTab === id ? "active" : ""}
+          aria-current={view === "overview" && !staffPage && !developerPage && userTab === id ? "page" : undefined}
           onClick={() => { onUserTabChange(id); setSidebarOpen(false); }}
         >
           <Icon name={icon} /><span>{t(label)}</span>
@@ -195,14 +205,36 @@ export function DashboardShell({
     </nav>
   );
 
+  const developerNav = (mobile = false) => (
+    <nav className={mobile ? "dash-nav dash-nav-mobile" : "dash-nav"} aria-label={t("shell.developerTabs")}>
+      {developerTabs.map((tab) => (
+        <button
+          key={tab.id}
+          id={mobile ? undefined : `developer-${tab.id}-tab`}
+          className={activeDeveloperTab === tab.id ? "active" : ""}
+          aria-current={activeDeveloperTab === tab.id ? "page" : undefined}
+          onClick={() => { onDeveloperTabChange?.(tab.id); setSidebarOpen(false); }}
+        >
+          <Icon name={tab.icon} /><span>{tab.label}</span>
+          {tab.badge ? <span className="nav-badge">{tab.badge}</span> : null}
+        </button>
+      ))}
+    </nav>
+  );
+
   const primaryNav = (mobile = false) => (
     <nav className={mobile ? "dash-nav dash-primary-nav dash-nav-mobile" : "dash-nav dash-primary-nav"} aria-label={t("shell.dashboard")}>
-      <button className={view === "overview" && !staffPage ? "active" : ""} aria-current={view === "overview" && !staffPage ? "page" : undefined} onClick={() => { onHome(); setSidebarOpen(false); }}>
+      <button className={view === "overview" && !staffPage && !developerPage ? "active" : ""} aria-current={view === "overview" && !staffPage && !developerPage ? "page" : undefined} onClick={() => { onHome(); setSidebarOpen(false); }}>
         <Icon name="grid" /><span>{t("shell.myOverview")}</span>
       </button>
       <button className={view === "servers" ? "active" : ""} aria-current={view === "servers" ? "page" : undefined} onClick={() => { onServers(); setSidebarOpen(false); }}>
         <Icon name="users" /><span>{t("shell.myServers")}</span>
       </button>
+      {developerAccess && <button
+        className={developerPage ? "active" : ""}
+        aria-current={developerPage ? "page" : undefined}
+        onClick={() => { navigate("/dashboard/developer"); setSidebarOpen(false); }}
+      ><Icon name="terminal" /><span>{t("shell.developerPortal")}</span></button>}
       {staffRole && <button
         className={staffPage === "workspace" ? "active" : ""}
         aria-current={staffPage === "workspace" ? "page" : undefined}
@@ -262,9 +294,9 @@ export function DashboardShell({
           <div className="dash-mobile-controls">{topActions()}</div>
           <div className="side-rail-heading"><span className="side-label">{t("shell.workspace")}</span><span className="rail-status"><span className="status-dot" /> {t("shell.live")}</span></div>
           {primaryNav()}
-          {/* The personal tabs are not this page's navigation, so a staff page
-              shows its own group instead of them. */}
-          {view === "overview" && !staffPage && (
+          {/* The personal tabs are not this page's navigation, so a staff or
+              developer page shows its own group instead of them. */}
+          {view === "overview" && !staffPage && !developerPage && (
             <>
               <div className="side-label side-label-settings">{t("shell.personal")}</div>
               <div className="side-guild">
@@ -287,6 +319,12 @@ export function DashboardShell({
               {sectionNav()}
             </>
           )}
+          {developerPage && developerTabs.length > 0 && (
+            <>
+              <div className="side-label side-label-settings">{t("shell.developerTabs")}</div>
+              {developerNav()}
+            </>
+          )}
           {staffPage === "workspace" && staffTabs.length > 0 && (
             <>
               <div className="side-label side-label-settings">{t("shell.staffTabs")}</div>
@@ -295,7 +333,7 @@ export function DashboardShell({
           )}
           <div className="sidebar-bottom">
             <span className="online-label"><span className="status-dot" /> {t("shell.botOnline")}</span>
-            <small>{t("shell.connectedServers", { count: formatNumber(stats?.guild_count), version: stats?.version || "1.0" })}</small>
+            <small>{t("shell.connectedServers", { count: formatNumber(stats?.guild_count), version: stats?.version || "2.28.0" })}</small>
             <a href={siteHref("/")} onClick={(e) => { e.preventDefault(); navigate("/"); }}>{t("shell.backToSite")} <Icon name="arrow" /></a>
           </div>
         </aside>
@@ -303,7 +341,8 @@ export function DashboardShell({
           <div className="dash-contextbar">{topActions()}</div>
           <div className="mobile-primary-bar">{primaryNav(true)}</div>
           {view === "guild" && <div className="mobile-section-bar">{sectionNav(true)}</div>}
-          {view === "overview" && !staffPage && <div className="mobile-section-bar">{personalNav(true)}</div>}
+          {view === "overview" && !staffPage && !developerPage && <div className="mobile-section-bar">{personalNav(true)}</div>}
+          {developerPage && developerTabs.length > 0 && <div className="mobile-section-bar">{developerNav(true)}</div>}
           {staffPage === "workspace" && staffTabs.length > 0 && <div className="mobile-section-bar">{staffNav(true)}</div>}
           <main className="dash-main">{children}</main>
         </div>

@@ -104,5 +104,18 @@
   "locales.completeWord": "· completos",
   "foot.note": "Las cifras vienen del proceso del bot en ejecución, así que cambian con él. ¿Falta un cog o ves algo inesperado?",
   "foot.support": "Avisa al equipo",
-  "locales.figures": "{translated} / {total}"
+  "locales.figures": "{translated} / {total}",
+  "incidents.aria": "Incidencias públicas y avisos de mantenimiento",
+  "incidents.kicker": "Incidencias públicas",
+  "incidents.title": "En qué se está trabajando",
+  "incidents.count": "{count} publicadas",
+  "incidents.noSummary": "El equipo está investigando este problema.",
+  "incidents.timeline": "Cronología · {count} actualizaciones",
+  "incidents.maintenanceActive": "{target} está en pausa mientras se investiga.",
+  "incidents.maintenanceEnded": "{target} vuelve a estar disponible.",
+  "maintenance.title": "Avisos de mantenimiento",
+  "maintenance.api": "API",
+  "maintenance.command": "Comando",
+  "maintenance.active": "En pausa",
+  "maintenance.noReason": "Sin motivo indicado"
 }

@@ -14,6 +14,9 @@ import asyncio
 import json
 import logging
 import logging.handlers
+import threading
+import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style, init as colorama_init
 from utils.ai.debugging import send_debug_report
@@ -83,6 +86,129 @@ class ConsoleFormatter(logging.Formatter):
         msg_part    = f"{level_color}{record.getMessage()}{Style.RESET_ALL}"
 
         return f"  {time_part}  {level_part}  {module_part}  {msg_part}"
+
+
+# -----------------------------------
+# In-memory console buffer (owner live-logs page)
+# -----------------------------------
+#: Libraries whose DEBUG output is stored in a ring of its own. They can emit
+#: far faster than a page reads, and sharing the main ring would push the bot's
+#: own lines out of the panel even while the noisy source is hidden.
+_NOISY_LOGGERS = ("pymongo", "urllib3", "wavelink")
+_NOISE_CAPACITY = 2000
+
+
+def _noisy_source(name: str) -> str | None:
+    """The private ring a logger belongs to, or ``None`` for the main ring."""
+    for library in _NOISY_LOGGERS:
+        if name == library or name.startswith(f"{library}."):
+            return library
+    return None
+
+
+class LogBufferHandler(logging.Handler):
+    """Keep the rendered console lines in memory for the owner's logs page.
+
+    The lines are stored exactly as the terminal sees them, ANSI colour codes
+    included, so the page can reproduce a coloured console instead of a plain
+    list. The handler is attached at ``NOTSET``: ``LOG_LEVEL`` filters the
+    terminal, not this buffer, and the page applies its own level filter to
+    what it shows.
+
+    ``pymongo`` and ``urllib3`` write to their own smaller rings (tagged with
+    ``source``) instead of the main one. They remain available to the page
+    when its switches are off, but their volume can never evict the bot's own
+    lines from the 5,000-line main buffer.
+
+    The buffers live for as long as this module does. A bot restart, or an
+    in-place update that reloads ``utils/logging.py``, starts fresh ones, and
+    that is the point the page reports as the first available line.
+    """
+
+    def __init__(self, capacity: int = 5000, noise_capacity: int = _NOISE_CAPACITY):
+        super().__init__(level=logging.NOTSET)
+        self.capacity = capacity
+        self.noise_capacity = noise_capacity
+        # Identifies this buffer to the page. Ids restart at 1 on every fresh
+        # buffer, so a page needs this to notice a reload even when the new
+        # buffer's head has already passed its old cursor.
+        self.token = uuid.uuid4().hex
+        self._lines: deque = deque(maxlen=capacity)
+        self._noise = {library: deque(maxlen=noise_capacity) for library in _NOISY_LOGGERS}
+        # Highest main-ring id evicted so far. The rings share one id sequence,
+        # so a gap between ``since`` and the main ring's first id is not proof
+        # of loss: the missing ids may simply belong to a noisy library.
+        self._main_dropped = 0
+        # One sequence across every ring: the page keeps a single cursor, and
+        # entries from different rings still sort into the order they arrived.
+        self._seq = 0
+        self._lock = threading.Lock()
+        self._formatter = ConsoleFormatter()
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            line = self._formatter.format(record)
+        except Exception:
+            self.handleError(record)
+            return
+        source = _noisy_source(record.name) or "main"
+        with self._lock:
+            self._seq += 1
+            entry = {
+                "id": self._seq,
+                "at": record.created,
+                "level": record.levelname.upper(),
+                # The logger that emitted the line, so the page can filter a
+                # noisy library without parsing the rendered text.
+                "logger": record.name,
+                "source": source,
+                "line": line,
+            }
+            if source == "main":
+                if len(self._lines) == self._lines.maxlen:
+                    self._main_dropped = self._lines[0]["id"]
+                self._lines.append(entry)
+            else:
+                self._noise[source].append(entry)
+
+    def snapshot(self, since: int = 0, limit: int = 2000) -> dict:
+        """Return buffered lines after ``since``, oldest first.
+
+        Entries from every ring are merged and sorted by their shared id, so a
+        single cursor sees the whole stream. ``reset`` tells a page whose
+        cursor belongs to an earlier buffer (the process restarted, or an
+        update reloaded this module) to clear what it already shows and start
+        again from the new buffer's first line.
+        """
+        with self._lock:
+            head = self._seq
+            pools = [self._lines, *self._noise.values()]
+            firsts = [pool[0]["id"] for pool in pools if pool]
+            main_dropped = self._main_dropped
+            entries = [
+                entry
+                for pool in pools
+                for entry in pool
+                if entry["id"] > since
+            ]
+            entries.sort(key=lambda entry: entry["id"])
+        first = min(firsts) if firsts else None
+        # Only the main ring drives the warning: a noisy library rolling its
+        # own private ring must not tell the owner that visible logs were lost.
+        truncated = main_dropped > since
+        returned = entries[:max(1, int(limit))]
+        next_id = returned[-1]["id"] if returned else max(0, head)
+        return {
+            "lines": returned,
+            "head": head,
+            "next": next_id,
+            "first": first,
+            "token": self.token,
+            "capacity": self.capacity,
+            "noise_capacity": self.noise_capacity,
+            "truncated": truncated,
+            "reset": since > head,
+        }
 
 
 # -----------------------------------
@@ -229,6 +355,11 @@ _console_handler = logging.StreamHandler()
 _console_handler.setLevel(_console_level)
 _console_handler.setFormatter(ConsoleFormatter())
 root.handlers = [_console_handler]
+
+# The owner's live-logs page reads this buffer. It sits at NOTSET so a debug
+# line the console's environment level hides is still available on the page.
+log_buffer = LogBufferHandler()
+root.addHandler(log_buffer)
 
 # AI debugging handler
 # uses the send_debug_report function to send logs to the AI debug channel

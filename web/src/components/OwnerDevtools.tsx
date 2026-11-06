@@ -1,8 +1,10 @@
 /**
  * Owner-only devtools.
  *
- * A small button in the bottom-left corner of every page, rendered only when
- * `/auth/status` says the session belongs to a configured owner. It holds the
+ * A small button in the bottom corner of every page, rendered only when
+ * `/auth/status` says the session belongs to a configured owner. Its own context
+ * menu moves it — and the panel — to the other edge of the screen, which is what
+ * gets it out of a dashboard sidebar on a phone. It holds the
  * browser information an owner reaches for while checking the site, plus tools
  * for the page they are on — including the switch that skips the support-server
  * gate on the team application pages.
@@ -20,13 +22,16 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { getAuth } from "../api";
-import { devtools, useDevtoolsFlag } from "../devtools";
-import { useLanguage, type LanguageCode } from "../i18n";
+import { devtools, useDevtoolsFlag, useDevtoolsValue, type DevtoolsSide } from "../devtools";
+import { TEST_FONTS, resetTestFont, setTestFont, testFontLabel, useTestFont } from "../fontTester";
+import { useLanguage, useStrings, type LanguageCode } from "../i18n";
 import { pageFromPath } from "../router";
 import type { AuthStatus } from "../types";
+import { registerContextMenuExtras } from "../utils/contextMenu";
 import { notifyError, notifySuccess } from "../utils/toast";
 import { Select } from "./dashboard/Select";
 import { Icon } from "./Icon";
+import { MOTION_TRANSITIONS, MotionLab, type MotionTransition } from "./MotionLab";
 
 const OUTLINE_CLASS = "owner-devtools-outline";
 const TOAST_ID = "owner-devtools";
@@ -36,10 +41,25 @@ const PANEL_ID = "owner-devtools-panel";
 const TABS = [
   { id: "page", label: "Page" },
   { id: "browser", label: "Browser" },
+  { id: "motion", label: "Motion" },
   { id: "tools", label: "Tools" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+/** The presence the status-icon preview paints, live included. */
+const PRESENCE_OPTIONS = [
+  { value: "online", label: "Online" },
+  { value: "idle", label: "Idle" },
+  { value: "dnd", label: "Do not disturb" },
+  { value: "offline", label: "Offline" },
+  { value: "online_mobile", label: "Online · mobile" },
+  { value: "idle_mobile", label: "Idle · mobile" },
+  { value: "dnd_mobile", label: "Do not disturb · mobile" },
+];
+
+/** The font tester's rows: every candidate; the site's own face is the reset. */
+const FONT_OPTIONS = TEST_FONTS.map((font) => ({ value: font.key, label: font.label }));
 
 const tabId = (id: TabId) => `owner-devtools-tab-${id}`;
 const tabPanelId = (id: TabId) => `owner-devtools-view-${id}`;
@@ -74,16 +94,30 @@ function Row({ label, value }: { label: string; value: string }) {
 export function OwnerDevtools() {
   const [session, setSession] = useState<AuthStatus | null>(null);
   const [open, setOpen] = useState(false);
+  const [labOpen, setLabOpen] = useState(false);
   const [tab, setTab] = useState<TabId>("page");
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const [outlined, setOutlined] = useState(false);
   const bypassSupportServer = useDevtoolsFlag(devtools.supportServerBypass);
+  const presencePreview = useDevtoolsValue(devtools.presencePreview);
+  // The lab's stage is chosen here and remembered for the tab session, so
+  // reopening the panel lands on the transition that was being judged.
+  const storedTransition = useDevtoolsValue(devtools.motionTransition);
+  const motionTransition: MotionTransition = MOTION_TRANSITIONS.find((entry) => entry.id === storedTransition)?.id ?? "iris";
+  // Which edge the button lives on. The dashboard sidebar sits bottom-left on a
+  // phone, so the panel opened over it had to be movable.
+  const side: DevtoolsSide = useDevtoolsValue(devtools.side);
+  const { t } = useStrings("shared");
+  // The typeface tester is public (it is installed for every visitor and driven
+  // from the console); this panel only mirrors it while an owner is here.
+  const fontFamily = useTestFont();
   // The site's own language choice, not the browser's: this is the control that
   // makes testing a translation possible without changing device settings.
   const { language, languages, browser, overridden, setLanguage, resetLanguage } = useLanguage();
 
   const toggleRef = useRef<HTMLButtonElement | null>(null);
-  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ page: null, browser: null, tools: null });
+  const labButtonRef = useRef<HTMLButtonElement | null>(null);
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ page: null, browser: null, motion: null, tools: null });
 
   useEffect(() => {
     let active = true;
@@ -103,11 +137,23 @@ export function OwnerDevtools() {
     if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // The lab is a layer above the panel, so Esc peels that off first.
+      if (labOpen) {
+        setLabOpen(false);
+        labButtonRef.current?.focus();
+        return;
+      }
       setOpen(false);
       toggleRef.current?.focus();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
+  }, [labOpen, open]);
+
+  // Closing the panel takes the lab with it: the overlay belongs to the panel
+  // that opened it, so reopening starts on the tab strip instead.
+  useEffect(() => {
+    if (!open) setLabOpen(false);
   }, [open]);
 
   // Opening the panel moves focus into it, so a keyboard user lands on the tab
@@ -119,6 +165,24 @@ export function OwnerDevtools() {
   // The outline overlay is a page-wide debug style, so it never outlives the
   // panel that switches it on.
   useEffect(() => () => document.documentElement.classList.remove(OUTLINE_CLASS), []);
+
+  // The button answers its own context menu with the one choice it has: the edge
+  // the whole cluster sits on. Registered here rather than in the menu because
+  // the current side lives in this component.
+  useEffect(
+    () =>
+      registerContextMenuExtras((target) => {
+        if (!target.closest(".owner-devtools-toggle")) return null;
+        const next: DevtoolsSide = side === "right" ? "left" : "right";
+        return [{
+          key: "devtools-side",
+          label: t(next === "right" ? "contextMenu.moveDevtoolsRight" : "contextMenu.moveDevtoolsLeft"),
+          icon: next === "right" ? "arrow" : "back",
+          action: () => devtools.setSide(next),
+        }];
+      }),
+    [side, t],
+  );
 
   const refreshSession = () => {
     getAuth()
@@ -171,7 +235,7 @@ export function OwnerDevtools() {
     user_agent: navigator.userAgent,
   };
 
-  return <div className="owner-devtools">
+  return <div className="owner-devtools" data-side={side}>
     <button
       ref={toggleRef}
       type="button"
@@ -186,13 +250,14 @@ export function OwnerDevtools() {
       <span>Dev</span>
     </button>
 
-    {open && <section
-      className="owner-devtools-panel"
-      id={PANEL_ID}
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby="owner-devtools-title"
-    >
+    {open && <>
+      <section
+        className="owner-devtools-panel"
+        id={PANEL_ID}
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="owner-devtools-title"
+      >
       <header className="owner-devtools-head">
         <div>
           <span className="owner-devtools-kicker">OWNER DEVTOOLS</span>
@@ -301,6 +366,42 @@ export function OwnerDevtools() {
           </div>
         </div>}
 
+        {tab === "motion" && <div
+          role="tabpanel"
+          id={tabPanelId("motion")}
+          aria-labelledby={tabId("motion")}
+          tabIndex={0}
+          className="owner-devtools-view"
+        >
+          <h3>Motion lab</h3>
+          <p className="owner-devtools-note">
+            A full-screen stage for judging page transitions, component interactions and scroll effects
+            before any of them reach a real page. Nothing here changes the site.
+          </p>
+          <div className="owner-devtools-motion-list" role="group" aria-label="Page transition">
+            {MOTION_TRANSITIONS.map((entry) => {
+              const selected = entry.id === motionTransition;
+              return <button
+                key={entry.id}
+                type="button"
+                aria-pressed={selected}
+                className={`owner-devtools-motion${selected ? " is-active" : ""}`}
+                onClick={() => devtools.setMotionTransition(entry.id)}
+              >
+                <strong>{entry.label} transition</strong>
+                <small>{entry.description}</small>
+              </button>;
+            })}
+          </div>
+          <div className="owner-devtools-actions">
+            <button ref={labButtonRef} type="button" onClick={() => setLabOpen(true)}>Open motion lab</button>
+          </div>
+          <p className="owner-devtools-note">
+            Inside: iris, morph and blur page transitions, press and pointer-tilt feedback, a ripple, a
+            toggle, a staggered list, a skeleton, plus scroll reveal, parallax and a progress meter.
+          </p>
+        </div>}
+
         {tab === "tools" && <div
           role="tabpanel"
           id={tabPanelId("tools")}
@@ -326,8 +427,60 @@ export function OwnerDevtools() {
             </button>
             <button type="button" onClick={() => window.location.reload()}>Reload page</button>
           </div>
+
+          <h3>Typeface</h3>
+          <div className="owner-devtools-tool owner-devtools-locale">
+            <div>
+              <strong id="owner-devtools-font">Site font</strong>
+              <small>
+                Re-typesets this tab — public pages and the dashboard together — so a candidate face can be
+                read at real sizes, line lengths and weights. The site itself is unchanged, and anyone can
+                do the same from the console with <code>nikoFont</code>.
+              </small>
+            </div>
+            <Select
+              ariaLabel="Site font"
+              listClassName="owner-devtools-select-list"
+              placeholder="Site default"
+              value={fontFamily}
+              onChange={setTestFont}
+              unknownOption={(value) => ({ value, label: testFontLabel(value) })}
+              options={FONT_OPTIONS}
+            />
+          </div>
+          {fontFamily && <button type="button" className="owner-devtools-reset" onClick={resetTestFont}>
+            Use the site font
+          </button>}
+
+          <h3>Presence preview</h3>
+          <div className="owner-devtools-tool owner-devtools-locale">
+            <div>
+              <strong id="owner-devtools-presence">Status icons</strong>
+              <small>
+                Fakes one presence on every avatar in this tab, so the round and mobile status icons can be
+                checked across the site without waiting for a client to change.
+              </small>
+            </div>
+            <Select
+              ariaLabel="Status icon preview"
+              listClassName="owner-devtools-select-list"
+              placeholder="Live status"
+              value={presencePreview}
+              onChange={(value) => devtools.setPresencePreview(value)}
+              options={PRESENCE_OPTIONS}
+            />
+          </div>
+          {presencePreview && <button type="button" className="owner-devtools-reset" onClick={() => devtools.setPresencePreview("")}>
+            Use live status
+          </button>}
         </div>}
       </div>
-    </section>}
+      </section>
+      {labOpen && <MotionLab
+        transition={motionTransition}
+        onTransition={(value) => devtools.setMotionTransition(value)}
+        onClose={() => { setLabOpen(false); labButtonRef.current?.focus(); }}
+      />}
+    </>}
   </div>;
 }

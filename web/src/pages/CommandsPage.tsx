@@ -4,7 +4,7 @@ import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { PublicPageIntro } from "../components/PublicPageIntro";
-import { useLanguage, useStrings } from "../i18n";
+import { type Translate, useLanguage, useStrings } from "../i18n";
 import { type Command, type CommandParameter, type CommandType } from "../types";
 
 const BROWSER_LOCALE = typeof navigator !== "undefined" ? (navigator.language || "en").slice(0, 2) : "en";
@@ -34,8 +34,6 @@ function pickLocalized(value: string | Record<string, string> | undefined, langu
     ?? localizedValue(value, "en")
     ?? Object.values(value).find((text) => typeof text === "string" && text.trim());
 }
-
-type Translate = (key: string) => string;
 
 /**
  * Command wording for the active site language. Both the card list and the

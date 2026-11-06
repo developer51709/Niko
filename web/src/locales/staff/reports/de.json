@@ -1,3 +1,15 @@
 {
-  "reports.unavailable": "Fehlerberichte nicht verfügbar."
+  "reports.unavailable": "Fehlerberichte nicht verfügbar.",
+  "reports.statusSaved": "Berichtsstatus aktualisiert.",
+  "reports.statusFailed": "Der Berichtsstatus konnte nicht gespeichert werden.",
+  "reports.deleteTitle": "Diesen Fehlerbericht löschen?",
+  "reports.deleteBody": "Bericht {code} und sein Traceback werden endgültig entfernt. Das kann nicht rückgängig gemacht werden.",
+  "reports.delete": "Bericht löschen",
+  "reports.cancel": "Bericht behalten",
+  "reports.deleted": "Fehlerbericht gelöscht.",
+  "reports.deleteFailed": "Der Bericht konnte nicht gelöscht werden.",
+  "reports.maintenanceUnavailable": "Wartungsziele nicht verfügbar.",
+  "reports.incidentSaved": "Einstellungen der Störungsmeldung gespeichert.",
+  "reports.maintenanceEnabled": "Wartung aktiviert und die Störungsmeldung veröffentlicht.",
+  "reports.incidentFailed": "Die Einstellungen der Störungsmeldung konnten nicht gespeichert werden."
 }

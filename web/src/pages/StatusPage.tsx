@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getStatus } from "../api";
+import { AnimatedDetails } from "../components/AnimatedDetails";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
 import { PublicHeader } from "../components/PublicHeader";
 import { useStrings } from "../i18n";
-import type { CogState, StatusLavalinkNode, StatusCoverage, StatusPayload, StatusState } from "../types";
+import type { CogState, StatusIncident, StatusLavalinkNode, StatusMaintenanceNotice, StatusCoverage, StatusPayload, StatusState } from "../types";
 import { formatNumber } from "../utils/format";
 
 const POLL_MS = 5_000;
@@ -70,6 +71,71 @@ function formatUptime(seconds?: number | null) {
 function formatClock(seconds?: number) {
   if (!seconds) return "—";
   return new Date(seconds * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function formatMoment(value?: string | null) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function incidentTone(state: string) {
+  return state === "resolved" ? "ok" : state === "monitoring" ? "wait" : "warn";
+}
+
+function severityTone(severity: string) {
+  return severity === "critical" ? "bad" : severity === "major" ? "warn" : "wait";
+}
+
+/** One owner-published incident, with only the public-safe timeline. */
+function IncidentCard({ incident }: { incident: StatusIncident }) {
+  const { t } = useStrings("status");
+  return (
+    <article className={`status-incident status-incident-${incidentTone(incident.state)}`}>
+      <div className="status-incident-head">
+        <span className={`status-pill ${severityTone(incident.severity)}`}>{incident.severity}</span>
+        <span className={`status-pill ${incidentTone(incident.state)}`}>{incident.state_label}</span>
+        <small>{formatMoment(incident.updated_at)}</small>
+      </div>
+      <h3>{incident.title}</h3>
+      <p>{incident.summary || t("incidents.noSummary")}</p>
+      {incident.maintenance && (
+        <p className="status-incident-target">
+          {t(incident.maintenance_active ? "incidents.maintenanceActive" : "incidents.maintenanceEnded", {
+            target: incident.maintenance.label || incident.maintenance.key,
+          })}
+        </p>
+      )}
+      <AnimatedDetails className="status-incident-timeline">
+        <summary>
+          <span>{t("incidents.timeline", { count: incident.timeline.length })}</span>
+          <Icon name="chevron" className="status-incident-timeline-caret" />
+        </summary>
+        <ol>
+          {incident.timeline.map((event, index) => (
+            <li key={`${event.at}-${index}`}><span>{event.label}</span><time>{formatMoment(event.at)}</time></li>
+          ))}
+        </ol>
+      </AnimatedDetails>
+    </article>
+  );
+}
+
+/** A paused API or command, linked to its report state when one exists. */
+function MaintenanceNoticeRow({ notice }: { notice: StatusMaintenanceNotice }) {
+  const { t } = useStrings("status");
+  return (
+    <li className="status-maintenance-row">
+      <span className="status-maintenance-kind">{t(notice.kind === "api" ? "maintenance.api" : "maintenance.command")}</span>
+      <span className="status-maintenance-copy">
+        <strong>{notice.label}</strong>
+        <small>{notice.reason || t("maintenance.noReason")}{notice.since ? ` · ${new Date(notice.since * 1000).toLocaleString()}` : ""}</small>
+      </span>
+      <span className={`status-pill ${notice.incident_state === "resolved" ? "ok" : "warn"}`}>
+        {notice.incident_label || t("maintenance.active")}
+      </span>
+    </li>
+  );
 }
 
 /** A thin fill bar; the parent row always prints the same figure as text. */
@@ -190,9 +256,12 @@ export function StatusPage() {
   const host = data?.host;
   const locales = data?.locales;
   const lavalink = data?.lavalink ?? null;
+  const incidents = data?.incidents ?? [];
+  const apiMaintenance = data?.api_maintenance ?? [];
+  const commandMaintenance = data?.command_maintenance ?? [];
 
   const cogCounts = data?.cog_counts;
-  const issueCount = (cogCounts?.disabled ?? 0) + (cogCounts?.maintenance ?? 0) + (cogCounts?.failed ?? 0);
+  const issueCount = (cogCounts?.disabled ?? 0) + (cogCounts?.maintenance ?? 0) + (cogCounts?.failed ?? 0) + apiMaintenance.length + commandMaintenance.length;
 
   const averageLatency = useMemo(() => {
     const values = shards.map((shard) => shard.latency_ms).filter((value): value is number => typeof value === "number");
@@ -265,9 +334,34 @@ export function StatusPage() {
             <p><strong>{t("offline.title")}</strong> {data.reason || t("offline.body")}</p>
           </div>}
 
+          {(incidents.length > 0 || apiMaintenance.length > 0 || commandMaintenance.length > 0) && (
+            <section className="status-notices" aria-label={t("incidents.aria")}>
+              <div className="status-notices-heading">
+                <div><span className="panel-kicker">{t("incidents.kicker")}</span><h2>{t("incidents.title")}</h2></div>
+                <span className={`status-pill ${incidents.some((incident) => incident.state !== "resolved") || apiMaintenance.length > 0 || commandMaintenance.length > 0 ? "warn" : "ok"}`}>
+                  {t("incidents.count", { count: incidents.length })}
+                </span>
+              </div>
+              {incidents.length > 0 && (
+                <div className="status-incident-list">
+                  {incidents.map((incident) => <IncidentCard key={incident.code} incident={incident} />)}
+                </div>
+              )}
+              {(apiMaintenance.length > 0 || commandMaintenance.length > 0) && (
+                <div className="status-maintenance-block">
+                  <h3>{t("maintenance.title")}</h3>
+                  <ul className="status-maintenance-list">
+                    {apiMaintenance.map((notice) => <MaintenanceNoticeRow key={`api-${notice.name}`} notice={notice} />)}
+                    {commandMaintenance.map((notice) => <MaintenanceNoticeRow key={`command-${notice.name}`} notice={notice} />)}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
           <div className="status-sections">
             {/* Collapsed by default: 24 rows is the longest section on the page. */}
-            <details className="status-section">
+            <AnimatedDetails className="status-section">
               <summary className="status-section-summary">
                 <span className="status-section-heading">
                   <span className="status-section-icon"><Icon name="grid" /></span>
@@ -304,9 +398,9 @@ export function StatusPage() {
                     ))}
                   </ul>}
               </div>
-            </details>
+            </AnimatedDetails>
 
-            <details className="status-section">
+            <AnimatedDetails className="status-section">
               <summary className="status-section-summary">
                 <span className="status-section-heading">
                   <span className="status-section-icon"><Icon name="guild_server" /></span>
@@ -351,9 +445,9 @@ export function StatusPage() {
                     })}
                   </ul>}
               </div>
-            </details>
+            </AnimatedDetails>
 
-            <details className="status-section">
+            <AnimatedDetails className="status-section">
               <summary className="status-section-summary">
                 <span className="status-section-heading">
                   <span className="status-section-icon"><Icon name="guild_tickets" /></span>
@@ -385,9 +479,9 @@ export function StatusPage() {
                   <p className="status-locale-foot">{t("lavalink.privacy")}</p>
                 )}
               </div>
-            </details>
+            </AnimatedDetails>
 
-            <details className="status-section">
+            <AnimatedDetails className="status-section">
               <summary className="status-section-summary">
                 <span className="status-section-heading">
                   <span className="status-section-icon"><Icon name="guild_overview" /></span>
@@ -445,9 +539,9 @@ export function StatusPage() {
                   </ul>
                 </>}
               </div>
-            </details>
+            </AnimatedDetails>
 
-            <details className="status-section">
+            <AnimatedDetails className="status-section">
               <summary className="status-section-summary">
                 <span className="status-section-heading">
                   <span className="status-section-icon"><Icon name="doc" /></span>
@@ -509,7 +603,7 @@ export function StatusPage() {
                   </p>
                 </>}
               </div>
-            </details>
+            </AnimatedDetails>
           </div>
 
           <p className="status-footnote">

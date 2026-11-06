@@ -6,10 +6,9 @@ import type { ServerStats } from "../../types";
 import { formatNumber } from "../../utils/format";
 import { useFreshSignal } from "../../hooks/useLiveSync";
 import { useCountUp } from "../../hooks/useCountUp";
-import { useStrings } from "../../i18n";
+import { type Translate, useStrings } from "../../i18n";
 
 type Props = { stats: ServerStats };
-type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 function dayLabel(date: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(`${date}T12:00:00`));

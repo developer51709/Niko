@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import os
 import re
+import secrets
 import asyncio
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,28 @@ _MOD_COLLECTION = "moderation_config"
 def _pool():
     import database as database_module
     return getattr(database_module, "_shared_pool", None)
+
+
+def _warn_row(row) -> dict:
+    return {
+        "id": int(row["id"]),
+        "guild_id": str(row["guild_id"]),
+        "user_id": str(row["user_id"]),
+        "moderator_id": str(row["moderator_id"]),
+        "reason": str(row["reason"] or ""),
+        "created_at": str(row["created_at"] or ""),
+    }
+
+
+def _publish_warn_event(event_type: str, guild_id: int, data: dict) -> None:
+    """Fan out a warning event without ever failing the database operation."""
+    try:
+        from webapp.developer_webhooks import dispatch_guild_event
+
+        dispatch_guild_event(event_type, str(guild_id), data)
+    except Exception as error:
+        from utils import logging
+        logging.warning("Moderation", f"Could not queue {event_type} webhook: {error}")
 
 
 async def _load_all_moderation_configs() -> dict:
@@ -439,29 +462,96 @@ class ModerationUtils(commands.Cog):
     # ---------- WARN SYSTEM (DATABASE) ----------
 
     async def add_warn(self, guild_id: int, user_id: int, moderator_id: int, reason: str):
-        """Insert a warning into the database."""
+        """Insert a warning and return its API representation.
+
+        The explicit id matters on both backends: SQLite normally allocates it,
+        while the MongoDB adapter needs the primary key before it can store a
+        document. It also lets the created event carry a stable id that a bot
+        can use to reconcile the warning later.
+        """
         pool = _pool()
         if pool is None:
-            return
+            return None
+        warn_id = secrets.randbits(48) or 1
+        created_at = datetime.now(timezone.utc).isoformat()
+        record = {
+            "id": warn_id,
+            "guild_id": int(guild_id),
+            "user_id": int(user_id),
+            "moderator_id": int(moderator_id),
+            "reason": str(reason or ""),
+            "created_at": created_at,
+        }
         try:
-            if pool.db_type == "mongodb":
-                await pool.collection("warns").insert_one({
-                    "guild_id": guild_id,
-                    "user_id": user_id,
-                    "moderator_id": moderator_id,
-                    "reason": reason,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                })
-            else:
-                await pool.execute(
-                    "INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) "
-                    "VALUES ($1, $2, $3, $4, $5)",
-                    guild_id, user_id, moderator_id, reason,
-                    datetime.now(timezone.utc).isoformat(),
-                )
+            await pool.execute(
+                "INSERT INTO warns (id, guild_id, user_id, moderator_id, reason, created_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
+                warn_id, int(guild_id), int(user_id), int(moderator_id),
+                str(reason or ""), created_at,
+            )
         except Exception as e:
             from utils import logging
             logging.error("Moderation", f"Failed to add warn for {user_id} in {guild_id}: {e}")
+            return None
+        _publish_warn_event("warn.created", guild_id, {"warn": record})
+        return record
+
+    async def list_warnings(
+        self,
+        guild_id: int,
+        *,
+        user_id: int | None = None,
+        offset: int = 0,
+        limit: int = 100,
+    ):
+        """Read warning cases for a guild, optionally filtered to one member."""
+        pool = _pool()
+        if pool is None:
+            return None, 0
+        offset = max(0, int(offset))
+        limit = max(1, min(int(limit), 500))
+        where = "guild_id = $1"
+        args = [int(guild_id)]
+        if user_id is not None:
+            where += " AND user_id = $2"
+            args.append(int(user_id))
+        try:
+            total = int(await pool.fetchval(f"SELECT COUNT(*) FROM warns WHERE {where}", *args) or 0)
+            rows = await pool.fetch(
+                "SELECT id, guild_id, user_id, moderator_id, reason, created_at "
+                f"FROM warns WHERE {where} ORDER BY id ASC LIMIT ? OFFSET ?",
+                *args, limit, offset,
+            )
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to list warnings for {guild_id}: {e}")
+            return None, 0
+        return [_warn_row(row) for row in rows], total
+
+    async def delete_warning(self, guild_id: int, warn_id: int):
+        """Delete one warning case, scoped to its guild, and publish the event."""
+        pool = _pool()
+        if pool is None:
+            return None
+        try:
+            row = await pool.fetchrow(
+                "SELECT id, guild_id, user_id, moderator_id, reason, created_at "
+                "FROM warns WHERE id = $1 AND guild_id = $2",
+                int(warn_id), int(guild_id),
+            )
+            if row is None:
+                return None
+            await pool.execute(
+                "DELETE FROM warns WHERE id = $1 AND guild_id = $2",
+                int(warn_id), int(guild_id),
+            )
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to delete warn {warn_id} in {guild_id}: {e}")
+            return None
+        record = _warn_row(row)
+        _publish_warn_event("warn.deleted", guild_id, {"warn": record})
+        return record
 
     async def get_warnings(self, guild_id: int, user_id: int) -> list:
         """Fetch all warnings for a user in a guild from the database."""
@@ -497,23 +587,32 @@ class ModerationUtils(commands.Cog):
             return []
 
     async def clear_warnings(self, guild_id: int, user_id: int):
-        """Delete all warnings for a user in a guild from the database."""
+        """Delete all warnings for a user in a guild and publish one event."""
         pool = _pool()
         if pool is None:
-            return
+            return 0
         try:
-            if pool.db_type == "mongodb":
-                await pool.collection("warns").delete_many(
-                    {"guild_id": guild_id, "user_id": user_id}
-                )
-            else:
-                await pool.execute(
-                    "DELETE FROM warns WHERE guild_id = $1 AND user_id = $2",
-                    guild_id, user_id,
-                )
+            rows = await pool.fetch(
+                "SELECT id, guild_id, user_id, moderator_id, reason, created_at "
+                "FROM warns WHERE guild_id = $1 AND user_id = $2 ORDER BY id ASC",
+                int(guild_id), int(user_id),
+            )
+            await pool.execute(
+                "DELETE FROM warns WHERE guild_id = $1 AND user_id = $2",
+                int(guild_id), int(user_id),
+            )
         except Exception as e:
             from utils import logging
             logging.error("Moderation", f"Failed to clear warnings for {user_id} in {guild_id}: {e}")
+            return 0
+        removed = [_warn_row(row) for row in rows]
+        if removed:
+            _publish_warn_event("warns.cleared", guild_id, {
+                "user_id": str(user_id),
+                "count": len(removed),
+                "warn_ids": [item["id"] for item in removed],
+            })
+        return len(removed)
 
     # ---------- MUTE SYSTEM (DATABASE) ----------
 

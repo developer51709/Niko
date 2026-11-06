@@ -78,6 +78,132 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs.png"
     },
+    "/developers": {
+      "title": "Developer documentation — Niko API v1",
+      "description": "The Niko API v1 reference: access requests, scoped API keys, endpoints, errors, and developer policies.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers.png"
+    },
+    "/developers/quickstart": {
+      "title": "Quickstart — Niko API v1",
+      "description": "Request developer access, accept the guidelines, create a scoped key, and make your first Niko API request.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/quickstart.png"
+    },
+    "/developers/authentication": {
+      "title": "Authentication — Niko API v1",
+      "description": "Send scoped bearer keys, understand the key lifecycle, and keep credentials out of client code.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/authentication.png"
+    },
+    "/developers/versioning": {
+      "title": "Versioning — Niko API v1",
+      "description": "Use the versioned Niko API base URL, API subdomain paths, and stable Discord snowflake IDs.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/versioning.png"
+    },
+    "/developers/applications": {
+      "title": "Applications & verification — Niko API v1",
+      "description": "Register a bot, verify it with a Discord Developer Portal screenshot, and bind reviewed keys to it.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/applications.png"
+    },
+    "/developers/scopes": {
+      "title": "Permissions — Niko API v1",
+      "description": "The scoped permissions available to Niko API integrations and how endpoint enforcement works.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/scopes.png"
+    },
+    "/developers/endpoints": {
+      "title": "API reference — Niko API v1",
+      "description": "Every Niko API v1 endpoint, its required scope, pagination, and privacy behavior.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/endpoints.png"
+    },
+    "/developers/endpoints/economy": {
+      "title": "Economy API — Niko API v1",
+      "description": "Read the global economy leaderboard or one user's economy profile with economy:read.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/endpoints/economy.png"
+    },
+    "/developers/endpoints/leveling": {
+      "title": "Leveling API — Niko API v1",
+      "description": "Read server and member leveling data, or write migrated XP and levels with levels:write.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/endpoints/leveling.png"
+    },
+    "/developers/endpoints/users": {
+      "title": "Users API — Niko API v1",
+      "description": "Resolve public Discord profile details for a known user ID with users:read.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/endpoints/users.png"
+    },
+    "/developers/endpoints/warnings": {
+      "title": "Warnings API — Niko API v1",
+      "description": "Read and synchronize guild warning cases for shared guilds with warns:read and warns:write.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/endpoints/warnings.png"
+    },
+    "/developers/endpoints/blacklist": {
+      "title": "Blacklist API — Niko API v1",
+      "description": "Read Niko's sensitive user and server blacklist records, and write trusted entries with blacklist:write.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/endpoints/blacklist.png"
+    },
+    "/developers/webhooks": {
+      "title": "Webhooks — Niko API v1",
+      "description": "Receive signed, guild-filtered warning events with retries and HMAC signature verification.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/webhooks.png"
+    },
+    "/developers/rate-limits": {
+      "title": "Rate limits & appeals — Niko API v1",
+      "description": "Niko's IP request limits, automated abuse detection, account suspension, and the Discord appeal process.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/rate-limits.png"
+    },
+    "/developers/maintenance": {
+      "title": "Maintenance — Niko API v1",
+      "description": "How Niko API endpoints answer during owner-scheduled maintenance, and how to retry safely.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/maintenance.png"
+    },
+    "/developers/errors": {
+      "title": "Errors — Niko API v1",
+      "description": "Niko API error codes, report references, status codes, retry guidance, and safe debugging details.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/errors.png"
+    },
+    "/developers/policies": {
+      "title": "Developer policies — Niko API v1",
+      "description": "The privacy, security, write-access, and data-handling rules for Niko API developers.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/policies.png"
+    },
+    "/developers/support": {
+      "title": "Developer support — Niko API v1",
+      "description": "Request API access or report a security incident through a Niko support ticket.",
+      "section": "Developer documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/developers/support.png"
+    },
     "/changelog": {
       "title": "Changelog — Niko",
       "description": "A clear record of every improvement, fix, and new feature added to Niko.",
@@ -455,6 +581,13 @@
       "section": "Documentation",
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/welcome.png"
+    },
+    "/changelog/developer-api-and-portal": {
+      "title": "Build with Niko: The Developer API — Niko changelog",
+      "description": "Niko has a documented developer platform. `/api/v1` serves economy standings and profiles, server leveling data, Discord user profiles, warning cases, and the user and server blacklist behind per-key scopes, while signed webhooks deliver warning events instead of forcing a poll. The API has its own documentation site at `/developers` and a portal at `/dashboard/developer` where approved developers register applications, create one-time keys, read their request log, and manage webhooks.",
+      "section": "Changelog · v2.28.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/developer-api-and-portal.png"
     },
     "/changelog/website-localization-status-and-maintenance": {
       "title": "The Site Learns Languages — Niko changelog",

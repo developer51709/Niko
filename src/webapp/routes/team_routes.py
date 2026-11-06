@@ -1,6 +1,6 @@
 """Flask routes for team."""
 
-from .. import server as _server
+from .. import developer_portal, server as _server
 from ..staff_card import avatar_data_url, render_staff_card, validate_accent
 
 globals().update({
@@ -10,11 +10,13 @@ globals().update({
 })
 
 @app.route("/api/team")
+@developer_portal.allow_site_or_key("users:read")
 def api_team():
     return jsonify(_load_staff_rows())
 
 
 @app.route("/api/team/<profile_key>")
+@developer_portal.allow_site_or_key("users:read")
 def api_team_member(profile_key):
     # Accepts both `/team/<username>` and the permanent `/team/<user id>` link.
     member = _find_staff_member(profile_key)

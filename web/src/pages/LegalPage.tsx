@@ -4,9 +4,11 @@ import { PublicHeader } from "../components/PublicHeader";
 import { useStrings } from "../i18n";
 import { navigate } from "../router";
 
-//: Rendered by the Discord markdown renderer, so every reader sees the date in
-//: their own locale and timezone exactly as they would inside Discord.
-const EFFECTIVE_DATE = "<t:1793491200:F>";
+//: The revision date shown at the top of every document: when the copy was
+//: last changed, not when the document was first written. Rendered by the
+//: Discord markdown renderer, so every reader sees the date in their own locale
+//: and timezone exactly as they would inside Discord.
+const LAST_UPDATED = "<t:1793491200:F>";
 //: The owner's Discord account, credited on every legal page.
 const OWNER_USER_ID = "1052690741874401360";
 
@@ -77,7 +79,7 @@ export function LegalPage({ type }: { type: "privacy" | "terms" | "community" })
   return (
     <>
       <PublicHeader page={type} />
-      <main className="shell page-main legal-page" onClick={followInternalLink}><div className="page-heading"><div className="eyebrow">{t("legal.eyebrow")}</div><h1>{t("doc.title")}</h1><p>{t("doc.intro")}</p><div className="legal-meta"><span>{t("legal.effective")} <DiscordMarkdown text={EFFECTIVE_DATE} inline interactiveUsers={false} /></span><span>{t("legal.updatedBy")} <DiscordMarkdown text={`<@${OWNER_USER_ID}>`} inline /></span></div></div><div className="legal-copy">{sections.map((section, index) => <section key={index}><h2>{section.heading}</h2><LegalBody body={section.body} /></section>)}</div></main>
+      <main className="shell page-main legal-page" onClick={followInternalLink}><div className="page-heading"><div className="eyebrow">{t("legal.eyebrow")}</div><h1>{t("doc.title")}</h1><p>{t("doc.intro")}</p><div className="legal-meta"><span>{t("legal.effective")} <DiscordMarkdown text={LAST_UPDATED} inline interactiveUsers={false} /></span><span>{t("legal.updatedBy")} <DiscordMarkdown text={`<@${OWNER_USER_ID}>`} inline /></span></div></div><div className="legal-copy">{sections.map((section, index) => <section key={index}><h2>{section.heading}</h2><LegalBody body={section.body} /></section>)}</div></main>
       <Footer />
     </>
   );

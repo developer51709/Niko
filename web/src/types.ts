@@ -19,6 +19,41 @@ export type StatusCog = {
   commands: number;
 };
 
+export type StatusMaintenanceNotice = {
+  kind: "cog" | "command" | "api";
+  name: string;
+  label: string;
+  reason: string | null;
+  since: number | null;
+  report_code?: string | null;
+  /** The linked report's public state, when this pause came from a report. */
+  incident_state?: string | null;
+  incident_label?: string | null;
+};
+
+/** One owner-published error report as the public status page may show it. */
+export type StatusIncidentEvent = {
+  at: string;
+  state: string;
+  label: string;
+};
+
+export type StatusIncident = {
+  code: string;
+  title: string;
+  summary: string;
+  source: string;
+  severity: "minor" | "major" | "critical" | string;
+  status: string;
+  state: string;
+  state_label: string;
+  started_at: string;
+  updated_at: string;
+  maintenance: { kind: string; key: string; label: string | null } | null;
+  maintenance_active: boolean;
+  timeline: StatusIncidentEvent[];
+};
+
 export type StatusShard = {
   id: number;
   /** Null when the shard has not answered yet, which is not the same as 0 ms. */
@@ -65,6 +100,8 @@ export type OwnerBotSync = {
 /** What the owner's locale page reads from `/api/owner/locales`. */
 export type OwnerLocales = {
   configured: boolean;
+  /** Whether the background beta poll may run without an explicit sync. */
+  auto_sync?: boolean;
   origin: string | null;
   source: StatusLocaleSource;
   generated_at: number | null;
@@ -94,6 +131,8 @@ export type OwnerUpdateArea = {
   bytes: number;
   files: OwnerUpdateFile[];
   truncated: number;
+  /** False when beta's build does not publish this area at all. */
+  available?: boolean;
 };
 
 /** What one area did when an update was applied. */
@@ -108,6 +147,8 @@ export type OwnerUpdateRunArea = {
   reloaded?: string[];
   loaded?: string[];
   unloaded?: string[];
+  /** Event handlers whose name was rebound to a re-imported module. */
+  rebound?: string[];
   failed?: string[];
   dashboard?: { swapped?: boolean; routes?: number };
   purged?: string[];
@@ -250,6 +291,9 @@ export type StatusPayload = {
   /** Null when the music system is not loaded, or when the bot is offline. */
   lavalink?: StatusLavalink | null;
   cogs: StatusCog[];
+  api_maintenance: StatusMaintenanceNotice[];
+  command_maintenance: StatusMaintenanceNotice[];
+  incidents: StatusIncident[];
   cog_counts: Record<CogState, number>;
   host: StatusHost;
   locales: {
@@ -412,6 +456,65 @@ export type Guild = {
   blacklisted?: boolean;
   blacklist_reason?: string | null;
   invite_url?: string | null;
+};
+
+/** The structured exception stored inside an error report. */
+export type ErrorReportException = {
+  type: string;
+  name: string;
+  message: string;
+  traceback: string;
+};
+
+export type ErrorReportIncidentEvent = {
+  type: string;
+  at: string;
+  status?: string;
+  from?: string;
+  enabled?: boolean;
+  severity?: string;
+  kind?: string | null;
+  key?: string | null;
+  by?: string | null;
+  by_name?: string | null;
+};
+
+/**
+ * One report as JSON. Version 0 is a report converted from the old plain-text
+ * format, which keeps its original text in `raw`.
+ */
+export type StoredErrorReport = {
+  version: number;
+  code: string;
+  created_at: string;
+  source: string;
+  /** `user_error` stays support context; `system` can become an incident. */
+  classification?: "user_error" | "system" | string;
+  summary: string;
+  exception: ErrorReportException;
+  context: Record<string, unknown>;
+  environment: Record<string, unknown>;
+  raw?: string | null;
+};
+
+/** One stored bot error report, as the diagnostics panel lists it. */
+export type StaffErrorReport = {
+  code: string;
+  report: StoredErrorReport;
+  created_at: string;
+  summary: string;
+  source: string;
+  status: string;
+  status_by?: string | null;
+  status_by_name?: string | null;
+  status_at?: string | null;
+  /** Set only after an owner publishes the report to the status page. */
+  public_notice: boolean;
+  severity: "minor" | "major" | "critical" | string;
+  incident_events: ErrorReportIncidentEvent[];
+  maintenance_kind: "api" | "command" | null;
+  maintenance_key: string | null;
+  public_state?: string;
 };
 
 export type StaffGuild = {
@@ -1143,6 +1246,8 @@ export type StaffMember = {
   avatar_decoration_url?: string | null;
   status?: string;
   status_label?: string;
+  /** The phone is the client holding the presence, so avatars draw the mobile icon. */
+  is_mobile?: boolean;
   activities?: StaffActivity[];
   custom_status?: StaffCustomStatus | null;
   activity?: string | null;
@@ -1192,6 +1297,8 @@ export type StaffMaintenanceCommand = {
   name: string;
   cog: string | null;
   cog_label: string | null;
+  /** How Discord invokes it: a prefix command, slash command, or context menu. */
+  kind?: "prefix" | "slash" | "hybrid" | "context" | null;
   maintenance: boolean;
   /** The entry that actually blocks this command: its own, or its cog. */
   blocked_by: string | null;
@@ -1200,10 +1307,51 @@ export type StaffMaintenanceCommand = {
   by: string | null;
 };
 
+export type StaffMaintenanceApi = {
+  endpoint: string;
+  path: string | null;
+  methods: string[] | null;
+  label: string;
+  maintenance: boolean;
+  reason: string | null;
+  since: number | null;
+  by: string | null;
+  report_code: string | null;
+};
+
 export type StaffMaintenanceResponse = {
   cogs: StaffMaintenanceCog[];
   commands: StaffMaintenanceCommand[];
+  apis: StaffMaintenanceApi[];
   updated_at: number;
+};
+
+/** One console line in the owner's live log, already ANSI-coloured. */
+export type OwnerLogEntry = {
+  id: number;
+  at: number;
+  level: string;
+  /** Name of the logger that emitted the line, e.g. ``pymongo.command``. */
+  logger: string;
+  /** Which ring holds the line: the main one, or a noisy library's own. */
+  source?: "main" | "pymongo" | "urllib3" | "wavelink";
+  line: string;
+};
+
+export type OwnerLogsResponse = {
+  lines: OwnerLogEntry[];
+  head: number;
+  next: number;
+  first: number | null;
+  /** Changes whenever the bot starts a new buffer (restart or update). */
+  token: string;
+  capacity: number;
+  /** Capacity of each noisy-library ring; absent on an older backend. */
+  noise_capacity?: number;
+  truncated: boolean;
+  /** The page's cursor belongs to an earlier process or module load. */
+  reset: boolean;
+  unavailable?: boolean;
 };
 
 export type StaffEmoji = {
@@ -1382,11 +1530,16 @@ export type DocCategory =
 
 export type StaffBroadcastStatus = "draft" | "sending" | "sent" | "syncing" | "failed";
 
+/** The mention kinds a broadcast can still ping; an empty list is silent. */
+export type StaffBroadcastMention = "everyone" | "roles" | "users";
+
 export type StaffBroadcastMedia = {
   id: string;
   filename: string;
   content_type: string;
   size: number;
+  /** This image alone is hidden behind Discord's spoiler reveal. */
+  spoiler: boolean;
   url: string;
 };
 
@@ -1406,6 +1559,10 @@ export type StaffBroadcast = {
   skipped_count: number;
   edited_count: number;
   last_error: string | null;
+  /** The whole container opens behind a spoiler in every server. */
+  spoiler: boolean;
+  /** Mentions that are allowed to ping; all three off delivers silently. */
+  allowed_mentions: StaffBroadcastMention[];
   media: StaffBroadcastMedia[];
 };
 
@@ -1429,6 +1586,176 @@ export type LavalinkPoolResponse = {
   target: number;
   private_count: number;
   static_count: number;
+};
+
+// ── Developer portal ─────────────────────────────────────────────────────────
+export type DeveloperScope = {
+  key: string;
+  label: string;
+  description: string;
+  sensitive: boolean;
+  restricted?: boolean;
+};
+
+export type DeveloperSuspension = {
+  id: string;
+  active: boolean;
+  reason: string;
+  trigger: string;
+  at: number | null;
+  key_id: string | null;
+  key_prefix: string | null;
+  appeal_id: string | null;
+  notified_at: number | null;
+  resolved_at: number | null;
+  resolution: string | null;
+  metadata: Record<string, number | string>;
+};
+
+export type DeveloperAppeal = {
+  id: string;
+  user_id?: string;
+  status: "pending" | "approved" | "denied" | string;
+  text: string;
+  created_at: number | null;
+  reviewed_at: number | null;
+  reviewed_by: string | null;
+  note: string | null;
+  notified_at: number | null;
+};
+
+export type DeveloperAccess = {
+  user_id: string;
+  is_owner: boolean;
+  enabled: boolean;
+  granted: boolean;
+  suspended: boolean;
+  suspension: DeveloperSuspension | null;
+  appeal: DeveloperAppeal | null;
+  scopes: string[];
+  notes: string;
+  policy_version: number;
+  policy_accepted: boolean;
+  policy_accepted_at: number | null;
+  granted_at: number | null;
+  granted_by: string | null;
+};
+
+export type DeveloperMe = {
+  access: DeveloperAccess;
+  appeal: DeveloperAppeal | null;
+  suspension: DeveloperSuspension | null;
+  policy_version: number;
+  policy_updated: string;
+  scopes: DeveloperScope[];
+  key_count: number;
+  base_url: string;
+  rate_limit: { limit: number; window_seconds: number; scope: string };
+};
+
+export type DeveloperKey = {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  application_id: string | null;
+  created_at: number;
+  last_used_at: number | null;
+  revoked_at: number | null;
+};
+
+export type DeveloperUsageEntry = {
+  id: string;
+  at: number;
+  user_id: string;
+  key_id: string;
+  key_name: string;
+  key_prefix: string;
+  scope: string;
+  method: string;
+  path: string;
+  status: number;
+  latency_ms: number;
+};
+
+export type DeveloperAccessRow = DeveloperAccess & {
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  key_count: number;
+  last_used_at: number | null;
+  updated_at: number | null;
+};
+
+export type DeveloperAccessList = {
+  scopes: DeveloperScope[];
+  owners: { user_id: string; is_owner: true; enabled: true; scopes: string[]; notes: string }[];
+  developers: DeveloperAccessRow[];
+  appeals: DeveloperAppeal[];
+};
+
+export type DeveloperWebhookEvent = {
+  key: string;
+  label: string;
+  description: string;
+};
+
+export type DeveloperWebhook = {
+  url: string;
+  enabled: boolean;
+  events: string[];
+  secret: string;
+  updated_at: number | null;
+  last_delivery_at: number | null;
+  last_delivery_status: number | null;
+  last_delivery_error: string | null;
+  last_event: string | null;
+};
+
+export type DeveloperApplication = {
+  id: string;
+  owner_id: string;
+  owner_username: string;
+  owner_display_name: string;
+  owner_avatar_url: string | null;
+  name: string;
+  description: string;
+  bot_user_id: string;
+  bot_username: string;
+  bot_display_name: string;
+  bot_avatar_url: string | null;
+  status: "pending" | "approved" | "denied";
+  requested_scopes: string[];
+  approved_scopes: string[];
+  screenshot: {
+    url: string;
+    content_type: string;
+    size: number;
+    uploaded_at: number | null;
+  } | null;
+  webhook: DeveloperWebhook;
+  created_at: number | null;
+  updated_at: number | null;
+  submitted_at: number | null;
+  reviewed_at: number | null;
+  reviewed_by: string | null;
+  review_note: string | null;
+  webhook_configured: boolean;
+  shared_guild_count?: number;
+};
+
+export type DeveloperApplicationList = {
+  applications: DeveloperApplication[];
+  scopes: DeveloperScope[];
+  restricted_scopes: DeveloperScope[];
+  events: DeveloperWebhookEvent[];
+  policy_accepted: boolean;
+};
+
+export type DeveloperApplicationReviewList = {
+  applications: DeveloperApplication[];
+  scopes: DeveloperScope[];
+  events: DeveloperWebhookEvent[];
 };
 
 export type DocPage = {

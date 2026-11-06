@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { getStaffMaintenance, setStaffMaintenance } from "../../api";
-import type { StaffMaintenanceCog, StaffMaintenanceCommand, StaffMaintenanceResponse } from "../../types";
+import type { StaffMaintenanceApi, StaffMaintenanceCog, StaffMaintenanceCommand, StaffMaintenanceResponse } from "../../types";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
-import { useStrings } from "../../i18n";
-
-type Translate = (key: string, values?: Record<string, string | number>) => string;
+import { type Translate, useStrings } from "../../i18n";
 import { Icon } from "../Icon";
+import { LoadingCard } from "../LoadingCard";
 import { Switch } from "./Switch";
 
 const TOAST_KEY = "staff-maintenance";
@@ -21,7 +20,7 @@ function relativeTime(timestamp: number | null, t: Translate) {
   return t("maintenance.daysAgo", { count: Math.floor(hours / 24) });
 }
 
-type Apply = (kind: "cog" | "command", key: string, enabled: boolean, reason: string) => void;
+type Apply = (kind: "cog" | "command" | "api", key: string, enabled: boolean, reason: string) => void;
 
 /** One command row inside a cog card: switch plus its own optional reason. */
 function CommandRow({
@@ -43,11 +42,21 @@ function CommandRow({
   const blockedByCog = command.maintenance && command.blocked_by !== command.name;
   const locked = blockedByCog;
   const reasonChanged = command.maintenance && !locked && draft.trim() !== (command.reason ?? "").trim();
+  // Only a slash command is typed with a slash: a context menu lives in the
+  // right-click menu and a prefix command uses the guild's own prefix. A hybrid
+  // command answers both ways, so it keeps the slash and says so.
+  const contextMenu = command.kind === "context";
+  const prefixOnly = command.kind === "prefix";
+  const hybrid = command.kind === "hybrid";
+  const displayName = contextMenu || prefixOnly ? command.name : `/${command.name}`;
 
   return (
     <div className={`maintenance-row${command.maintenance ? " is-paused" : ""}`}>
       <div className="maintenance-identity">
-        <strong>/{command.name}</strong>
+        <strong>{displayName}</strong>
+        {contextMenu && <span className="maintenance-tag">{t("maintenance.contextMenu")}</span>}
+        {prefixOnly && <span className="maintenance-tag">{t("maintenance.prefixCommand")}</span>}
+        {hybrid && <span className="maintenance-tag" title={t("maintenance.hybridHint")}>{t("maintenance.hybridCommand")}</span>}
         {blockedByCog ? (
           <span className="maintenance-tag">{t("maintenance.pausedWithCog")}</span>
         ) : command.maintenance ? (
@@ -79,6 +88,68 @@ function CommandRow({
           size="sm"
           checked={command.maintenance}
           disabled={busy || locked}            aria-label={t(command.maintenance ? "maintenance.resumeCommand" : "maintenance.pauseCommand", { name: command.name })}
+          onCheckedChange={onToggle}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** One Flask API endpoint, paused independently of the bot's commands. */
+function ApiRow({
+  api,
+  draft,
+  onDraft,
+  onToggle,
+  onSaveReason,
+  busy,
+}: {
+  api: StaffMaintenanceApi;
+  draft: string;
+  onDraft: (value: string) => void;
+  onToggle: (enabled: boolean) => void;
+  onSaveReason: () => void;
+  busy: boolean;
+}) {
+  const { t } = useStrings("dashboard");
+  const reasonChanged = api.maintenance && draft.trim() !== (api.reason ?? "").trim();
+  return (
+    <div className={`maintenance-row${api.maintenance ? " is-paused" : ""}`}>
+      <div className="maintenance-identity">
+        <strong>{api.label}</strong>
+        <span className="maintenance-meta">
+          {api.path || api.endpoint}
+          {api.methods?.length ? ` · ${api.methods.join(", ")}` : ""}
+        </span>
+        {api.maintenance && (
+          <span className="maintenance-meta">
+            {api.reason || t("maintenance.noReason")}
+            {api.since ? t("maintenance.pausedSince", { time: relativeTime(api.since, t) }) : ""}
+          </span>
+        )}
+      </div>
+      <div className="maintenance-controls">
+        <label className="maintenance-reason-field">
+          <input
+            type="text"
+            value={draft}
+            maxLength={500}
+            placeholder={t("maintenance.apiReasonPlaceholder")}
+            aria-label={t("maintenance.apiReasonAria", { name: api.label })}
+            disabled={busy}
+            onChange={(event) => onDraft(event.target.value)}
+          />
+          {reasonChanged && (
+            <button type="button" className="button button-small button-muted" disabled={busy} onClick={onSaveReason}>
+              {t("maintenance.saveReason")}
+            </button>
+          )}
+        </label>
+        <Switch
+          size="sm"
+          checked={api.maintenance}
+          disabled={busy}
+          aria-label={t(api.maintenance ? "maintenance.resumeApi" : "maintenance.pauseApi", { name: api.label })}
           onCheckedChange={onToggle}
         />
       </div>
@@ -224,8 +295,9 @@ export function MaintenanceView({ csrfToken }: { csrfToken?: string }) {
 
   const pausedCogs = cogs.filter((cog) => cog.maintenance).length;
   const pausedCommands = commands.filter((command) => command.maintenance && command.blocked_by === command.name).length;
+  const pausedApis = (data?.apis ?? []).filter((api) => api.maintenance).length;
 
-  const apply = async (kind: "cog" | "command", key: string, enabled: boolean, reason: string) => {
+  const apply = async (kind: "cog" | "command" | "api", key: string, enabled: boolean, reason: string) => {
     if (!data) return;
     setBusyKey(key);
     notifyLoading(t(enabled ? "maintenance.pausing" : "maintenance.resuming"), TOAST_KEY);
@@ -296,15 +368,16 @@ export function MaintenanceView({ csrfToken }: { csrfToken?: string }) {
             {t("maintenance.text")}
           </p>
         </div>
-        <div className={`maintenance-badge${pausedCogs + pausedCommands ? " is-on" : ""}`}>
+        <div className={`maintenance-badge${pausedCogs + pausedCommands + pausedApis ? " is-on" : ""}`}>
           <i />
           <span>
             <small>{t("maintenance.pausedBadge")}</small>
             <strong>
-              {pausedCogs + pausedCommands
+              {pausedCogs + pausedCommands + pausedApis
                 ? [
                   pausedCogs ? t(pausedCogs === 1 ? "maintenance.cogCountOne" : "maintenance.cogCountMany", { count: pausedCogs }) : "",
                   pausedCommands ? t(pausedCommands === 1 ? "maintenance.commandCountOneLabel" : "maintenance.commandCountManyLabel", { count: pausedCommands }) : "",
+                  pausedApis ? t(pausedApis === 1 ? "maintenance.apiCountOne" : "maintenance.apiCountMany", { count: pausedApis }) : "",
                 ].filter(Boolean).join(" · ")
                 : t("maintenance.everythingLive")}
             </strong>
@@ -325,8 +398,8 @@ export function MaintenanceView({ csrfToken }: { csrfToken?: string }) {
       </div>
 
       {loading && !data ? (
-        <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("maintenance.loading")}</p></div>
-      ) : visibleCards.length === 0 && looseCommands.length === 0 ? (
+        <LoadingCard message={t("maintenance.loading")} />
+      ) : visibleCards.length === 0 && looseCommands.length === 0 && !(data?.apis ?? []).some((api) => !term || `${api.label} ${api.endpoint} ${api.path ?? ""}`.toLowerCase().includes(term)) ? (
         <div className="staff-guild-empty">{t("maintenance.noMatches")}</div>
       ) : (
         <div className="maintenance-cards">
@@ -343,6 +416,33 @@ export function MaintenanceView({ csrfToken }: { csrfToken?: string }) {
               renderCommand={renderCommand}
             />
           ))}
+
+          {(data?.apis ?? []).filter((api) => !term || `${api.label} ${api.endpoint} ${api.path ?? ""}`.toLowerCase().includes(term)).length > 0 && (
+            <article className="maintenance-cog-card is-open">
+              <header className="maintenance-cog-header">
+                <div className="maintenance-cog-toggle is-static">
+                  <span className="maintenance-cog-caret is-static" aria-hidden="true" />
+                  <span className="maintenance-cog-title">
+                    <strong>{t("maintenance.apisTitle")}</strong>
+                    <small>{t("maintenance.apisText")}</small>
+                  </span>
+                </div>
+              </header>
+              <div className="maintenance-cog-body">
+                {(data?.apis ?? []).filter((api) => !term || `${api.label} ${api.endpoint} ${api.path ?? ""}`.toLowerCase().includes(term)).map((api) => (
+                  <ApiRow
+                    key={api.endpoint}
+                    api={api}
+                    draft={drafts[api.endpoint] ?? api.reason ?? ""}
+                    busy={busyKey === api.endpoint}
+                    onDraft={(value) => setDrafts((current) => ({ ...current, [api.endpoint]: value }))}
+                    onToggle={(enabled) => void apply("api", api.endpoint, enabled, drafts[api.endpoint] ?? api.reason ?? "")}
+                    onSaveReason={() => void apply("api", api.endpoint, true, drafts[api.endpoint] ?? "")}
+                  />
+                ))}
+              </div>
+            </article>
+          )}
 
           {looseCommands.length > 0 && (
             <article className="maintenance-cog-card is-open">

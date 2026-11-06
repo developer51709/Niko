@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, getAuth, getGuilds, getStaffEmail, getStaffEmailMessage, getStaffMe, getStats, sendStaffEmail } from "../api";
+import { ApiError, getAuth, getDeveloperMe, getGuilds, getStaffEmail, getStaffEmailMessage, getStaffMe, getStats, sendStaffEmail } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { EmailMessageBody } from "../components/EmailMessageBody";
 import { Icon } from "../components/Icon";
+import { LoadingCard } from "../components/LoadingCard";
 import { Select } from "../components/dashboard/Select";
 import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { RichTextEditor } from "../components/RichTextEditor";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
 import { notifyError, notifyLoading, notifySuccess } from "../utils/toast";
+import { registerContextMenuExtras } from "../utils/contextMenu";
 import { useStrings } from "../i18n";
 import type { AuthStatus, BotStats, Guild, StaffEmailAttachment, StaffEmailInbox, StaffEmailMessage } from "../types";
 
@@ -205,10 +207,14 @@ function StatusDialog({ message, domain, onClose }: { message: StaffEmailMessage
 
 export function StaffEmailPage() {
   const { t } = useStrings("staff-email");
+  // The menu's own copy confirmations, so this page does not carry a second set.
+  const { t: sharedT } = useStrings("shared");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessError, setAccessError] = useState("");
   const [staffRole, setStaffRole] = useState<string | null>(null);
+  // Keeps the developer portal entry in the sidebar while the mailbox is open.
+  const [developerAccess, setDeveloperAccess] = useState(false);
   const [stats, setStats] = useState<BotStats | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [inbox, setInbox] = useState<StaffEmailInbox | null>(null);
@@ -233,9 +239,10 @@ export function StaffEmailPage() {
           setAccessLoading(false);
           return;
         }
-        const staffStatus = await getStaffMe();
+        const [staffStatus, developerStatus] = await Promise.all([getStaffMe(), getDeveloperMe().catch(() => null)]);
         if (!active) return;
         setStaffRole(staffStatus.role);
+        setDeveloperAccess(Boolean(developerStatus?.access.enabled));
         setAccessLoading(false);
         if (!staffStatus.role) return;
         const [botStats, availableGuilds] = await Promise.all([getStats(), getGuilds()]);
@@ -271,6 +278,13 @@ export function StaffEmailPage() {
     } finally {
       setInboxLoading(false);
     }
+  }
+
+  function copy(value: string) {
+    navigator.clipboard
+      .writeText(value)
+      .then(() => notifySuccess(sharedT("contextMenu.copied"), "staff-email"))
+      .catch(() => notifyError(sharedT("contextMenu.copyFailed"), "staff-email"));
   }
 
   async function openMessage(message: StaffEmailMessage) {
@@ -408,6 +422,34 @@ export function StaffEmailPage() {
       .sort((a, b) => b.latest.created_at - a.latest.created_at);
   }, [visible]);
 
+  // Every element that stands for one mail — a list row, the open message, a
+  // turn of its thread — answers the context menu with the same three rows.
+  // Reply is the one action the list itself cannot reach; the copies save
+  // selecting an address or a subject out of the reader by hand.
+  useEffect(() => {
+    const messageFor = (id: string) => {
+      const fromInbox = inbox?.messages.find((item) => item.message_id === id);
+      if (fromInbox) return fromInbox;
+      if (selected?.message_id === id) return selected;
+      return selected?.thread?.find((item) => item.message_id === id) || null;
+    };
+    return registerContextMenuExtras((target) => {
+      const holder = target.closest<HTMLElement>("[data-email-message-id]");
+      const message = holder ? messageFor(holder.dataset.emailMessageId || "") : null;
+      if (!message) return null;
+      return [
+        { key: "email-reply", label: t("menu.reply"), icon: "arrow", action: () => startCompose(message) },
+        { key: "email-copy-address", label: t("menu.copyAddress"), icon: "mail", action: () => copy(counterpart(message)) },
+        {
+          key: "email-copy-subject",
+          label: t("menu.copySubject"),
+          icon: "copy",
+          action: () => copy(message.subject || t("dialog.noSubject")),
+        },
+      ];
+    });
+  }, [inbox, selected, mailboxFilter, t, sharedT]);
+
   if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>{t("auth.checkingAccess")}</p></div>;
   if (!auth?.authenticated) {
     return <AuthScreen
@@ -457,7 +499,7 @@ export function StaffEmailPage() {
       </div>
     </header>
 
-    {!inbox && inboxLoading && <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("inbox.loading")}</p></div>}
+    {!inbox && inboxLoading && <LoadingCard message={t("inbox.loading")} />}
 
     {inbox && !inbox.configured && <section className="staff-email-setup" role="status">
       <div className="staff-email-setup-copy">
@@ -483,7 +525,7 @@ export function StaffEmailPage() {
           <label className="staff-guild-search"><Icon name="search" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("inbox.search")} aria-label={t("inbox.search")} /></label>
           <button type="button" className="staff-email-refresh" onClick={() => void loadInbox()} disabled={inboxLoading} aria-label={t("inbox.refresh")}><Icon name="spark" /></button>
         </div>
-        {inboxLoading && inbox.messages.length === 0 ? <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("inbox.loadingMessages")}</p></div>
+        {inboxLoading && inbox.messages.length === 0 ? <LoadingCard message={t("inbox.loadingMessages")} />
           : conversations.length === 0 ? <div className="staff-email-empty-list">{inbox.messages.length ? t("inbox.noMatch") : t("inbox.emptyList")}</div>
           : <div className="staff-email-list">
             {conversations.map((conversation) => {
@@ -491,6 +533,7 @@ export function StaffEmailPage() {
               return <button
                 type="button"
                 key={conversation.key}
+                data-email-message-id={message.message_id}
                 className={`staff-email-item${selectedKey === conversation.key ? " is-open" : ""}${conversation.unread ? " is-unread" : ""}`}
                 onClick={() => void openMessage(message)}
               >
@@ -566,7 +609,7 @@ export function StaffEmailPage() {
           </div>
           <div className="staff-panel-footer"><span>{t("compose.footer", { address: `${compose.mailbox}@${inbox.domain}` })}{compose.thread_id ? t("compose.footerReply") : ""}</span><button type="button" className="button button-primary" onClick={() => void submitCompose()} disabled={sending}>{sending ? t("compose.sending") : t("compose.send")}</button></div>
         </div>
-          : selected ? <article className="staff-email-message">
+          : selected ? <article className="staff-email-message" data-email-message-id={selected.message_id}>
             <div className="staff-email-reader-head">
               <div>
                 <span className="panel-kicker">{selected.direction === "outbound" ? t("reader.sent") : t("reader.receivedOn", { address: selected.to_address })}</span>
@@ -582,7 +625,7 @@ export function StaffEmailPage() {
             </div>
             {selected.thread && selected.thread.length > 1 ? <div className="staff-email-thread">
               <p className="staff-email-thread-head"><span>{t("thread.count", { count: selected.thread.length })}</span><small>{t("thread.oldestFirst")}</small></p>
-              {selected.thread.map((entry) => <article key={entry.message_id} className={`staff-email-turn is-${entry.direction}${entry.message_id === selected.message_id ? " is-current" : ""}`}>
+              {selected.thread.map((entry) => <article key={entry.message_id} data-email-message-id={entry.message_id} className={`staff-email-turn is-${entry.direction}${entry.message_id === selected.message_id ? " is-current" : ""}`}>
                 <header>
                   <strong>{entry.direction === "outbound" ? `Niko · ${entry.from_address}` : entry.from_name || entry.from_address}</strong>
                   <time dateTime={new Date(entry.created_at * 1000).toISOString()}>{new Date(entry.created_at * 1000).toLocaleString()}</time>
@@ -614,6 +657,7 @@ export function StaffEmailPage() {
     userTab="overview"
     stats={stats}
     staffRole={staffRole}
+    developerAccess={developerAccess}
     onHome={() => navigate(dashboardPath())}
     onServers={() => navigate(dashboardServersPath())}
     onGuildChange={() => undefined}

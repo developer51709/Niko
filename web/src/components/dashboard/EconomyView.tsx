@@ -3,9 +3,7 @@ import { siteHref } from "../../router";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import type { EconomyStanding, EconomyTransaction, LotteryStanding } from "../../types";
-import { useStrings } from "../../i18n";
-
-type Translate = (key: string, values?: Record<string, string | number>) => string;
+import { type Translate, useStrings } from "../../i18n";
 
 /** The vote streak caps at ten steps on the server; the track mirrors that. */
 const STREAK_STEPS = 10;

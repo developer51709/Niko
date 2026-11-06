@@ -47,7 +47,7 @@
   transform: translateX(-50%);
   z-index: 0;
   color: rgba(255, 255, 255, .035);
-  font: 800 clamp(120px, 21vw, 190px)/1 "Plus Jakarta Sans", sans-serif;
+  font: 800 clamp(120px, 21vw, 190px)/1 var(--font-sans);
   letter-spacing: -.08em;
   pointer-events: none;
   user-select: none;

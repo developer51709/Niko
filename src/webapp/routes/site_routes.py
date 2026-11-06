@@ -1,7 +1,10 @@
 """Flask routes for site."""
 
+from flask import Response
+
 from utils import logging
 
+from .. import seo
 from .. import server as _server
 
 globals().update({
@@ -23,9 +26,29 @@ def dashboard_redirect():
     # one (see ``social.render_site_shell``).
     return serve_spa_shell()
 
+
 @app.route("/llms.txt")
 def llms_index():
     return send_from_directory(WEB_DIST_DIR, "llms.txt", mimetype="text/plain")
+
+
+@app.route(seo.SITEMAP_PATH)
+def sitemap_xml():
+    """The sitemap for the pages in the current site build."""
+    response = Response(seo.current_sitemap(), mimetype="application/xml")
+    response.headers["Cache-Control"] = f"public, max-age={seo.CACHE_MAX_AGE}"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.route(seo.ROBOTS_PATH)
+def robots_txt():
+    """Crawler rules, including the absolute sitemap URL for this deployment."""
+    response = Response(seo.robots_txt(seo.site_url()), mimetype="text/plain")
+    response.headers["Cache-Control"] = f"public, max-age={seo.CACHE_MAX_AGE}"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
 
 @app.route("/docs/<slug>.md")
 def docs_markdown(slug):
@@ -110,6 +133,7 @@ def partnership_page():
 @app.route("/leaderboard")
 @app.route("/levels")
 @app.route("/docs")
+@app.route("/developers")
 @app.route("/team")
 @app.route("/support")
 @app.route("/changelog")
@@ -127,6 +151,7 @@ def public_spa_route(path=None):
 @app.route("/commands/<path:path>")
 @app.route("/levels/<path:path>")
 @app.route("/docs/<path:path>")
+@app.route("/developers/<path:path>")
 @app.route("/team/<path:path>")
 @app.route("/changelog/<path:path>")
 @app.route("/privacy/<path:path>")

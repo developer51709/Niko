@@ -1,3 +1,15 @@
 {
-  "reports.unavailable": "Informes de errores no disponibles."
+  "reports.unavailable": "Informes de errores no disponibles.",
+  "reports.statusSaved": "Estado del informe actualizado.",
+  "reports.statusFailed": "No se pudo guardar el estado del informe.",
+  "reports.deleteTitle": "¿Eliminar este informe de error?",
+  "reports.deleteBody": "El informe {code} y su traza se eliminarán definitivamente. Esta acción no se puede deshacer.",
+  "reports.delete": "Eliminar informe",
+  "reports.cancel": "Conservar informe",
+  "reports.deleted": "Informe de error eliminado.",
+  "reports.deleteFailed": "No se pudo eliminar el informe.",
+  "reports.maintenanceUnavailable": "Objetivos de mantenimiento no disponibles.",
+  "reports.incidentSaved": "Ajustes de la incidencia guardados.",
+  "reports.maintenanceEnabled": "Mantenimiento activado y la incidencia publicada.",
+  "reports.incidentFailed": "No se pudieron guardar los ajustes de la incidencia."
 }

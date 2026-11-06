@@ -79,7 +79,6 @@
 .home-stat { display: flex; align-items: baseline; gap: 9px; }
 .home-stat strong { font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
 .home-stat span { color: var(--dim); font: 10px "Space Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
-.home-stats-note { display: flex; align-items: center; gap: 7px; margin: 0 0 0 auto; color: var(--dim); font: 10px "Space Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
 
 /* Heading on the left, the four systems as rows on the right. */
 .home-inside {
@@ -239,7 +238,6 @@
   .home-inside-head h2 { font-size: 26px; }
   .home-row { grid-template-columns: 26px minmax(0, 1fr); row-gap: 10px; }
   .home-row > a { grid-column: 2; }
-  .home-stats-note { margin-left: 0; }
   .home-rows { padding: 2px 16px; }
   .shell.home-cta {
     flex-direction: column;
@@ -279,7 +277,6 @@
   .home-stats-band { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .home-stat { flex-direction: column; align-items: flex-start; gap: 2px; }
   .home-stat strong { font-size: 22px; }
-  .home-stats-note { grid-column: 1 / -1; }
   .home-inside { padding-top: 40px; }
 }
 

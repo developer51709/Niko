@@ -285,6 +285,14 @@ function useCatalogue(page: string) {
   return { language, revision };
 }
 
+/**
+ * The signature of the `t` a page gets from `useStrings`.
+ *
+ * Views that hand their translate function to a helper (a formatter, a nested
+ * row component) import this instead of restating the shape.
+ */
+export type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 function interpolate(template: string, values: Record<string, string | number>) {
   return template.replace(/\{(\w+)\}/g, (whole, key: string) =>
     key in values ? String(values[key]) : whole,
@@ -451,6 +459,8 @@ export function usePageTitle(page: string) {
 const STATIC_TITLELESS_PAGES = new Set([
   "guild-leaderboard",
   "docs-detail",
+  // The developer docs set their own title per routed page.
+  "developers",
   "team-member",
   "changelog-detail",
   "transcript",

@@ -33,6 +33,7 @@ import time
 from flask import Flask, jsonify, request, send_from_directory
 
 from . import config, runtime, social
+from .api_errors import error_response
 
 # ── Shared namespace ──────────────────────────────────────────────────────────
 # Re-exported for the route modules' snapshot (see the module docstring),
@@ -180,10 +181,23 @@ def static_proxy(path):
 @app.errorhandler(404)
 def spa_not_found(error):
     """Keep browser navigations inside the SPA while preserving API 404s."""
-    if request.path.startswith("/api/") or request.path.startswith("/auth/"):
-        return jsonify({"error": "Not found"}), 404
+    if request.path.startswith(("/api/", "/v1/")):
+        return error_response("NOT_FOUND", "The requested API endpoint does not exist.", 404)
+    if request.path.startswith("/auth/"):
+        return jsonify({"error": "Not found", "code": "NOT_FOUND"}), 404
     if request.accept_mimetypes.accept_html:
         return social.render_site_shell()
+    return error
+
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    if request.path.startswith(("/api/", "/v1/")):
+        return error_response(
+            "METHOD_NOT_ALLOWED",
+            "That HTTP method is not supported by this API endpoint.",
+            405,
+        )
     return error
 
 

@@ -1,0 +1,140 @@
+/* The site's own context menu — right-click on a desktop, long press on a
+   phone. It is the dashboard's glass card in miniature: the same translucent
+   wash, hairline border, rounded corner and shadow as the panels, so the menu
+   reads as part of the site instead of the browser's own chrome.
+
+   It is portalled to <body>, outside `.dashboard-layout`, so it uses the root
+   tokens (the same reason the toasts do) and follows the site theme. */
+
+.context-menu {
+  /* Fixed like the profile popups, and re-placed against its page anchor on
+     every scroll: it travels with the words it was opened on, then stops at the
+     edge of the window instead of scrolling out of reach. */
+  position: fixed;
+  z-index: 12000;
+  min-width: 212px;
+  max-width: min(300px, calc(100vw - 24px));
+  /* A tall menu on a short screen (a phone in landscape) scrolls itself rather
+     than spilling past the edge it is clamped to. */
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  color: var(--ink);
+  cursor: default;
+  /* Taps land on rows; the grey flash iOS and Android paint first reads as a
+     web page, not a native menu. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  background: rgba(16, 18, 21, .82);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .06);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  outline: none;
+  /* A finger resting on a row to choose it must not start a text selection:
+     a half-selected label reads as a broken menu, not a native one. */
+  user-select: none;
+  -webkit-user-select: none;
+  animation: context-menu-in .12s ease-out;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--muted);
+  /* Logical, so an Arabic or Hebrew page lays the menu out the same way the
+     rest of the site reads. */
+  text-align: start;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  /* Comfortable under a thumb without looking padded on a desktop. */
+  min-height: 34px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .12s ease, background .12s ease;
+}
+
+.context-menu-item .icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--dim);
+}
+
+.context-menu-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One highlight, moved by the pointer and by the arrow keys. A separate
+   `:hover` wash would paint a second row when the menu opens under a still
+   cursor or after the keys have moved the highlight. */
+.context-menu-item.is-highlighted {
+  color: var(--ink);
+  background: rgba(255, 255, 255, .07);
+}
+
+.context-menu-item.is-highlighted .icon {
+  color: var(--accent-dark);
+}
+
+.context-menu-item:active {
+  background: rgba(255, 255, 255, .11);
+}
+
+/* A hairline keeps the page-wide actions apart from whatever was pressed. */
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--line-soft);
+}
+
+@keyframes context-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--context-menu-shift, -3px)) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-menu {
+    animation: none;
+  }
+}
+
+/* One menu on this site, and it is ours: iOS must never raise its own callout
+   on top of a long press. Text fields are put back below, because the paste,
+   spell-check and autofill menu there cannot be replaced. */
+html {
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable]:not([contenteditable="false"]) {
+  -webkit-touch-callout: default;
+}
+
+/* Without a backdrop filter the same wash, just unblurred — the menu must never
+   end up more transparent than the page behind it. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .context-menu {
+    background: rgba(12, 13, 15, .97);
+  }
+}

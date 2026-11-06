@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import type { CSSProperties, Ref } from "react";
 import type { ProfileBadge } from "../data/profileBadges";
+import { placePopup } from "../utils/popover";
 
 /**
  * The badge row inside a profile popup.
@@ -36,17 +37,7 @@ export function DiscordBadgeList({ badges, className, label = "Profile badges" }
       : null;
     const popup = popupRef.current;
     if (!trigger || !popup) return;
-    const rect = trigger.getBoundingClientRect();
-    const margin = 12;
-    const gap = 8;
-    const width = popup.offsetWidth;
-    const height = popup.offsetHeight;
-    const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
-    const below = rect.bottom + gap;
-    const top = below + height <= window.innerHeight - margin
-      ? below
-      : Math.max(margin, rect.top - height - gap);
-    setPopupPosition({ left, top: Math.min(top, window.innerHeight - height - margin) });
+    setPopupPosition(placePopup(trigger, popup));
   }, [openKey]);
 
   useLayoutEffect(() => {

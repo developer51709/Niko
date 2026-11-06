@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   addNotifierFollow,
   getGuildNotifier,
@@ -11,14 +11,14 @@ import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../ut
 import { Icon } from "../Icon";
 import { ChannelSelect } from "./ChannelSelect";
 import { RolePicker } from "./RolePicker";
+import { Field } from "./FormField";
+import { SectionTitle } from "./SectionTitle";
 import { Select } from "./Select";
 import type { GuildResources, NotifierFollow, NotifierResponse } from "../../types";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards } from "./SettingCards";
-import { useStrings } from "../../i18n";
-
-type Translate = (key: string, values?: Record<string, string | number>) => string;
+import { type Translate, useStrings } from "../../i18n";
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
 type Draft = { channel_id: string; ping_role_id: string; template: string };
@@ -37,17 +37,6 @@ const notifierStyles = `
 .notifier-follow-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
 .notifier-list{display:grid;gap:14px;padding-top:12px}
 `;
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return <label className="form-field"><span className="form-label">{label}</span>{children}{hint && <small>{hint}</small>}</label>;
-}
-
-function SectionTitle({ label, title, detail, icon }: { label: string; title: string; detail: string; icon: string }) {
-  return <div className="panel-heading settings-section-title">
-    <div><span className="panel-kicker">{label}</span><h3>{title}</h3><p>{detail}</p></div>
-    <span className="panel-icon"><Icon name={icon} /></span>
-  </div>;
-}
 
 function followKey(follow: NotifierFollow) {
   return `${follow.platform}:${follow.username}`;

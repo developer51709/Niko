@@ -104,5 +104,18 @@
   "locales.completeWord": "· terminé",
   "foot.note": "Les chiffres viennent du processus du bot en cours, ils évoluent donc avec lui. Un cog manquant ou quelque chose d’inattendu ?",
   "foot.support": "Préviens l’équipe",
-  "locales.figures": "{translated} / {total}"
+  "locales.figures": "{translated} / {total}",
+  "incidents.aria": "Incidents publics et avis de maintenance",
+  "incidents.kicker": "Incidents publics",
+  "incidents.title": "Ce sur quoi nous travaillons",
+  "incidents.count": "{count} publiés",
+  "incidents.noSummary": "L’équipe enquête sur ce problème.",
+  "incidents.timeline": "Chronologie · {count} mises à jour",
+  "incidents.maintenanceActive": "{target} est en pause pendant l’enquête.",
+  "incidents.maintenanceEnded": "{target} est de nouveau disponible.",
+  "maintenance.title": "Avis de maintenance",
+  "maintenance.api": "API",
+  "maintenance.command": "Commande",
+  "maintenance.active": "En pause",
+  "maintenance.noReason": "Aucun motif fourni"
 }

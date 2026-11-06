@@ -12,10 +12,11 @@ in and clear the pause.
 
 from __future__ import annotations
 
-from flask import jsonify, request
+from flask import request
 
 from utils import maintenance
 
+from .api_errors import error_response
 from .staff import _current_staff_role, _is_owner
 
 _EXEMPT_PATHS = (
@@ -60,7 +61,7 @@ def register_api_maintenance(app) -> None:
     @app.before_request
     def gate_api_maintenance():
         path = request.path or ""
-        if not path.startswith("/api/") or _is_exempt(path):
+        if not path.startswith(("/api/", "/v1/")) or _is_exempt(path):
             return None
         found = maintenance.find_api_block(request.endpoint, path)
         if found is None:
@@ -76,8 +77,7 @@ def register_api_maintenance(app) -> None:
         except Exception:
             pass
         _kind, key, entry = found
-        response = jsonify({
-            "error": "This API is in maintenance mode.",
+        details = {
             "maintenance": {
                 "kind": "api",
                 "key": key,
@@ -85,7 +85,14 @@ def register_api_maintenance(app) -> None:
                 "reason": entry.get("reason"),
                 "since": entry.get("since"),
             },
-        })
-        response.status_code = 503
-        response.headers["Retry-After"] = "300"
-        return response
+        }
+        if entry.get("report_code"):
+            details["report_code"] = entry["report_code"]
+        return error_response(
+            "API_MAINTENANCE",
+            "This API is in maintenance mode.",
+            503,
+            docs="/developers/maintenance",
+            details=details,
+            headers={"Retry-After": "300"},
+        )

@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { applyOwnerUpdates, getOwnerUpdateProgress, getOwnerUpdates } from "../../api";
-import { useStrings } from "../../i18n";
+import { type Translate, useStrings } from "../../i18n";
 import type { OwnerUpdateApply, OwnerUpdateProgress, OwnerUpdates } from "../../types";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
+import { LoadingCard } from "../LoadingCard";
 import { Switch } from "../dashboard/Switch";
-
-type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 const TOAST_KEY = "owner-updates";
 
@@ -47,11 +46,46 @@ function ago(timestamp: number | null | undefined, t: Translate) {
  *
  * One switch per area, because each area is applied differently: files for the
  * website, a reload for cogs, a module purge for utilities, a Flask rebuild for
- * the API, and a successor process for the bot core. The page names what the
+ * the API, a ready-handler rebind for the startup writers, and an in-place
+ * restart for the bot core. The page names what the
  * selected areas will do before anything is written, and reports what each one
  * actually did afterwards. Areas and the apply panel sit side by side on a
  * desktop and stack on a phone, where the apply panel follows the list.
  */
+/**
+ * Reload the page once the restarted process is the one answering.
+ *
+ * A bot-core update replaces the process image a moment after the apply
+ * response, and the listening socket is inherited rather than rebound, so the
+ * reload can land in the middle of the exec and fail. `uptime_seconds` from
+ * `/api/health` tells the two images apart — the read taken now belongs to the
+ * old process, and the page reloads when it drops below that.
+ */
+async function reloadAfterRestart(): Promise<void> {
+  const uptime = async () => {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    if (!response.ok) throw new Error(`health ${response.status}`);
+    const health: { uptime_seconds?: number } = await response.json();
+    return Number(health.uptime_seconds ?? 0);
+  };
+  let before: number | null = null;
+  try {
+    before = await uptime();
+  } catch {
+    // Already between images: the first read that works is the new one.
+  }
+  const deadline = Date.now() + 40_000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    try {
+      if (before === null || (await uptime()) < before) break;
+    } catch {
+      // The socket is queued while the new image imports; keep waiting.
+    }
+  }
+  window.location.reload();
+}
+
 export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
   const { t } = useStrings("staff");
   const [data, setData] = useState<OwnerUpdates | null>(null);
@@ -132,7 +166,7 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
           notifyLoading(stageLabel(next, next.area ? data?.areas[next.area]?.label : undefined, t), TOAST_KEY);
         }
       } catch {
-        // A bot handoff can drop one poll; the next one lands on the successor.
+        // A bot restart can drop one poll; the next one lands on the new image.
       }
       if (pollRef.current === token) window.setTimeout(tick, 700);
     };
@@ -145,9 +179,9 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
       // them is cleared rather than left ticked for the refreshed list.
       setSelected([]);
       notifySuccess(t("owner.updates.applied"), TOAST_KEY);
-      // A bot update retires this process mid-response; reloading lands on the
-      // successor, which serves the same page on the same socket.
-      if (next.areas?.bot?.ok) window.setTimeout(() => window.location.reload(), 2500);
+      // A bot update restarts this process mid-response; the reload waits for
+      // the new image, which serves the same page on the same socket.
+      if (next.areas?.bot?.ok) void reloadAfterRestart();
       else void load();
     } catch (exc) {
       notifyError(exc instanceof Error ? exc.message : String(exc), TOAST_KEY);
@@ -173,10 +207,7 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
   if (!data) {
     return (
       <div className="updates-view">
-        <div className="staff-guild-empty updates-state">
-          <div className="loading-ring" />
-          <p>{t("owner.loading")}</p>
-        </div>
+        <LoadingCard message={t("owner.loading")} />
       </div>
     );
   }
@@ -256,9 +287,11 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
                       <div className="updates-area-heading">
                         <h4>{area.label}</h4>
                         <span className={`updates-badge${area.changed ? "" : " is-quiet"}`}>
-                          {area.changed
-                            ? t("owner.updates.filesChanged", { count: area.changed, size: bytes(area.bytes) })
-                            : t("owner.updates.upToDate")}
+                          {area.available === false
+                            ? t("owner.updates.notPublished")
+                            : area.changed
+                              ? t("owner.updates.filesChanged", { count: area.changed, size: bytes(area.bytes) })
+                              : t("owner.updates.upToDate")}
                         </span>
                       </div>
                       <p>{t(`owner.area.${name}`)}</p>
@@ -373,6 +406,7 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
                           : area.strategy ?? t("owner.updates.done")}
                       </span>
                       {area.reloaded?.length ? <small>{t("owner.updates.reloaded", { count: area.reloaded.length })}</small> : null}
+                      {area.rebound?.length ? <small>{t("owner.updates.rebound", { count: area.rebound.length })}</small> : null}
                       {area.failed?.length ? <small className="is-bad">{area.failed.join(" · ")}</small> : null}
                     </div>
                   </li>

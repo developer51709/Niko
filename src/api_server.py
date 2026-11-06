@@ -59,7 +59,12 @@ def start_api_server(bot=None, fd: int | None = None, port: int | None = None) -
     configure_bot(bot)
     # Bot wording is refreshed from beta on a timer as well as on demand: the bot
     # answers Discord messages whether or not anyone has the dashboard open.
-    locale_feed.start_sync_loop()
+    try:
+        locale_feed.start_sync_loop(bot)
+    except TypeError:
+        # A bot-core update can start this server against the previous image's
+        # feed, which takes no bot argument; its default still runs the loop.
+        locale_feed.start_sync_loop()
 
     port = int(port or os.environ.get("PORT", "5000"))
     server = make_server("0.0.0.0", port, _flask_app(), threaded=True, fd=fd)

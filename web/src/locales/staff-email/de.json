@@ -87,7 +87,6 @@
   "setup.between": "bei Mailgun zusammen mit den DNS-Einträgen ein, die es dir gibt, und lege dann eine Empfangsroute an, die an",
   "setup.after": "weiterleitet. Bis dahin zeigt die Seite, was sie weiß, und tut nicht so, als wäre eine Nachricht gesendet worden.",
   "item.to": "An {address}",
-  "item.threadTitle": "{count} Nachrichten in dieser Unterhaltung",
   "item.noPreview": "Kein Nachrichtentext.",
   "item.addressConversation": "{address} · {count} Nachrichten",
   "reader.aria": "Nachricht",
@@ -119,5 +118,8 @@
   "compose.sending": "Wird gesendet…",
   "compose.send": "Nachricht senden",
   "thread.count": "{count} Nachrichten in dieser Unterhaltung",
-  "thread.oldestFirst": "Älteste zuerst"
+  "thread.oldestFirst": "Älteste zuerst",
+  "menu.reply": "Antworten",
+  "menu.copyAddress": "E-Mail-Adresse kopieren",
+  "menu.copySubject": "Betreff kopieren"
 }

@@ -108,5 +108,7 @@
   "pickers.opacity": "Opacité",
   "pickers.degrees": "{value} degrés",
   "pickers.formatAria": "Format de couleur : {format}. Changer de format",
-  "pickers.colorTriggerAria": "Couleur de {label}"
+  "pickers.colorTriggerAria": "Couleur de {label}",
+  "shell.developerPortal": "Portail développeurs",
+  "shell.developerTabs": "Portail développeurs"
 }

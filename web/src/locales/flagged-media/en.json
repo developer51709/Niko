@@ -1,0 +1,16 @@
+{
+  "title": "Flagged media in log entries — Niko",
+  "hero.eyebrow": "Message logs",
+  "hero.title": "Why an image is missing from this log",
+  "hero.lead": "Niko's server logs keep deleted messages for moderators. When Discord's automated content scanning has flagged an image, the log shows a placeholder instead of the image, and the entry links here.",
+  "type.explicit.name": "Explicit content",
+  "type.explicit.what": "Discord labelled the image as sexually explicit — the same check behind its sensitive-media warning.",
+  "type.gore.name": "Gore",
+  "type.gore.what": "Discord labelled the image as graphic violence: visible injury, blood, or similar shock content.",
+  "type.self-harm.name": "Self-harm",
+  "type.self-harm.what": "Discord labelled the image as self-harm content.",
+  "note.notStored": "The placeholder is not a blurred copy. Niko never downloaded the image, so nothing from it is stored with the log entry.",
+  "note.kept": "The message text, author, channel, timestamp and attachment names are still recorded.",
+  "support.before": "Questions about a specific entry?",
+  "support.link": "Ask in the support server"
+}

@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type ReactElement, type ReactNode, cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getGuildTickets, saveConfig, saveProfile, updateGuildTicketStatus } from "../../api";
 import { Icon } from "../Icon";
@@ -6,6 +6,7 @@ import { DiscordMarkdown } from "../DiscordMarkdown";
 import { DiscordAppBadge } from "../DiscordAppBadge";
 import { useBotConfig } from "../../hooks/useBotConfig";
 import { ColorPicker } from "./ColorPicker";
+import { Field } from "./FormField";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards, type SettingCardFlag } from "./SettingCards";
 import { ChannelSelect } from "./ChannelSelect";
@@ -35,31 +36,6 @@ const CAPTCHA_METHODS = selectOptions([["click", "onboarding.method.click"], ["i
 // Display-name styles for the profile editor, keyed by Discord's own ids.
 const NAME_FONTS = selectOptions([["3", "profile.font.sakura"], ["4", "profile.font.jellybean"], ["6", "profile.font.modern"], ["7", "profile.font.medieval"], ["8", "profile.font.bit"], ["10", "profile.font.vampyre"], ["11", "profile.font.ggSans"], ["12", "profile.font.tempo"]]);
 const NAME_EFFECTS = selectOptions([["1", "profile.effect.solid"], ["2", "profile.effect.gradient"], ["3", "profile.effect.neon"], ["4", "profile.effect.toon"], ["5", "profile.effect.pop"], ["6", "profile.effect.glow"]]);
-
-const LABELABLE_CONTROLS = new Set(["input", "select", "textarea"]);
-
-/**
- * A settings field. The label points at its control with `htmlFor` instead of
- * wrapping it, so the click area stays the control itself rather than the label
- * text, the hint, and the rest of the stretched grid cell.
- */
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  const generatedId = useId();
-  const control = isValidElement(children) && typeof children.type === "string" && LABELABLE_CONTROLS.has(children.type)
-    ? children as ReactElement<{ id?: string }>
-    : null;
-  // Custom pickers cannot be labelled by htmlFor, so they get the field label
-  // as their accessible name instead.
-  const picker = isValidElement(children) && (children.type === RoleSelect || children.type === ChannelSelect || children.type === RolePicker || children.type === Select)
-    ? children as ReactElement<{ ariaLabel?: string }>
-    : null;
-  const controlId = control ? `${generatedId}-control` : undefined;
-  return <div className="form-field">
-    <label className="form-label" htmlFor={controlId}>{label}</label>
-    {control ? cloneElement(control, { id: controlId }) : picker ? cloneElement(picker, { ariaLabel: picker.props.ariaLabel || label }) : children}
-    {hint && <small>{hint}</small>}
-  </div>;
-}
 
 function channelsWithSelected(resources: GuildResources | null, selected: string | number | null | undefined) {
   const selectedId = selected ? String(selected) : "";

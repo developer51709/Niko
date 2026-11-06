@@ -1,0 +1,152 @@
+/* Owner live logs: a real console, not a list of cards.
+   The console keeps the terminal's own colours and never draws a separator
+   between lines — the rhythm has to come from the monospace text alone. */
+
+.bot-logs { display: grid; gap: 14px; min-width: 0; }
+.bot-logs-heading { align-items: flex-start; }
+
+.bot-logs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: 700 9px "Space Mono", monospace;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.bot-logs-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7bd88f;
+  box-shadow: 0 0 0 3px rgba(123, 216, 143, .14);
+  animation: bot-logs-pulse 2.4s ease-in-out infinite;
+}
+
+.bot-logs-status.is-unavailable i {
+  background: #e5c07b;
+  box-shadow: 0 0 0 3px rgba(229, 192, 123, .14);
+  animation: none;
+}
+
+@keyframes bot-logs-pulse {
+  50% { opacity: .4; }
+}
+
+.bot-logs-toolbar { flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.bot-logs-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 20px; min-width: 0; }
+.bot-logs-level { display: grid; gap: 5px; width: 190px; }
+.bot-logs-level .dash-select { width: 100%; }
+
+.bot-logs-filter { display: flex; align-items: center; gap: 10px; padding-bottom: 2px; }
+.bot-logs-filter-text { display: grid; gap: 2px; }
+.bot-logs-filter-text strong { color: var(--ink); font-size: 10px; font-weight: 700; }
+.bot-logs-filter-text small { max-width: 210px; color: var(--dim); font-size: 9px; line-height: 1.45; }
+
+.bot-logs-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  margin-left: auto;
+  padding-bottom: 3px;
+  color: var(--dim);
+  font: 700 9px "Space Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.bot-logs-truncated { color: #a8795b; }
+.bot-logs-notice { margin: 0; }
+
+.bot-logs-terminal { position: relative; min-width: 0; }
+
+/* The console itself: dark on purpose, so the ANSI palette reads the way it
+   does over SSH. Long lines scroll sideways instead of wrapping, which keeps
+   one log record on one row. */
+.bot-logs-console {
+  height: min(66vh, 680px);
+  min-height: 320px;
+  overflow: auto;
+  padding: 14px 16px 16px;
+  color: #d7dae0;
+  background: #090b0a;
+  border: 1px solid #23282a;
+  border-radius: 12px;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-variant-ligatures: none;
+  tab-size: 4;
+  overscroll-behavior: contain;
+  scrollbar-color: #2b3132 #090b0a;
+  scrollbar-width: thin;
+}
+
+.bot-logs-console::-webkit-scrollbar { width: 10px; height: 10px; }
+.bot-logs-console::-webkit-scrollbar-track { background: #090b0a; }
+.bot-logs-console::-webkit-scrollbar-thumb { background: #2b3132; border: 2px solid #090b0a; border-radius: 999px; }
+.bot-logs-console::-webkit-scrollbar-thumb:hover { background: #3a4244; }
+
+/* No border, margin or padding between rows: the console is a continuous
+   block of text, exactly like the terminal it mirrors. */
+.bot-log-line {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  letter-spacing: 0;
+}
+
+.bot-logs-empty {
+  padding: 8px 2px;
+  color: #7a8480;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.bot-logs-jump {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 12px;
+  color: #07110c;
+  background: var(--sage);
+  border: 1px solid var(--sage);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  font: 700 9px "Space Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform .16s ease, filter .16s ease;
+}
+
+.bot-logs-jump:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.bot-logs-jump:focus-visible { outline: 2px solid var(--sage); outline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .bot-logs-heading { gap: 10px; }
+  .bot-logs-status { padding: 6px 9px; font-size: 8px; }
+  .bot-logs-toolbar { align-items: stretch; gap: 10px; }
+  .bot-logs-controls { width: 100%; }
+  .bot-logs-level { width: 100%; }
+  .bot-logs-filter { width: 100%; justify-content: space-between; padding-bottom: 0; }
+  .bot-logs-meta { margin-left: 0; padding-bottom: 0; font-size: 8px; }
+  .bot-logs-console {
+    height: 58vh;
+    min-height: 260px;
+    padding: 11px 12px 12px;
+    font-size: 11px;
+    line-height: 1.62;
+    border-radius: 10px;
+  }
+  .bot-logs-jump { right: 12px; bottom: 12px; }
+}

@@ -298,7 +298,7 @@
 .command-dialog-kicker i { width: 3px; height: 3px; background: #5b6472; border-radius: 50%; }
 .site-content .command-dialog-header h2 { margin: 0; color: #f4f5f7; font-size: 22px; line-height: 1.25; letter-spacing: -.04em; }
 .site-content .command-dialog-header h2 code { color: #f4f5f7; font-size: .95em; }
-.site-content .command-dialog-header .context-invocation { color: #d5d9df !important; font-family: "Plus Jakarta Sans", sans-serif !important; font-size: 17px; font-weight: 700; }
+.site-content .command-dialog-header .context-invocation { color: #d5d9df !important; font-family: var(--font-sans) !important; font-size: 17px; font-weight: 700; }
 .site-content .command-dialog .dialog-close { width: 32px; height: 32px; color: #9aa3b0; background: rgba(255, 255, 255, .04); border: 1px solid rgba(226, 234, 246, .14); border-radius: 10px; transition: background .18s, color .18s, border-color .18s; }
 .site-content .command-dialog .dialog-close:hover { color: #f4f5f7; background: rgba(255, 255, 255, .1); border-color: rgba(213, 220, 229, .3); }
 

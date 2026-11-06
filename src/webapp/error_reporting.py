@@ -146,6 +146,27 @@ def _persist(error: BaseException, context: dict, source: str, summary: str) -> 
     return code
 
 
+def record_api_error(
+    error: BaseException,
+    *,
+    code: str,
+    summary: str,
+    extra: dict | None = None,
+) -> str | None:
+    """Store a known API failure through the staff report pipeline.
+
+    The normal Flask handler only sees unhandled exceptions. A route that
+    deliberately answers with a 5xx can use this to attach a report code to
+    that response as well, using the same redacted request context.
+    """
+    context = _request_context()
+    context["api_error"] = {
+        "code": str(code),
+        "details": _redact_value(extra or {}),
+    }
+    return _persist(error, context, "api", str(summary or code)[:600])
+
+
 def _fallback_page(report_code: str | None) -> str:
     code_line = (
         f"<p>Reference: <code>{report_code}</code></p>"
@@ -169,10 +190,19 @@ def _fallback_page(report_code: str | None) -> str:
 
 def _error_response(source: str, report_code: str | None):
     if source == "api":
-        return jsonify({
+        payload = {
             "error": "An unexpected server error occurred.",
-            "report_code": report_code,
-        }), 500
+            "code": "INTERNAL_SERVER_ERROR",
+            "docs": "/developers/errors",
+        }
+        if report_code:
+            payload["report_code"] = report_code
+        response = jsonify(payload)
+        response.status_code = 500
+        response.headers["X-Error-Code"] = "INTERNAL_SERVER_ERROR"
+        if report_code:
+            response.headers["X-Error-Report"] = report_code
+        return response
     try:
         response = make_response(social.render_site_shell())
         response.status_code = 500
@@ -196,7 +226,7 @@ def register_error_reporting(app) -> None:
         if isinstance(error, HTTPException):
             return error
 
-        source = "api" if request.path.startswith("/api/") else "website"
+        source = "api" if request.path.startswith(("/api/", "/v1/")) else "website"
         summary = (
             f"{request.method} {request.path} · "
             f"{type(error).__name__}: {error}"

@@ -1030,7 +1030,7 @@ class MusicSystem(commands.Cog):
             self._node_labels = sorted(node.identifier for node in connected)
             self.connected = bool(connected)
             if connected:
-                log.info(
+                log.debug(
                     "Lavalink",
                     f"Node rescan complete: {len(connected)} connected "
                     f"({', '.join(self._node_labels)}).",
@@ -1065,7 +1065,7 @@ class MusicSystem(commands.Cog):
                 f"{', ' + node['label'] if node.get('label') else ''})"
                 for node in private
             )
-            log.info("Lavalink", f"Private nodes loaded: {described}.")
+            log.debug("Lavalink", f"Private nodes loaded: {described}.")
         return _node_catalog(private)
 
     async def apply_lavalink_changes(self) -> None:
@@ -1144,7 +1144,7 @@ class MusicSystem(commands.Cog):
                 "reported ready — left out of the pool.",
             )
             return False
-        log.info("Lavalink", f"Node top-up: {node.identifier} connected.")
+        log.debug("Lavalink", f"Node top-up: {node.identifier} connected.")
         return True
 
     async def _eject_stale_nodes(self):
@@ -1188,7 +1188,7 @@ class MusicSystem(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload):
         node_id = payload.node.identifier
-        log.info("Lavalink", f"Node '{node_id}' ready (resumed={payload.resumed})")
+        log.debug("Lavalink", f"Node '{node_id}' ready (resumed={payload.resumed})")
 
         # Ready events can land after startup_connect's decision window (the
         # handshake completes on the node's background task), so keep the cog's

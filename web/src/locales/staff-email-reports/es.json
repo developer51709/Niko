@@ -58,5 +58,7 @@
   "answer.noneSent": "No se envió ninguna respuesta.",
   "reader.aria": "Reporte",
   "reader.pickTitle": "Elige un reporte.",
-  "reader.pickBody": "Los reportes están a la izquierda, del más reciente al más antiguo. Al abrir uno se muestra lo reportado, el motivo y la conversación si quien reportó la compartió."
+  "reader.pickBody": "Los reportes están a la izquierda, del más reciente al más antiguo. Al abrir uno se muestra lo reportado, el motivo y la conversación si quien reportó la compartió.",
+  "menu.copyReporter": "Copiar dirección de quien reporta",
+  "menu.copySubject": "Copiar asunto"
 }
