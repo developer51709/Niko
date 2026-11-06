@@ -12,6 +12,7 @@ being inherited instead of rebound — see :mod:`utils.handoff`.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -67,7 +68,14 @@ def start_api_server(
     # Bot wording is refreshed from beta on a timer as well as on demand: the bot
     # answers Discord messages whether or not anyone has the dashboard open.
     try:
-        locale_feed.start_sync_loop(bot)
+        # Inside the bot this runs on its event loop.  Pass it explicitly:
+        # ``bot.loop`` is still Discord's pre-login sentinel until ``login()``
+        # runs, and reading attributes off that sentinel raises.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        locale_feed.start_sync_loop(bot, loop)
     except TypeError:
         # A bot-core update can start this server against the previous image's
         # feed, which takes no bot argument; its default still runs the loop.
