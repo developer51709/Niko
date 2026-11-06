@@ -18,6 +18,12 @@ from utils import logging
 # disagree about it.
 STATUS_PANEL_INTERVAL = 30.0
 
+#: How long before the next edit the next snapshot starts collecting. The
+#: database ping and the health probes take a few seconds; starting this far
+#: ahead means the snapshot is ready when the interval elapses, while its
+#: figures still describe the bot seconds before the panel is redrawn.
+STATUS_PANEL_PREFETCH_LEAD = 10.0
+
 
 def _load_bot_stats_file() -> dict:
     """Read data/bot_stats.json written at startup (best-effort)."""
@@ -500,37 +506,70 @@ class StatusPanelCog(commands.Cog):
 
 
 async def _status_refresh_loop(bot):
-    """Re-edit every stored status panel every STATUS_PANEL_INTERVAL seconds."""
-    await bot.wait_until_ready()
-    while not bot.is_closed():
-        try:
-            cxn = getattr(bot, "cxn", None)
-            if cxn is None:
-                await asyncio.sleep(STATUS_PANEL_INTERVAL)
-                continue
-            rows = await cxn.fetch(
-                "SELECT channel_id, message_id FROM persistent_status_panels"
-            )
-            if not rows:
-                await asyncio.sleep(STATUS_PANEL_INTERVAL)
-                continue
+    """Re-edit every stored status panel every STATUS_PANEL_INTERVAL seconds.
 
-            status = await _collect_status(bot)
-            panel_view = _build_status_panel(bot, status)
-            for row in rows:
-                try:
-                    channel = bot.get_channel(int(row["channel_id"]))
-                    if channel is None:
-                        continue
-                    message = channel.get_partial_message(int(row["message_id"]))
-                    await message.edit(view=panel_view)
-                except discord.HTTPException:
-                    # Deleted panel, missing permissions, etc. — skip this row.
-                    continue
-                except Exception:
-                    continue
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logging.warning("StatusPanel", f"Refresh tick failed: {exc}")
-        await asyncio.sleep(STATUS_PANEL_INTERVAL)
+    Collecting a snapshot is the slow part of a tick — the guild and member
+    counts, the command totals, the database ping and the two health probes
+    take a few seconds. The next snapshot therefore starts collecting
+    ``STATUS_PANEL_PREFETCH_LEAD`` seconds before the next tick, so its work
+    happens between edits and the edit lands on the interval instead of a few
+    seconds after it, with figures that are still only seconds old.
+    """
+    await bot.wait_until_ready()
+    prefetch = None
+    try:
+        while not bot.is_closed():
+            started = time.monotonic()
+            rows = []
+            try:
+                cxn = getattr(bot, "cxn", None)
+                if cxn is not None:
+                    rows = await cxn.fetch(
+                        "SELECT channel_id, message_id FROM persistent_status_panels"
+                    )
+                if rows:
+                    # A first pass (or one whose prefetch never finished) still
+                    # collects inline, so a panel is never left unrendered.
+                    status = await prefetch if prefetch is not None else await _collect_status(bot)
+                    prefetch = None
+                    # The snapshot was collected ahead of time; stamp the edit
+                    # itself so the footer's "Updated … ago" never carries the
+                    # prefetch lead (which made a 30s refresh read as 40s).
+                    status["checked_at"] = int(time.time())
+                    panel_view = _build_status_panel(bot, status)
+                    for row in rows:
+                        try:
+                            channel = bot.get_channel(int(row["channel_id"]))
+                            if channel is None:
+                                continue
+                            message = channel.get_partial_message(int(row["message_id"]))
+                            await message.edit(view=panel_view)
+                        except discord.HTTPException:
+                            # Deleted panel, missing permissions, etc. — skip this row.
+                            continue
+                        except Exception:
+                            continue
+                elif prefetch is not None:
+                    # The panels are gone; stop paying for a snapshot nobody
+                    # is going to render.
+                    prefetch.cancel()
+                    prefetch = None
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logging.warning("StatusPanel", f"Refresh tick failed: {exc}")
+
+            # Keep the cadence anchored to the start of this tick, and gather
+            # the next snapshot ahead of the next one: the collection then runs
+            # between edits instead of pushing the edit that triggered it back.
+            deadline = started + STATUS_PANEL_INTERVAL
+            if rows:
+                start_at = deadline - STATUS_PANEL_PREFETCH_LEAD
+                now = time.monotonic()
+                if start_at > now:
+                    await asyncio.sleep(start_at - now)
+                prefetch = asyncio.create_task(_collect_status(bot))
+            await asyncio.sleep(max(0.0, deadline - time.monotonic()))
+    finally:
+        if prefetch is not None:
+            prefetch.cancel()

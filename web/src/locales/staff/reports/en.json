@@ -1,3 +1,15 @@
 {
-  "reports.unavailable": "Error reports unavailable."
+  "reports.unavailable": "Error reports unavailable.",
+  "reports.statusSaved": "Report status updated.",
+  "reports.statusFailed": "The report status could not be saved.",
+  "reports.deleteTitle": "Delete this error report?",
+  "reports.deleteBody": "Report {code} and its traceback will be removed for good. This cannot be undone.",
+  "reports.delete": "Delete report",
+  "reports.cancel": "Keep report",
+  "reports.deleted": "Error report deleted.",
+  "reports.deleteFailed": "The report could not be deleted.",
+  "reports.maintenanceUnavailable": "Maintenance targets unavailable.",
+  "reports.incidentSaved": "Incident settings saved.",
+  "reports.maintenanceEnabled": "Maintenance enabled and the incident published.",
+  "reports.incidentFailed": "The incident settings could not be saved."
 }

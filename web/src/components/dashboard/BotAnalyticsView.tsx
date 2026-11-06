@@ -5,6 +5,7 @@ import { useLiveResource } from "../../hooks/useLiveResource";
 import type { StaffAnalytics, StaffAnalyticsDay } from "../../types";
 import { formatNumber } from "../../utils/format";
 import { Icon } from "../Icon";
+import { LoadingCard } from "../LoadingCard";
 import { useStrings } from "../../i18n";
 
 /** The API always returns the long window; the toggle slices it client-side. */
@@ -220,7 +221,7 @@ export function BotAnalyticsView() {
 
   const days = useMemo(() => (data ? data.usage.days.slice(-range) : []), [data, range]);
   if (loading && !data) {
-    return <div className="bot-analytics bot-analytics-state"><div className="loading-ring" /><p>{t("analytics.loading")}</p></div>;
+    return <LoadingCard message={t("analytics.loading")} />;
   }
   if (!data) {
     return <div className="bot-analytics bot-analytics-state">

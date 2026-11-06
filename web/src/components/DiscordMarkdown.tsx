@@ -1,13 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DiscordBadgeList } from "./DiscordBadgeList";
+import { DiscordCodeBlock } from "./DiscordCodeBlock";
 import { useStrings } from "../i18n";
 import { DiscordServerTagPill, type DiscordServerTagInfo } from "./DiscordServerTag";
 import { DiscordStatusAvatar } from "./DiscordStatusAvatar";
 import { isApplicationEmoji, useBotEmojis } from "../data/botEmojis";
 import { profileBadges } from "../data/profileBadges";
+import { twemojiUrl } from "../data/twemoji";
 import type { CSSProperties, ReactNode, Ref } from "react";
 import { resolveDiscordText } from "../api";
+import { placePopup } from "../utils/popover";
 
 export type DiscordMentionNames = Partial<Record<"user" | "channel" | "role", Record<string, string>>>;
 type Format = "bold" | "italic" | "italicAlt" | "underline" | "strike" | "spoiler";
@@ -31,7 +34,10 @@ const timestampStyles = new Set(["t", "T", "d", "D", "f", "F", "R"]);
 // would be cut at its first underscore and only the text in front of it would
 // become the link. The last character may not be a marker, so the ``**`` that
 // closes a bold link stays a marker instead of being swallowed by the URL.
-const tokenPattern = /(`[^`\n]+`)|(<t:-?\d+(?::[tTdDfFR])?>)|(<@!?\d+>|<@&\d+>|<#\d+>|@everyone\b|@here\b)|(<a?:[\w~]+:\d+>)|(\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\))|(\*\*)|(__)|((?<!\*)\*(?!\*))|((?<!_)_(?!_))|(~~)|(\|\|)|(https?:\/\/[^\s<>\(\)*|~_](?:[^\s<>\(\)*|~]*[^\s<>\(\)*|~_])?)/g;
+// A masked link may also carry ``mailto:`` or a site-relative path, which is
+// how the legal documents write the owner's address and their own pages; a
+// masked link Discord itself would refuse is left as plain text.
+const tokenPattern = /(`[^`\n]+`)|(<t:-?\d+(?::[tTdDfFR])?>)|(<@!?\d+>|<@&\d+>|<#\d+>|@everyone\b|@here\b)|(<a?:[\w~]+:\d+>)|(\[([^\]\n]+)\]\(((?:https?:\/\/|mailto:)[^\s)]+|\/[^\s)]*)\))|(\*\*)|(__)|((?<!\*)\*(?!\*))|((?<!_)_(?!_))|(~~)|(\|\|)|(https?:\/\/[^\s<>\(\)*|~_](?:[^\s<>\(\)*|~]*[^\s<>\(\)*|~_])?)/g;
 
 function timestampLabel(unix: number, style: string): string | null {
   if (!Number.isSafeInteger(unix) || !timestampStyles.has(style)) return null;
@@ -235,17 +241,7 @@ export function DiscordEmoji({ name, id, animated = false, className, interactiv
     const trigger = triggerRef.current;
     const popup = popupRef.current;
     if (!trigger || !popup) return;
-    const rect = trigger.getBoundingClientRect();
-    const margin = 12;
-    const gap = 8;
-    const width = popup.offsetWidth;
-    const height = popup.offsetHeight;
-    const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
-    const below = rect.bottom + gap;
-    const top = below + height <= window.innerHeight - margin
-      ? below
-      : Math.max(margin, rect.top - height - gap);
-    setPosition({ left, top: Math.min(top, window.innerHeight - height - margin) });
+    setPosition(placePopup(trigger, popup));
   }, []);
 
   useLayoutEffect(() => {
@@ -361,7 +357,16 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
       // the bot writes its command legend: [`Lock`](url). The code keeps its
       // box and takes the link's colour instead of the usual code colour.
       const code = /^`([^`\n]+)`$/.exec(node.text);
-      return <a key={key} className="discord-md-link" href={node.url} target="_blank" rel="noopener noreferrer">
+      // Only a web link leaves the site. An address opens the mail client in
+      // place, and a relative link is a page of this site (the legal pages
+      // turn it into a client-side navigation), so neither may claim a new tab.
+      const external = /^https?:\/\//i.test(node.url);
+      return <a
+        key={key}
+        className="discord-md-link"
+        href={node.url}
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
         {code ? <code className="discord-md-code">{code[1]}</code> : node.text}
       </a>;
     }
@@ -396,7 +401,7 @@ function renderInline(nodes: Node[], names?: DiscordMentionNames, prefix = "disc
   });
 }
 
-type DiscordCustomStatus = {
+export type DiscordCustomStatus = {
   text: string | null;
   emoji_name: string | null;
   emoji_id: string | null;
@@ -421,9 +426,17 @@ type TranscriptProfile = {
   guild_nick: string | null; guild_tag: string | null; guild_badge_url: string | null;
   server_tag?: DiscordServerTagInfo | null;
   status?: string | null;
+  /** The phone is the client holding the presence, so the avatar draws the mobile icon. */
+  is_mobile?: boolean;
 
   avatar_decoration_url: string | null;
   badges?: string[] | null;
+  /** A Discord bot account: the display name carries Discord's APP pill. */
+  bot?: boolean;
+  /** A verified bot's pill also carries Discord's tick. */
+  verified_bot?: boolean;
+  /** The four-digit tag Discord prints after a bot's handle. */
+  discriminator?: string | null;
   custom_status?: DiscordCustomStatus | null;
   activities?: DiscordProfileActivity[] | null;
 };
@@ -464,7 +477,9 @@ function statusEmoji(status: DiscordCustomStatus) {
   if (status.emoji_id) {
     return <DiscordEmoji name={status.emoji_name || "emoji"} id={status.emoji_id} animated={status.emoji_animated} className="discord-profile-status-emoji" interactive={false} />;
   }
-  return status.emoji_name ? <span className="discord-profile-status-emoji">{status.emoji_name}</span> : null;
+  // Discord draws default emojis with Twemoji rather than the system font, so the
+  // bubble matches Discord instead of whatever the visitor's OS ships.
+  return status.emoji_name ? <img className="discord-profile-status-emoji" src={twemojiUrl(status.emoji_name)} alt={status.emoji_name} /> : null;
 }
 
 /**
@@ -472,7 +487,7 @@ function statusEmoji(status: DiscordCustomStatus) {
  * holds just the emoji; text clamps to two lines and expands on click, the way
  * Discord truncates a long status and opens it in full.
  */
-function ProfileCustomStatus({ status }: { status: DiscordCustomStatus }) {
+export function ProfileCustomStatus({ status }: { status: DiscordCustomStatus }) {
   const { t } = useStrings("shared");
   const emoji = statusEmoji(status);
   const text = status.text?.trim() || "";
@@ -528,7 +543,7 @@ function ProfileSpotifyCard({ activity }: { activity: DiscordProfileActivity }) 
   const total = activity.duration_seconds || (hasWindow ? (end as number) - (start as number) : 0);
   const elapsed = hasWindow ? Math.min(Math.max(now - (start as number), 0), total) : 0;
   const card = <div className="discord-profile-spotify">
-    <div className="discord-profile-spotify-head"><img src="/spotify.svg" alt="" /><span>Listening to Spotify</span></div>
+    <div className="discord-profile-spotify-head"><span>Listening to Spotify</span><img src="/spotify.svg" alt="" /></div>
     <div className="discord-profile-spotify-body">
       <img className="discord-profile-spotify-art" src={activity.album_cover_url} alt="" />
       <div className="discord-profile-spotify-copy">
@@ -628,17 +643,8 @@ export function useDiscordProfile(enabled = true) {
     const trigger = profileTriggerRef.current;
     const card = profileCardRef.current;
     if (!trigger || !card) return;
-    const rect = trigger.getBoundingClientRect();
-    const margin = 12;
-    const gap = 8;
-    const width = card.offsetWidth;
-    const height = card.offsetHeight;
-    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
-    const below = rect.bottom + gap;
-    const top = below + height <= window.innerHeight - margin
-      ? below
-      : Math.max(margin, rect.top - height - gap);
-    setProfilePosition({ left, top: Math.min(top, window.innerHeight - height - margin) });
+    // Left-aligned with the name, not centred under it.
+    setProfilePosition(placePopup(trigger, card, "start"));
   }, []);
   useLayoutEffect(() => {
     if (!profileLoading && !profileError && !profile) return;
@@ -740,17 +746,29 @@ export function useDiscordProfile(enabled = true) {
           <ProfileMenu key={profile.id} userId={profile.id} />
           <div className="discord-profile-body">
             <div className="discord-profile-head">
-              {profile.avatar_url && <DiscordStatusAvatar status={profileStatusKey(profile.status)} className="discord-profile-avatar-wrap" label={profileStatusLabel(profile.status, t)}>
+              {profile.avatar_url && <DiscordStatusAvatar status={profileStatusKey(profile.status)} mobile={profile.is_mobile} className="discord-profile-avatar-wrap" label={profileStatusLabel(profile.status, t)}>
                 <img className="discord-profile-avatar" src={profile.avatar_url} alt="" />
                 {profile.avatar_decoration_url && <img className="discord-profile-avatar-decoration" src={profile.avatar_decoration_url} alt="" />}
               </DiscordStatusAvatar>}
               {customStatus && (customStatus.text || customStatus.emoji_id || customStatus.emoji_name) && <ProfileCustomStatus status={customStatus} />}
             </div>
-            <h2 className="discord-profile-name">{profile.display_name}</h2>
+            <h2 className="discord-profile-name">
+              {profile.display_name}
+              {/* Discord puts one APP pill beside a bot's name, with the
+                  verified tick inside it rather than as a separate badge. */}
+              {profile.bot && <span className="discord-bot-tag" title={profile.verified_bot ? "Verified bot" : "Bot"}>
+                {profile.verified_bot && <svg className="discord-bot-tag-check" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9.4 16.6 4.8 12l-1.4 1.4 6.1 6.1L21 7.8l-1.4-1.4z" /></svg>}
+                APP
+              </span>}
+            </h2>
             {/* Discord puts the server tag pill on the username row and the
                 profile badges on the line directly below it. */}
             <p className="discord-profile-username">
-              <span className="discord-profile-user-tag">{profile.username}</span>
+              <span className="discord-profile-user-tag">
+                {profile.username}
+                {/* Bots still carry Discord's four-digit tag after the handle. */}
+                {profile.bot && profile.discriminator && <span className="discord-profile-discriminator">#{profile.discriminator}</span>}
+              </span>
               {profile.guild_tag && <DiscordServerTagPill
                 server={profile.server_tag || null}
                 tag={profile.guild_tag}
@@ -879,10 +897,11 @@ export function DiscordMarkdown({ text, mentionNames, guildId, className, style,
     const line = lines[index];
     const trimmed = line.trimStart();
     if (trimmed.startsWith("```")) {
+      const language = trimmed.slice(3).trim().split(/\s+/)[0] || "";
       const code: string[] = [];
       index += 1;
       while (index < lines.length && !lines[index].trimStart().startsWith("```")) code.push(lines[index++]);
-      children.push(<pre className="discord-md-block-code" key={`code-${index}`}><code>{code.join("\n")}</code></pre>);
+      children.push(<DiscordCodeBlock code={code.join("\n")} language={language} key={`code-${index}`} />);
       continue;
     }
     // A double pipe is a spoiler, not the first cell of a table row.

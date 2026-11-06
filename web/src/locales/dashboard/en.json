@@ -81,6 +81,8 @@
   "shell.botOnline": "Niko is online",
   "shell.connectedServers": "{count} connected servers · v{version}",
   "shell.backToSite": "Back to public site",
+  "shell.developerPortal": "Developer portal",
+  "shell.developerTabs": "Developer portal",
   "settings.perServer": "Per server",
   "settings.footerNote": "Changes apply to this server.",
   "settings.saving": "Saving…",

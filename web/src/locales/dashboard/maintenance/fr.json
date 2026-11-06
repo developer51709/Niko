@@ -50,5 +50,17 @@
   "maintenance.resuming": "Réactivation…",
   "maintenance.nowPaused": "{key} est désormais en mode maintenance.",
   "maintenance.nowAvailable": "{key} est de nouveau disponible.",
-  "maintenance.saveFailed": "La modification de maintenance n’a pas pu être enregistrée."
+  "maintenance.saveFailed": "La modification de maintenance n’a pas pu être enregistrée.",
+  "maintenance.contextMenu": "Menu contextuel",
+  "maintenance.prefixCommand": "Commande préfixe",
+  "maintenance.hybridCommand": "Slash + préfixe",
+  "maintenance.hybridHint": "Fonctionne comme commande slash et avec le préfixe du serveur.",
+  "maintenance.apiCountOne": "{count} API",
+  "maintenance.apiCountMany": "{count} API",
+  "maintenance.apisTitle": "Routes de l’API",
+  "maintenance.apisText": "Mets une route en pause sans couper tout le site. Les propriétaires gardent l’accès pour tester.",
+  "maintenance.apiReasonPlaceholder": "Motif facultatif affiché sur /status",
+  "maintenance.apiReasonAria": "Motif de maintenance du point de terminaison {name}",
+  "maintenance.pauseApi": "Mettre le point de terminaison {name} en pause",
+  "maintenance.resumeApi": "Réactiver le point de terminaison {name}"
 }

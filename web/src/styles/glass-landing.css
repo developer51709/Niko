@@ -1,7 +1,8 @@
 /* Shared dark glass treatment: let the ambient canvas show through without sacrificing contrast. */
 .hero-art .workspace-preview,
 .feature-grid .feature-card,
-.shell > .callout {
+.shell > .callout,
+.flagged-page .flagged-panel {
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -15,7 +16,8 @@
 
 .hero-art .workspace-preview::before,
 .feature-grid .feature-card::before,
-.shell > .callout::before {
+.shell > .callout::before,
+.flagged-page .flagged-panel::before {
   content: "";
   position: absolute;
   z-index: -1;
@@ -41,7 +43,8 @@
 .preview-sidebar,
 .preview-main,
 .feature-card > *,
-.shell > .callout > * {
+.shell > .callout > *,
+.flagged-page .flagged-panel > * {
   position: relative;
   z-index: 1;
 }

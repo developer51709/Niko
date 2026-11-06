@@ -1,0 +1,33 @@
+/* The card a staff page shows while its data is loading
+   (components/LoadingCard.tsx).
+
+   An empty list under a staff panel is the same surface, so both selectors are
+   declared here once: the loading card and the empty state have always looked
+   alike, and a single rule keeps them from drifting apart. */
+
+.loading-card,
+.dashboard-layout .staff-guild-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 46px 20px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .035);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  font-size: 11px;
+}
+
+.loading-card p,
+.dashboard-layout .staff-guild-empty p { margin: 0; }
+
+@media (prefers-reduced-transparency: reduce) {
+  .loading-card,
+  .dashboard-layout .staff-guild-empty {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

@@ -58,5 +58,7 @@
   "answer.noneSent": "Aucune réponse n’a été envoyée.",
   "reader.aria": "Signalement",
   "reader.pickTitle": "Choisis un signalement.",
-  "reader.pickBody": "Les signalements sont à gauche, du plus récent au plus ancien. En ouvrir un montre ce qui a été signalé, le motif et la conversation si la personne qui signale l’a partagée."
+  "reader.pickBody": "Les signalements sont à gauche, du plus récent au plus ancien. En ouvrir un montre ce qui a été signalé, le motif et la conversation si la personne qui signale l’a partagée.",
+  "menu.copyReporter": "Copier l’adresse de la personne qui signale",
+  "menu.copySubject": "Copier l’objet"
 }

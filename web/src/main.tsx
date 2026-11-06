@@ -13,6 +13,12 @@ import "./styles/staff-card.css";
 import "./styles/discord-name-fonts.css";
 import "./styles/devtools.css";
 import "./styles/team-applications.css";
+import "./styles/test-fonts.css";
+import { installFontTester } from "./fontTester";
+
+// Public on purpose: the typeface tester is for anyone with a console, not just
+// an owner session, so it is installed before the app renders.
+installFontTester();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

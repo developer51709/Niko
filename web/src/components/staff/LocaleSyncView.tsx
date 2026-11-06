@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { getOwnerLocales, setOwnerLocaleTranslationCard, syncOwnerLocales } from "../../api";
-import { useStrings } from "../../i18n";
+import { getOwnerLocales, setOwnerLocaleAutoSync, setOwnerLocaleTranslationCard, syncOwnerLocales } from "../../api";
+import { type Translate, useStrings } from "../../i18n";
 import type { OwnerLocalePage, OwnerLocales } from "../../types";
 import { notifyError, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
-
-type Translate = (key: string, values?: Record<string, string | number>) => string;
+import { LoadingCard } from "../LoadingCard";
 
 const TOAST_KEY = "owner-locales";
 
@@ -130,6 +129,7 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [panelBusy, setPanelBusy] = useState(false);
+  const [autoBusy, setAutoBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -169,16 +169,31 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
   }
 
   if (!data) {
-    // The same loading card the update page uses: the ring and its line of
-    // text in the dashboard's empty-state panel, with no tile around the ring.
-    return <div className="owner-view"><div className="staff-guild-empty"><div className="loading-ring" /><p>{t("owner.loading")}</p></div></div>;
+    return <div className="owner-view"><LoadingCard message={t("owner.loading")} /></div>;
   }
 
   const live = data.source?.mode === "beta";
+  const autoOn = data.auto_sync ?? true;
   const languages = [...data.coverage].sort((a, b) => b.percent - a.percent);
   // The card is drawn by the bot, so this switch records the owner's intent; the
   // panel picks it up on its next refresh, which is why nothing here polls it.
   const cardOn = data.status_panel?.translation_card ?? false;
+
+  const toggleAuto = async () => {
+    setAutoBusy(true);
+    try {
+      const next = await setOwnerLocaleAutoSync(!autoOn, csrfToken);
+      setData(next);
+      notifySuccess(
+        t(next.auto_sync === false ? "owner.locales.autoDisabled" : "owner.locales.autoEnabled"),
+        TOAST_KEY,
+      );
+    } catch (exc) {
+      notifyError(exc instanceof Error ? exc.message : String(exc), TOAST_KEY);
+    } finally {
+      setAutoBusy(false);
+    }
+  };
 
   const toggleCard = async () => {
     setPanelBusy(true);
@@ -256,6 +271,35 @@ export function LocaleSyncView({ csrfToken }: { csrfToken?: string }) {
           </div>
         </dl>
       </section>
+
+      {data.configured && (
+        <section className="owner-card">
+          <div className="owner-card-head">
+            <div>
+              <span className="panel-kicker">{t("owner.locales.autoKicker")}</span>
+              <h3>{t("owner.locales.autoTitle")}</h3>
+              <p>{t("owner.locales.autoBody")}</p>
+            </div>
+            <div className="owner-card-actions">
+              <span className={`owner-chip${autoOn ? " is-live" : ""}`}>
+                {autoOn ? t("owner.locales.autoOn") : t("owner.locales.autoOff")}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoOn}
+                aria-label={t("owner.locales.autoToggle")}
+                className={`owner-switch${autoOn ? " is-on" : ""}`}
+                onClick={() => void toggleAuto()}
+                disabled={autoBusy}
+              >
+                <span />
+              </button>
+            </div>
+          </div>
+          <p className="owner-card-note">{t("owner.locales.autoHint")}</p>
+        </section>
+      )}
 
       <section className="owner-card">
         <div className="owner-card-head">

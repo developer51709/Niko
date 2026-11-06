@@ -1,4 +1,4 @@
-export type Page = "home" | "commands" | "docs" | "docs-detail" | "status" | "leaderboard" | "guild-leaderboard" | "dashboard" | "staff" | "staff-email" | "staff-email-reports" | "email-report" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "not-found" | "render-lab";
+export type Page = "home" | "commands" | "docs" | "docs-detail" | "developers" | "status" | "leaderboard" | "guild-leaderboard" | "dashboard" | "developer" | "staff" | "staff-email" | "staff-email-reports" | "email-report" | "appeal" | "application" | "team-application" | "team" | "team-member" | "support" | "discord" | "partnership" | "privacy" | "terms" | "data-removal" | "community" | "donate" | "billing" | "gift" | "transcript" | "changelog" | "changelog-detail" | "flagged-media" | "not-found" | "render-lab";
 
 // Unlisted scratch route for eyeballing Discord text and profile popup
 // rendering. It is deliberately not linked, documented, or prerendered.
@@ -137,6 +137,8 @@ export function pageFromPath(pathname = currentPath()): Page {
   if (path.startsWith("/levels/")) return "guild-leaderboard";
   if (path === "/docs") return "docs";
   if (path.startsWith("/docs/")) return "docs-detail";
+  if (path === "/developers" || path.startsWith("/developers/")) return "developers";
+  if (path === "/dashboard/developer" || path.startsWith("/dashboard/developer/")) return "developer";
   if (path === "/dashboard/staff") return "staff";
   // The hidden staff mailbox sits beside the workspace, never under its hash
   // tabs, so it is its own page.
@@ -150,6 +152,9 @@ export function pageFromPath(pathname = currentPath()): Page {
   if (path === "/dashboard" || path.startsWith("/dashboard/")) return "dashboard";
   if (path === "/team") return "team";
   if (path === "/support") return "support";
+  // The page a flagged-image placeholder in a log entry links to. Its `?type=`
+  // names which content filter fired; the page reads it itself.
+  if (path === "/help/flagged-media") return "flagged-media";
   if (path === "/discord/partnership") return "partnership";
   if (path === "/discord") return "discord";
   if (path.startsWith("/team/")) return "team-member";

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import {
   createStaffBroadcast,
   deleteStaffBroadcast,
@@ -8,19 +8,30 @@ import {
   getStaffBroadcasts,
   sendStaffBroadcast,
   updateStaffBroadcast,
+  updateStaffBroadcastMedia,
   uploadStaffBroadcastMedia,
 } from "../../api";
 import { DiscordMarkdown } from "../DiscordMarkdown";
 import { Icon } from "../Icon";
+import { LoadingCard } from "../LoadingCard";
 import { ColorPicker } from "./ColorPicker";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
-import type { StaffBroadcast, StaffBroadcastStatus } from "../../types";
+import { registerContextMenuExtras } from "../../utils/contextMenu";
+import type { StaffBroadcast, StaffBroadcastMedia, StaffBroadcastMention, StaffBroadcastStatus } from "../../types";
 import { useStrings } from "../../i18n";
 
 const MAX_MEDIA = 10;
 const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const ACCENT_PRESETS = ["C8A882", "5865F2", "57F287", "FEE75C", "EB459E", "ED4245", "9B59B6", "3498DB"];
+
+// The mention kinds a broadcast can still ping, in the order the chips show.
+const MENTIONS: StaffBroadcastMention[] = ["everyone", "roles", "users"];
+const MENTION_LABELS: Record<StaffBroadcastMention, string> = {
+  everyone: "broadcast.mentionEveryone",
+  roles: "broadcast.mentionRoles",
+  users: "broadcast.mentionUsers",
+};
 
 // Catalogue keys rather than text: each badge is translated where it renders.
 const STATUS_LABELS: Record<StaffBroadcastStatus, string> = {
@@ -48,6 +59,12 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** The readable name and the extension the attachment keeps. */
+function splitFileName(filename: string) {
+  const extension = /\.[^./]+$/.exec(filename)?.[0] ?? "";
+  return { stem: filename.slice(0, filename.length - extension.length), extension };
+}
+
 /**
  * Owner-only Components v2 broadcast composer.
  *
@@ -64,8 +81,22 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
   const [body, setBody] = useState("");
   const [footer, setFooter] = useState("");
   const [accent, setAccent] = useState("C8A882");
+  // Advanced options: who may be pinged, and whether the whole container opens
+  // behind Discord's spoiler. They are stored with the broadcast and applied at
+  // send time, so an edit of a delivered copy keeps them too.
+  const [mentions, setMentions] = useState<StaffBroadcastMention[]>(MENTIONS);
+  const [spoiler, setSpoiler] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // The preview mirrors Discord's spoiler reveal: it is hidden until clicked.
+  const [previewRevealed, setPreviewRevealed] = useState(false);
+  // Renaming an attachment happens in the studio's own dialog rather than the
+  // browser's prompt, so the flow keeps the page's typography and colours.
+  const [renameTarget, setRenameTarget] = useState<StaffBroadcastMedia | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const renameInput = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"" | "saving" | "sending" | "uploading" | "deleting" | "creating">("");
+  const [busy, setBusy] = useState<"" | "saving" | "sending" | "uploading" | "deleting" | "creating" | "media">("");
   const [error, setError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const loadedFor = useRef<string | null>(null);
@@ -79,6 +110,9 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     setBody(broadcast.body);
     setFooter(broadcast.footer);
     setAccent(broadcast.accent);
+    setMentions(broadcast.allowed_mentions);
+    setSpoiler(broadcast.spoiler);
+    setPreviewRevealed(false);
   };
 
   const applyBroadcast = (broadcast: StaffBroadcast) => {
@@ -140,7 +174,16 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     setBody(selected.body);
     setFooter(selected.footer);
     setAccent(selected.accent || "C8A882");
+    setMentions(selected.allowed_mentions);
+    setSpoiler(selected.spoiler);
+    setPreviewRevealed(false);
   }, [selected?.id]);
+
+  // Turning the spoiler off resets the preview, so switching it back on shows
+  // the hidden state straight away instead of a card the owner already opened.
+  useEffect(() => {
+    if (!spoiler) setPreviewRevealed(false);
+  }, [spoiler]);
 
   // Live progress: the job updates counters after every copy. Polling pauses
   // automatically once the status settles back to sent or failed.
@@ -175,11 +218,16 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [selectedId, active]);
 
+  // Order-free comparison: the chips keep a fixed order, but a stored row may
+  // list the allowed mentions differently after a round trip.
+  const mentionsKey = (value: StaffBroadcastMention[]) => [...value].sort().join(",");
   const dirty = !!selected && (
     title !== selected.title
     || body !== selected.body
     || footer !== selected.footer
     || accent !== selected.accent
+    || spoiler !== selected.spoiler
+    || mentionsKey(mentions) !== mentionsKey(selected.allowed_mentions)
   );
 
   const save = async (): Promise<StaffBroadcast | null> => {
@@ -187,7 +235,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     setBusy("saving");
     notifyLoading(t("broadcast.saving"), "staff-broadcast");
     try {
-      const result = await updateStaffBroadcast(selected.id, { title, body, accent, footer }, csrfToken);
+      const result = await updateStaffBroadcast(selected.id, { title, body, accent, footer, spoiler, allowed_mentions: mentions }, csrfToken);
       const stored = applySaved(result.broadcast, result.syncing);
       loadFields(stored);
       if (result.syncing) {
@@ -215,7 +263,7 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     try {
       let current = selected;
       if (dirty) {
-        const saved = await updateStaffBroadcast(current.id, { title, body, accent, footer }, csrfToken);
+        const saved = await updateStaffBroadcast(current.id, { title, body, accent, footer, spoiler, allowed_mentions: mentions }, csrfToken);
         current = saved.broadcast;
         applyBroadcast(current);
       }
@@ -329,8 +377,126 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
     }
   };
 
+  const toggleMediaSpoiler = async (mediaId: string, next: boolean) => {
+    if (!selected || busy) return;
+    setBusy("media");
+    try {
+      const result = await updateStaffBroadcastMedia(selected.id, mediaId, { spoiler: next }, csrfToken);
+      applySaved(result.broadcast, result.syncing);
+      notifySuccess(
+        t(next ? "broadcast.imageSpoilerOn" : "broadcast.imageSpoilerOff"),
+        "staff-broadcast",
+      );
+    } catch (reason) {
+      notifyError(reason instanceof Error ? reason.message : t("broadcast.imageSpoilerFailed"), "staff-broadcast");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  // The dialog edits the readable part of the name only: the extension is read
+  // from the attachment and shown as a fixed suffix, because the server keeps
+  // the one that matches the stored bytes.
+  const { stem: renameStem, extension: renameExtension } = renameTarget
+    ? splitFileName(renameTarget.filename)
+    : { stem: "", extension: "" };
+
+  const openRename = (media: StaffBroadcastMedia) => {
+    if (!selected || busy) return;
+    setRenameTarget(media);
+    setRenameValue(splitFileName(media.filename).stem);
+    setRenameError("");
+  };
+
+  const closeRename = () => {
+    if (busy === "media") return;
+    setRenameTarget(null);
+    setRenameError("");
+  };
+
+  const submitRename = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected || !renameTarget || busy) return;
+    const next = renameValue.trim();
+    if (!next) {
+      setRenameError(t("broadcast.renameEmpty"));
+      renameInput.current?.focus();
+      return;
+    }
+    // Typing the current name back is not a change worth a request.
+    if (next === renameStem) {
+      setRenameTarget(null);
+      return;
+    }
+    setBusy("media");
+    setRenameError("");
+    try {
+      const result = await updateStaffBroadcastMedia(
+        selected.id, renameTarget.id, { filename: next }, csrfToken,
+      );
+      applySaved(result.broadcast, result.syncing);
+      const renamed = result.broadcast.media.find((item) => item.id === renameTarget.id);
+      setRenameTarget(null);
+      notifySuccess(t("broadcast.imageRenamed", { name: renamed?.filename || next }), "staff-broadcast");
+    } catch (reason) {
+      // A rejected name (a duplicate, mostly) stays in the dialog so it can be
+      // corrected without opening it again.
+      setRenameError(reason instanceof Error ? reason.message : t("broadcast.renameFailed"));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  // Escape closes the dialog and the input takes focus as it opens, so the
+  // rename can be typed, confirmed and dismissed entirely from the keyboard.
+  useEffect(() => {
+    if (!renameTarget) return;
+    renameInput.current?.focus();
+    renameInput.current?.select();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRenameTarget(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [renameTarget?.id]);
+
+  const toggleMention = (kind: StaffBroadcastMention) => {
+    setMentions((current) => (
+      current.includes(kind)
+        ? current.filter((item) => item !== kind)
+        // Keep the chips' order so a save round trip compares cleanly.
+        : MENTIONS.filter((item) => item === kind || current.includes(item))
+    ));
+  };
+
+  // Right-click on an uploaded image offers its own rows: rename the file, and
+  // switch its spoiler. The menu is mounted above every page, so it learns
+  // about the images from this resolver instead of holding a second copy of the
+  // studio's state.
+  useEffect(() => registerContextMenuExtras((target) => {
+    const figure = target.closest<HTMLElement>("[data-broadcast-media]");
+    if (!figure || !selected || busy) return null;
+    if (selected.status === "sending" || selected.status === "syncing") return null;
+    const media = selected.media.find((item) => item.id === figure.dataset.broadcastMedia);
+    if (!media) return null;
+    return [
+      {
+        key: "broadcast-image-rename",
+        label: t("broadcast.renameImage"),
+        icon: "file",
+        action: () => openRename(media),
+      },
+      {
+        key: "broadcast-image-spoiler",
+        label: media.spoiler ? t("broadcast.removeImageSpoiler") : t("broadcast.markImageSpoiler"),
+        icon: "lock",
+        action: () => void toggleMediaSpoiler(media.id, !media.spoiler),
+      },
+    ];
+  }), [selected, busy, t]);
+
   if (loading) {
-    return <div className="broadcast-studio-state"><div className="loading-ring" /><p>{t("broadcast.opening")}</p></div>;
+    return <LoadingCard message={t("broadcast.opening")} />;
   }
   if (error) {
     return (
@@ -477,14 +643,20 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
               <div>
                 <span className="form-label">{t("broadcast.imagesLabel")}</span>
                 <small>{t("broadcast.imagesHint")}</small>
+                <small>{t("broadcast.imageSpoilerHint")}</small>
               </div>
               <span className="broadcast-media-count">{selected.media.length}/{MAX_MEDIA}</span>
             </div>
             {selected.media.length > 0 && (
               <div className="broadcast-media-grid">
                 {selected.media.map((item) => (
-                  <figure className="broadcast-media-item" key={item.id}>
-                    <img src={item.url} alt="" loading="lazy" />
+                  <figure
+                    className={`broadcast-media-item${item.spoiler ? " is-spoiler" : ""}`}
+                    key={item.id}
+                    data-broadcast-media={item.id}
+                    data-label={t("broadcast.spoilerBadge")}
+                  >
+                    <img src={item.url} alt="" loading="lazy" draggable={false} />
                     <figcaption>
                       <strong title={item.filename}>{item.filename}</strong>
                       <small>{formatBytes(item.size)}</small>
@@ -521,6 +693,88 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
               <span>{t(busy === "uploading" ? "broadcast.uploading" : "broadcast.addImages")}</span>
               <small>{t("broadcast.imageLimits")}</small>
             </button>
+          </section>
+
+          {/* Advanced options live at the bottom of the editor: most broadcasts
+              never open them, so they stay folded away until needed. */}
+          <section className={`broadcast-advanced${advancedOpen ? " is-open" : ""}`}>
+            <button
+              type="button"
+              className="broadcast-advanced-toggle"
+              onClick={() => setAdvancedOpen((open) => !open)}
+              aria-expanded={advancedOpen}
+              aria-controls="broadcast-advanced-panel"
+            >
+              <Icon name="settings" />
+              <span className="broadcast-advanced-label">
+                <strong>{t("broadcast.advancedTitle")}</strong>
+                <small>{t("broadcast.advancedHint")}</small>
+              </span>
+              {(spoiler || mentions.length !== MENTIONS.length) && (
+                <span className="broadcast-advanced-badge">{t("broadcast.advancedCustom")}</span>
+              )}
+              <Icon name="chevron" className="broadcast-advanced-chevron" />
+            </button>
+
+            {advancedOpen && (
+              <div className="broadcast-advanced-panel" id="broadcast-advanced-panel">
+                <div className="broadcast-advanced-group">
+                  <div className="broadcast-advanced-heading">
+                    <span className="form-label">{t("broadcast.mentionsLabel")}</span>
+                    <small>{t("broadcast.mentionsHint")}</small>
+                  </div>
+                  <div className="broadcast-mention-chips" role="group" aria-label={t("broadcast.mentionsLabel")}>
+                    {MENTIONS.map((kind) => {
+                      const on = mentions.includes(kind);
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          className={`broadcast-chip${on ? " is-on" : ""}`}
+                          aria-pressed={on}
+                          onClick={() => toggleMention(kind)}
+                          disabled={locked}
+                        >
+                          {on && <Icon name="check" />}
+                          {t(MENTION_LABELS[kind])}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="broadcast-silence"
+                      onClick={() => setMentions([])}
+                      disabled={locked || mentions.length === 0}
+                    >
+                      {t("broadcast.mentionsSilence")}
+                    </button>
+                  </div>
+                  <small className="broadcast-advanced-state">
+                    {mentions.length === 0 ? t("broadcast.mentionsSilent") : t("broadcast.mentionsActive")}
+                  </small>
+                </div>
+
+                <div className="broadcast-advanced-group">
+                  <div className="broadcast-advanced-heading">
+                    <span className="form-label">{t("broadcast.spoilerLabel")}</span>
+                    <small>{t("broadcast.spoilerHint")}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className={`broadcast-switch${spoiler ? " is-on" : ""}`}
+                    role="switch"
+                    aria-checked={spoiler}
+                    onClick={() => setSpoiler((value) => !value)}
+                    disabled={locked}
+                  >
+                    <span className="broadcast-switch-track"><span /></span>
+                    <span className="broadcast-switch-copy">
+                      <strong>{t("broadcast.spoilerSwitch")}</strong>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           <footer className="broadcast-composer-actions">
@@ -567,21 +821,44 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
             <span>{t("broadcast.previewSurface")}</span>
           </div>
           <div className="broadcast-preview-surface">
-            <article className="broadcast-preview-card" style={{ borderLeftColor: `#${accent}` }}>
-              <h3 className="broadcast-preview-title">{title.trim() || t("broadcast.previewTitle")}</h3>
-              <span className="broadcast-preview-separator" />
-              <DiscordMarkdown
-                text={body.trim() || t("broadcast.previewBody")}
-                className="broadcast-preview-body"
-              />
-              {selected.media.length > 0 && (
-                <div className={`broadcast-preview-gallery is-${Math.min(selected.media.length, 4)}`}>
-                  {selected.media.slice(0, 4).map((item) => <img key={item.id} src={item.url} alt="" loading="lazy" />)}
-                  {selected.media.length > 4 && <span className="broadcast-preview-more">+{selected.media.length - 4}</span>}
-                </div>
+            <article className={`broadcast-preview-card${spoiler ? " is-spoiler" : ""}`} style={{ borderLeftColor: `#${accent}` }}>
+              <div className={`broadcast-preview-inner${spoiler && !previewRevealed ? " is-hidden" : ""}`}>
+                <h3 className="broadcast-preview-title">{title.trim() || t("broadcast.previewTitle")}</h3>
+                <span className="broadcast-preview-separator" />
+                <DiscordMarkdown
+                  text={body.trim() || t("broadcast.previewBody")}
+                  className="broadcast-preview-body"
+                />
+                {selected.media.length > 0 && (
+                  <div className={`broadcast-preview-gallery is-${Math.min(selected.media.length, 4)}`}>
+                    {selected.media.slice(0, 4).map((item) => (
+                      <span
+                        key={item.id}
+                        className={`broadcast-preview-media${item.spoiler ? " is-spoiler" : ""}`}
+                        data-label={t("broadcast.spoilerBadge")}
+                      >
+                        <img src={item.url} alt="" loading="lazy" />
+                      </span>
+                    ))}
+                    {selected.media.length > 4 && <span className="broadcast-preview-more">+{selected.media.length - 4}</span>}
+                  </div>
+                )}
+                <span className="broadcast-preview-separator" />
+                {/* The bot posts the footer as `-# …` in a TextDisplay, so the
+                    preview renders it the same way: the markdown renderer's
+                    global subtext style, not a second copy of those rules. */}
+                <DiscordMarkdown text={`-# ${previewFooter}`} className="broadcast-preview-footer" />
+              </div>
+              {spoiler && !previewRevealed && (
+                <button
+                  type="button"
+                  className="broadcast-preview-spoiler"
+                  onClick={() => setPreviewRevealed(true)}
+                >
+                  <strong>{t("broadcast.spoilerBadge")}</strong>
+                  <small>{t("broadcast.spoilerReveal")}</small>
+                </button>
               )}
-              <span className="broadcast-preview-separator" />
-              <p className="broadcast-preview-footer">-# {previewFooter}</p>
             </article>
           </div>
           <p className="broadcast-preview-note">
@@ -632,6 +909,66 @@ export function BroadcastStudioView({ csrfToken }: BroadcastStudioProps) {
           })}
         </div>
       </section>
+
+      {/* The page's own dialog, not the browser's prompt: the same backdrop,
+          heading and field styling as the rest of the staff workspace. */}
+      {renameTarget && (
+        <div className="modal-backdrop" role="presentation" onClick={closeRename}>
+          <section
+            className="modal-card broadcast-rename-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="broadcast-rename-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-heading">
+              <div>
+                <span className="panel-kicker">{t("broadcast.renameKicker")}</span>
+                <h3 id="broadcast-rename-title">{t("broadcast.renameTitle")}</h3>
+              </div>
+              <button
+                type="button"
+                className="dialog-close"
+                onClick={closeRename}
+                disabled={busy === "media"}
+                aria-label={t("broadcast.renameCancel")}
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+            <form onSubmit={(event) => void submitRename(event)}>
+              <label className="broadcast-field broadcast-rename-field" htmlFor="broadcast-rename-input">
+                <span className="form-label">{t("broadcast.renameLabel")}</span>
+                <span className="broadcast-rename-control">
+                  <input
+                    id="broadcast-rename-input"
+                    ref={renameInput}
+                    value={renameValue}
+                    maxLength={60}
+                    spellCheck={false}
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setRenameValue(event.target.value);
+                      setRenameError("");
+                    }}
+                  />
+                  {renameExtension && <span className="broadcast-rename-extension">{renameExtension}</span>}
+                </span>
+                <small>{t("broadcast.renameHint")}</small>
+              </label>
+              {renameError && <small className="broadcast-rename-error" role="alert">{renameError}</small>}
+              <footer className="broadcast-rename-actions">
+                <button type="button" className="button button-muted" onClick={closeRename} disabled={busy === "media"}>
+                  {t("broadcast.renameCancel")}
+                </button>
+                <button type="submit" className="button button-primary" disabled={busy === "media"}>
+                  {t(busy === "media" ? "broadcast.renameSaving" : "broadcast.renameConfirm")}
+                </button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -58,5 +58,7 @@
   "answer.noneSent": "Es wurde keine Antwort gesendet.",
   "reader.aria": "Meldung",
   "reader.pickTitle": "Wähle eine Meldung.",
-  "reader.pickBody": "Meldungen stehen links, die neueste zuerst. Wenn du eine öffnest, siehst du, was markiert wurde, den Grund und die Unterhaltung, falls der Meldende sie geteilt hat."
+  "reader.pickBody": "Meldungen stehen links, die neueste zuerst. Wenn du eine öffnest, siehst du, was markiert wurde, den Grund und die Unterhaltung, falls der Meldende sie geteilt hat.",
+  "menu.copyReporter": "Adresse der meldenden Person kopieren",
+  "menu.copySubject": "Betreff kopieren"
 }

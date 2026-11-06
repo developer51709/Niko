@@ -22,10 +22,12 @@ import type {
   StaffApplication,
   StaffApplicationSubmission,
   PublicStaffApplication,
+  StaffErrorReport,
   StaffGuild,
   StaffBlacklist,
   StaffBillingResponse,
   StaffBroadcast,
+  StaffBroadcastMention,
   StaffEmailInbox,
   StaffEmailMessage,
   StaffEmailReport,
@@ -44,6 +46,7 @@ import type {
   NotifierResponse,
   StaffMaintenanceResponse,
   OwnerLocales,
+  OwnerLogsResponse,
   OwnerUpdates,
   OwnerUpdateApply,
   OwnerUpdateProgress,
@@ -51,6 +54,14 @@ import type {
   TeamRecruitmentOpening,
   TeamRecruitmentSettings,
   TeamRecruitmentSubmission,
+  DeveloperAccessList,
+  DeveloperApplication,
+  DeveloperApplicationList,
+  DeveloperApplicationReviewList,
+  DeveloperAppeal,
+  DeveloperKey,
+  DeveloperMe,
+  DeveloperUsageEntry,
 } from "./types";
 
 export class ApiError extends Error {
@@ -62,11 +73,12 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const isForm = typeof FormData !== "undefined" && options?.body instanceof FormData;
   const response = await fetch(path, {
     ...options,
     credentials: "same-origin",
     cache: "no-store",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { ...(isForm ? {} : { "Content-Type": "application/json" }), ...options?.headers },
   });
   const isJson = (response.headers.get("content-type") || "").toLowerCase().includes("json");
   const payload: unknown = isJson ? await response.json().catch(() => null) : null;
@@ -94,7 +106,7 @@ export const getSiteBuild = (signal?: AbortSignal) => api<{ build: string }>("/a
 // ── Owner maintenance controls (staff settings) ─────────────
 export const getStaffMaintenance = () => api<StaffMaintenanceResponse>("/api/staff/maintenance");
 export const setStaffMaintenance = (
-  body: { kind: "cog" | "command"; key: string; enabled: boolean; reason?: string },
+  body: { kind: "cog" | "command" | "api"; key: string; enabled: boolean; reason?: string },
   csrfToken?: string,
 ) => api<StaffMaintenanceResponse>("/api/staff/maintenance", {
   method: "POST",
@@ -104,11 +116,19 @@ export const setStaffMaintenance = (
 // ── Owner localization & updates (staff settings) ───────────────────────────
 /** Which languages the live site can render right now, and where they came from. */
 export const getOwnerLocales = () => api<OwnerLocales>("/api/owner/locales");
+export const getOwnerLogs = (since: number, signal?: AbortSignal) =>
+  api<OwnerLogsResponse>(`/api/owner/logs?since=${encodeURIComponent(String(since))}`, { signal });
 /** Pull beta's catalogues immediately instead of waiting for the next poll. */
 export const syncOwnerLocales = (csrfToken?: string) => api<OwnerLocales>("/api/owner/locales/sync", {
   method: "POST",
   headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
   body: JSON.stringify({}),
+});
+/** Switch the locale feed between automatic polling and manual syncs only. */
+export const setOwnerLocaleAutoSync = (enabled: boolean, csrfToken?: string) => api<OwnerLocales>("/api/owner/locales/auto-sync", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify({ enabled }),
 });
 /** Show or hide the translation coverage card on the support servers' status panel. */
 export const setOwnerLocaleTranslationCard = (translationCard: boolean, csrfToken?: string) => api<OwnerLocales>("/api/owner/locales/panel", {
@@ -173,7 +193,22 @@ export const resetStaffGuildProfile = (guildId: string, csrfToken?: string) => a
 export const lockdownStaffGuild = (guildId: string, step: string, csrfToken?: string) => api<{ ok: boolean; blacklisted: boolean } & LockdownStepResult>(`/api/staff/guilds/${guildId}/blacklist/lockdown`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ step }) });
 export const sendStaffGuildNotice = (guildId: string, message: string, csrfToken?: string) => api<{ ok: boolean; recipient_id: string }>(`/api/staff/guilds/${guildId}/moderation-notice`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ message }) });
 export const getStaffBlacklist = () => api<StaffBlacklist>("/api/staff/blacklist");
-export const getStaffErrorReports = () => api<{ reports: { code: string; report: string; created_at: string }[]; count: number }>("/api/staff/error-reports");
+export const getStaffErrorReports = () => api<{ reports: StaffErrorReport[]; count: number }>("/api/staff/error-reports");
+export const setStaffErrorReportStatus = (code: string, status: string, csrfToken?: string) => api<{ report: { code: string; status: string; status_by: string | null; status_by_name: string | null; status_at: string | null } }>(`/api/staff/error-reports/${encodeURIComponent(code)}`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status }) });
+export const updateStaffErrorReportIncident = (
+  code: string,
+  body: {
+    public_notice?: boolean;
+    severity?: string;
+    maintenance?: { enabled: boolean; kind?: "api" | "command"; key?: string };
+  },
+  csrfToken?: string,
+) => api<{ report: StaffErrorReport }>(`/api/staff/error-reports/${encodeURIComponent(code)}/incident`, {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify(body),
+});
+export const deleteStaffErrorReport = (code: string, csrfToken?: string) => api<{ deleted: boolean; code: string }>(`/api/staff/error-reports/${encodeURIComponent(code)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const getStaffBilling = () => api<StaffBillingResponse>("/api/staff/billing");
 export const getStaffEmail = () => api<StaffEmailInbox>("/api/staff/email");
 // The report form is reached from an email, by whoever received it: the token
@@ -351,7 +386,29 @@ export async function uploadStaffBroadcastMedia(broadcastId: string, file: File,
 export const getStaffBroadcasts = () => api<{ broadcasts: StaffBroadcast[] }>("/api/staff/broadcasts");
 export const getStaffBroadcast = (id: string) => api<{ broadcast: StaffBroadcast }>(`/api/staff/broadcasts/${encodeURIComponent(id)}`);
 export const createStaffBroadcast = (csrfToken?: string) => api<{ broadcast: StaffBroadcast }>("/api/staff/broadcasts", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
-export const updateStaffBroadcast = (id: string, body: { title: string; body: string; accent: string; footer: string }, csrfToken?: string) => api<{ broadcast: StaffBroadcast; syncing: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}`, { method: "PUT", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const updateStaffBroadcast = (id: string, body: { title: string; body: string; accent: string; footer: string; spoiler: boolean; allowed_mentions: StaffBroadcastMention[] }, csrfToken?: string) => api<{ broadcast: StaffBroadcast; syncing: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}`, { method: "PUT", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+/** Rename an uploaded image, mark it as a spoiler, or both at once. */
+export const updateStaffBroadcastMedia = (id: string, mediaId: string, patch: { spoiler?: boolean; filename?: string }, csrfToken?: string) => api<{ broadcast: StaffBroadcast; syncing: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}/media/${encodeURIComponent(mediaId)}`, { method: "PATCH", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(patch) });
 export const deleteStaffBroadcast = (id: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const deleteStaffBroadcastMedia = (id: string, mediaId: string, csrfToken?: string) => api<{ broadcast: StaffBroadcast; syncing: boolean }>(`/api/staff/broadcasts/${encodeURIComponent(id)}/media/${encodeURIComponent(mediaId)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const sendStaffBroadcast = (id: string, csrfToken?: string) => api<{ broadcast: StaffBroadcast }>(`/api/staff/broadcasts/${encodeURIComponent(id)}/send`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
+
+// ── Developer portal ─────────────────────────────────────────────────────────
+export const getDeveloperMe = () => api<DeveloperMe>("/api/developer/me");
+export const acceptDeveloperPolicy = (csrfToken?: string) => api<{ ok: boolean; access: DeveloperMe["access"] }>("/api/developer/agree", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
+export const getDeveloperKeys = () => api<{ keys: DeveloperKey[] }>("/api/developer/keys");
+export const createDeveloperKey = (name: string, scopes: string[], csrfToken?: string, applicationId?: string) => api<{ ok: boolean; key: DeveloperKey; secret: string }>("/api/developer/keys", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ name, scopes, application_id: applicationId || undefined }) });
+export const revokeDeveloperKey = (keyId: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/developer/keys/${encodeURIComponent(keyId)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const getDeveloperLogs = (all = false) => api<{ entries: DeveloperUsageEntry[]; scope: "all" | "self" }>(`/api/developer/logs?limit=200${all ? "&all=1" : ""}`);
+export const getDeveloperAccess = () => api<DeveloperAccessList>("/api/developer/access");
+export const grantDeveloperAccess = (userId: string, body: { scopes: string[]; enabled?: boolean; notes?: string }, csrfToken?: string) => api<{ ok: boolean; access: DeveloperMe["access"] }>(`/api/developer/access/${encodeURIComponent(userId)}`, { method: "PUT", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const revokeDeveloperAccess = (userId: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/developer/access/${encodeURIComponent(userId)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const reviewDeveloperAppeal = (appealId: string, status: "approved" | "denied", note: string, csrfToken?: string) => api<{ ok: boolean; appeal: DeveloperAppeal; access: DeveloperMe["access"] }>(`/api/developer/appeals/${encodeURIComponent(appealId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({ status, note }) });
+
+export const getDeveloperApplications = () => api<DeveloperApplicationList>("/api/developer/applications");
+export const createDeveloperApplication = (form: FormData, csrfToken?: string) => api<{ ok: boolean; application: DeveloperApplication }>("/api/developer/applications", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: form });
+export const deleteDeveloperApplication = (applicationId: string, csrfToken?: string) => api<{ ok: boolean }>(`/api/developer/applications/${encodeURIComponent(applicationId)}`, { method: "DELETE", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
+export const updateDeveloperWebhook = (applicationId: string, body: { url: string; enabled: boolean; events: string[] }, csrfToken?: string) => api<{ ok: boolean; webhook: DeveloperApplication["webhook"] }>(`/api/developer/applications/${encodeURIComponent(applicationId)}/webhook`, { method: "PUT", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });
+export const testDeveloperWebhook = (applicationId: string, csrfToken?: string) => api<{ ok: boolean; status: number | null }>(`/api/developer/applications/${encodeURIComponent(applicationId)}/webhook/test`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify({}) });
+export const getDeveloperApplicationReview = () => api<DeveloperApplicationReviewList>("/api/developer/applications/review");
+export const reviewDeveloperApplication = (applicationId: string, body: { status: "approved" | "denied"; scopes?: string[]; note?: string }, csrfToken?: string) => api<{ ok: boolean; application: DeveloperApplication }>(`/api/developer/applications/${encodeURIComponent(applicationId)}/review`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });

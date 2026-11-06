@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError, actOnEmailReport, getAuth, getEmailReports, getGuilds, getStaffMe, getStats } from "../api";
+import { ApiError, actOnEmailReport, getAuth, getDeveloperMe, getEmailReports, getGuilds, getStaffMe, getStats } from "../api";
 import { DashboardShell } from "../components/dashboard/DashboardShell";
 import { EmailMessageBody } from "../components/EmailMessageBody";
 import { Icon } from "../components/Icon";
+import { LoadingCard } from "../components/LoadingCard";
 import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
 import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, staffEmailReportsPath } from "../router";
 import { notifyError, notifyLoading, notifySuccess } from "../utils/toast";
+import { registerContextMenuExtras } from "../utils/contextMenu";
 import { useStrings } from "../i18n";
 import type { AuthStatus, BotStats, Guild, StaffEmailMessage, StaffEmailReport } from "../types";
 
@@ -50,9 +52,13 @@ function ReportMessage({ message, label }: { message: StaffEmailMessage; label: 
  */
 export function StaffEmailReportsPage() {
   const { t } = useStrings("staff-email-reports");
+  // The menu's own copy confirmations, so this page does not carry a second set.
+  const { t: sharedT } = useStrings("shared");
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [staffRole, setStaffRole] = useState<string | null>(null);
+  // Keeps the developer portal entry in the sidebar while report triage is open.
+  const [developerAccess, setDeveloperAccess] = useState(false);
   const [stats, setStats] = useState<BotStats | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [reports, setReports] = useState<StaffEmailReport[]>([]);
@@ -73,9 +79,10 @@ export function StaffEmailReportsPage() {
           setAccessLoading(false);
           return;
         }
-        const staffStatus = await getStaffMe();
+        const [staffStatus, developerStatus] = await Promise.all([getStaffMe(), getDeveloperMe().catch(() => null)]);
         if (!active) return;
         setStaffRole(staffStatus.role);
+        setDeveloperAccess(Boolean(developerStatus?.access.enabled));
         setAccessLoading(false);
         if (staffStatus.role !== "owner") return;
         const [botStats, availableGuilds] = await Promise.all([getStats(), getGuilds()]);
@@ -118,6 +125,13 @@ export function StaffEmailReportsPage() {
     }
   }
 
+  function copy(value: string) {
+    navigator.clipboard
+      .writeText(value)
+      .then(() => notifySuccess(sharedT("contextMenu.copied"), "staff-email"))
+      .catch(() => notifyError(sharedT("contextMenu.copyFailed"), "staff-email"));
+  }
+
   async function act(action: "reply" | "close") {
     if (!selected || busy) return;
     if (action === "reply" && !reply.trim()) return;
@@ -145,6 +159,32 @@ export function StaffEmailReportsPage() {
     [reports, selectedId],
   );
   const open = reports.filter((report) => report.status === "open").length;
+
+  // A queue row is about one report: its reporter's address and the subject of
+  // the mail they complained about are what staff paste into Discord or into the
+  // provider's tools, so the row offers them without a trip through the reader.
+  useEffect(() => {
+    const reportFor = (id: string) => reports.find((item) => item.report_id === id) || null;
+    return registerContextMenuExtras((target) => {
+      const holder = target.closest<HTMLElement>("[data-email-report-id]");
+      const report = holder ? reportFor(holder.dataset.emailReportId || "") : null;
+      if (!report) return null;
+      return [
+        {
+          key: "email-report-copy-reporter",
+          label: t("menu.copyReporter"),
+          icon: "mail",
+          action: () => copy(report.reporter_address),
+        },
+        {
+          key: "email-report-copy-subject",
+          label: t("menu.copySubject"),
+          icon: "copy",
+          action: () => copy(report.message?.subject || t("item.noSubject")),
+        },
+      ];
+    });
+  }, [reports, t, sharedT]);
 
   if (accessLoading) return <div className="dashboard-state"><div className="loading-ring" /><p>{t("auth.checkingAccess")}</p></div>;
   if (!auth?.authenticated) {
@@ -189,7 +229,7 @@ export function StaffEmailReportsPage() {
       </div>
     </header>
 
-    {reports.length === 0 ? (loading ? <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("list.loading")}</p></div> : <section className="staff-guild-empty">
+    {reports.length === 0 ? (loading ? <LoadingCard message={t("list.loading")} /> : <section className="staff-guild-empty">
       <span className="staff-email-reader-icon"><Icon name="check" /></span>
       <h2>{t("list.emptyTitle")}</h2>
       <p>{t("list.emptyBody")}</p>
@@ -206,6 +246,7 @@ export function StaffEmailReportsPage() {
           {reports.map((report) => <button
             type="button"
             key={report.report_id}
+            data-email-report-id={report.report_id}
             className={`staff-email-item${selectedId === report.report_id ? " is-open" : ""}${report.status === "open" ? " is-unread" : ""}`}
             onClick={() => { setSelectedId(report.report_id); setReply(""); }}
           >
@@ -304,6 +345,7 @@ export function StaffEmailReportsPage() {
     userTab="overview"
     stats={stats}
     staffRole={staffRole}
+    developerAccess={developerAccess}
     onHome={() => navigate(dashboardPath())}
     onServers={() => navigate(dashboardServersPath())}
     onGuildChange={() => undefined}

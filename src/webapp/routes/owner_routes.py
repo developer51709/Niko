@@ -45,6 +45,11 @@ _source_lock = threading.Lock()
 #: at the signature once here is enough; the numbers catch up with the next start.
 _MERGED_COVERAGE = "include_bot" in inspect.signature(locale_feed.coverage_rows).parameters
 
+#: Whether the loaded feed knows the owner's automatic-sync switch. A webapp
+#: update can install this route before the feed has been reloaded, so the page
+#: reports "automatic" rather than failing until the process restarts.
+_AUTO_SYNC = hasattr(locale_feed, "auto_sync_enabled")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Locales
@@ -88,6 +93,7 @@ def _locale_payload() -> dict:
     bot = _locale_rows(document.get("bot_pages") or {})
     return {
         "configured": bool(locale_feed.BETA_INSTANCE_URL),
+        "auto_sync": locale_feed.auto_sync_enabled() if _AUTO_SYNC else True,
         "origin": locale_feed.BETA_INSTANCE_URL or None,
         "source": document.get("source"),
         "generated_at": document.get("generated_at"),
@@ -177,6 +183,39 @@ def api_owner_locales_sync():
     payload = _locale_payload()
     payload["synced_at"] = int(time.time())
     return jsonify(payload)
+
+
+@app.route("/api/owner/locales/auto-sync", methods=["POST"])
+@require_auth
+@require_csrf
+def api_owner_locales_auto_sync():
+    """Switch the background beta poll between automatic and manual.
+
+    The poller is a daemon thread in this process and reads the same cached
+    flag, so the choice applies on its next pass without a restart.
+    """
+    error = _require_owner()
+    if error:
+        return error
+    if not hasattr(locale_feed, "set_auto_sync"):
+        return jsonify({"error": "This build cannot change the sync mode yet."}), 503
+    body = request.get_json(silent=True) or {}
+    if "enabled" not in body:
+        return jsonify({"error": "Choose whether automatic syncing is enabled."}), 400
+    enabled = bool(body.get("enabled"))
+    actor = session["user"]["id"]
+
+    async def save():
+        await locale_feed.set_auto_sync(enabled, actor, _discord_bot)
+
+    try:
+        run_on_bot_loop(save(), timeout=15)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+    except Exception:
+        log.exception("Could not change automatic locale syncing")
+        return jsonify({"error": "The sync setting could not be saved."}), 502
+    return jsonify(_locale_payload())
 
 
 # ──────────────────────────────────────────────────────────────────────────────

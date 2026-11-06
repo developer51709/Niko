@@ -20,8 +20,8 @@
   "footer.dataRemoval": "データ削除",
   "footer.community": "コミュニティポリシー",
   "footer.support": "サポート",
-  "update.kicker": "新しいバージョン",
-  "update.body": "このタブは開いたときのバージョンのまま動いています。再読み込みすると最新の変更が反映されます。",
-  "update.reload": "ページを再読み込み",
+  "update.kicker": "更新があります",
+  "update.body": "サイトの新しいバージョンが公開されました。このページを再読み込みすると最新版になります。",
+  "update.reload": "今すぐ再読み込み",
   "update.later": "あとで"
 }

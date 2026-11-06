@@ -4,7 +4,7 @@ import asyncio
 import re
 import time
 
-from .. import server as _server
+from .. import developer_portal, server as _server
 from flask import jsonify, request
 
 from utils.member_badges import boosting_badge_key, niko_badge_keys
@@ -705,6 +705,7 @@ def resolve_discord_text_mentions(guild_id, text):
 
 
 @app.route("/api/discord/users/<user_id>")
+@developer_portal.allow_site_or_key("users:read")
 def api_get_discord_user_profile(user_id):
     """Fetch a public Discord profile for a transcript mention popover."""
     if not re.fullmatch(r"\d{1,22}", user_id):
@@ -722,6 +723,7 @@ def api_get_discord_user_profile(user_id):
 
 
 @app.route("/api/discord/text", methods=["POST"])
+@developer_portal.allow_site_or_key("users:read")
 def api_resolve_discord_text():
     """Resolve mentions in arbitrary Discord-formatted text."""
     payload = request.get_json(silent=True)

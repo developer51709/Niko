@@ -50,5 +50,17 @@
   "maintenance.resuming": "Wird fortgesetzt…",
   "maintenance.nowPaused": "{key} ist jetzt im Wartungsmodus.",
   "maintenance.nowAvailable": "{key} ist wieder verfügbar.",
-  "maintenance.saveFailed": "Die Wartungsänderung konnte nicht gespeichert werden."
+  "maintenance.saveFailed": "Die Wartungsänderung konnte nicht gespeichert werden.",
+  "maintenance.contextMenu": "Kontextmenü",
+  "maintenance.prefixCommand": "Präfix-Befehl",
+  "maintenance.hybridCommand": "Slash + Präfix",
+  "maintenance.hybridHint": "Funktioniert als Slash-Befehl und mit dem Server-Präfix.",
+  "maintenance.apiCountOne": "{count} API",
+  "maintenance.apiCountMany": "{count} APIs",
+  "maintenance.apisTitle": "API-Endpunkte",
+  "maintenance.apisText": "Pausiere eine Route, ohne die ganze Website offline zu nehmen. Owner behalten für Tests Zugriff.",
+  "maintenance.apiReasonPlaceholder": "Optionaler Grund, der auf /status angezeigt wird",
+  "maintenance.apiReasonAria": "Wartungsgrund für den Endpunkt {name}",
+  "maintenance.pauseApi": "Endpunkt {name} pausieren",
+  "maintenance.resumeApi": "Endpunkt {name} fortsetzen"
 }

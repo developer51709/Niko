@@ -1,10 +1,11 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { getBoosterSettings, saveBoosterSettings } from "../../api";
 import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
 import { Icon } from "../Icon";
 import type { BoosterSettings, GuildResources } from "../../types";
 import { ChannelSelect } from "./ChannelSelect";
 import { DashHeading, SectionSkeleton } from "./DashboardViews";
+import { Field } from "./FormField";
 import { Switch } from "./Switch";
 import { SettingCard, SettingCards } from "./SettingCards";
 import { useStrings } from "../../i18n";
@@ -17,10 +18,6 @@ type Props = {
 };
 
 type Draft = BoosterSettings;
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return <label className="form-field"><span className="form-label">{label}</span>{children}{hint && <small>{hint}</small>}</label>;
-}
 
 function selectedChannels(resources: GuildResources | null, selected: string, savedLabel: string) {
   const channels = resources?.channels || [];

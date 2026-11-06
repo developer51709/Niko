@@ -108,5 +108,7 @@
   "pickers.opacity": "Opacidad",
   "pickers.degrees": "{value} grados",
   "pickers.formatAria": "Formato de color: {format}. Cambiar formato",
-  "pickers.colorTriggerAria": "Color de {label}"
+  "pickers.colorTriggerAria": "Color de {label}",
+  "shell.developerPortal": "Portal de desarrolladores",
+  "shell.developerTabs": "Portal de desarrolladores"
 }

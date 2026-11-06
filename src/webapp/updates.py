@@ -9,9 +9,10 @@ needs the Flask app rebuilt and nothing else.
 This module stages files from beta and then applies them area by area:
 
 ===========  ==================================================================
-``support``  *new* ``src/config/*.py`` modules only — a module the areas below
-             import must exist before they reload; an existing config file keeps
-             this deployment's own ids, links and copy
+``support``  shared ``src/config/*.py`` modules — a module the areas below
+             import must exist before they reload. Existing config files keep
+             this deployment's own ids and copy, except ``config/links.py``,
+             which always carries production URLs and is replaced in full
 ``website``  copied into ``src/website/dist``; Flask serves that folder from
              disk, so the next request is the new site. Nothing restarts.
 ``cogs``     the changed ``cogs/<package>`` modules are dropped from
@@ -29,10 +30,15 @@ This module stages files from beta and then applies them area by area:
              its thread while the routes change underneath it.
 ``events``   the gateway event modules (``src/events/on_*.py``) are re-imported and
              the name ``bot.py``'s callbacks look up is rebound, so the next
-             message runs the new handler. Nothing restarts; the startup chain
-             under ``src/events/startup/`` is not part of this area, because it
-             runs once and reloading it would change nothing.
-``bot``      ``src/bot.py`` and the startup chain: the only area Python cannot
+             message runs the new handler. Nothing restarts; most of the startup
+             chain under ``src/events/startup/`` is not part of this area,
+             because it runs once and reloading it would change nothing.
+``startup``  ``src/events/startup/writers.py`` only: re-imported, its exports
+             refreshed on the startup package, ``on_ready`` rebound and the
+             writers run again. It is called from the ready handler rather than
+             the bot core, so a writers change needs neither a process restart
+             nor a cog reload.
+``bot``      ``src/bot.py`` and the remaining startup chain: the only area Python cannot
              reload into the same process, so the process replaces its own image
              with ``execve``, keeping its PID and its listening socket (see
              :mod:`utils.handoff`). The port is never closed and a supervisor
@@ -84,15 +90,21 @@ DATA_DIR = ROOT / "data" / "updates"
 AREAS: dict[str, dict] = {
     "support": {
         "label": "Shared modules",
-        # ``src/config`` holds each deployment's own ids, links and status copy,
-        # so these files are additions only: a module that already exists here is
-        # never replaced and one beta dropped is never deleted, so beta cannot
-        # repoint production's links. A *new* module has nothing to overwrite,
-        # and leaving it behind is what makes an update import something this
-        # deployment does not have — ``ModuleNotFoundError: No module named
-        # 'config.version'``. It applies before every other area for that reason.
+        # ``src/config`` mostly holds each deployment's own ids and status copy,
+        # so those files are additions only: a module that already exists here is
+        # never replaced and one beta dropped is never deleted. A *new* module
+        # has nothing to overwrite, and leaving it behind is what makes an update
+        # import something this deployment does not have — ``ModuleNotFoundError:
+        # No module named 'config.version'``. It applies before every other area
+        # for that reason.
+        #
+        # ``links.py`` is the exception. It is only ever written with the
+        # production URLs (beta reads PUBLIC_URL from its environment instead),
+        # so beta's copy is safe to replace here and saves a manual pull plus a
+        # full deployment restart for a link change.
         "paths": ("src/config/",),
         "additive": True,
+        "replace_paths": ("src/config/links.py",),
     },
     "website": {"label": "Website build", "paths": ("src/website/dist/",)},
     "cogs": {"label": "Cog extensions", "paths": ("src/cogs/",)},
@@ -106,6 +118,14 @@ AREAS: dict[str, dict] = {
         # a new table, column or backfill to the live pool. The rest of
         # ``src/events/startup/`` only runs once and stays with the bot core.
         "paths": ("src/events/startup/database.py",),
+    },
+    "startup": {
+        "label": "Startup writers",
+        # The writers are imported by ``events.on_ready`` and called on every
+        # READY, so the new module can be re-imported and the ready handler
+        # rebound without a restart. The rest of the startup chain only runs at
+        # boot and stays with the bot core.
+        "paths": ("src/events/startup/writers.py",),
     },
     "events": {
         "label": "Gateway events",
@@ -126,7 +146,7 @@ AREAS: dict[str, dict] = {
 
 #: Apply order. The schema runs after the utilities it imports and before the
 #: code that reads the tables it creates.
-AREA_ORDER = ("support", "website", "cogs", "utils", "database", "webapp", "events", "bot")
+AREA_ORDER = ("support", "website", "cogs", "utils", "database", "webapp", "events", "startup", "bot")
 
 #: Files that never travel: bytecode, editor state, and the update's own data.
 SKIPPED_PARTS = {"__pycache__", ".pytest_cache", ".git", "node_modules"}
@@ -216,6 +236,11 @@ def area_for_path(relative: str) -> str | None:
             continue
         return name
     return None
+
+
+def _replaceable(area: str, relative: str) -> bool:
+    """Whether an additive area still replaces this exact file in full."""
+    return relative in set(AREAS[area].get("replace_paths", ()))
 
 
 def _ignored(relative: str) -> bool:
@@ -350,8 +375,9 @@ def plan(areas=None) -> dict:
             }
             continue
         remote = (published or {}).get("files") or {}
-        # An additive area only ever adds: beta's copy of a file this deployment
-        # already has is a difference in configuration, not in code.
+        # An additive area normally only ever adds: beta's copy of a file this
+        # deployment already has is a difference in configuration, not in code.
+        # ``replace_paths`` opts a file back into the ordinary diff.
         additive = bool(AREAS[name].get("additive"))
         local_files = set(_files(name))
         changes = []
@@ -365,7 +391,7 @@ def plan(areas=None) -> dict:
             path = ROOT / relative
             if not path.exists():
                 changes.append({"path": relative, "status": "added", "bytes": size, "sha": sha})
-            elif not additive:
+            elif not additive or _replaceable(name, relative):
                 try:
                     current = _sha(path)
                 except OSError:
@@ -759,6 +785,15 @@ def _event_modules(files) -> list[str]:
 #: The startup module that owns the schema. Applied live by re-running it.
 SCHEMA_MODULE = "events.startup.database"
 
+#: The startup module that exports the data writers. It is called from the ready
+#: handler, not the bot core, so it can be re-imported live.
+STARTUP_WRITERS_MODULE = "events.startup.writers"
+STARTUP_WRITERS_FILE = "src/events/startup/writers.py"
+#: ``banner`` reads ``VERSION`` from the writers at import time, so a writers
+#: change has to re-import it too rather than leave the old version cached.
+STARTUP_WRITER_DEPENDENTS = ("events.startup.banner",)
+_STARTUP_WRITER_MODULES = (STARTUP_WRITERS_MODULE, *STARTUP_WRITER_DEPENDENTS)
+
 
 def _module_source(name: str) -> Path:
     return ROOT / "src" / Path(*name.split(".")).with_suffix(".py")
@@ -816,6 +851,114 @@ def reload_database(bot) -> dict:
     # command-path call: a big database can take longer than a minute.
     _run(init(bot), timeout=180)
     return {}
+
+
+def _import_startup_writers() -> dict:
+    """Re-import the writers and their dependants, keeping the old copy on failure."""
+    previous = {name: sys.modules.get(name) for name in _STARTUP_WRITER_MODULES}
+    package = sys.modules.get("events.startup")
+    package_before = dict(vars(package)) if package is not None else {}
+    for module in previous.values():
+        source = getattr(module, "__file__", None)
+        if source:
+            _drop_bytecode_path(Path(source))
+    _purge(_STARTUP_WRITER_MODULES)
+    fresh = {}
+    try:
+        for name in _STARTUP_WRITER_MODULES:
+            fresh[name] = importlib.import_module(name)
+        # ``on_ready`` imports through the package, not the module: refresh the
+        # re-exports before it is re-imported below.
+        if package is not None:
+            for module in fresh.values():
+                for attribute, value in vars(module).items():
+                    if not attribute.startswith("_") and attribute in package_before:
+                        setattr(package, attribute, value)
+    except Exception:
+        for name, module in previous.items():
+            if module is not None:
+                sys.modules[name] = module
+        if package is not None:
+            for attribute, value in package_before.items():
+                if not attribute.startswith("__"):
+                    setattr(package, attribute, value)
+        raise
+    importlib.invalidate_caches()
+    return fresh
+
+
+def _run_startup_writers(bot, module) -> list[str]:
+    """Run the re-imported writers, keeping the process uptime marker intact."""
+    stats_path = ROOT / "data" / "bot_stats.json"
+    try:
+        before = json.loads(stats_path.read_text(encoding="utf-8")).get("uptime_since")
+    except Exception:
+        before = None
+    ran = []
+    for name in ("write_commands", "write_bot_stats"):
+        writer = getattr(module, name, None)
+        if not callable(writer):
+            continue
+        try:
+            writer(bot)
+        except Exception:
+            # The writers log their own failures; a write must not undo an
+            # otherwise successful module reload.
+            continue
+        ran.append(name)
+    # ``write_bot_stats`` stamps a fresh uptime because it normally runs during
+    # startup. This process did not restart, so a live writers update must keep
+    # the uptime the running bot has been reporting.
+    if before:
+        try:
+            payload = json.loads(stats_path.read_text(encoding="utf-8"))
+            if payload.get("uptime_since") != before:
+                payload["uptime_since"] = before
+                stats_path.write_text(json.dumps(payload), encoding="utf-8")
+        except Exception:
+            pass
+    return ran
+
+
+def reload_startup_writers(bot=None, files=None, run_writers=True) -> dict:
+    """Apply a writers change without restarting the process or reloading cogs.
+
+    ``events.on_ready`` imports the writers through ``events.startup``. Purging
+    the writers, refreshing that package's exports and re-importing ``on_ready``
+    is enough for the next ready event to run the new code; running the writers
+    once here also refreshes ``data/bot_stats.json`` and ``data/commands.json``
+    immediately, so an update does not sit on disk until the next restart.
+    """
+    if files is not None and not any(
+        str(path).replace("\\", "/") == STARTUP_WRITERS_FILE for path in files
+    ):
+        return {"reloaded": [], "rebound": [], "failed": []}
+    if not _module_source(STARTUP_WRITERS_MODULE).exists():
+        return {
+            "reloaded": [],
+            "rebound": [],
+            "failed": [
+                f"{STARTUP_WRITERS_MODULE}: the file was removed on beta; the loaded module stays until the next restart"
+            ],
+        }
+    try:
+        fresh = _import_startup_writers()
+    except Exception as exc:
+        return {
+            "reloaded": [],
+            "rebound": [],
+            "failed": [f"{STARTUP_WRITERS_MODULE}: {type(exc).__name__}: {exc}"],
+        }
+
+    ready = reload_events(["src/events/on_ready.py"])
+    summary = {
+        "reloaded": list(fresh),
+        "rebound": list(ready.get("rebound") or []),
+        "failed": list(ready.get("failed") or []),
+    }
+    if run_writers and bot is not None and not summary["failed"]:
+        summary["ran"] = _run_startup_writers(bot, fresh.get(STARTUP_WRITERS_MODULE))
+    return summary
 
 
 def _rebind_event_handlers(previous: dict, fresh: dict) -> list[str]:
@@ -924,7 +1067,7 @@ def reload_events(files=None) -> dict:
 
 #: What the feed owns rather than defines: carried across a reload so an update
 #: never blanks the site or drops the bot back to its own files.
-_FEED_STATE = ("_lock", "_beta", "_local", "_catalogues", "_bot_files", "_bot", "_loop")
+_FEED_STATE = ("_lock", "_beta", "_local", "_catalogues", "_bot_files", "_bot", "_loop", "_settings")
 
 
 def reload_locale_feed() -> bool:
@@ -1145,9 +1288,17 @@ def apply(areas, bot=None) -> dict:
             outcome = {"ok": True, "changed": changes, **staged}
             try:
                 if name == "support":
-                    # Written before the areas below reload on top of them; the
-                    # files are new, so nothing was importing them yet.
-                    outcome["strategy"] = "added new shared modules"
+                    # Written before the areas below reload on top of them. New
+                    # modules are not imported yet; ``links.py`` is safe to pull
+                    # because every deployment uses the production URL.
+                    replaced = any(
+                        _replaceable(name, change["path"])
+                        for change in current["areas"][name]["files"]
+                    )
+                    outcome["strategy"] = (
+                        "updated shared modules" if replaced
+                        else "added new shared modules"
+                    )
                 elif name == "cogs":
                     if bot is None:
                         raise RuntimeError("The bot is not running.")
@@ -1184,6 +1335,18 @@ def apply(areas, bot=None) -> dict:
                         [change["path"] for change in current["areas"][name]["files"]]
                     )))
                     outcome["strategy"] = "re-imported the gateway event handlers"
+                elif name == "startup":
+                    # The startup package imports this file at boot, so a beta
+                    # that deleted it cannot be applied: roll the removal back
+                    # rather than leave a deployment that fails its next start.
+                    if any(change["status"] == "removed" for change in current["areas"][name]["files"]):
+                        raise RuntimeError(
+                            "src/events/startup/writers.py was removed on beta; this deployment still imports it."
+                        )
+                    outcome.update(reload_startup_writers(
+                        bot, [change["path"] for change in current["areas"][name]["files"]]
+                    ))
+                    outcome["strategy"] = "re-imported the startup writers"
                 elif name == "website":
                     outcome["strategy"] = "served from disk on the next request"
                 elif name == "bot":
@@ -1275,6 +1438,11 @@ def _rebuild_after_rollback(name: str, bot) -> None:
             # Re-import from the files the rollback just restored and put the
             # callbacks back on the code they were running.
             reload_events(None)
+        elif name == "startup":
+            # Same for the ready handler: put the writers and its imports back
+            # on the restored files. The data files were already written; the
+            # next ready or the next apply refreshes them.
+            reload_startup_writers(None, run_writers=False)
         elif name == "database":
             # The schema work already ran and is idempotent; put the module back
             # on the code the files were restored to.

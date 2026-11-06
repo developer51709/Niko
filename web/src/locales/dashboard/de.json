@@ -108,5 +108,7 @@
   "pickers.opacity": "Deckkraft",
   "pickers.degrees": "{value} Grad",
   "pickers.formatAria": "Farbformat: {format}. Format wechseln",
-  "pickers.colorTriggerAria": "Farbe für {label}"
+  "pickers.colorTriggerAria": "Farbe für {label}",
+  "shell.developerPortal": "Entwicklerportal",
+  "shell.developerTabs": "Entwicklerportal"
 }

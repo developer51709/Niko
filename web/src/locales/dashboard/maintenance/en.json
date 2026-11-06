@@ -50,5 +50,17 @@
   "maintenance.resuming": "Resuming…",
   "maintenance.nowPaused": "{key} is now in maintenance mode.",
   "maintenance.nowAvailable": "{key} is available again.",
-  "maintenance.saveFailed": "The maintenance change could not be saved."
+  "maintenance.saveFailed": "The maintenance change could not be saved.",
+  "maintenance.contextMenu": "Context menu",
+  "maintenance.prefixCommand": "Prefix command",
+  "maintenance.hybridCommand": "Slash + prefix",
+  "maintenance.hybridHint": "Works as a slash command and with the server prefix.",
+  "maintenance.apiCountOne": "{count} API",
+  "maintenance.apiCountMany": "{count} APIs",
+  "maintenance.apisTitle": "API endpoints",
+  "maintenance.apisText": "Pause one route without taking the whole website offline. Owners keep access for testing.",
+  "maintenance.apiReasonPlaceholder": "Optional reason shown on /status",
+  "maintenance.apiReasonAria": "Maintenance reason for the {name} endpoint",
+  "maintenance.pauseApi": "Pause the {name} endpoint",
+  "maintenance.resumeApi": "Resume the {name} endpoint"
 }

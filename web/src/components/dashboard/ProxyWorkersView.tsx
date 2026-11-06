@@ -3,10 +3,9 @@ import type { FormEvent } from "react";
 import { addStaffProxyWorker, getStaffProxyWorkers, removeStaffProxyWorker, setStaffProxyWorkerRouting } from "../../api";
 import type { ProxyWorker, ProxyWorkerLatencyPoint, ProxyWorkersResponse } from "../../types";
 import { Icon } from "../Icon";
+import { LoadingCard } from "../LoadingCard";
 import { notifyError, notifyLoading, notifySuccess } from "../../utils/toast";
-import { useStrings } from "../../i18n";
-
-type Translate = (key: string, values?: Record<string, string | number>) => string;
+import { type Translate, useStrings } from "../../i18n";
 
 function formatMs(value: number | undefined | null) {
   if (value === undefined || value === null || !Number.isFinite(value)) return "—";
@@ -312,7 +311,7 @@ export function ProxyWorkersView({ csrfToken }: { csrfToken?: string }) {
       </form>
 
       <div className="proxy-worker-list">
-        {loading && !data ? <div className="staff-guild-empty"><div className="loading-ring" /><p>{t("proxy.loading")}</p></div> : workers.length === 0 ? (
+        {loading && !data ? <LoadingCard message={t("proxy.loading")} /> : workers.length === 0 ? (
           <div className="staff-guild-empty">
             <Icon name="shield" />
             <span>{t("proxy.noneBefore")} <code>proxy-worker/</code>{t("proxy.noneMiddle")} <code>AUTH_TOKEN</code>{t("proxy.noneAfter")}</span>

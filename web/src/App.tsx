@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { CommandsPage } from "./pages/CommandsPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { DeveloperPortalPage } from "./pages/DeveloperPortalPage";
+import { DeveloperDocsPage } from "./pages/DeveloperDocsPage";
 import { DocsPage, DocsSlugPage } from "./pages/DocsPage";
 import { LeaderboardPage } from "./pages/LeaderboardPage";
 import { StatusPage } from "./pages/StatusPage";
@@ -25,7 +27,9 @@ import { BlacklistAppealPage } from "./pages/BlacklistAppealPage";
 import { StaffApplicationPage } from "./pages/StaffApplicationPage";
 import { TeamStaffApplicationPage } from "./pages/TeamStaffApplicationPage";
 import { DiscordRedirectPage, SupportPage } from "./pages/SupportPage";
+import { FlaggedMediaPage } from "./pages/FlaggedMediaPage";
 import { PartnershipPage } from "./pages/PartnershipPage";
+import { ContextMenuHost } from "./components/ContextMenu";
 import { ToastHost } from "./components/ToastHost";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { OwnerDevtools } from "./components/OwnerDevtools";
@@ -60,7 +64,9 @@ export function App() {
   else if (page === "docs-detail") {
     const pathParts = currentPath().split("/").filter(Boolean);
     pageContent = <DocsSlugPage slug={pathParts[pathParts.length - 1] || ""} />;
-  } else if (page === "docs") pageContent = <DocsPage />;
+  }  else if (page === "docs") pageContent = <DocsPage />;
+  else if (page === "developers") pageContent = <DeveloperDocsPage />;
+  else if (page === "developer") pageContent = <DeveloperPortalPage />;
   else if (page === "staff") pageContent = <StaffDashboardPage />;
   else if (page === "staff-email") pageContent = <StaffEmailPage />;
   else if (page === "staff-email-reports") pageContent = <StaffEmailReportsPage />;
@@ -72,6 +78,7 @@ export function App() {
   else if (page === "team") pageContent = <TeamPage />;
   else if (page === "team-member") pageContent = <TeamMemberPage profileKey={currentPath().split("/").filter(Boolean)[1] || ""} />;
   else if (page === "support") pageContent = <SupportPage />;
+  else if (page === "flagged-media") pageContent = <FlaggedMediaPage />;
   else if (page === "discord") pageContent = <DiscordRedirectPage />;
   else if (page === "partnership") pageContent = <PartnershipPage />;
   else if (page === "privacy") pageContent = <LegalPage type="privacy" />;
@@ -98,6 +105,7 @@ export function App() {
         <ShaderBackground className="ambient-effect-canvas" />
       </div>
       <div className="site-content">{pageContent}</div>
+      <ContextMenuHost />
       <ToastHost />
       <UpdatePrompt />
       <OwnerDevtools />

@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import { PublicHeader } from "./PublicHeader";
 import { useStrings } from "../i18n";
 import { publicPath } from "../router";
+import { registerContextMenuExtras } from "../utils/contextMenu";
 
 type BackLink = {
   label: ReactNode;
@@ -18,10 +19,33 @@ type BackLink = {
  */
 export function DiscordSignIn({ next, available = true, label, unavailableNotice }: { next: string; available?: boolean; label?: string; unavailableNotice?: ReactNode }) {
   const { t } = useStrings("shared");
-  if (!available) return <div className="notice warning">{unavailableNotice ?? t("auth.unavailable")}</div>;
+  const linkRef = useRef<HTMLAnchorElement | null>(null);
   // ``next`` is written in the apex form like every other path here; on a
   // section host it is the short form that the visitor comes back to.
-  return <a className="button button-primary full-width" href={`/auth/login?next=${encodeURIComponent(publicPath(next))}`}>
+  const href = `/auth/login?next=${encodeURIComponent(publicPath(next))}`;
+
+  // Discord's Canary and PTB builds keep sessions of their own, so a sign-in
+  // started on one of them authorizes with the account that build is logged
+  // into — the way a second account gets in without signing out of the first.
+  // The rows sit on this button because they change the same sign-in; the build
+  // is a parameter of the route, so the callback, the state and the way back
+  // stay exactly as they are.
+  useEffect(
+    () =>
+      registerContextMenuExtras((target) => {
+        const anchor = target.closest("[data-discord-signin]");
+        if (!anchor || anchor !== linkRef.current) return null;
+        const begin = (client: string) => () => window.location.assign(`${href}&client=${client}`);
+        return [
+          { key: "discord-canary", label: t("auth.signInCanary"), icon: "external", action: begin("canary") },
+          { key: "discord-ptb", label: t("auth.signInPtb"), icon: "external", action: begin("ptb") },
+        ];
+      }),
+    [href, t],
+  );
+
+  if (!available) return <div className="notice warning">{unavailableNotice ?? t("auth.unavailable")}</div>;
+  return <a ref={linkRef} data-discord-signin className="button button-primary full-width" href={href}>
     <Icon name="lock" /> {label ?? t("auth.continue")} <Icon name="arrow" />
   </a>;
 }

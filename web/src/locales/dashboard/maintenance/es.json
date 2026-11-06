@@ -50,5 +50,17 @@
   "maintenance.resuming": "Reactivando…",
   "maintenance.nowPaused": "{key} está ahora en modo mantenimiento.",
   "maintenance.nowAvailable": "{key} vuelve a estar disponible.",
-  "maintenance.saveFailed": "No se pudo guardar el cambio de mantenimiento."
+  "maintenance.saveFailed": "No se pudo guardar el cambio de mantenimiento.",
+  "maintenance.contextMenu": "Menú contextual",
+  "maintenance.prefixCommand": "Comando de prefijo",
+  "maintenance.hybridCommand": "Slash + prefijo",
+  "maintenance.hybridHint": "Funciona como comando slash y con el prefijo del servidor.",
+  "maintenance.apiCountOne": "{count} API",
+  "maintenance.apiCountMany": "{count} APIs",
+  "maintenance.apisTitle": "Endpoints de la API",
+  "maintenance.apisText": "Pausa una ruta sin dejar toda la web fuera de línea. Los propietarios mantienen el acceso para probar.",
+  "maintenance.apiReasonPlaceholder": "Motivo opcional que se muestra en /status",
+  "maintenance.apiReasonAria": "Motivo de mantenimiento del endpoint {name}",
+  "maintenance.pauseApi": "Pausar el endpoint {name}",
+  "maintenance.resumeApi": "Reactivar el endpoint {name}"
 }

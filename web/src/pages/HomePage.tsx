@@ -38,6 +38,9 @@ type HomeExample = {
 // rather than painted-on placeholders.
 const BAN_TARGET = "<@1514675711493935114>";
 const EXAMPLE_MEMBER = "1451608836174512301";
+// The reminder card answers a second member, so the two cards do not both read
+// as the same person's messages.
+const REMINDER_MEMBER = "1495618222488162439";
 
 /**
  * The bot's own replies, drawn as Discord messages.
@@ -63,7 +66,7 @@ function useHomeExamples(): HomeExample[] {
       note: t("examples.ban.note"),
     },
     {
-      userId: EXAMPLE_MEMBER,
+      userId: REMINDER_MEMBER,
       command: "/reminder set",
       time: t("examples.reminder.time"),
       // The bot writes its due time as a Discord timestamp, which the viewer's
@@ -169,7 +172,6 @@ export function HomePage() {
           <div className="home-stat"><strong>{formatNumber(stats?.guild_count)}</strong><span>{t("stats.servers")}</span></div>
           <div className="home-stat"><strong>{formatNumber(stats?.user_count)}</strong><span>{t("stats.members")}</span></div>
           <div className="home-stat"><strong>{formatNumber(stats?.command_count)}</strong><span>{t("stats.commands")}</span></div>
-          <p className="home-stats-note"><span className="status-dot" /> {t("stats.live")}</p>
         </section>
 
         <section className="shell home-features" aria-labelledby="home-features-title">

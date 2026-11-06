@@ -4,7 +4,7 @@ import json
 
 from flask import Response
 
-from .. import server as _server
+from .. import developer_portal, server as _server
 from .discord_text_routes import resolve_discord_text_mentions, resolve_discord_user_profiles
 
 globals().update({
@@ -41,6 +41,7 @@ def _resolve_transcript_mentions(guild_id, messages):
 
 
 @app.route("/api/transcript/<transcript_id>")
+@developer_portal.first_party_only
 def api_get_transcript(transcript_id):
     """Fetch a transcript by its short ID."""
     if _discord_bot is None or not getattr(_discord_bot, "cxn", None):
@@ -77,6 +78,7 @@ def api_get_transcript(transcript_id):
     return jsonify(result)
 
 @app.route("/api/transcript/<transcript_id>/download")
+@developer_portal.first_party_only
 def api_download_transcript(transcript_id):
     """Download a transcript in the specified format."""
     fmt = request.args.get("format", "txt").lower()

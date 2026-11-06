@@ -104,5 +104,18 @@
   "locales.completeWord": "· vollständig",
   "foot.note": "Die Werte kommen aus dem laufenden Bot-Prozess und bewegen sich mit ihm. Fehlt ein Cog oder siehst du etwas Unerwartetes?",
   "foot.support": "Sag dem Team Bescheid",
-  "locales.figures": "{translated} / {total}"
+  "locales.figures": "{translated} / {total}",
+  "incidents.aria": "Öffentliche Störungen und Wartungshinweise",
+  "incidents.kicker": "Öffentliche Störungen",
+  "incidents.title": "Woran gerade gearbeitet wird",
+  "incidents.count": "{count} veröffentlicht",
+  "incidents.noSummary": "Das Team untersucht dieses Problem.",
+  "incidents.timeline": "Verlauf · {count} Aktualisierungen",
+  "incidents.maintenanceActive": "{target} ist pausiert, während das untersucht wird.",
+  "incidents.maintenanceEnded": "{target} ist wieder verfügbar.",
+  "maintenance.title": "Wartungshinweise",
+  "maintenance.api": "API",
+  "maintenance.command": "Befehl",
+  "maintenance.active": "Pausiert",
+  "maintenance.noReason": "Kein Grund angegeben"
 }

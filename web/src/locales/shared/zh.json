@@ -20,8 +20,8 @@
   "footer.dataRemoval": "数据删除",
   "footer.community": "社区政策",
   "footer.support": "支持",
-  "update.kicker": "新版本",
-  "update.body": "这个标签页仍在运行打开时的版本。刷新即可获取最新改动。",
-  "update.reload": "刷新页面",
+  "update.kicker": "有可用更新",
+  "update.body": "网站有新版本可用。刷新此页面即可使用新版本。",
+  "update.reload": "立即刷新",
   "update.later": "稍后"
 }

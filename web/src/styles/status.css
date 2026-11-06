@@ -200,6 +200,9 @@
   transition: transform .18s ease;
 }
 .status-section[open] > .status-section-summary::after { transform: rotate(-135deg); }
+/* A card that is folding shut keeps `open` until the slide ends, so the chevron
+ * turns with the start of the fold instead of after it. */
+.status-section[data-closing] > .status-section-summary::after { transform: rotate(45deg); }
 
 .status-section-body {
   padding: 14px 18px 18px;
@@ -448,6 +451,7 @@
 @media (prefers-reduced-motion: reduce) {
   .status-meter > span { transition: none; }
   .status-section > .status-section-summary::after { transition: none; }
+  .status-incident-timeline-caret { transition: none; }
 }
 
 @media (max-width: 860px) {
@@ -482,4 +486,83 @@
   .status-locale-card { padding: 8px 9px 9px; }
   .status-locale-head { gap: 7px; }
   .status-locale-percent { font-size: 11.5px; }
+}
+
+/* ── Public incidents and API/command maintenance ─────────────────────────── */
+
+.site-content .status-page .status-notices {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  margin: 20px 0;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(226, 234, 246, .14);
+  border-radius: 16px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.status-notices-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.status-notices-heading h2 { margin: 4px 0 0; color: #f4f5f7; font-size: 18px; letter-spacing: -.035em; }
+.status-incident-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.status-incident {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  min-width: 0;
+  padding: 15px 16px;
+  background: rgba(11, 12, 15, .55);
+  border: 1px solid rgba(232, 162, 162, .22);
+  border-left: 3px solid rgba(232, 162, 162, .68);
+  border-radius: 12px;
+}
+.status-incident-ok { border-color: rgba(139, 213, 177, .22); border-left-color: rgba(139, 213, 177, .68); }
+.status-incident-warn { border-color: rgba(233, 200, 119, .24); border-left-color: rgba(233, 200, 119, .68); }
+.status-incident-wait { border-color: rgba(159, 180, 216, .24); border-left-color: rgba(159, 180, 216, .68); }
+.status-incident-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.status-incident-head small { margin-left: auto; color: #858c96; font: 9px "Space Mono", monospace; }
+.status-incident h3 { margin: 0; color: #f4f5f7; font-size: 15px; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.status-incident p { margin: 0; color: #b4bac3; font-size: 11.5px; line-height: 1.65; overflow-wrap: anywhere; }
+.status-incident-target { color: #d5d9df !important; font-weight: 600; }
+.status-incident-timeline { margin-top: 2px; border-top: 1px solid rgba(226, 234, 246, .1); }
+.status-incident-timeline summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0 0;
+  color: #858c96;
+  cursor: pointer;
+  list-style: none;
+  font: 9px "Space Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  transition: color .18s ease;
+}
+.status-incident-timeline summary::-webkit-details-marker { display: none; }
+.status-incident-timeline summary:hover { color: #d5d9df; }
+.status-incident-timeline summary:focus-visible { outline: 2px solid rgba(226, 234, 246, .4); outline-offset: 3px; border-radius: 4px; }
+.status-incident-timeline-caret { width: 12px; height: 12px; flex: 0 0 auto; color: currentColor; transition: transform .18s ease; }
+.status-incident-timeline[open] > summary .status-incident-timeline-caret { transform: rotate(90deg); }
+.status-incident-timeline[data-closing] > summary .status-incident-timeline-caret { transform: rotate(0deg); }
+.status-incident-timeline ol { display: grid; gap: 6px; padding: 8px 0 0; margin: 0; list-style: none; }
+.status-incident-timeline li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: #b4bac3; font-size: 10.5px; }
+.status-incident-timeline time { flex: 0 0 auto; color: #858c96; font: 8.5px "Space Mono", monospace; text-align: right; }
+.status-maintenance-block { display: grid; gap: 8px; }
+.status-maintenance-block h3 { margin: 0; color: #d5d9df; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.status-maintenance-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.status-maintenance-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; background: rgba(11, 12, 15, .42); border: 1px solid rgba(226, 234, 246, .1); border-radius: 9px; }
+.status-maintenance-kind { flex: 0 0 auto; padding: 2px 6px; color: #c3d0e6; background: rgba(159, 180, 216, .1); border: 1px solid rgba(159, 180, 216, .22); border-radius: 999px; font: 8px "Space Mono", monospace; text-transform: uppercase; }
+.status-maintenance-copy { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.status-maintenance-copy strong { color: #f4f5f7; font-size: 11.5px; overflow-wrap: anywhere; }
+.status-maintenance-copy small { color: #858c96; font-size: 10px; overflow-wrap: anywhere; }
+.status-maintenance-row .status-pill { flex: 0 0 auto; }
+
+@media (max-width: 760px) {
+  .status-incident-list { grid-template-columns: minmax(0, 1fr); }
+  .site-content .status-page .status-notices { padding: 15px; }
+}
+@media (max-width: 520px) {
+  .status-notices-heading { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .status-maintenance-row { align-items: flex-start; flex-wrap: wrap; }
+  .status-maintenance-row .status-pill { margin-left: auto; }
 }

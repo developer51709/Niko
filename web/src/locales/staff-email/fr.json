@@ -87,7 +87,6 @@
   "setup.between": "chez Mailgun avec les enregistrements DNS qu’il te fournit, puis ajoute une route de réception qui transfère vers",
   "setup.after": ". D’ici là, la page montre ce qu’elle sait et refuse de prétendre qu’un message a été envoyé.",
   "item.to": "À {address}",
-  "item.threadTitle": "{count} messages dans cette conversation",
   "item.noPreview": "Aucun texte de message.",
   "item.addressConversation": "{address} · {count} messages",
   "reader.aria": "Message",
@@ -119,5 +118,8 @@
   "compose.sending": "Envoi…",
   "compose.send": "Envoyer le message",
   "thread.count": "{count} messages dans cette conversation",
-  "thread.oldestFirst": "Plus anciens d’abord"
+  "thread.oldestFirst": "Plus anciens d’abord",
+  "menu.reply": "Répondre",
+  "menu.copyAddress": "Copier l’adresse e-mail",
+  "menu.copySubject": "Copier l’objet"
 }

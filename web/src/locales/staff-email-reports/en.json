@@ -58,5 +58,7 @@
   "answer.noneSent": "No response was sent.",
   "reader.aria": "Report",
   "reader.pickTitle": "Pick a report.",
-  "reader.pickBody": "Reports are on the left, newest first. Opening one shows what was flagged, the reason, and the conversation if the reporter shared it."
+  "reader.pickBody": "Reports are on the left, newest first. Opening one shows what was flagged, the reason, and the conversation if the reporter shared it.",
+  "menu.copyReporter": "Copy reporter address",
+  "menu.copySubject": "Copy subject"
 }

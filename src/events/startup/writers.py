@@ -15,7 +15,7 @@ from utils import logging
 #: (``web/src/data/changelog.ts``); bump both in the same change. It lives in this
 #: file, rather than a module of its own, because an update applies one area at a
 #: time — a new module an area imports is a module production may not have yet.
-VERSION = "2.27.0"
+VERSION = "2.28.0"
 
 
 def write_bot_stats(bot):

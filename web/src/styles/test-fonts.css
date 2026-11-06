@@ -1,0 +1,14 @@
+/* Faces that exist only for the font tester (see src/fontTester.ts). A face
+   declared here downloads only if someone switches the site to it, so a normal
+   visit never fetches these files. */
+
+@font-face {
+  font-family: "Starborn";
+  src: url("/fonts/starborn.ttf") format("truetype");
+  font-display: swap;
+}
+
+/* Most test faces carry one weight. The site itself sets `font-synthesis: none`,
+   so while a tester face is active the browser is allowed to draw a bold face —
+   otherwise every heading would read as regular and the preview would lie. */
+html[data-font] { font-synthesis: weight style; }

@@ -97,6 +97,12 @@ export function DocsPage() {
           description={t("intro.description")}
         />
 
+        <a className="docs-developer-card" href="/developers" onClick={(event) => { event.preventDefault(); navigate("/developers"); }}>
+          <span className="docs-developer-card-icon"><Icon name="terminal" size={18} /></span>
+          <span><strong>Building an integration?</strong><small>API v1, scoped keys, and the developer policies live in a separate developer documentation portal.</small></span>
+          <span className="docs-developer-card-link">Developer docs <Icon name="arrow" size={14} /></span>
+        </a>
+
         {/* Search Section */}
         <div className={`docs-search-section ${showResults ? "active" : ""}`}>
           <div className="docs-search-container">
