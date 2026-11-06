@@ -145,6 +145,51 @@ def test_api_maintenance_is_in_the_same_cache_and_snapshot(maintenance_store):
     assert found[2]["reason"] == "The endpoint is down."
 
 
+def test_api_maintenance_gate_returns_a_stable_documented_envelope(monkeypatch):
+    monkeypatch.setattr(
+        maintenance,
+        "find_api_block",
+        lambda _endpoint, _path: (
+            "api",
+            "api_economy_leaderboard",
+            {"reason": "Rebuilding the leaderboard cache", "since": 1762300000, "report_code": "ABC123"},
+        ),
+    )
+    monkeypatch.setattr(api_maintenance, "_is_owner", lambda: False)
+    monkeypatch.setattr(api_maintenance, "_current_staff_role", lambda: None)
+    client = flask_app.test_client()
+
+    response = client.get("/api/v1/economy/leaderboard")
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "300"
+    assert response.headers["X-Error-Code"] == "API_MAINTENANCE"
+    assert response.headers["X-Error-Report"] == "ABC123"
+    payload = response.get_json()
+    assert payload["code"] == "API_MAINTENANCE"
+    assert payload["docs"] == "/developers/maintenance"
+    assert payload["maintenance"] == {
+        "kind": "api",
+        "key": "api_economy_leaderboard",
+        "label": maintenance.api_label("api_economy_leaderboard"),
+        "reason": "Rebuilding the leaderboard cache",
+        "since": 1762300000,
+    }
+    assert payload["report_code"] == "ABC123"
+
+
+def test_api_404_and_405_responses_are_json_with_stable_codes():
+    client = flask_app.test_client()
+
+    missing = client.get("/api/v1/does-not-exist")
+    assert missing.status_code == 404
+    assert missing.get_json()["code"] == "NOT_FOUND"
+
+    wrong_method = client.post("/api/v1/economy/leaderboard")
+    assert wrong_method.status_code == 405
+    assert wrong_method.get_json()["code"] == "METHOD_NOT_ALLOWED"
+
+
 def test_owner_can_publish_a_report_and_pause_its_api(monkeypatch, reports):
     async def add_maintenance_table():
         await reports.pool.execute(MAINTENANCE_SCHEMA)

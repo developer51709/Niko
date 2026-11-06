@@ -22,8 +22,15 @@ from cogs.economy.commands.leaderboard import LeaderboardMixin
 from database import MongoPool, SQLitePool
 
 
-def leaderboard_client(rows, *, viewer=None, staff=None, mutual=None, bot=None):
+def site_client():
+    """The website's own fetches announce themselves; direct clients do not."""
     client = app.test_client()
+    client.environ_base["HTTP_SEC_FETCH_SITE"] = "same-origin"
+    return client
+
+
+def leaderboard_client(rows, *, viewer=None, staff=None, mutual=None, bot=None):
+    client = site_client()
     if viewer:
         with client.session_transaction() as session:
             session["user"] = {"id": viewer}
@@ -298,7 +305,7 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
                     def get_cog(_name):
                         return None
 
-                client = app.test_client()
+                client = site_client()
                 with client.session_transaction() as session:
                     session["user"] = {"id": "424242"}
                     session["access_token"] = "test-token"
@@ -358,7 +365,7 @@ class EconomyLeaderboardPrivacyTests(unittest.TestCase):
             def get_cog(_name):
                 return None
 
-        client = app.test_client()
+        client = site_client()
         with client.session_transaction() as session:
             session["user"] = {"id": "424242"}
             session["access_token"] = "test-token"

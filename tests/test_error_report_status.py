@@ -275,6 +275,8 @@ def test_web_and_api_failures_create_reports_with_redacted_requests(monkeypatch)
     response = client.get("/api/boom?token=super-secret&guild_id=7")
     assert response.status_code == 500
     assert response.get_json()["report_code"] == "WEB123"
+    assert response.headers["X-Error-Code"] == "INTERNAL_SERVER_ERROR"
+    assert response.headers["X-Error-Report"] == "WEB123"
     api = captured[-1]
     assert api["source"] == "api"
     assert api["context"]["request"]["method"] == "GET"

@@ -53,6 +53,7 @@ class CallCountingBot:
 
 def leaderboard_client(rows, *, viewer=None, bot=None):
     client = app.test_client()
+    client.environ_base["HTTP_SEC_FETCH_SITE"] = "same-origin"
     if viewer:
         with client.session_transaction() as session:
             session["user"] = {"id": viewer}

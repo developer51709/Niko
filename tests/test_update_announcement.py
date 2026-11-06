@@ -84,36 +84,39 @@ def test_update_announcement_carries_the_docs_and_changelog_links():
     view = ctx.sent[0]
 
     assert ctx.message.deleted, "an announcement should replace the invoking message"
-    assert AdministrationCommands.UPDATE_DOCS_URL in view_urls(view)
-    assert AdministrationCommands.UPDATE_CHANGELOG_URL in view_urls(view)
-    # The update announcement carries exactly the two links it is announced
-    # with: the docs page and the changelog entry. (The Support Server button
-    # belongs to the policy notice, which ``_policy_view`` still carries.)
-    assert view_labels(view) == ["Language docs", "What's new"]
+    urls = view_urls(view)
+    assert AdministrationCommands.UPDATE_DOCS_URL in urls
+    assert AdministrationCommands.UPDATE_PORTAL_URL in urls
+    assert AdministrationCommands.UPDATE_CHANGELOG_URL in urls
+    # The update announcement carries exactly the three links it is announced
+    # with: the documentation, the portal, and the changelog entry. (The Support
+    # Server button belongs to the policy notice, which ``_policy_view`` still
+    # carries.)
+    assert view_labels(view) == ["Developer docs", "Open the portal", "What's new"]
 
     text = view_text(view)
-    assert "German and Spanish" in text
-    assert "`.help` menu" in text
-    assert "argument hints" in text
-    assert "commands page" in text
-    assert "locales/en.json" in text
+    assert "`/api/v1`" in text
+    assert "`niko_dev_`" in text
+    assert "HMAC-SHA256" in text
+    assert "`/dashboard/developer`" in text
+    assert "`/developers`" in text
+    assert "invite-only" in text
     # The update stays free, and the announcement says so up front.
     assert "The bot stays free" in text
-    assert "ships for every server" in text
 
 
 def test_changelog_entry_covers_the_current_update():
     """The announced entry must describe the features the announcement names."""
     changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
-    entry = changelog.split('slug: "multi-language-everywhere"', 1)[1].split("\n  },", 1)[0]
+    entry = changelog.split('slug: "developer-api-and-portal"', 1)[1].split("\n  },", 1)[0]
     lowered = entry.lower()
 
-    assert "german" in lowered
-    assert "spanish" in lowered
-    assert "description_localizations" in entry
-    assert "/api/commands" in entry
-    assert "locales" in lowered
-    assert "argument" in lowered
+    assert "api/v1" in entry
+    assert "niko_dev_" in entry
+    assert "developer portal" in lowered
+    assert "documentation" in lowered
+    assert "webhook" in lowered
+    assert "scope" in lowered
 
 
 def test_changelog_entry_is_the_newest_release():
@@ -140,13 +143,16 @@ def test_changelog_entry_covers_the_legal_update():
 
 
 def test_announcement_links_point_at_pages_that_exist():
-    """A renamed docs page or changelog slug must fail here, not in Discord."""
-    docs_slug = AdministrationCommands.UPDATE_DOCS_URL.removeprefix(f"{links.DOCS}/")
-    changelog_slug = AdministrationCommands.UPDATE_CHANGELOG_URL.removeprefix(f"{links.WEBSITE}/changelog/")
+    """A renamed docs route or changelog slug must fail here, not in Discord."""
+    assert AdministrationCommands.UPDATE_DOCS_URL == f"{links.WEBSITE}/developers"
+    assert AdministrationCommands.UPDATE_PORTAL_URL == f"{links.WEBSITE}/dashboard/developer"
 
-    assert AdministrationCommands.UPDATE_DOCS_URL == f"{links.WEBSITE}/docs/{docs_slug}"
+    router = (ROOT / "web/src/router.ts").read_text(encoding="utf-8")
+    assert 'path === "/developers"' in router
+    assert '"/dashboard/developer' in router
+
+    changelog_slug = AdministrationCommands.UPDATE_CHANGELOG_URL.removeprefix(f"{links.WEBSITE}/changelog/")
     assert AdministrationCommands.UPDATE_CHANGELOG_URL == f"{links.WEBSITE}/changelog/{changelog_slug}"
-    assert (ROOT / "web/src/content/docs" / f"{docs_slug}.mdx").exists()
 
     changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
     assert f'slug: "{changelog_slug}"' in changelog, changelog_slug
@@ -179,6 +185,7 @@ def test_staff_announce_posts_the_update_with_both_links():
 
     urls = view_urls(ctx.sent[0])
     assert AdministrationCommands.UPDATE_DOCS_URL in urls
+    assert AdministrationCommands.UPDATE_PORTAL_URL in urls
     assert AdministrationCommands.UPDATE_CHANGELOG_URL in urls
 
 

@@ -15,6 +15,13 @@ from webapp import discord_api, runtime, staff  # noqa: E402
 from webapp.routes import discord_text_routes as routes
 
 
+def site_client():
+    """The website's own fetches announce themselves; direct clients do not."""
+    client = app.test_client()
+    client.environ_base["HTTP_SEC_FETCH_SITE"] = "same-origin"
+    return client
+
+
 class FakeGuild:
     id = 123
 
@@ -62,7 +69,7 @@ def test_discord_text_endpoint_resolves_uncached_mentions(monkeypatch):
     monkeypatch.setattr(routes, "_discord_bot", bot)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    response = app.test_client().post(
+    response = site_client().post(
         "/api/discord/text",
         json={"guild_id": "123", "text": "<@456> <#321> <@&789>"},
     )
@@ -99,7 +106,7 @@ def test_discord_text_endpoint_uses_discord_api_when_bot_cache_misses(monkeypatc
         raise AssertionError(f"Unexpected Discord API URL: {url}")
 
     monkeypatch.setattr(discord_api.req, "get", fake_get)
-    response = app.test_client().post(
+    response = site_client().post(
         "/api/discord/text",
         json={"guild_id": "123", "text": "<@999> <#888>"},
     )
@@ -151,7 +158,7 @@ def test_transcript_endpoint_resolves_message_author_profiles(monkeypatch):
 
     monkeypatch.setattr(transcript_routes, "resolve_discord_user_profiles", fake_profiles)
 
-    response = app.test_client().get("/api/transcript/test")
+    response = site_client().get("/api/transcript/test")
 
     assert response.status_code == 200
     assert calls == {"guild_id": 1, "text": "", "author_ids": [101, 101]}
@@ -159,7 +166,7 @@ def test_transcript_endpoint_resolves_message_author_profiles(monkeypatch):
 
 
 def test_discord_text_endpoint_rejects_invalid_or_oversized_requests():
-    client = app.test_client()
+    client = site_client()
 
     assert client.post("/api/discord/text", json={"text": 42}).status_code == 400
     assert client.post(
@@ -204,7 +211,7 @@ def test_public_discord_user_profile_endpoint_fetches_live_member_data(monkeypat
     monkeypatch.setattr(routes, "_discord_bot", bot)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    response = app.test_client().get("/api/discord/users/456")
+    response = site_client().get("/api/discord/users/456")
 
     assert response.status_code == 200
     assert response.get_json()["display_name"] == "Global Name"
@@ -218,7 +225,7 @@ def test_public_discord_user_profile_endpoint_fetches_live_member_data(monkeypat
     assert profile["avatar_decoration_url"] == "https://cdn.example/decoration.png"
     assert profile["avatar_decoration_sku_id"] == 987
     assert profile["badges"] == ["staff", "early_supporter"]
-    assert app.test_client().get("/api/discord/users/not-an-id").status_code == 400
+    assert site_client().get("/api/discord/users/not-an-id").status_code == 400
 
 
 def _presence_user():
@@ -277,7 +284,7 @@ def test_public_discord_user_profile_reads_the_richest_presence_across_guilds(mo
     monkeypatch.setattr(routes, "_discord_bot", _presence_bot([quiet, active], user))
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    profile = app.test_client().get("/api/discord/users/456").get_json()
+    profile = site_client().get("/api/discord/users/456").get_json()
 
     assert profile["status"] == "idle"
     assert profile["custom_status"]["text"] == "Writing docs"
@@ -307,7 +314,7 @@ def test_profile_popup_endpoint_returns_no_text_for_an_emoji_only_status(monkeyp
     monkeypatch.setattr(routes, "_discord_bot", _presence_bot([member], user))
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    profile = app.test_client().get("/api/discord/users/456").get_json()
+    profile = site_client().get("/api/discord/users/456").get_json()
 
     assert profile["custom_status"]["text"] is None
     assert profile["custom_status"]["emoji_name"] == "\U0001f319"
@@ -371,7 +378,7 @@ def test_profile_payload_carries_the_public_server_tag_details(monkeypatch):
     monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+    server = site_client().get("/api/discord/users/456").get_json()["server_tag"]
 
     assert server["available"] is True
     assert server["private"] is False
@@ -414,7 +421,7 @@ def test_profile_payload_hides_a_server_discord_does_not_list_publicly(monkeypat
     monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+    server = site_client().get("/api/discord/users/456").get_json()["server_tag"]
 
     assert server == {
         "id": "123",
@@ -453,7 +460,7 @@ def test_profile_payload_reports_membership_for_the_signed_in_viewer(monkeypatch
     monkeypatch.setattr(routes, "_discord_bot", _tagged_profile_bot([guild], user, guild))
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    with app.test_client() as client:
+    with site_client() as client:
         with client.session_transaction() as flask_session:
             flask_session["user"] = {"id": "789"}
         server = client.get("/api/discord/users/456").get_json()["server_tag"]
@@ -476,7 +483,7 @@ def test_profile_payload_reports_a_server_niko_is_not_in(monkeypatch):
     monkeypatch.setattr(routes, "_fetch_guild_widget", no_widget)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+    server = site_client().get("/api/discord/users/456").get_json()["server_tag"]
 
     assert server["available"] is False
     assert server["private"] is False
@@ -500,7 +507,7 @@ def test_profile_payload_reads_a_guild_niko_is_not_in_through_its_widget(monkeyp
     monkeypatch.setattr(routes, "_fetch_guild_widget", widget)
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
 
-    server = app.test_client().get("/api/discord/users/456").get_json()["server_tag"]
+    server = site_client().get("/api/discord/users/456").get_json()["server_tag"]
 
     assert server["available"] is True
     assert server["private"] is False
@@ -520,7 +527,7 @@ def test_public_discord_user_profile_re_reads_presence_on_every_request(monkeypa
     member = _presence_member(user, status="online")
     monkeypatch.setattr(routes, "_discord_bot", _presence_bot([member], user))
     monkeypatch.setattr(routes._server, "run_on_bot_loop", _run_on_loop)
-    client = app.test_client()
+    client = site_client()
 
     assert client.get("/api/discord/users/456").get_json()["status"] == "online"
     member.status = SimpleNamespace(name="dnd")
@@ -541,7 +548,7 @@ def test_profile_popup_and_staff_cards_share_one_presence_lookup(monkeypatch):
     monkeypatch.setattr(runtime, "_discord_bot", bot)
     monkeypatch.setattr(runtime, "run_on_bot_loop", _run_on_loop)
 
-    popup = app.test_client().get("/api/discord/users/456").get_json()
+    popup = site_client().get("/api/discord/users/456").get_json()
     card = staff._staff_identity("456")
 
     assert popup["status"] == card["status"] == "idle"
@@ -592,7 +599,7 @@ def test_discord_text_endpoint_keeps_empty_resolutions_without_bot_loop(monkeypa
     monkeypatch.setattr(
         routes, "_discord_bot", SimpleNamespace(loop=SimpleNamespace(is_running=lambda: False))
     )
-    response = app.test_client().post(
+    response = site_client().post(
         "/api/discord/text",
         json={"guild_id": "123", "text": "<@456> <#321> <@&789>"},
     )

@@ -1,8 +1,10 @@
 """A new shared module travels with the update that needs it.
 
-``src/config`` is configured per deployment, so it is never overwritten — but an
-update that ships code importing a *new* config module has to write that module
-first, or the reload dies with ``ModuleNotFoundError`` and the area rolls back.
+``src/config`` is configured per deployment, so it is normally never overwritten
+— but an update that ships code importing a *new* config module has to write that
+module first, or the reload dies with ``ModuleNotFoundError`` and the area rolls
+back. ``links.py`` is the exception: it only ever holds production URLs, so beta's
+copy replaces it and a link change needs no manual deployment restart.
 """
 
 import tempfile
@@ -47,6 +49,23 @@ class SharedModulePlanTests(unittest.TestCase):
         # one has nothing to overwrite and has to arrive.
         self.assertEqual([entry["path"] for entry in files], ["src/config/version.py"])
         self.assertEqual(files[0]["status"], "added")
+
+    def test_links_is_replaced_even_though_the_area_is_additive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "links.py").write_text("SITE = 'old'\n", encoding="utf-8")
+            document = _manifest({"support": {
+                "src/config/links.py": "a" * 40,
+            }})
+
+            with patch.object(updates, "ROOT", root), \
+                    patch.object(updates, "beta_manifest", lambda force=False: document):
+                planned = updates.plan(["support"])
+
+        files = planned["areas"]["support"]["files"]
+        self.assertEqual([entry["path"] for entry in files], ["src/config/links.py"])
+        self.assertEqual(files[0]["status"], "modified")
 
     def test_a_config_file_beta_dropped_is_not_deleted(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -99,6 +118,44 @@ class SharedModuleApplyTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["areas"]["support"]["strategy"], "added new shared modules")
         self.assertEqual(result["areas"]["webapp"]["strategy"], "rebuilt the dashboard app")
+
+    def test_a_links_change_rides_along_with_another_area(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src" / "config").mkdir(parents=True)
+            (root / "src" / "config" / "links.py").write_text("SITE = 'old'\n", encoding="utf-8")
+            (root / "src" / "webapp").mkdir(parents=True)
+            (root / "src" / "webapp" / "x.py").write_text("OLD = 1\n", encoding="utf-8")
+            document = _manifest({
+                "support": {"src/config/links.py": "a" * 40},
+                "webapp": {"src/webapp/x.py": "b" * 40},
+            })
+            bodies = {
+                "src/config/links.py": b"SITE = 'https://niko.sryze.cc'\n",
+                "src/webapp/x.py": b"NEW = 2\n",
+            }
+            order: list[str] = []
+
+            def download(relative, expected):
+                order.append(relative)
+                return bodies[relative]
+
+            with patch.object(updates, "ROOT", root), \
+                    patch.object(updates, "DATA_DIR", root / "data" / "updates"), \
+                    patch.object(updates, "beta_manifest", lambda force=False: document), \
+                    patch.object(updates, "_download", download), \
+                    patch.object(updates, "reload_webapp", lambda bot: {"swapped": True, "routes": 1}), \
+                    patch.object(updates, "reload_updates_module", lambda: True), \
+                    patch.object(updates, "_record", lambda run: None):
+                result = updates.apply(["webapp"], None)
+
+            links = (root / "src" / "config" / "links.py").read_text(encoding="utf-8")
+
+        # links.py is applied first even though the owner only selected webapp,
+        # and the strategy reports a replacement rather than a new module.
+        self.assertEqual(order, ["src/config/links.py", "src/webapp/x.py"])
+        self.assertEqual(links, "SITE = 'https://niko.sryze.cc'\n")
+        self.assertEqual(result["areas"]["support"]["strategy"], "updated shared modules")
 
     def test_a_deployment_that_has_every_config_keeps_support_out_of_the_run(self):
         with tempfile.TemporaryDirectory() as tmp:

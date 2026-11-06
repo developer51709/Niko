@@ -46,7 +46,207 @@ Discord, and a request without it is answered `401`. It is the *Interactions
 Endpoint URL* of the Developer Portal (`docs/maintenance.md`), so an interaction
 never has to be answered by an outbound request to Discord's API.
 
-### Authentication
+## Developer API (v1)
+
+The developer API is versioned in the URL and lives beside the website's own
+routes. Its documented surface is `/api/v1/*`. A deployment that serves the API
+from an API subdomain also exposes the same handlers at `/v1/*`; the `/api`
+segment is omitted there. Unversioned aliases are not supported.
+
+Every v1 endpoint returns user data and requires a developer key. The website's
+internal leaderboard, profile, team, and transcript routes are not a substitute:
+they accept only the site's own same-origin fetches (or a developer key where a
+key is supplied), so a crawler cannot read them directly. Transcripts are
+first-party only and are never available through an API key.
+
+Access is invite-only. A developer joins the support server, opens a ticket,
+and is approved by the bot owner. The owner grants scopes per Discord account in
+**Dashboard → Developer portal → Access management**. A key can only carry a
+subset of that account's grants; the endpoint decorator checks the key's scopes
+on every request, so narrowing either the account or the key immediately takes
+effect.
+
+Bot integrations can additionally register an **application** with their bot
+user / Application ID. Registration requires a screenshot of the Discord
+Developer Portal's General Information page with the account profile menu open,
+and the owner reviews it manually. A key may be bound to one approved
+application. Its effective scopes are the intersection of the key scopes, the
+application's owner-approved scopes, and the developer account's grants. Warn
+endpoints and application webhooks require an app-bound key.
+
+Keys are created in the Developer portal and shown once. Niko stores a peppered
+SHA-256 hash and a short display prefix, never the raw secret. The developer must
+accept the current developer policies in `/developers/policies` before their
+first key can be created. The policy version is `2`; accepting an older version
+requires accepting the current text again.
+
+| Method | Path | Required scope | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/v1/economy/leaderboard` | `economy:read` | Global economy leaderboard; `?page=` and `?page_size=` |
+| GET | `/api/v1/guilds/<guild_id>/levels` | `levels:read` | Server leveling leaderboard; alias `/api/v1/levels/<guild_id>` |
+| GET | `/api/v1/users/<user_id>` | `users:read` | Discord profile for one user ID |
+| GET | `/api/v1/users/<user_id>/economy` | `economy:read` | One user's economy profile |
+| GET | `/api/v1/guilds/<guild_id>/members/<user_id>/level` | `levels:read` | One member's XP and level |
+| PUT | `/api/v1/guilds/<guild_id>/members/<user_id>/level` | `levels:write` | Replace XP and level for one member |
+| GET | `/api/v1/guilds/<guild_id>/warns` | `warns:read` | Guild warning cases; `?user_id=`, `?page=`, `?page_size=` |
+| GET | `/api/v1/guilds/<guild_id>/members/<user_id>/warns` | `warns:read` | All warning cases for one member |
+| POST | `/api/v1/guilds/<guild_id>/members/<user_id>/warns` | `warns:write` | Create a warning case (`reason`, optional `moderator_id`) |
+| DELETE | `/api/v1/guilds/<guild_id>/warns/<warn_id>` | `warns:write` | Delete one warning case |
+| DELETE | `/api/v1/guilds/<guild_id>/members/<user_id>/warns` | `warns:write` | Clear all warning cases for one member |
+| GET | `/api/v1/blacklist` | `blacklist:read` | Blacklist records; `?type=users\|guilds\|all` |
+| POST | `/api/v1/blacklist` | `blacklist:write` | Add/remove a blacklist entry (trusted apps only) |
+
+Send the key as `Authorization: Bearer <key>` or `X-API-Key: <key>`. Missing,
+unknown, and revoked keys return `401`; a valid key without the endpoint's scope
+returns `403`. The current version is `v1`, and breaking changes will use a new
+path version with a migration window rather than silently changing `v1`.
+
+Warn and blacklist endpoints require an app-bound key. For warnings, the bot
+must share the requested guild with Niko, and Niko must also be in the guild.
+The owner can grant `guilds:cross_server` to a trusted application to bypass
+only the shared-guild check. `blacklist:read`, `blacklist:write`, and
+`guilds:cross_server` are restricted scopes and cannot be created on a generic
+key.
+
+### Reviewed applications and webhooks
+
+Application data lives in `developer_applications.json`; screenshots are stored
+under `developer_application_screenshots/`. A bot user ID can be registered once.
+Pending and approved applications are locked; a denied application can be
+resubmitted by the same developer. Approval is manual and the owner selects the
+final scopes. See `src/webapp/developer_applications.py`.
+
+Approved applications can configure an HTTPS webhook endpoint in the portal.
+Delivery is handled by `src/webapp/developer_webhooks.py`. Events are only sent
+for guilds the application's bot currently shares with Niko, unless the app was
+granted `guilds:cross_server`. Each event is signed with
+`X-Niko-Signature: t=<unix>,v1=<hmac-sha256(secret, "<unix>.<raw body>")>`.
+Warn events are emitted after the database write: `warn.created`,
+`warn.deleted`, and `warns.cleared`. Delivery retries transient failures up to
+three attempts (about 0, 2, and 6 seconds) with an 8-second timeout per request.
+Webhook URLs must use HTTPS and resolve only to public addresses.
+
+### Rate limits and automated abuse
+
+Every external `/api/v1/*` and `/v1/*` request is limited by source IP before
+authentication: **120 requests per 60 seconds per `request.remote_addr`**. The
+window is shared by all callers behind the same IP, so a NAT or datacenter egress
+address must coordinate its own traffic. Every limited response carries
+`X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (Unix
+seconds). An exhausted window returns `429` with `Retry-After` and the standard
+envelope with `code: "RATE_LIMITED"` plus `limit`, `remaining`, and
+`retry_after`. Health, static assets, and the portal are not IP-limited.
+
+Authenticated traffic is also reviewed for automated abuse. The detector looks
+at one key doing at least 300 requests per minute, at least 80 errors per minute
+when at least 80% of requests fail, one key seen from at least 12 distinct IPs
+with at least 30 requests in five minutes, or at least 20 IP rate-limit blocks in
+five minutes. Crossing a threshold suspends the developer account: the key that
+triggered it and every other key owned by that developer are revoked. The access
+grant record is kept, and `enabled` is derived as granted, not suspended.
+
+A suspended key cannot authenticate for data. Suspended developers can still
+open `GET /api/developer/me` to read `suspension` and `appeal` state, but every
+other portal key and usage operation returns `403` with
+`code: "ACCESS_SUSPENDED"`. `POST /api/developer/keys`, `DELETE
+/api/developer/keys/<key_id>`, `POST /api/developer/agree`, and
+`GET /api/developer/logs` are locked until the suspension is lifted. Lifting a
+suspension does not restore revoked keys; the developer must create new ones.
+
+### Errors and report codes
+
+Every API failure uses the shared error-report envelope. The top-level `error`
+string is retained for compatibility, and every failure adds a stable `code`,
+a `docs` path, and an identical `X-Error-Code` header:
+
+```json
+{
+  "error": "This key does not have the required permission.",
+  "code": "SCOPE_REQUIRED",
+  "docs": "/developers/scopes",
+  "required_scope": "economy:read"
+}
+```
+
+When a genuine server failure is recorded in the error-report system, the body
+and `X-Error-Report` header also include a six-character `report_code`. Expected
+client errors (invalid input, missing scopes, rate limits, 404s) are not
+reported. API 404 and 405 responses return the same JSON envelope with
+`NOT_FOUND` and `METHOD_NOT_ALLOWED` instead of Flask's HTML error page. See
+`web/src/pages/developerDocsContent.tsx` for the complete stable-code table and
+`src/webapp/api_errors.py` for the envelope implementation.
+
+### Maintenance responses
+
+An owner can pause an API endpoint without taking the whole site down. The gate
+in `src/webapp/api_maintenance.py` applies to both `/api/v1/*` and `/v1/*` and
+returns a linked error report when one exists:
+
+```json
+{
+  "error": "This API is in maintenance mode.",
+  "code": "API_MAINTENANCE",
+  "docs": "/developers/maintenance",
+  "maintenance": {
+    "kind": "api",
+    "key": "api_v1_economy_leaderboard",
+    "label": "Economy leaderboard API",
+    "reason": "Rebuilding the leaderboard cache",
+    "since": 1762300000
+  },
+  "report_code": "ABC123"
+}
+```
+
+The response is `503` with `Retry-After: 300`. `/api/health`, `/status`, static
+assets, and the signed-in portal remain reachable. The public status timeline
+lists active API maintenance alongside owner-published incidents.
+
+### Suspension appeals
+
+A suspension revokes keys and sends the developer a Discord DM stating that API
+access is suspended. The DM includes a persistent `niko:developer:appeal` button
+backed by `src/cogs/system/developer_appeals.py`; the button survives restarts
+and opens a modal. A developer can submit **one appeal per suspension**. The
+owner reviews it in the Developer portal, and both decisions send a follow-up
+DM. An approval lifts the suspension and restores portal access, but the
+revoked keys stay revoked. The approval DM links to
+`https://niko.sryze.cc/developers/rate-limits`,
+`https://niko.sryze.cc/developers/policies`, and Discord's rate-limit
+documentation.
+
+### Developer portal
+
+The portal is the signed-in management surface. It does not expose other
+developers' data unless the caller is the owner.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/developer/me` | Access, current policy version, scope catalogue, active key count, rate-limit state, suspension, and appeal status (available while suspended) |
+| POST | `/api/developer/agree` | Accept the current developer policies |
+| GET | `/api/developer/keys` | List the caller's keys (prefixes only) |
+| POST | `/api/developer/keys` | Create a scoped key; returns the raw secret once |
+| DELETE | `/api/developer/keys/<key_id>` | Revoke one of the caller's keys |
+| GET | `/api/developer/logs` | The caller's API usage; owner may pass `?all=1` |
+| GET | `/api/developer/access` | Owner-only developer access roster and scope catalogue |
+| PUT | `/api/developer/access/<user_id>` | Owner-only grant or edit access, scopes, note, and enabled state |
+| DELETE | `/api/developer/access/<user_id>` | Owner-only revoke access and all of that developer's keys |
+| GET | `/api/developer/appeals` | Owner-only suspension appeal queue |
+| POST | `/api/developer/appeals/<appeal_id>/review` | Owner-only approve or deny an appeal; approval lifts the suspension |
+| GET | `/api/developer/applications` | Applications owned by the caller, plus scope/event catalogue |
+| POST | `/api/developer/applications` | Submit a multipart application with a verification screenshot |
+| GET | `/api/developer/applications/<application_id>/screenshot` | Serve an owned screenshot to its developer or the owner |
+| DELETE | `/api/developer/applications/<application_id>` | Remove a denied application |
+| PUT | `/api/developer/applications/<application_id>/webhook` | Save the URL, enabled state, and event selection |
+| POST | `/api/developer/applications/<application_id>/webhook/test` | Deliver a signed test event |
+| GET | `/api/developer/applications/review` | Owner-only review queue |
+| POST | `/api/developer/applications/<application_id>/review` | Owner-only approve or deny an application |
+
+`POST /api/developer/keys` accepts an optional `application_id` in its JSON
+body. App-bound keys are limited to the application's approved scopes and the
+developer's current grants; warn scopes are rejected on generic keys.
+
+## Authentication
 
 | Method | Path | Purpose |
 | --- | --- | --- |
