@@ -97,6 +97,43 @@ def test_supervised_bot_update_records_the_last_good_restore_point(monkeypatch):
     assert (updates.DATA_DIR / "pending.json").exists()
 
 
+def _restart_targets_for(monkeypatch, *, split_web: str, split_db: str) -> list:
+    """The ``child`` values a bot update sends, in the requested split layout."""
+    _prepare(monkeypatch)
+    monkeypatch.setenv("NIKO_SPLIT_WEB", split_web)
+    monkeypatch.setenv("NIKO_SPLIT_DB", split_db)
+    requested = []
+    monkeypatch.setattr(
+        updates.supervisor_control,
+        "request_restart",
+        lambda **kwargs: requested.append(kwargs) or {"ok": True, "accepted": True},
+    )
+
+    result = updates.apply(["bot"], object())
+
+    assert result["ok"] is True
+    assert requested, "a bot update must request a supervised restart"
+    return [item.get("child") for item in requested]
+
+
+def test_a_bot_update_restarts_the_database_child_beside_the_bot(monkeypatch):
+    # The database child imported ``src/database/`` at its own boot, so it has
+    # to be replaced with the bot or it keeps serving the old modules.
+    assert _restart_targets_for(monkeypatch, split_web="1", split_db="1") == [
+        ["bot", "db"]
+    ]
+
+
+def test_a_bot_update_leaves_the_split_database_alone_when_it_is_in_the_bot(monkeypatch):
+    assert _restart_targets_for(monkeypatch, split_web="1", split_db="0") == ["bot"]
+
+
+def test_a_bot_update_in_the_combined_layout_restarts_every_child(monkeypatch):
+    # ``None`` is the supervisor's "all children", which is right when the bot
+    # child is also the dashboard and the database.
+    assert _restart_targets_for(monkeypatch, split_web="0", split_db="0") == [None]
+
+
 def test_a_rejected_supervised_restart_clears_the_restore_point(monkeypatch):
     _prepare(monkeypatch)
     monkeypatch.setattr(

@@ -58,19 +58,19 @@ files the bot is currently serving from beta.
 ## The update page
 
 **Staff settings → Updates** compares beta's files with this deployment's, area
-by area, and applies what is selected:
+by area, and applies what is selected, in the order below:
 
 | Area | What it covers | How it is applied |
 | --- | --- | --- |
-| Shared modules | new `src/config/**` files and `src/config/links.py` | Written before anything is reloaded, because a module an area imports has to exist first. Existing config files keep this deployment's own ids and copy, and a file beta dropped is never deleted — except `links.py`, which always carries the production URLs and is replaced in full. Applied with every run, whether or not the owner ticked it. |
+| Shared modules | new `src/config/**` files and `src/config/links.py` | Written before anything is reloaded, because a module an area imports has to exist first. Existing config files keep this deployment's own ids and copy, and a file beta dropped is never deleted — except `links.py`, which always carries the production URLs and is replaced in full. A pending module is added to any run, whether or not the owner ticked it. |
 | Website build | `src/website/dist/**` | Files replaced in place. Flask serves that folder from disk, so the next request is the new site. Nothing restarts. |
 | Cog extensions | `src/cogs/**` | The changed `cogs.<package>` modules are dropped from `sys.modules` (clearing the cached import) and only the affected extensions are reloaded. |
 | Utilities | `src/utils/**` | Changed `utils.*` modules are purged, every loaded extension is reloaded on top of them, and the dashboard app is rebuilt. |
-| API & dashboard | `src/webapp/**` | `webapp.*` is re-imported and the new Flask app is swapped into the running server (`server.app`). The listening socket, its thread and in-flight connections stay up. The swap is checked before it is reported: the new app must be the one on the server and must answer `/api/health`. |
 | Database schema | `src/events/startup/database.py` | The module is re-imported and its `init_database` run again on the live pool: `CREATE TABLE IF NOT EXISTS`, missing columns and the idempotent migrations. The process keeps running. |
+| API & dashboard | `src/webapp/**` | `webapp.*` is re-imported and the new Flask app is swapped into the running server (`server.app`). The listening socket, its thread and in-flight connections stay up. The swap is checked before it is reported: the new app must be the one on the server and must answer `/api/health`. |
 | Gateway events | `src/events/on_*.py` | The modules are purged from `sys.modules`, re-imported, and the handler names `bot.py`'s callbacks look up are rebound onto the new functions. The next message runs the new code; nothing restarts. |
 | Startup writers | `src/events/startup/writers.py` | The writers and the banner that reads their version are re-imported, `events.startup`'s exports are refreshed, and the ready handler is rebound. The writers then run once so `bot_stats.json` and `commands.json` are current. No restart and no cog reload. |
-| Bot core | `src/bot.py`, `src/api_server.py`, the remaining `src/events/startup/**`, `src/database/**` | The process replaces its own image in place, keeping its PID and listening socket; see below. |
+| Bot core | `src/bot.py`, `src/api_server.py`, the remaining `src/events/startup/**`, `src/database/**`, `src/db_child.py` | The process replaces its own image in place, keeping its PID and listening socket; see below. In the split layout the supervisor restarts the database child beside it, so the new `src/database/` client and the `src/db_child.py` that serves it change together. |
 
 The API rebuild is transactional. The modules the running app was built from
 are snapshotted before `webapp.*` is dropped; if the new copy fails to import,

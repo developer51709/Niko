@@ -7,6 +7,7 @@ not in the custom id the button carries.
 """
 
 import asyncio
+import io
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -129,27 +130,15 @@ def snapshots():
 
 
 class _Cdn:
-    """Stands in for the bot's HTTP session on the CDN read used by the retry."""
+    """Stands in for the bot's HTTP session on the CDN reads used by the archive."""
 
     def __init__(self, data):
         self.data = data
         self.urls = []
 
-    def get_from_cdn(self, url):
+    async def get_from_cdn(self, url):
         self.urls.append(url)
-        cdn = self
-
-        class _Response:
-            async def read(self):
-                return cdn.data
-
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *_exc):
-                return False
-
-        return _Response()
+        return self.data
 
 
 class _Asset:
@@ -395,6 +384,103 @@ class TestProfilePictures:
         call = _call(cog)
         assert [file.filename for file in call.files] == ["profile-picture-after.png"]
         assert call.media_urls[0] == "https://cdn.example/huge.gif"
+
+    def test_an_oversized_animated_picture_is_archived_from_a_smaller_rendition(self):
+        cog = _cog()
+        cog.bot.http = _Cdn(b"small-gif-bytes")
+        # Discord hands out an animated avatar as a 1024px gif, which can be
+        # several megabytes — too big to re-upload, but the smaller rendition of
+        # the same animation is not.
+        before = _user(avatar=_Asset(
+            "https://cdn.discordapp.com/avatars/42/hash.gif?size=1024",
+            data=b"x" * 4096))
+        after = _user(avatar=_Asset("https://cdn.example/new.png"))
+
+        with mock.patch.object(logging_cog, "MAX_ARCHIVED_AVATAR_BYTES", 64):
+            asyncio.run(cog.on_user_update(before, after))
+
+        assert cog.bot.http.urls == [
+            "https://cdn.discordapp.com/avatars/42/hash.gif?size=512"]
+        call = _call(cog)
+        assert [file.filename for file in call.files] == [
+            "profile-picture-before.gif", "profile-picture-after.png"]
+        assert "could not be archived" not in call.body
+
+    def test_a_nine_megabyte_animated_picture_is_archived_untouched(self):
+        cog = _cog()
+        cog.bot.http = _Cdn(None)
+        # Discord now allows 20 MiB per attachment, so the production gif that
+        # used to be linked at 9 MB goes up exactly as Discord served it.
+        data = b"x" * 9_000_000
+        before = _user(avatar=_Asset(
+            "https://cdn.discordapp.com/avatars/42/hash.gif?size=1024",
+            data=data))
+        after = _user(avatar=_Asset("https://cdn.example/new.png"))
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        # No smaller rendition is requested and nothing is re-encoded.
+        assert cog.bot.http.urls == []
+        call = _call(cog)
+        assert [file.filename for file in call.files] == [
+            "profile-picture-before.gif", "profile-picture-after.png"]
+        archived = call.files[0].fp
+        archived.seek(0)
+        assert len(archived.read()) == len(data)
+        assert "could not be archived" not in call.body
+
+    def test_a_picture_only_served_at_full_size_is_resized_locally(self):
+        cog = _cog()
+        # The exact production asset: the CDN answers "Invalid resource" for
+        # every smaller rendition of the gif, so the archive has to resize the
+        # bytes it already has instead of falling back to a link.
+        cog.bot.http = _Cdn(None)
+        before = _user(avatar=_Asset(
+            "https://cdn.discordapp.com/avatars/42/hash.gif?size=1024",
+            data=b"x" * 4096))
+        after = _user(avatar=_Asset("https://cdn.example/new.png"))
+
+        with mock.patch.object(logging_cog, "MAX_ARCHIVED_AVATAR_BYTES", 64), \
+                mock.patch.object(logging_cog, "_resized_picture",
+                                  return_value=b"small-gif") as resize:
+            asyncio.run(cog.on_user_update(before, after))
+
+        resize.assert_called_once()
+        call = _call(cog)
+        assert [file.filename for file in call.files] == [
+            "profile-picture-before.gif", "profile-picture-after.png"]
+        assert "could not be archived" not in call.body
+
+    def test_resizing_an_animated_picture_keeps_its_frames(self):
+        from PIL import Image
+
+        frames = [Image.new("RGB", (64, 64), (index * 60, 0, 0)) for index in range(3)]
+        out = io.BytesIO()
+        frames[0].save(out, format="GIF", save_all=True, append_images=frames[1:],
+                       duration=100, loop=0)
+
+        resized = logging_cog._resized_picture(out.getvalue(), 16, "gif")
+
+        assert resized and len(resized) < len(out.getvalue())
+        with Image.open(io.BytesIO(resized)) as picture:
+            assert picture.size == (16, 16)
+            assert picture.n_frames == 3
+
+    def test_a_gif_that_fails_is_retried_as_webp(self):
+        cog = _cog()
+        cog.bot.http = _Cdn(b"animated-webp-bytes")
+        before = _user(avatar=_Asset("https://cdn.example/old.png"))
+        after = _user(avatar=_Asset(
+            "https://cdn.discordapp.com/avatars/42/hash.gif?size=1024",
+            error=OSError("415 on the gif rendition")))
+
+        asyncio.run(cog.on_user_update(before, after))
+
+        assert cog.bot.http.urls == [
+            "https://cdn.discordapp.com/avatars/42/hash.webp?size=1024"]
+        call = _call(cog)
+        assert [file.filename for file in call.files] == [
+            "profile-picture-before.png", "profile-picture-after.webp"]
 
     def test_the_same_change_dispatched_twice_is_logged_once(self):
         cog = _cog()

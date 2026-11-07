@@ -103,7 +103,7 @@ where there is no second process to coordinate with. `NIKO_SPLIT_DB=0` or
 | `website` | Static files are read from disk on the next request | No | No |
 | `utils`, `cogs`, `events`, `startup` | Applied in place in the bot child | No | No |
 | `database` (schema) | `init_database` runs again through the database child | No | No |
-| `support`, `bot` (includes `src/database/`) | The bot child is replaced, and the `db` child with it so it loads the new database modules; the `web` child keeps serving | Yes (restart) | No |
+| `support`, `bot` (includes `src/database/` and `src/db_child.py`) | The bot child is replaced, and the `db` child with it so it loads the new database modules and child script; the `web` child keeps serving | Yes (restart) | No |
 
 `utils.supervisor_control.request_restart()` takes a `child` target, so a bot
 update names `bot` and a webapp update names `web`. A run that includes both

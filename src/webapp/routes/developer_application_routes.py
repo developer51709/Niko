@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import io
 import json
 
 from flask import jsonify, request, send_file
 
-from .. import developer_applications, developer_portal, developer_webhooks, runtime
+from .. import runtime
 from .. import server as _server
 from ..api_errors import error_response
+from ..developer import applications, portal, webhooks
 
 app = _server.app
 require_auth = _server.require_auth
@@ -16,7 +18,7 @@ require_csrf = _server.require_csrf
 
 
 def _current_user_id() -> str:
-    return developer_portal.session_user_id()
+    return portal.session_user_id()
 
 
 def _owner() -> bool:
@@ -25,7 +27,7 @@ def _owner() -> bool:
 
 def _portal_access():
     user_id = _current_user_id()
-    access = developer_portal.developer_access(user_id)
+    access = portal.developer_access(user_id)
     if access["suspended"]:
         return None, error_response(
             "ACCESS_SUSPENDED",
@@ -70,11 +72,11 @@ def _bot_identity(bot_user_id: str) -> dict:
         raise
     except Exception:
         pass
-    return developer_portal.resolve_identity(bot_user_id)
+    return portal.resolve_identity(bot_user_id)
 
 
 def _app_for_current_user(application_id: str):
-    application = developer_applications.get_application(application_id)
+    application = applications.get_application(application_id)
     if not isinstance(application, dict):
         return None, error_response(
             "APPLICATION_NOT_FOUND",
@@ -94,24 +96,24 @@ def _app_for_current_user(application_id: str):
 
 @app.route("/api/developer/applications")
 @require_auth
-def api_developer_applications():
+def api_applications():
     access, error = _portal_access()
     if error:
         return error
     standard = [
-        scope for scope in developer_portal.scope_options()
+        scope for scope in portal.scope_options()
         if not scope.get("restricted") and scope["key"] in access["scopes"]
     ]
     return jsonify({
-        "applications": developer_applications.applications_for_user(_current_user_id()),
+        "applications": applications.applications_for_user(_current_user_id()),
         "scopes": standard,
         "restricted_scopes": [
-            scope for scope in developer_portal.scope_options()
+            scope for scope in portal.scope_options()
             if scope.get("restricted")
         ],
         "events": [
             {"key": key, **value}
-            for key, value in developer_applications.WEBHOOK_EVENTS.items()
+            for key, value in applications.WEBHOOK_EVENTS.items()
         ],
         "policy_accepted": bool(access["policy_accepted"]),
     })
@@ -139,10 +141,10 @@ def api_developer_create_application():
             400,
             docs="/developers/applications",
         )
-    raw = upload.stream.read(developer_applications.MAX_SCREENSHOT_BYTES + 1)
-    if len(raw) > developer_applications.MAX_SCREENSHOT_BYTES:
+    raw = upload.stream.read(applications.MAX_SCREENSHOT_BYTES + 1)
+    if len(raw) > applications.MAX_SCREENSHOT_BYTES:
         return error_response("SCREENSHOT_TOO_LARGE", "Screenshots must be 8 MB or smaller.", 413, docs="/developers/applications")
-    content_type = developer_applications.detect_image_type(raw, upload.mimetype)
+    content_type = applications.detect_image_type(raw, upload.mimetype)
     if content_type is None:
         return error_response(
             "SCREENSHOT_INVALID",
@@ -151,7 +153,7 @@ def api_developer_create_application():
             docs="/developers/applications",
         )
     standard = [
-        scope["key"] for scope in developer_portal.scope_options()
+        scope["key"] for scope in portal.scope_options()
         if not scope.get("restricted") and scope["key"] in access["scopes"]
     ]
     requested = _request_scopes()
@@ -160,7 +162,7 @@ def api_developer_create_application():
     except ValueError as error_value:
         return error_response("INVALID_BOT_ID", str(error_value), 400, docs="/developers/applications")
     try:
-        application = developer_applications.create_or_resubmit(
+        application = applications.create_or_resubmit(
             _current_user_id(),
             name=_form_text("name"),
             description=_form_text("description"),
@@ -168,7 +170,7 @@ def api_developer_create_application():
             requested_scopes=requested,
             allowed_scopes=standard,
             bot_identity=bot_identity,
-            owner_identity=developer_portal.resolve_identity(_current_user_id()),
+            owner_identity=portal.resolve_identity(_current_user_id()),
             screenshot=raw,
             screenshot_content_type=content_type,
         )
@@ -187,7 +189,7 @@ def api_developer_delete_application(application_id):
     if error:
         return error
     try:
-        removed = developer_applications.delete_application(application_id, _current_user_id())
+        removed = applications.delete_application(application_id, _current_user_id())
     except ValueError as error_value:
         return error_response("APPLICATION_LOCKED", str(error_value), 409, docs="/developers/applications")
     if not removed:
@@ -201,11 +203,11 @@ def api_developer_application_screenshot(application_id):
     application, error = _app_for_current_user(application_id)
     if error:
         return error
-    shot = developer_applications.screenshot_path(application_id)
+    shot = applications.screenshot_bytes(application_id)
     if shot is None:
         return error_response("SCREENSHOT_NOT_FOUND", "Screenshot not found.", 404, docs="/developers/applications")
-    path, content_type = shot
-    return send_file(path, mimetype=content_type, max_age=0, conditional=True)
+    raw, content_type = shot
+    return send_file(io.BytesIO(raw), mimetype=content_type, max_age=0, conditional=True)
 
 
 @app.route("/api/developer/applications/<application_id>/webhook", methods=["PUT"])
@@ -215,7 +217,7 @@ def api_developer_configure_webhook(application_id):
     access, error = _portal_access()
     if error:
         return error
-    application = developer_applications.get_application(application_id)
+    application = applications.get_application(application_id)
     if not isinstance(application, dict):
         return error_response("APPLICATION_NOT_FOUND", "Application not found.", 404, docs="/developers/applications")
     if str(application.get("owner_id")) != _current_user_id():
@@ -224,7 +226,7 @@ def api_developer_configure_webhook(application_id):
     if not isinstance(payload, dict):
         return error_response("INVALID_BODY", "A JSON object is required.", 400, docs="/developers/applications")
     try:
-        webhook = developer_applications.configure_webhook(
+        webhook = applications.configure_webhook(
             application_id,
             _current_user_id(),
             url=payload.get("url"),
@@ -247,12 +249,12 @@ def api_developer_test_webhook(application_id):
     _access, error = _portal_access()
     if error:
         return error
-    application = developer_applications.get_application(application_id)
+    application = applications.get_application(application_id)
     if not isinstance(application, dict):
         return error_response("APPLICATION_NOT_FOUND", "Application not found.", 404, docs="/developers/applications")
     if str(application.get("owner_id")) != _current_user_id():
         return error_response("APPLICATION_FORBIDDEN", "This application belongs to another developer.", 403, docs="/developers/applications")
-    ok, status, message = developer_webhooks.send_test_event(application_id)
+    ok, status, message = webhooks.send_test_event(application_id)
     if not ok:
         return error_response(
             "WEBHOOK_DELIVERY_FAILED",
@@ -270,17 +272,17 @@ def api_developer_application_review_queue():
     if not _owner():
         return error_response("OWNER_ONLY", "Only the bot owner can review applications.", 403, docs="/developers/applications")
     rows = []
-    for application in developer_applications.review_rows():
+    for application in applications.review_rows():
         rows.append({
             **application,
-            "shared_guild_count": developer_applications.shared_guild_count(application),
+            "shared_guild_count": applications.shared_guild_count(application),
         })
     return jsonify({
         "applications": rows,
-        "scopes": developer_portal.scope_options(),
+        "scopes": portal.scope_options(),
         "events": [
             {"key": key, **value}
-            for key, value in developer_applications.WEBHOOK_EVENTS.items()
+            for key, value in applications.WEBHOOK_EVENTS.items()
         ],
     })
 
@@ -291,7 +293,7 @@ def api_developer_application_review_queue():
 def api_developer_review_application(application_id):
     if not _owner():
         return error_response("OWNER_ONLY", "Only the bot owner can review applications.", 403, docs="/developers/applications")
-    application = developer_applications.get_application(application_id)
+    application = applications.get_application(application_id)
     if not isinstance(application, dict):
         return error_response("APPLICATION_NOT_FOUND", "Application not found.", 404, docs="/developers/applications")
     payload = request.get_json(silent=True)
@@ -300,9 +302,9 @@ def api_developer_review_application(application_id):
     status = str(payload.get("status") or "").strip().lower()
     if status not in {"approved", "denied"}:
         return error_response("INVALID_DECISION", "Choose approved or denied.", 400, docs="/developers/applications")
-    owner_access = developer_portal.developer_access(str(application.get("owner_id") or ""))
+    owner_access = portal.developer_access(str(application.get("owner_id") or ""))
     try:
-        reviewed = developer_applications.review_application(
+        reviewed = applications.review_application(
             application_id,
             status,
             scopes=payload.get("scopes"),

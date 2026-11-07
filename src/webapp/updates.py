@@ -43,7 +43,10 @@ This module stages files from beta and then applies them area by area:
              with ``execve``, keeping its PID and its listening socket (see
              :mod:`utils.handoff`). The port is never closed and a supervisor
              never sees an exit, which is what keeps a hosted deployment from
-             recreating the instance and discarding the files just written.
+             recreating the instance and discarding the files just written. It
+             also carries ``src/database/`` and ``src/db_child.py``; the restart
+             names the database child beside the bot so both halves of the
+             database API load the same files.
 
 Every area is optional and applied in the order above, so selecting a cog fix
 and a website tweak does not touch the process at all.
@@ -141,7 +144,18 @@ AREAS: dict[str, dict] = {
     },
     "bot": {
         "label": "Bot core",
-        "paths": ("src/bot.py", "src/api_server.py", "src/events/startup/", "src/database/"),
+        # ``src/database/`` is the translation layer and ``src/db_child.py`` is
+        # the process that owns it.  They have to change together: shipping a
+        # new client while the database child still runs the old server would
+        # leave the two halves of one API disagreeing, so the child script
+        # travels with the area whose restart replaces that child.
+        "paths": (
+            "src/bot.py",
+            "src/api_server.py",
+            "src/db_child.py",
+            "src/events/startup/",
+            "src/database/",
+        ),
         "except_paths": ("src/events/startup/database.py",),
     },
 }
@@ -683,9 +697,10 @@ def _split_web() -> bool:
 def _split_db() -> bool:
     """Whether the database runs in its own child.
 
-    Database code (``src/database/``) is bot-core code, so a bot restart picks
-    it up.  The database child imported those modules at its own boot, so it has
-    to be restarted with the bot for the new translation layer to take effect.
+    Database code (``src/database/``) and the ``src/db_child.py`` script that
+    serves it are bot-core code, so a bot restart picks them up.  The database
+    child imported those modules at its own boot, so it has to be restarted
+    with the bot for the new translation layer to take effect.
     """
     return _split_web() and (os.environ.get("NIKO_SPLIT_DB") or "").strip() == "1"
 

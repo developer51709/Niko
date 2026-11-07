@@ -266,7 +266,8 @@ class AutoMod(commands.Cog):
                     display_title=_log_t(lang, "title_spam"))
                 try:
                     user = message.guild.get_member(message.author.id)
-                    await utils.mute_member(message.guild, user, duration=60, reason="Auto-mute: spam")
+                    await utils.mute_member(message.guild, user, duration=60,
+                                            reason="Auto-mute: spam", method="Automod")
                 except discord.Forbidden:
                     if message.guild.id not in self._missing_perms_warned:
                         self._missing_perms_warned.add(message.guild.id)
@@ -311,7 +312,8 @@ class AutoMod(commands.Cog):
                            channel=message.channel.mention),
                     display_title=_log_t(lang, "title_mention"))
                 try:
-                    await utils.mute_member(message.guild, message.author, duration=120, reason="Auto-mute: mass mention")
+                    await utils.mute_member(message.guild, message.author, duration=120,
+                                            reason="Auto-mute: mass mention", method="Automod")
                 except discord.Forbidden:
                     if message.guild.id not in self._missing_perms_warned:
                         self._missing_perms_warned.add(message.guild.id)

@@ -22,7 +22,7 @@ import time
 
 from utils import logging
 
-from . import developer_applications, developer_portal
+from . import applications, portal
 
 DELIVERY_TIMEOUT_SECONDS = 8
 DELIVERY_ATTEMPTS = 3
@@ -86,7 +86,7 @@ async def _post_once(url: str, body: str, headers: dict) -> tuple[bool, int | No
 
 
 async def _deliver(application_id: str, payload: dict, *, attempts: int = DELIVERY_ATTEMPTS) -> bool:
-    app = developer_applications.get_application(application_id)
+    app = applications.get_application(application_id)
     if not isinstance(app, dict):
         return False
     webhook = app.get("webhook") if isinstance(app.get("webhook"), dict) else {}
@@ -97,9 +97,9 @@ async def _deliver(application_id: str, payload: dict, *, attempts: int = DELIVE
     try:
         # Re-check at delivery time as well as at save time: DNS records can
         # change, and the stored URL is untrusted input.
-        url = developer_applications._normalise_webhook_url(raw_url)
+        url = applications._normalise_webhook_url(raw_url)
     except ValueError as error:
-        developer_applications.record_delivery(
+        applications.record_delivery(
             application_id,
             event_type=str(payload.get("type") or ""),
             status=None,
@@ -121,7 +121,7 @@ async def _deliver(application_id: str, payload: dict, *, attempts: int = DELIVE
         }
         ok, last_status, last_error = await _post_once(url, body, headers)
         if ok:
-            developer_applications.record_delivery(
+            applications.record_delivery(
                 application_id,
                 event_type=str(payload.get("type") or ""),
                 status=last_status,
@@ -133,7 +133,7 @@ async def _deliver(application_id: str, payload: dict, *, attempts: int = DELIVE
             break
         if attempt + 1 < attempts:
             await asyncio.sleep(RETRY_DELAYS[min(attempt + 1, len(RETRY_DELAYS) - 1)])
-    developer_applications.record_delivery(
+    applications.record_delivery(
         application_id,
         event_type=str(payload.get("type") or ""),
         status=last_status,
@@ -144,12 +144,12 @@ async def _deliver(application_id: str, payload: dict, *, attempts: int = DELIVE
 
 async def dispatch_guild_event_async(event_type: str, guild_id: str, data: dict) -> int:
     """Deliver one event to every approved app that is allowed to receive it."""
-    if event_type not in developer_applications.WEBHOOK_EVENTS:
+    if event_type not in applications.WEBHOOK_EVENTS:
         return 0
     guild_id = str(guild_id or "").strip()
     if not guild_id:
         return 0
-    apps = developer_applications.approved_applications()
+    apps = applications.approved_applications()
     deliveries = 0
     for app in apps:
         if not _webhook_ready(app, event_type):
@@ -158,13 +158,13 @@ async def dispatch_guild_event_async(event_type: str, guild_id: str, data: dict)
         # even if an old approval and webhook configuration still exist. The
         # effective scope is still the intersection, so a removed read grant
         # must also stop the corresponding event stream.
-        owner_access = developer_portal.developer_access(str(app.get("owner_id") or ""))
+        owner_access = portal.developer_access(str(app.get("owner_id") or ""))
         if not owner_access["enabled"]:
             continue
         if event_type.startswith("warn") and "warns:read" not in (owner_access.get("scopes") or []):
             continue
         if not _application_allows_guild(app, guild_id):
-            if not await developer_applications.application_in_guild_async(app, guild_id):
+            if not await applications.application_in_guild_async(app, guild_id):
                 continue
         payload = _payload(event_type, guild_id, data, str(app.get("id") or ""))
         # Each receiver gets its own task so one slow endpoint cannot delay the
@@ -179,7 +179,7 @@ async def dispatch_guild_event_async(event_type: str, guild_id: str, data: dict)
 
 def dispatch_guild_event(event_type: str, guild_id: str, data: dict) -> int:
     """Schedule guild-filtered delivery without blocking the caller."""
-    from . import runtime
+    from .. import runtime
 
     if runtime._discord_bot is None:
         return 0
@@ -192,7 +192,7 @@ def dispatch_guild_event(event_type: str, guild_id: str, data: dict) -> int:
 
 
 async def send_test_event_async(application_id: str) -> tuple[bool, int | None, str]:
-    app = developer_applications.get_application(application_id)
+    app = applications.get_application(application_id)
     if not isinstance(app, dict):
         return False, None, "Application not found."
     if str(app.get("status")) != "approved":
@@ -210,13 +210,13 @@ async def send_test_event_async(application_id: str) -> tuple[bool, int | None, 
         application_id,
     )
     ok = await _deliver(application_id, payload, attempts=1)
-    updated = developer_applications.get_application(application_id) or {}
+    updated = applications.get_application(application_id) or {}
     state = updated.get("webhook") if isinstance(updated.get("webhook"), dict) else {}
     return ok, state.get("last_delivery_status"), str(state.get("last_delivery_error") or "")
 
 
 def send_test_event(application_id: str) -> tuple[bool, int | None, str]:
-    from . import runtime
+    from .. import runtime
 
     try:
         return runtime.run_on_bot_loop(send_test_event_async(application_id), timeout=15)

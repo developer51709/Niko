@@ -117,14 +117,18 @@ key.
 
 ### Reviewed applications and webhooks
 
-Application data lives in `developer_applications.json`; screenshots are stored
-under `developer_application_screenshots/`. A bot user ID can be registered once.
+Applications and their screenshots live in the developer portal's own MongoDB
+database (`<MONGODB_DATABASE>_developer_portal`, e.g.
+`discord_bot_developer_portal`), beside the bot's database rather than in it,
+like the music and error-report stores. Without `MONGODB_URL` the historical
+`data/developer_applications.json` and `data/developer_application_screenshots/`
+are used instead, and the first MongoDB use imports them. A bot user ID can be registered once.
 Pending and approved applications are locked; a denied application can be
 resubmitted by the same developer. Approval is manual and the owner selects the
-final scopes. See `src/webapp/developer_applications.py`.
+final scopes. See `src/webapp/developer/applications.py`.
 
 Approved applications can configure an HTTPS webhook endpoint in the portal.
-Delivery is handled by `src/webapp/developer_webhooks.py`. Events are only sent
+Delivery is handled by `src/webapp/developer/webhooks.py`. Events are only sent
 for guilds the application's bot currently shares with Niko, unless the app was
 granted `guilds:cross_server`. Each event is signed with
 `X-Niko-Signature: t=<unix>,v1=<hmac-sha256(secret, "<unix>.<raw body>")>`.

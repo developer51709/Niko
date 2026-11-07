@@ -5,7 +5,7 @@ Niko's mute system allows you to temporarily silence members who are breaking ru
 ## Types of Mutes
 
 ### Regular Mute
-A mute until manually removed:
+A mute for Discord's longest timeout (28 days):
 
 ```
 .mute <user> [reason]
@@ -26,22 +26,53 @@ Duration examples:
 
 ## How Mutes Work
 
-### Mute Role
-Niko creates a "Muted" role that:
-- Blocks sending messages
-- Blocks speaking in voice
-- Blocks adding reactions
-
-The role is automatically applied to muted members and removed when unmuted.
-
-### Channel Permissions
+### Timeout and Mute Role
 When a member is muted:
-1. The Muted role is added to the member
-2. Channel permissions deny message sending for the Muted role
-3. Voice permissions restrict speaking
+1. Discord's own timeout is applied first
+2. A "Muted" role is added, with channel denies for sending messages, speaking, adding reactions, using app commands and using external apps
+
+The timeout is what makes the mute hold: it ignores channel permissions entirely. In a server that denies @everyone and lets a verified role talk in its verification channels, the Muted role cannot help — Discord applies role allows after role denies, so the verified role's allow beats the mute role's deny. The timeout does not care about any of that.
+
+Discord accepts at most 28 days per timeout. A temporary mute ends when its duration runs out, and a regular mute ends after 28 days too — Niko does not renew it. Discord removes the timeout the moment it expires, so all that is left for Niko is the role: when a mute ends, the Muted role comes off and a **Mute Expired** entry appears in your moderation log with a **Mute** button, so re-applying it takes one click instead of remembering the member was muted at all. The role still holds in channels where no other role is allowed to talk. Channels that already deny the role are left untouched, and a channel created later is caught up the next time someone is muted.
+
+### Every Mute Method
+A mute does not have to start with a command. These all mute a member, and each one records the same mute and posts a single **Mute** entry:
+
+| Method | What happens |
+|--------|--------------|
+| **Command** | `.mute` or `.tempmute` applies the timeout and the role |
+| **Muted role** | Give a member the Muted role from their roles; Niko applies the 28-day timeout and records the mute |
+| **Automod** | A spam or mass-mention auto-mute |
+| **Rejoined server** | A mute that was still running when the member came back |
+
+The same is true in reverse, and each way of lifting a mute posts one **Unmute** entry instead of a separate role or timeout entry:
+
+| Method | What happens |
+|--------|--------------|
+| **Command** | `.unmute` clears the timeout and takes the role off |
+| **Muted role** | Take the Muted role off; Niko clears the timeout and forgets the mute |
+| **Timeout** | Clearing the timeout of a mute Niko applied counts as an unmute. Only Niko's own mutes work this way |
+
+The **Method:** line names it, so the log always says how the mute was applied or lifted. The Muted role doubles as the visible indicator that somebody is muted, which gives your team a quick way to apply or lift a mute while looking at the member in Discord.
+
+### Timeouts That Are Not Mutes
+A timeout on its own is not a mute, and a mute from another bot is not Niko's to undo. The official ways to mute here are the Muted role and `.mute`, so:
+
+- A timeout a moderator (or another bot) puts on by hand is logged as a normal **Timeout** entry. Niko does not add the Muted role to that member.
+- If that timeout is cleared, it is logged as a normal timeout removal and nothing else happens — the member never had the Muted role, and the timeout was not Niko's action to undo.
+- If the member *does* carry the Muted role, clearing their timeout is an unmute: the role comes off, the mute record is forgotten, and one **Unmute** entry is written.
+- Running `.unmute` always works on Niko's own mutes, whatever the timeout's state. A member who is not muted at all gets no entry.
+
+Setting the mute role up is one log entry, not one per channel. If Niko has to create the Muted role it posts the creation straight away, then updates that same message once the deny has been written across every channel, showing the permissions it denies and how many channels it touched. A later repair — a channel created after the role, or a role that predates this check — posts a single **Mute Role Permissions** entry when the batch is finished. Only Niko's own bulk write is folded together like that; a change you or another bot make to the role or to its channel overwrites is logged like any other role or channel edit.
 
 ### Automatic Unmuting
-Temporary mutes are automatically removed when the duration expires. Niko checks regularly for expired mutes.
+Mutes end automatically when their timeout runs out. Discord clears the timeout itself; Niko takes off the Muted role and writes a **Mute Expired** entry to your moderation log when the timeout ends, or shortly after if the bot was offline at the time.
+
+### Leaving and Rejoining
+A member who leaves while muted keeps their mute record. The roles Discord strips when somebody leaves are not read as an unmute, so the mute is still on file when they come back:
+
+- **Rejoin before it expires** — the Muted role and the remaining timeout are put back automatically, and a **Mute** entry with the method *Rejoined server* is logged.
+- **Rejoin after it expires** — the record is cleared and the member comes back with no mute.
 
 ## Unmuting
 
@@ -50,7 +81,7 @@ Temporary mutes are automatically removed when the duration expires. Niko checks
 .unmute <user>
 ```
 
-This removes the Muted role and restores the member's permissions.
+This clears the timeout, removes the Muted role, and restores the member's permissions.
 
 ## Mute Commands
 

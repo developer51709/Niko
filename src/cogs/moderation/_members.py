@@ -16,6 +16,11 @@ from utils.command_locales import command_texts
 
 CMDS = command_texts(__package__)
 
+#: Days of recent messages a ban clears. Fixed on purpose: the day count used to
+#: be an optional argument before the reason, so a moderator typing
+#: ``ban @user spam`` had the reason parsed as a number and the ban failed.
+_BAN_DELETE_DAYS = 7
+
 #: The mass role panel's own table, kept beside this module's commands.
 MASSROLE = load_locales(__package__, "massrole")
 _massmsg = make_flat_msg(MASSROLE, {"loading": get_emoji("loading"), "tick": get_emoji("tick"),
@@ -470,15 +475,16 @@ class MembersMixin:
         self,
         ctx,
         member: discord.User = commands.parameter(default=None, description=CMDS.arg("ban", "member")),
-        delete_days: int = commands.parameter(default=7, description=CMDS.arg("ban", "delete_days")),
         *,
         reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("ban", "reason")),
     ):
         if not member:
             return await ctx.send(msg(ctx, "no_member", action="ban"))
-        # Discord accepts 0–7 days. Clamping keeps a typo from failing the ban,
-        # and the confirmation below always states what will be deleted.
-        delete_days = max(0, min(int(delete_days if delete_days is not None else 7), 7))
+        # Always the default. Asking for the day count turned "ban @user spam"
+        # into a failed command — the reason was read as the number — which is
+        # the last thing a moderator needs mid-raid. Discord caps this at 7 and
+        # the confirmation below always states what will be deleted.
+        delete_days = _BAN_DELETE_DAYS
 
         confirm_view = _ModConfirmView(
             msg(ctx, "confirm_ban", user=member, id=member.id, reason=reason, days=delete_days),
@@ -642,17 +648,14 @@ class MembersMixin:
             return await ctx.send(msg(ctx, "no_member", action="mute"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
-        await utils.mute_member(ctx.guild, member, duration=None, reason=reason)
+        if not await utils.mute_member(ctx.guild, member, duration=None, reason=reason,
+                                       method="Command", actor=ctx.author):
+            return await ctx.send(msg(ctx, "cannot_mute", member=member))
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=msg(ctx, "muted", member=member, reason=reason))
         ))
         await ctx.send(view=view)
-        body = (
-            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Action:** Mute\n**Reason:** {reason}\n**Moderator:** {ctx.author.mention}"
-        )
-        await self.logger().log_event(ctx.guild, "moderation", "Mute", body, target_id=member.id, action_key="Mute")
 
     @commands.hybrid_command(description=CMDS.text("tempmute.description"),
                              help=CMDS.help("tempmute"))
@@ -673,18 +676,14 @@ class MembersMixin:
             return await ctx.send(msg(ctx, "no_duration"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
-        await utils.mute_member(ctx.guild, member, duration=int(duration), reason=reason)
+        if not await utils.mute_member(ctx.guild, member, duration=int(duration), reason=reason,
+                                       method="Command", actor=ctx.author):
+            return await ctx.send(msg(ctx, "cannot_mute", member=member))
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=msg(ctx, "tempmuted", member=member, duration=duration, reason=reason))
         ))
         await ctx.send(view=view)
-        body = (
-            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Action:** Tempmute\n**Duration:** {duration}s\n**Reason:** {reason}\n"
-            f"**Moderator:** {ctx.author.mention}"
-        )
-        await self.logger().log_event(ctx.guild, "moderation", "Tempmute", body, target_id=member.id, action_key="Tempmute")
 
     @commands.hybrid_command(name="unmute", aliases=["untimeout"],
                              description=CMDS.text("unmute.description"),
@@ -697,17 +696,12 @@ class MembersMixin:
             return await ctx.send(msg(ctx, "no_member", action="unmute"))
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
-        await utils.unmute_member(member, reason=f"Unmuted by {ctx.author}")
+        await utils.unmute_member(member, method="Command", actor=ctx.author)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=msg(ctx, "unmuted", member=member))
         ))
         await ctx.send(view=view)
-        body = (
-            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Action:** Unmute\n**Moderator:** {ctx.author.mention}"
-        )
-        await self.logger().log_event(ctx.guild, "moderation", "Unmute", body, target_id=member.id)
 
     # ── NICK ─────────────────────────────────────────────────────────────────
     @commands.hybrid_command(description=CMDS.text("nick.description"),

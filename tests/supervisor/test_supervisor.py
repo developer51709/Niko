@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import signal
 import stat
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import psutil
 import requests
@@ -13,7 +15,7 @@ import requests
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from supervisor import Options, Supervisor  # noqa: E402
+from supervisor import Child, Options, Supervisor  # noqa: E402
 from supervisor_protocol import CONTROL_SOCKET_ENV  # noqa: E402
 
 
@@ -26,6 +28,82 @@ def test_child_environment_carries_the_control_socket_path(tmp_path):
     assert env[CONTROL_SOCKET_ENV] == str(options.control_socket.resolve())
     assert env["NIKO_SUPERVISED"] == "1"
     assert "PORT" not in env
+
+
+def _child(name: str, port: int | None, **fields) -> Child:
+    return Child(
+        proc=SimpleNamespace(pid=1),
+        reader=None,
+        writer=None,
+        started_at=time.monotonic(),
+        name=name,
+        api_port=port,
+        **fields,
+    )
+
+
+def test_a_child_that_is_being_replaced_does_not_lend_its_port(tmp_path):
+    """An update restarts the bot and the database child in one request.
+
+    The replacement bot boots while the old database child is still shutting
+    down.  Handing it that port would attach the new bot to a child that is
+    about to exit, and the update would be confirmed on a database that is
+    already gone.
+    """
+    supervisor = Supervisor(
+        Options(control_socket=tmp_path / "supervisor.sock", split_web=True, split_db=True)
+    )
+    db = _child("db", 4567)
+    supervisor._children["db"] = db
+
+    assert supervisor._live_api_port("db") == 4567
+
+    # Marked before any target is stopped, so it is never offered again.
+    db.restart_requested = True
+    assert supervisor._live_api_port("db") is None
+
+    db.restart_requested = False
+    db.exit_event.set()
+    assert supervisor._live_api_port("db") is None
+
+
+def test_a_multi_child_restart_marks_every_target_before_stopping_any(tmp_path):
+    async def scenario():
+        supervisor = Supervisor(
+            Options(control_socket=tmp_path / "supervisor.sock", split_web=True, split_db=True)
+        )
+        supervisor._children["bot"] = _child("bot", 1111)
+        supervisor._children["db"] = _child("db", 2222)
+        stopped = []
+
+        async def fake_terminate(child, reason):
+            # By the time the first child is stopped, the sibling must already
+            # be marked as going away or a boot in between could use its port.
+            stopped.append(child.name)
+            assert all(instance.restart_requested for instance in supervisor._children.values())
+
+        supervisor._terminate_child = fake_terminate  # type: ignore[method-assign]
+        supervisor._request_restart(
+            0.0,
+            "update",
+            [supervisor._slots["bot"], supervisor._slots["db"]],
+        )
+        await asyncio.sleep(0.05)
+        return stopped
+
+    assert asyncio.run(scenario()) == ["bot", "db"]
+
+
+def test_a_booting_bot_does_not_inherit_a_dying_database_port(tmp_path):
+    options = Options(
+        control_socket=tmp_path / "supervisor.sock", split_web=True, split_db=True
+    )
+    supervisor = Supervisor(options)
+    supervisor._children["db"] = _child("db", 4567, restart_requested=True)
+
+    env = supervisor._child_environment(9, supervisor._slots["bot"])
+
+    assert "NIKO_DB_API_PORT" not in env
 
 
 def test_health_and_readiness_are_separate(supervisor):

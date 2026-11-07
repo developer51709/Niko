@@ -92,10 +92,10 @@ class DeveloperAppealModal(discord.ui.Modal, title="Appeal your API suspension")
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        from webapp import developer_portal
+        from webapp.developer import portal
 
         try:
-            appeal = developer_portal.submit_appeal(interaction.user.id, str(self.statement.value or ""))
+            appeal = portal.submit_appeal(interaction.user.id, str(self.statement.value or ""))
         except PermissionError as error:
             return await interaction.response.send_message(str(error), ephemeral=True)
         except ValueError as error:
@@ -123,15 +123,15 @@ class DeveloperAppealButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        from webapp import developer_portal
+        from webapp.developer import portal
 
-        suspension = developer_portal.suspension_for_user(interaction.user.id)
+        suspension = portal.suspension_for_user(interaction.user.id)
         if suspension is None:
             return await interaction.response.send_message(
                 "This account does not have an active API suspension.",
                 ephemeral=True,
             )
-        appeal = developer_portal.appeal_for_user(interaction.user.id)
+        appeal = portal.appeal_for_user(interaction.user.id)
         if appeal is not None:
             status = str(appeal.get("status") or "pending")
             if status == "pending":
@@ -183,15 +183,15 @@ def _decision_view(appeal: dict, suspension: dict | None) -> discord.ui.LayoutVi
 
 
 async def send_suspension_dm(bot, user_id: str, suspension_id: str) -> bool:
-    from webapp import developer_portal
+    from webapp.developer import portal
 
-    suspension = developer_portal.suspension_for_user(user_id)
+    suspension = portal.suspension_for_user(user_id)
     if suspension is None or str(suspension.get("id")) != str(suspension_id):
         return False
     try:
         user = bot.get_user(int(user_id)) or await bot.fetch_user(int(user_id))
         await user.send(view=_suspension_view(suspension), allowed_mentions=discord.AllowedMentions.none())
-        developer_portal.mark_suspension_notified(user_id, suspension_id)
+        portal.mark_suspension_notified(user_id, suspension_id)
         return True
     except discord.Forbidden:
         logging.warning(
@@ -206,19 +206,19 @@ async def send_suspension_dm(bot, user_id: str, suspension_id: str) -> bool:
 
 
 async def send_appeal_decision_dm(bot, user_id: str, appeal_id: str) -> bool:
-    from webapp import developer_portal
+    from webapp.developer import portal
 
-    appeal = developer_portal.appeal_by_id(appeal_id)
+    appeal = portal.appeal_by_id(appeal_id)
     if appeal is None:
         return False
-    suspension = developer_portal.suspension_for_user(user_id)
+    suspension = portal.suspension_for_user(user_id)
     try:
         user = bot.get_user(int(user_id)) or await bot.fetch_user(int(user_id))
         await user.send(
             view=_decision_view(appeal, suspension),
             allowed_mentions=discord.AllowedMentions.none(),
         )
-        developer_portal.mark_appeal_notified(appeal_id)
+        portal.mark_appeal_notified(appeal_id)
         return True
     except discord.Forbidden:
         logging.warning(

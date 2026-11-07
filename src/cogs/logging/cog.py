@@ -36,9 +36,15 @@ MAX_LOG_FILE_BYTES = 2_000_000
 
 #: Discord expires the CDN URL of a replaced avatar a day or two after the
 #: change, so both pictures are downloaded and uploaded with the log entry
-#: instead of linked. The cap keeps a large animated asset from turning one
-#: profile edit into a big upload.
-MAX_ARCHIVED_AVATAR_BYTES = 4_000_000
+#: instead of linked. Since September 2026 the platform's default upload limit
+#: is 20 MiB *per file* (it doubled from 10 MiB), so a whole animated avatar
+#: fits: the cap sits just under that, and anything larger is downscaled.
+MAX_ARCHIVED_AVATAR_BYTES = 20_000_000
+
+#: Renditions tried, largest first, when a picture's full-size bytes are too
+#: large to re-upload. An animated picture keeps its format and stays animated;
+#: the smaller rendition is what keeps it out of an expiring link.
+_ARCHIVE_FALLBACK_SIZES = (512, 256)
 
 #: Global profile changes arrive once per shared server, so the last logged
 #: profile of each user is remembered to drop the repeats. The cap keeps a big
@@ -49,6 +55,17 @@ MAX_TRACKED_PROFILES = 20_000
 #: posted once and then edited for this long, so a role menu that toggles six
 #: roles produces one entry rather than six.
 ENTRY_RETENTION_SECONDS = 30.0
+
+#: How long the entry posted for a newly created mute role waits for the
+#: channel denies written by the same mute, so that batch updates the message
+#: instead of adding a second entry.
+MUTE_ROLE_ENTRY_TTL = 120.0
+
+#: The permissions a mute role denies in a channel, in the order it writes them.
+_MUTE_CHANNEL_DENIES = (
+    "send messages", "speak", "add reactions", "use application commands",
+    "use external apps",
+)
 
 #: Titles whose entries describe an ongoing change to one member, and so are
 #: merged inside the retention window. Picture changes are left out: an edit
@@ -82,10 +99,74 @@ def _asset_url(asset) -> str | None:
         return None
 
 
+def _url_extension(url: str | None) -> str | None:
+    """The image format named in a URL, if it names one."""
+    tail = (url or "").split("?", 1)[0].rsplit(".", 1)[-1].lower()
+    return tail if tail in _IMAGE_EXTENSIONS else None
+
+
 def _asset_extension(asset) -> str:
     """The image format from the asset URL, for the archived file's name."""
-    tail = (_asset_url(asset) or "").split("?", 1)[0].rsplit(".", 1)[-1].lower()
-    return tail if tail in _IMAGE_EXTENSIONS else "png"
+    return _url_extension(_asset_url(asset)) or "png"
+
+
+def _resized_url(url: str | None, size: int) -> str | None:
+    """The same CDN asset asked for at ``size``, any other query kept.
+
+    Discord's ``size`` is a pixel dimension, so asking an animated picture for
+    a smaller rendition returns the same animation in far fewer bytes.
+    """
+    if not url:
+        return None
+    path, _, query = url.partition("?")
+    params = [part for part in query.split("&") if part and not part.startswith("size=")]
+    params.append(f"size={size}")
+    return f"{path}?{'&'.join(params)}"
+
+
+def _resized_picture(data: bytes, size: int, extension: str | None) -> bytes | None:
+    """A smaller copy of a picture's bytes, animation and format kept.
+
+    Discord serves some animated avatars only at their original size: every
+    smaller rendition of the exact gif answers ``Invalid resource``. Those
+    bytes have to be resized here instead of linked, or the log keeps a URL
+    that expires. Frames, durations and the loop count travel with the picture.
+    """
+    try:
+        from PIL import Image, ImageSequence
+    except Exception:  # noqa: BLE001 - without Pillow the entry links instead
+        return None
+    extension = extension or "png"
+    try:
+        with Image.open(io.BytesIO(data)) as picture:
+            frames: list = []
+            durations: list[int] = []
+            for frame in ImageSequence.Iterator(picture):
+                durations.append(frame.info.get("duration", 100))
+                scaled = frame.convert("RGBA")
+                scaled.thumbnail((size, size), Image.LANCZOS)
+                frames.append(scaled)
+            if not frames:
+                return None
+            out = io.BytesIO()
+            if extension == "gif":
+                frames[0].save(
+                    out, format="GIF", save_all=len(frames) > 1,
+                    append_images=frames[1:], duration=durations,
+                    loop=picture.info.get("loop", 0), disposal=2,
+                )
+            elif extension in ("jpg", "jpeg"):
+                frames[0].convert("RGB").save(out, format="JPEG", quality=90)
+            elif extension == "webp":
+                frames[0].save(
+                    out, format="WEBP", quality=90, save_all=len(frames) > 1,
+                    append_images=frames[1:], duration=durations,
+                )
+            else:
+                frames[0].save(out, format="PNG", optimize=True)
+            return out.getvalue()
+    except Exception:  # noqa: BLE001 - a picture Pillow cannot read stays linked
+        return None
 
 
 def _webp_url(url: str | None) -> str | None:
@@ -120,6 +201,29 @@ def _permission_list(permissions, *, limit: int = 8) -> str:
     if len(names) > limit:
         shown.append(f"+{len(names) - limit} more")
     return ", ".join(shown)
+
+
+def _role_created_body(role, responsible) -> str:
+    """The body of a Role Created entry."""
+    color_text = str(role.color) if role.color.value else "Default"
+    return (
+        f"**Role:** {role.mention} (`{role.name}` — ID: `{role.id}`)\n"
+        f"**Color:** `{color_text}` · **Hoisted:** `{role.hoist}` · **Mentionable:** `{role.mentionable}`\n"
+        f"**Position:** `{role.position}` · **Members:** `{len(role.members)}`\n"
+        f"**Permissions:** {_permission_list(role.permissions)}\n"
+        f"**Created By:** {responsible.mention if responsible else 'Unknown'}"
+    )
+
+
+def _mute_role_denied_lines(channels) -> str:
+    """The channel half of a mute role entry: what was denied, and where."""
+    denied = ", ".join(f"`{name}`" for name in _MUTE_CHANNEL_DENIES)
+    named = ", ".join(channel.mention for channel in channels[:5])
+    more = f" (+{len(channels) - 5} more)" if len(channels) > 5 else ""
+    where = f"`{len(channels)}`"
+    if named:
+        where += f" — {named}{more}"
+    return f"**Channel Permissions:** deny {denied}\n**Channels:** {where}"
 
 def _split_entry_body(body: str) -> tuple[str, list[tuple[str, str]]]:
     """Split a log body into its heading line(s) and labelled detail lines.
@@ -207,6 +311,20 @@ def _render_entry_body(heading: str, details: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
+class _PendingMuteRole:
+    """The entry a newly created mute role's channel denies will update."""
+
+    __slots__ = ("message", "channel_id", "title", "body", "expires_at")
+
+    def __init__(self, message, channel_id: int, title: str, body: str,
+                 expires_at: float):
+        self.message = message
+        self.channel_id = channel_id
+        self.title = title
+        self.body = body
+        self.expires_at = expires_at
+
+
 class _PendingEntry:
     """The entry a target's changes are collected into while it is open."""
 
@@ -247,6 +365,9 @@ class ServerLogger(commands.Cog):
         # two scan results arriving together cannot each rebuild the entry from
         # a copy that lacks the other one's placeholder.
         self._flag_locks: dict[int, asyncio.Lock] = {}
+        # (guild_id, role_id) → the mute role entry a channel batch will update,
+        # so provisioning a role posts one message instead of one per channel.
+        self._mute_role_entries: dict[tuple[int, int], _PendingMuteRole] = {}
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -490,6 +611,98 @@ class ServerLogger(commands.Cog):
         # stops the map from holding one per member the bot has ever logged.
         if retention_key not in self._pending_entries and not lock.locked():
             self._pending_locks.pop(retention_key, None)
+
+    async def log_mute_role_setup(self, guild: discord.Guild, role: discord.Role, *,
+                                  created: bool = False, channels=()) -> None:
+        """Log the mute role's provisioning as one entry, updated when it is done.
+
+        A role the bot has to create is posted the moment it exists, and the
+        denies written across every channel right after are folded into that
+        same message once the batch finishes — a hundred channel edits leave one
+        entry, not a hundred. A later repair on an existing role posts a single
+        entry naming the channels it touched, and a repair that found nothing to
+        write posts nothing.
+
+        Only the bot's own writes come through here. A moderator or another bot
+        changing the role or its overwrites is logged like any other edit.
+        """
+        key = (guild.id, role.id)
+        self._prune_mute_role_entries()
+        channel = await self._mute_role_log_channel(guild)
+        if channel is None:
+            return
+
+        channels = list(channels or ())
+        if created:
+            body = _role_created_body(role, self.bot.user)
+            message = await self._post_entry(
+                guild, channel, "roles", "Role Created", body,
+                target_id=role.id, action_key="Role Created",
+            )
+            if message is not None:
+                self._mute_role_entries[key] = _PendingMuteRole(
+                    message, getattr(channel, "id", 0), "Role Created", body,
+                    time.monotonic() + MUTE_ROLE_ENTRY_TTL,
+                )
+            return
+
+        pending = self._mute_role_entries.get(key)
+        if pending is not None and (
+                pending.expires_at <= time.monotonic()
+                or pending.channel_id != getattr(channel, "id", 0)):
+            self._mute_role_entries.pop(key, None)
+            pending = None
+
+        details = _mute_role_denied_lines(channels)
+        if pending is not None:
+            self._mute_role_entries.pop(key, None)
+            view = _build_log_view(
+                category="roles", title=pending.title,
+                body=f"{pending.body}\n{details}",
+                guild_id=guild.id, target_id=role.id,
+                action_key=pending.title, lang=get_lang(guild),
+            )
+            try:
+                await log_channel_limiter.acquire((guild.id, pending.channel_id))
+                await pending.message.edit(
+                    view=view, allowed_mentions=discord.AllowedMentions.none()
+                )
+                return
+            except Exception as e:
+                logging.warning(
+                    "logging_cog",
+                    f"Could not update the mute role entry in {guild.id}: {e}",
+                )
+        elif not channels:
+            return
+
+        body = "\n".join([
+            f"**Role:** {role.mention} (`{role.name}` — ID: `{role.id}`)",
+            details,
+            f"**Updated By:** {getattr(self.bot.user, 'mention', 'Unknown')}",
+        ])
+        await self._post_entry(
+            guild, channel, "roles", "Mute Role Permissions", body,
+            target_id=role.id, action_key="Mute Role Permissions",
+        )
+
+    async def _mute_role_log_channel(self, guild: discord.Guild):
+        """The channel role events go to, or None when they are not logged."""
+        await self.config()
+        cfg = self._get_cfg(guild.id)
+        if "roles" in cfg.get("disabled", []):
+            return None
+        channel_id = cfg.get("roles")
+        if not channel_id:
+            return None
+        return guild.get_channel(channel_id)
+
+    def _prune_mute_role_entries(self) -> None:
+        """Forget mute role entries whose batch never came back."""
+        now = time.monotonic()
+        for key, pending in list(self._mute_role_entries.items()):
+            if pending.expires_at <= now:
+                self._mute_role_entries.pop(key, None)
 
     def _retention_key(self, guild, category: str, title: str,
                        target_id: int | None, files, media_urls,
@@ -977,8 +1190,19 @@ class ServerLogger(commands.Cog):
         except Exception:
             return None
 
-    async def _read_asset(self, asset) -> tuple[bytes | None, bool]:
-        """An asset's bytes, plus whether they came from the webp retry.
+    async def _fetch_asset_bytes(self, url: str) -> bytes | None:
+        """One CDN read, or None when it fails.
+
+        ``HTTPClient.get_from_cdn`` returns the bytes itself; awaiting it is the
+        whole request.
+        """
+        try:
+            return await self.bot.http.get_from_cdn(url)
+        except Exception:  # noqa: BLE001 - the archive is best effort; the entry still logs
+            return None
+
+    async def _read_asset(self, asset) -> tuple[bytes | None, str | None]:
+        """An asset's bytes, plus the URL they actually came from.
 
         ``Asset.read`` asks the CDN for the png (or gif) rendition, which a
         picture Discord holds only as webp does not have. That 404 used to end
@@ -990,15 +1214,12 @@ class ServerLogger(commands.Cog):
         except (discord.HTTPException, discord.NotFound, OSError, AttributeError):
             data = None
         if data:
-            return data, False
+            return data, _asset_url(asset)
         fallback = _webp_url(_asset_url(asset))
         if not fallback:
-            return None, False
-        try:
-            async with self.bot.http.get_from_cdn(fallback) as response:
-                return await response.read(), True
-        except Exception:  # noqa: BLE001 - the retry is best effort; the entry still logs
-            return None, False
+            return None, None
+        data = await self._fetch_asset_bytes(fallback)
+        return (data, fallback) if data else (None, None)
 
     async def _archive_asset(self, asset, filename: str) -> discord.File | None:
         """Download an asset so the log keeps it after its CDN URL expires.
@@ -1006,15 +1227,36 @@ class ServerLogger(commands.Cog):
         Discord invalidates the URL of a replaced avatar a day or two after the
         change, so linking the old picture produced an entry that went dead. The
         bytes are uploaded with the entry instead.
+
+        Discord allows 20 MiB per attachment, so a full animated avatar goes up
+        as it was served. Only a picture past that (the old 4 MB cap used to
+        catch 9 MB gifs here) is asked for a smaller rendition, and when the CDN
+        has none — some animated gifs exist only at their original size — the
+        bytes are resized here, so the picture keeps its frames either way.
         """
         if asset is None:
             return None
-        data, webp = await self._read_asset(asset)
+        data, url = await self._read_asset(asset)
+        if data and len(data) > MAX_ARCHIVED_AVATAR_BYTES:
+            for size in _ARCHIVE_FALLBACK_SIZES:
+                smaller = await self._fetch_asset_bytes(_resized_url(url, size))
+                if smaller and len(smaller) <= MAX_ARCHIVED_AVATAR_BYTES:
+                    data = smaller
+                    break
+                # Decoding and re-encoding an animation takes most of a second,
+                # so it runs off the event loop the bot serves every other event
+                # from.
+                resized = await asyncio.to_thread(
+                    _resized_picture, data, size, _url_extension(url))
+                if resized and len(resized) <= MAX_ARCHIVED_AVATAR_BYTES:
+                    data = resized
+                    break
         if not data or len(data) > MAX_ARCHIVED_AVATAR_BYTES:
             return None
-        if webp:
-            # The name has to follow the bytes, or Discord shows a broken image.
-            filename = f"{filename.rpartition('.')[0]}.webp"
+        # The name has to follow the bytes, or Discord shows a broken image.
+        extension = _url_extension(url)
+        if extension:
+            filename = f"{filename.rpartition('.')[0]}.{extension}"
         return discord.File(io.BytesIO(data), filename=filename)
 
     async def _log_picture_change(self, before, after, *, attribute: str, title: str,
@@ -1202,18 +1444,45 @@ class ServerLogger(commands.Cog):
         added = after_roles - before_roles
         removed = before_roles - after_roles
 
+        # The Muted role is a mute control in its own right: a moderator putting
+        # it on mutes, taking it off unmutes, and the dedicated entry says so.
+        # Keeping it out of the generic role diff stops the same change being
+        # logged twice, and stops it looking like an unrelated role edit.
+        get_cog = getattr(self.bot, "get_cog", None)
+        mod_utils = get_cog("ModerationUtils") if get_cog else None
+        mute_role = mod_utils.find_mute_role(guild) if mod_utils else None
+        mute_added = bool(mute_role is not None and mute_role in added)
+        mute_removed = bool(mute_role is not None and mute_role in removed)
+        if mute_role is not None:
+            added.discard(mute_role)
+            removed.discard(mute_role)
+
         changes = []
         if added:
             changes.append(f"**Roles Added:** {', '.join(r.mention for r in added)}")
         if removed:
             changes.append(f"**Roles Removed:** {', '.join(r.mention for r in removed)}")
-        if added or removed:
+        if added or removed or mute_added or mute_removed:
             # A role change is usually somebody else's doing; the gateway event
             # only says the roles changed, so the audit log names the actor.
             role_entry = await self._audit_entry(
                 guild, discord.AuditLogAction.member_role_update, after.id)
             role_actor = role_entry.user if role_entry else None
-            if role_actor is not None and role_actor != self.bot.user:
+            # The bot writes the role itself as part of a mute, and that event
+            # must not be read back as a moderator muting the member again.
+            # A member who has left keeps any mute they had: their roles were
+            # stripped with them, and the record is what makes a rejoin inside
+            # the remaining time put the role and timeout back.
+            if (mute_added or mute_removed) and mod_utils is not None \
+                    and not mod_utils.is_self_write(guild.id, after.id, "role") \
+                    and guild.get_member(after.id) is not None:
+                if mute_added:
+                    await mod_utils.adopt_role_mute(
+                        guild, after, role_actor, role_entry.reason if role_entry else None)
+                else:
+                    await mod_utils.adopt_role_unmute(
+                        guild, after, role_actor, role_entry.reason if role_entry else None)
+            if role_actor is not None and role_actor != self.bot.user and (added or removed):
                 changes.append(f"**Roles Changed By:** {role_actor.mention}")
                 if role_entry.reason:
                     changes.append(f"**Reason:** {role_entry.reason}")
@@ -1266,7 +1535,30 @@ class ServerLogger(commands.Cog):
                 guild, discord.AuditLogAction.member_update, after.id)
             timeout_mod = timeout_entry.user if timeout_entry else None
 
-            if timeout_mod and timeout_mod != self.bot.user:
+            # A timeout is not a mute by itself. Our mutes are the ones the mute
+            # command or the Muted role made, and the record is what says so:
+            # only those lose the role here. A timeout somebody put on by hand,
+            # or another bot put on, is logged as the timeout it is and left
+            # alone — lifting somebody else's action was never ours to do. The
+            # bot's own writes are skipped: the mute helpers log those.
+            self_wrote = mod_utils is not None and mod_utils.is_self_write(
+                guild.id, after.id, "timeout")
+            present = guild.get_member(after.id) is not None
+            trackable = mod_utils is not None and not self_wrote and present
+            ours = (
+                after_timeout is None and before_timeout is not None
+                and trackable and await mod_utils.has_mute(guild.id, after.id)
+            )
+            if ours:
+                # Our mute's timeout ended or was cleared: the role comes off,
+                # and the entry says which of the two happened.
+                await mod_utils.release_mute(
+                    guild, after,
+                    actor=timeout_mod,
+                    reason=timeout_entry.reason if timeout_entry else None,
+                    expired=timeout_mod is None,
+                )
+            elif trackable and timeout_mod is not None and timeout_mod != self.bot.user:
                 if after_timeout:
                     timeout_body = (
                         f"**User:** {after.mention} (`{after}` — ID: `{after.id}`)\n"
@@ -1620,10 +1912,29 @@ class ServerLogger(commands.Cog):
         # Granting or revoking a member/role overwrite is the most consequential
         # channel edit and used to be silent unless the category was logged by
         # the role or member listener.
+        #
+        # The mute role is the exception: the bot writes its deny on every
+        # channel when it provisions or repairs a mute, which on a new server is
+        # one edit per channel. Those writes are left to the mute role entry,
+        # which says once what was denied and where. A moderator or another bot
+        # editing the same overwrite is not one of those writes, so it is logged
+        # here like any other channel edit.
         before_overwrites = getattr(before, "overwrites", {})
         after_overwrites = getattr(after, "overwrites", {})
+        mute_role = None
+        own_mute_write = False
+        if before_overwrites != after_overwrites:
+            get_cog = getattr(self.bot, "get_cog", None)
+            mod_utils = get_cog("ModerationUtils") if get_cog else None
+            mute_role = mod_utils.find_mute_role(after.guild) if mod_utils else None
+            own_mute_write = bool(
+                mute_role is not None
+                and mod_utils.is_own_overwrite(after.guild.id, after.id, mute_role.id)
+            )
         overwrite_restore: list[dict] = []
         for target, overwrite in after_overwrites.items():
+            if own_mute_write and target == mute_role:
+                continue
             old = before_overwrites.get(target)
             label = getattr(target, "mention", None) or getattr(target, "name", str(target))
             if old is None:
@@ -1649,6 +1960,8 @@ class ServerLogger(commands.Cog):
                     changes.append(f"**Overwrite Changed** for {label}: " + "; ".join(parts))
                     overwrite_restore.append(overwrite_entry(target, old))
         for target in before_overwrites:
+            if own_mute_write and target == mute_role:
+                continue
             if target not in after_overwrites:
                 label = getattr(target, "mention", None) or getattr(target, "name", str(target))
                 changes.append(f"**Overwrite Removed** for {label}")
@@ -1688,15 +2001,21 @@ class ServerLogger(commands.Cog):
             role.guild, discord.AuditLogAction.role_create, role.id)
         responsible = entry.user if entry else None
 
-        color_text = str(role.color) if role.color.value else "Default"
-        body = (
-            f"**Role:** {role.mention} (`{role.name}` — ID: `{role.id}`)\n"
-            f"**Color:** `{color_text}` · **Hoisted:** `{role.hoist}` · **Mentionable:** `{role.mentionable}`\n"
-            f"**Position:** `{role.position}` · **Members:** `{len(role.members)}`\n"
-            f"**Permissions:** {_permission_list(role.permissions)}\n"
-            f"**Created By:** {responsible.mention if responsible else 'Unknown'}"
-        )
-        await self.log_event(role.guild, "roles", "Role Created", body, target_id=role.id)
+        # The mute role's entry is written by the mute that provisions it, so
+        # creating it and denying it in every channel is one message that gets
+        # updated rather than one per channel. A role a person creates is logged
+        # as usual, even one called Muted: that is somebody's edit, not setup.
+        get_cog = getattr(self.bot, "get_cog", None)
+        mod_utils = get_cog("ModerationUtils") if get_cog else None
+        if (mod_utils is not None and mod_utils.is_mute_role(role)
+                and (mod_utils.is_self_write(role.guild.id, role.id, "role_create")
+                     or (responsible is not None
+                         and responsible.id == getattr(self.bot.user, "id", None)))):
+            return
+
+        await self.log_event(
+            role.guild, "roles", "Role Created",
+            _role_created_body(role, responsible), target_id=role.id)
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role: discord.Role):

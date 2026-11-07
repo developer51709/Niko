@@ -234,7 +234,7 @@ Niko takes user privacy seriously. If you believe you have found a vulnerability
 
 Include the affected endpoint or page, reproduction steps, and the impact. Please do not include real secrets or other people's private data. Valid reports are rewarded with the **Bug Bounty** role, because every vulnerability fixed is a potential future incident prevented.
 
-The deployment also publishes [`/.well-known/security.txt`](https://niko.sryze.cc/.well-known/security.txt) and serves friendly decoy responses on commonly scanned secret paths rather than exposing real configuration.
+The deployment also publishes [`/.well-known/security.txt`](https://niko.sryze.cc/.well-known/security.txt). Commonly scanned secret paths (`/.env`, `/.aws/credentials`, `dump.sql`, agent configuration files and friends) answer with generated decoy files instead of a 404. Every value in them comes from [`src/webapp/honeypot/values.py`](src/webapp/honeypot/values.py), so nothing served there is a real credential; the whole fake environment can be reproduced with `PYTHONPATH=src python -m webapp.honeypot --list`, and the package's [README](src/webapp/honeypot/README.md) explains what it does and why it exists.
 
 ---
 

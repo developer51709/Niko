@@ -6,7 +6,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from config import links as bot_links
 from utils import logging
-from .. import developer_portal, leaderboard_cache
+from .. import leaderboard_cache
+from ..developer import portal
 from .. import locale_feed
 from .. import runtime
 from .. import server as _server
@@ -78,7 +79,7 @@ def _resolve_leaderboard_identities(user_ids):
 
 
 @app.route("/api/economy/leaderboard")
-@developer_portal.allow_site_or_key("economy:read")
+@portal.allow_site_or_key("economy:read")
 def api_economy_leaderboard():
     """Return one ranked page of global economy standings.
 
@@ -141,7 +142,7 @@ def api_economy_leaderboard():
 
 
 @app.route("/api/levels/<guild_id>")
-@developer_portal.allow_site_or_key("levels:read")
+@portal.allow_site_or_key("levels:read")
 def api_public_guild_levels(guild_id):
     """Return one live page of a server's leveling standings.
 

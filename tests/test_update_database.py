@@ -88,6 +88,17 @@ def test_the_schema_area_owns_only_the_database_module():
     assert order.index("utils") < order.index("database") < order.index("webapp")
 
 
+def test_the_bot_area_ships_the_database_child_script():
+    """The child is the server half of the database API, so it travels with it.
+
+    ``src/database/remote.py`` is the client the bot uses and ``src/db_child.py``
+    is what serves it.  Shipping one without the other would leave the deployed
+    child answering a contract its own bot no longer speaks.
+    """
+    assert updates.area_for_path("src/db_child.py") == "bot"
+    assert "src/db_child.py" in updates.area_files("bot")
+
+
 def test_the_schema_cannot_be_applied_without_a_running_bot():
     with pytest.raises(RuntimeError):
         updates.reload_database(None)

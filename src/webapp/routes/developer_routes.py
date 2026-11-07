@@ -14,9 +14,10 @@ import time
 
 from flask import g, jsonify, request
 
-from .. import developer_applications, developer_portal, leaderboard_cache
+from .. import leaderboard_cache
 from .. import server as _server
 from ..api_errors import error_response
+from ..developer import applications, portal
 from ..database import (
     get_runtime_economy_rows,
     get_runtime_guild_level_page,
@@ -36,12 +37,12 @@ globals().update({
 # ── Portal helpers ────────────────────────────────────────────────────────────
 
 def _current_user_id() -> str:
-    return developer_portal.session_user_id()
+    return portal.session_user_id()
 
 
 def _portal_access():
     user_id = _current_user_id()
-    access = developer_portal.developer_access(user_id)
+    access = portal.developer_access(user_id)
     if access["suspended"]:
         return None, error_response(
             "ACCESS_SUSPENDED",
@@ -97,7 +98,7 @@ def _guild(guild_id: str):
 
 
 def _identity(user_id: str) -> dict:
-    return developer_portal.resolve_identity(user_id)
+    return portal.resolve_identity(user_id)
 
 
 # ── Portal: the signed-in developer ──────────────────────────────────────────
@@ -106,20 +107,20 @@ def _identity(user_id: str) -> dict:
 @require_auth
 def api_developer_me():
     user_id = _current_user_id()
-    access = developer_portal.developer_access(user_id)
-    keys = developer_portal.list_keys(user_id) if access["enabled"] else []
+    access = portal.developer_access(user_id)
+    keys = portal.list_keys(user_id) if access["enabled"] else []
     return jsonify({
         "access": access,
-        "appeal": access.get("appeal") or developer_portal.appeal_for_user(user_id),
+        "appeal": access.get("appeal") or portal.appeal_for_user(user_id),
         "suspension": access.get("suspension"),
-        "policy_version": developer_portal.POLICY_VERSION,
-        "policy_updated": developer_portal.POLICY_UPDATED,
-        "scopes": developer_portal.scope_options(),
+        "policy_version": portal.POLICY_VERSION,
+        "policy_updated": portal.POLICY_UPDATED,
+        "scopes": portal.scope_options(),
         "key_count": len([key for key in keys if not key.get("revoked_at")]),
         "base_url": "/api/v1",
         "rate_limit": {
-            "limit": developer_portal.IP_RATE_LIMIT,
-            "window_seconds": int(developer_portal.IP_RATE_WINDOW),
+            "limit": portal.IP_RATE_LIMIT,
+            "window_seconds": int(portal.IP_RATE_WINDOW),
             "scope": "ip",
         },
     })
@@ -130,7 +131,7 @@ def api_developer_me():
 @require_csrf
 def api_developer_agree():
     try:
-        access = developer_portal.accept_policy(_current_user_id())
+        access = portal.accept_policy(_current_user_id())
     except PermissionError as error:
         return error_response(
             "ACCESS_SUSPENDED" if "suspended" in str(error).lower() else "ACCESS_NOT_GRANTED",
@@ -147,7 +148,7 @@ def api_developer_keys():
     _access, error = _portal_access()
     if error:
         return error
-    return jsonify({"keys": developer_portal.list_keys(_current_user_id())})
+    return jsonify({"keys": portal.list_keys(_current_user_id())})
 
 
 @app.route("/api/developer/keys", methods=["POST"])
@@ -161,7 +162,7 @@ def api_developer_create_key():
     if not isinstance(payload, dict):
         return error_response("INVALID_BODY", "A JSON object is required.", 400, docs="/developers/authentication")
     try:
-        key, raw_key = developer_portal.create_key(
+        key, raw_key = portal.create_key(
             _current_user_id(),
             str(payload.get("name") or ""),
             payload.get("scopes"),
@@ -211,8 +212,8 @@ def _warn_guild_or_error(guild_id: str, auth: dict):
             docs="/developers/endpoints/warnings",
         )
     if "guilds:cross_server" not in (auth.get("scopes") or []):
-        full_app = developer_applications.get_application(str(application.get("id") or ""))
-        if not developer_applications.application_in_guild(full_app or {}, guild_id):
+        full_app = applications.get_application(str(application.get("id") or ""))
+        if not applications.application_in_guild(full_app or {}, guild_id):
             return None, error_response(
                 "GUILD_NOT_SHARED",
                 "This application's bot does not share that server with Niko.",
@@ -231,7 +232,7 @@ def _warn_page_args(default_size: int = 100, max_size: int = 500):
 
 @app.route("/api/v1/guilds/<guild_id>/warns")
 @app.route("/v1/guilds/<guild_id>/warns")
-@developer_portal.require_api_key("warns:read")
+@portal.require_api_key("warns:read")
 def api_v1_guild_warns(guild_id):
     auth = g.developer_api
     _guild_obj, error = _warn_guild_or_error(guild_id, auth)
@@ -294,7 +295,7 @@ def api_v1_guild_warns(guild_id):
 
 @app.route("/api/v1/guilds/<guild_id>/members/<user_id>/warns")
 @app.route("/v1/guilds/<guild_id>/members/<user_id>/warns")
-@developer_portal.require_api_key("warns:read")
+@portal.require_api_key("warns:read")
 def api_v1_member_warns(guild_id, user_id):
     auth = g.developer_api
     _guild_obj, error = _warn_guild_or_error(guild_id, auth)
@@ -333,7 +334,7 @@ def api_v1_member_warns(guild_id, user_id):
 
 @app.route("/api/v1/guilds/<guild_id>/members/<user_id>/warns", methods=["POST"])
 @app.route("/v1/guilds/<guild_id>/members/<user_id>/warns", methods=["POST"])
-@developer_portal.require_api_key("warns:write")
+@portal.require_api_key("warns:write")
 def api_v1_create_warn(guild_id, user_id):
     auth = g.developer_api
     _guild_obj, error = _warn_guild_or_error(guild_id, auth)
@@ -376,7 +377,7 @@ def api_v1_create_warn(guild_id, user_id):
 
 @app.route("/api/v1/guilds/<guild_id>/warns/<warn_id>", methods=["DELETE"])
 @app.route("/v1/guilds/<guild_id>/warns/<warn_id>", methods=["DELETE"])
-@developer_portal.require_api_key("warns:write")
+@portal.require_api_key("warns:write")
 def api_v1_delete_warn(guild_id, warn_id):
     auth = g.developer_api
     _guild_obj, error = _warn_guild_or_error(guild_id, auth)
@@ -406,7 +407,7 @@ def api_v1_delete_warn(guild_id, warn_id):
 
 @app.route("/api/v1/guilds/<guild_id>/members/<user_id>/warns", methods=["DELETE"])
 @app.route("/v1/guilds/<guild_id>/members/<user_id>/warns", methods=["DELETE"])
-@developer_portal.require_api_key("warns:write")
+@portal.require_api_key("warns:write")
 def api_v1_clear_warns(guild_id, user_id):
     auth = g.developer_api
     _guild_obj, error = _warn_guild_or_error(guild_id, auth)
@@ -439,7 +440,7 @@ def api_developer_revoke_key(key_id):
     access, error = _portal_access()
     if error:
         return error
-    if not developer_portal.revoke_key(_current_user_id(), key_id, allow_any=access["is_owner"]):
+    if not portal.revoke_key(_current_user_id(), key_id, allow_any=access["is_owner"]):
         return error_response("KEY_NOT_FOUND", "Key not found.", 404, docs="/developers/authentication")
     return jsonify({"ok": True})
 
@@ -453,7 +454,7 @@ def api_developer_logs():
     all_users = access["is_owner"] and request.args.get("all") == "1"
     limit = request.args.get("limit", "100")
     return jsonify({
-        "entries": developer_portal.usage_rows(
+        "entries": portal.usage_rows(
             _current_user_id(),
             limit=limit,
             all_users=all_users,
@@ -470,7 +471,7 @@ def api_developer_access():
     error = _owner_error()
     if error:
         return error
-    return jsonify(developer_portal.access_rows())
+    return jsonify(portal.access_rows())
 
 
 @app.route("/api/developer/access/<user_id>", methods=["PUT"])
@@ -484,7 +485,7 @@ def api_developer_grant_access(user_id):
     if not isinstance(payload, dict):
         return error_response("INVALID_BODY", "A JSON object is required.", 400, docs="/developers/authentication")
     try:
-        access = developer_portal.grant_access(
+        access = portal.grant_access(
             user_id,
             payload.get("scopes"),
             enabled=bool(payload.get("enabled", True)),
@@ -505,7 +506,7 @@ def api_developer_revoke_access(user_id):
     if error:
         return error
     try:
-        removed = developer_portal.revoke_access(user_id, actor_id=_current_user_id())
+        removed = portal.revoke_access(user_id, actor_id=_current_user_id())
     except ValueError as error:
         return error_response("INVALID_ACCESS_GRANT", str(error), 400, docs="/developers/authentication")
     if not removed:
@@ -521,7 +522,7 @@ def api_developer_appeals():
     error = _owner_error()
     if error:
         return error
-    return jsonify({"appeals": developer_portal.appeal_rows()})
+    return jsonify({"appeals": portal.appeal_rows()})
 
 
 @app.route("/api/developer/appeals/<appeal_id>/review", methods=["POST"])
@@ -538,7 +539,7 @@ def api_developer_review_appeal(appeal_id):
     if status not in {"approved", "denied"}:
         return error_response("INVALID_APPEAL_DECISION", "Choose approved or denied.", 400, docs="/developers/policies")
     try:
-        appeal = developer_portal.review_appeal(
+        appeal = portal.review_appeal(
             appeal_id,
             status,
             note=str(payload.get("note") or ""),
@@ -551,7 +552,7 @@ def api_developer_review_appeal(appeal_id):
     return jsonify({
         "ok": True,
         "appeal": appeal,
-        "access": developer_portal.developer_access(appeal.get("user_id") or ""),
+        "access": portal.developer_access(appeal.get("user_id") or ""),
     })
 
 
@@ -599,7 +600,7 @@ def _economy_leaderboard():
 
 @app.route("/api/v1/economy/leaderboard")
 @app.route("/v1/economy/leaderboard")
-@developer_portal.require_api_key("economy:read")
+@portal.require_api_key("economy:read")
 def api_v1_economy_leaderboard():
     return _economy_leaderboard()
 
@@ -661,14 +662,14 @@ def _guild_leaderboard(guild_id: str):
 @app.route("/api/v1/levels/<guild_id>")
 @app.route("/v1/guilds/<guild_id>/levels")
 @app.route("/v1/levels/<guild_id>")
-@developer_portal.require_api_key("levels:read")
+@portal.require_api_key("levels:read")
 def api_v1_guild_levels(guild_id):
     return _guild_leaderboard(guild_id)
 
 
 @app.route("/api/v1/users/<user_id>")
 @app.route("/v1/users/<user_id>")
-@developer_portal.require_api_key("users:read")
+@portal.require_api_key("users:read")
 def api_v1_user(user_id):
     if not str(user_id).isdigit() or len(str(user_id)) > 22:
         return error_response("INVALID_USER_ID", "A valid Discord user ID is required.", 400)
@@ -688,7 +689,7 @@ def api_v1_user(user_id):
 
 @app.route("/api/v1/users/<user_id>/economy")
 @app.route("/v1/users/<user_id>/economy")
-@developer_portal.require_api_key("economy:read")
+@portal.require_api_key("economy:read")
 def api_v1_user_economy(user_id):
     if not str(user_id).isdigit() or len(str(user_id)) > 22:
         return error_response("INVALID_USER_ID", "A valid Discord user ID is required.", 400)
@@ -755,7 +756,7 @@ def _read_level(guild_id: str, user_id: str) -> dict | None:
 
 @app.route("/api/v1/guilds/<guild_id>/members/<user_id>/level")
 @app.route("/v1/guilds/<guild_id>/members/<user_id>/level")
-@developer_portal.require_api_key("levels:read")
+@portal.require_api_key("levels:read")
 def api_v1_member_level(guild_id, user_id):
     if not str(guild_id).isdigit() or not str(user_id).isdigit():
         return error_response("INVALID_ID", "Guild and user IDs must be numeric.", 400)
@@ -775,7 +776,7 @@ def api_v1_member_level(guild_id, user_id):
 
 @app.route("/api/v1/guilds/<guild_id>/members/<user_id>/level", methods=["PUT"])
 @app.route("/v1/guilds/<guild_id>/members/<user_id>/level", methods=["PUT"])
-@developer_portal.require_api_key("levels:write")
+@portal.require_api_key("levels:write")
 def api_v1_write_member_level(guild_id, user_id):
     if not str(guild_id).isdigit() or not str(user_id).isdigit():
         return error_response("INVALID_ID", "Guild and user IDs must be numeric.", 400)
@@ -838,7 +839,7 @@ def api_v1_write_member_level(guild_id, user_id):
 
 @app.route("/api/v1/blacklist")
 @app.route("/v1/blacklist")
-@developer_portal.require_api_key("blacklist:read")
+@portal.require_api_key("blacklist:read")
 def api_v1_blacklist():
     auth = g.developer_api
     if not auth.get("application"):
@@ -890,7 +891,7 @@ def api_v1_blacklist():
 
 @app.route("/api/v1/blacklist", methods=["POST"])
 @app.route("/v1/blacklist", methods=["POST"])
-@developer_portal.require_api_key("blacklist:write")
+@portal.require_api_key("blacklist:write")
 def api_v1_write_blacklist():
     auth = g.developer_api
     if not auth.get("application"):

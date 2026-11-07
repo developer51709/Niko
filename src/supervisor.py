@@ -265,6 +265,20 @@ class Supervisor:
     def _bot_child(self) -> Child | None:
         return self._children.get("bot")
 
+    def _live_api_port(self, name: str) -> int | None:
+        """A child's loopback port, unless that child is going away.
+
+        A restart request marks the child before it is stopped, so a sibling
+        that is booting during the same restart never attaches to a port whose
+        owner is about to exit.  Without this, an update that replaces the bot
+        and the database child together could start the new bot on the old
+        database child's port, confirm the update, and only then lose it.
+        """
+        child = self._children.get(name)
+        if child is None or child.restart_requested or child.exit_event.is_set():
+            return None
+        return child.api_port
+
     def _slot_of(self, child: Child) -> ChildSlot:
         return self._slots[child.name]
 
@@ -800,9 +814,9 @@ class Supervisor:
         """
         deadline = time.monotonic() + max(0.0, timeout)
         while not self._shutdown_event.is_set():
-            child = self._children.get(name)
-            if child is not None and child.api_port:
-                return child.api_port
+            port = self._live_api_port(name)
+            if port:
+                return port
             if time.monotonic() >= deadline:
                 return None
             await asyncio.sleep(0.05)
@@ -934,16 +948,16 @@ class Supervisor:
             # database child serves it.  The dashboard child never gets it.
             env["NIKO_INTERNAL_TOKEN"] = self._internal_token
         if slot.spec.name == "bot" and self.options.split_db:
-            db = self._children.get("db")
-            if db is not None and db.api_port:
-                env["NIKO_DB_API_PORT"] = str(db.api_port)
+            db_port = self._live_api_port("db")
+            if db_port:
+                env["NIKO_DB_API_PORT"] = str(db_port)
         if slot.spec.name == "web":
             # The dashboard child forwards live-bot routes to the bot child's
             # loopback API.  It has no gateway of its own.
             env["NIKO_WEB_ROLE"] = "1"
-            bot = self._children.get("bot")
-            if bot is not None and bot.api_port:
-                env["NIKO_BOT_API_PORT"] = str(bot.api_port)
+            bot_port = self._live_api_port("bot")
+            if bot_port:
+                env["NIKO_BOT_API_PORT"] = str(bot_port)
         return env
 
     async def _wait_child(self, child: Child) -> None:
@@ -1324,14 +1338,12 @@ class Supervisor:
         if command == "status":
             return {"ok": True, "status": self._status_snapshot()}
         if command == "route":
-            bot = self._bot_child
-            db = self._children.get("db")
             return {
                 "ok": True,
                 "split_web": self.options.split_web,
                 "split_db": self.options.split_db,
-                "bot_api_port": bot.api_port if bot is not None else None,
-                "db_api_port": db.api_port if db is not None else None,
+                "bot_api_port": self._live_api_port("bot"),
+                "db_api_port": self._live_api_port("db"),
             }
         if command == "restart":
             if self._stopping:
@@ -1388,14 +1400,21 @@ class Supervisor:
             if self._shutdown_event.is_set():
                 return
             wake = False
+            doomed: list[Child] = []
+            # Mark every target before stopping any of them.  A bot that boots
+            # while the database child is still shutting down must not attach
+            # to the port of the child this restart is replacing, so the
+            # siblings have to look "going away" for the whole request.
             for slot in slots:
+                slot.restart_requested = True
                 child = self._children.get(slot.spec.name)
                 if child is None:
-                    slot.restart_requested = True
                     wake = True
                     continue
                 child.restart_requested = True
                 child.stop_reason = reason
+                doomed.append(child)
+            for child in doomed:
                 await self._terminate_child(child, reason)
             if wake:
                 self._restart_signal.set()

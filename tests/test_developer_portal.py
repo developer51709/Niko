@@ -6,14 +6,17 @@ import hmac
 import io
 import sys
 import time
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from webapp import app, auth, developer_applications, developer_portal, developer_webhooks, staff  # noqa: E402
-from webapp import api_errors  # noqa: E402
+from webapp import app, auth, staff  # noqa: E402
+from webapp import api_errors, config as webapp_config  # noqa: E402
+from webapp.developer import applications, portal, webhooks  # noqa: E402
+from webapp.developer import store as storage  # noqa: E402
 from webapp.routes import developer_routes, public_routes  # noqa: E402
 
 OWNER = "900"
@@ -21,14 +24,17 @@ OWNER = "900"
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    monkeypatch.setattr(developer_portal.config, "DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(developer_portal, "_STORE", None)
-    monkeypatch.setattr(developer_portal, "_STORE_STAMP", None)
-    monkeypatch.setattr(developer_portal, "is_owner_id", lambda user_id: str(user_id) == OWNER)
+    monkeypatch.setattr(webapp_config, "DATA_DIR", str(tmp_path))
+    # The suite exercises the local backend; the MongoDB backend has its own
+    # tests below, with a fake collection so no server is required.
+    monkeypatch.delenv("MONGODB_URL", raising=False)
+    monkeypatch.delenv("DEVELOPER_API_KEY_PEPPER", raising=False)
+    storage.reset()
+    monkeypatch.setattr(portal, "is_owner_id", lambda user_id: str(user_id) == OWNER)
     monkeypatch.setattr(staff, "is_owner_id", lambda user_id: str(user_id) == OWNER)
     monkeypatch.setattr(auth, "_current_user_blacklist_entry", lambda: None)
-    monkeypatch.setattr(developer_portal, "_IP_HITS", {})
-    monkeypatch.setattr(developer_portal, "_KEY_HITS", {})
+    monkeypatch.setattr(portal, "_IP_HITS", {})
+    monkeypatch.setattr(portal, "_KEY_HITS", {})
     return tmp_path
 
 
@@ -52,24 +58,24 @@ def signed_in_client(user_id, csrf="test-csrf"):
 
 
 def grant(user_id="42", scopes=("economy:read", "levels:read")):
-    developer_portal.grant_access(user_id, list(scopes), actor_id=OWNER)
+    portal.grant_access(user_id, list(scopes), actor_id=OWNER)
 
 
 def accepted_key(user_id="42", scopes=("economy:read",), name="migration"):
-    if not developer_portal.developer_access(user_id)["policy_accepted"]:
-        developer_portal.accept_policy(user_id)
-    return developer_portal.create_key(user_id, name, list(scopes))[1]
+    if not portal.developer_access(user_id)["policy_accepted"]:
+        portal.accept_policy(user_id)
+    return portal.create_key(user_id, name, list(scopes))[1]
 
 
 def test_policy_must_be_accepted_before_the_first_key(store):
     grant()
 
-    assert developer_portal.developer_access("42")["policy_accepted"] is False
+    assert portal.developer_access("42")["policy_accepted"] is False
     with pytest.raises(PermissionError, match="guidelines"):
-        developer_portal.create_key("42", "migration", ["economy:read"])
+        portal.create_key("42", "migration", ["economy:read"])
 
-    developer_portal.accept_policy("42")
-    key, raw = developer_portal.create_key("42", "migration", ["economy:read"])
+    portal.accept_policy("42")
+    key, raw = portal.create_key("42", "migration", ["economy:read"])
 
     assert key["scopes"] == ["economy:read"]
     assert raw.startswith("niko_dev_")
@@ -87,17 +93,17 @@ def test_revoked_and_narrowed_keys_stop_working(store):
     grant(scopes=("economy:read", "levels:read"))
     raw = accepted_key(scopes=("economy:read", "levels:read"))
 
-    authenticated = developer_portal.authenticate(raw)
+    authenticated = portal.authenticate(raw)
     assert authenticated is not None
     assert authenticated["scopes"] == ["economy:read", "levels:read"]
 
-    developer_portal.grant_access("42", ["levels:read"], actor_id=OWNER)
-    narrowed = developer_portal.authenticate(raw)
+    portal.grant_access("42", ["levels:read"], actor_id=OWNER)
+    narrowed = portal.authenticate(raw)
     assert narrowed is not None
     assert narrowed["scopes"] == ["levels:read"]
 
-    developer_portal.revoke_key("42", narrowed["key"]["id"])
-    assert developer_portal.authenticate(raw) is None
+    portal.revoke_key("42", narrowed["key"]["id"])
+    assert portal.authenticate(raw) is None
 
 
 def test_api_key_requires_the_matching_scope(store, monkeypatch):
@@ -146,8 +152,8 @@ def test_website_data_routes_reject_direct_clients_but_allow_the_site(store, mon
 
 
 def test_external_api_rate_limits_per_ip_and_recovers(store, monkeypatch):
-    monkeypatch.setattr(developer_portal, "IP_RATE_LIMIT", 1)
-    monkeypatch.setattr(developer_portal, "IP_RATE_WINDOW", 0.2)
+    monkeypatch.setattr(portal, "IP_RATE_LIMIT", 1)
+    monkeypatch.setattr(portal, "IP_RATE_WINDOW", 0.2)
     client = app.test_client()
 
     first = client.get("/api/v1/economy/leaderboard")
@@ -170,7 +176,7 @@ def test_external_api_rate_limits_per_ip_and_recovers(store, monkeypatch):
 
 def test_sustained_key_traffic_suspends_and_revokes_every_key(store, monkeypatch):
     stub_leaderboard(monkeypatch)
-    monkeypatch.setattr(developer_portal, "KEY_RATE_LIMIT", 2)
+    monkeypatch.setattr(portal, "KEY_RATE_LIMIT", 2)
     grant(scopes=("economy:read",))
     raw = accepted_key(scopes=("economy:read",), name="primary")
     other = accepted_key(scopes=("economy:read",), name="secondary")
@@ -185,13 +191,13 @@ def test_sustained_key_traffic_suspends_and_revokes_every_key(store, monkeypatch
 
     assert suspended.status_code == 403
     assert suspended.get_json()["code"] == "ACCESS_SUSPENDED"
-    access = developer_portal.developer_access("42")
+    access = portal.developer_access("42")
     assert access["suspended"] is True
     assert access["enabled"] is False
     assert access["suspension"]["trigger"] == "sustained_request_rate"
-    assert developer_portal.authenticate(raw) is None
-    assert developer_portal.authenticate(raw, allow_suspended=True)["suspended"] is True
-    stored = developer_portal._load()["keys"]
+    assert portal.authenticate(raw) is None
+    assert portal.authenticate(raw, allow_suspended=True)["suspended"] is True
+    stored = portal._load()["keys"]
     assert len(stored) == 2
     assert all(key.get("revoked_at") for key in stored.values())
     assert all(key.get("revoked_reason") == "developer_suspended" for key in stored.values())
@@ -201,7 +207,7 @@ def test_sustained_key_traffic_suspends_and_revokes_every_key(store, monkeypatch
 def test_suspended_developer_keeps_read_only_status_but_cannot_manage_keys(store):
     grant(scopes=("economy:read",))
     accepted_key(scopes=("economy:read",))
-    developer_portal.suspend_developer(
+    portal.suspend_developer(
         "42",
         reason="Automated abuse detection: test threshold.",
         trigger="error_scanning",
@@ -226,64 +232,64 @@ def test_suspended_developer_keeps_read_only_status_but_cannot_manage_keys(store
     assert create.status_code == 403
     assert create.get_json()["code"] == "ACCESS_SUSPENDED"
     with pytest.raises(PermissionError, match="suspended"):
-        developer_portal.create_key("42", "retry", ["economy:read"])
+        portal.create_key("42", "retry", ["economy:read"])
 
 
 def test_a_denied_appeal_keeps_the_suspension_and_cannot_be_reopened(store):
     grant(scopes=("economy:read",))
     accepted_key(scopes=("economy:read",))
-    suspension = developer_portal.suspend_developer(
+    suspension = portal.suspend_developer(
         "42",
         reason="Automated abuse detection: test threshold.",
         trigger="sustained_request_rate",
     )
 
-    appeal = developer_portal.submit_appeal("42", "This was a one-off migration and the limiter is fixed.")
+    appeal = portal.submit_appeal("42", "This was a one-off migration and the limiter is fixed.")
     assert appeal["status"] == "pending"
-    assert developer_portal.appeal_for_user("42")["id"] == appeal["id"]
+    assert portal.appeal_for_user("42")["id"] == appeal["id"]
     with pytest.raises(ValueError, match="already under review"):
-        developer_portal.submit_appeal("42", "Second appeal")
+        portal.submit_appeal("42", "Second appeal")
 
-    decided = developer_portal.review_appeal(appeal["id"], "denied", note="No limiter added.", actor_id=OWNER)
+    decided = portal.review_appeal(appeal["id"], "denied", note="No limiter added.", actor_id=OWNER)
     assert decided["status"] == "denied"
-    assert developer_portal.suspension_for_user("42")["id"] == suspension["id"]
-    assert developer_portal.developer_access("42")["enabled"] is False
+    assert portal.suspension_for_user("42")["id"] == suspension["id"]
+    assert portal.developer_access("42")["enabled"] is False
     with pytest.raises(ValueError, match="already denied"):
-        developer_portal.submit_appeal("42", "Third appeal")
+        portal.submit_appeal("42", "Third appeal")
 
 
 def test_approved_appeal_restores_portal_access_but_not_revoked_keys(store):
     grant(scopes=("economy:read",))
     raw = accepted_key(scopes=("economy:read",))
-    developer_portal.suspend_developer(
+    portal.suspend_developer(
         "42",
         reason="Automated abuse detection: test threshold.",
         trigger="error_scanning",
     )
-    appeal = developer_portal.submit_appeal("42", "The failing loop was a bad deploy and is reverted.")
+    appeal = portal.submit_appeal("42", "The failing loop was a bad deploy and is reverted.")
 
-    decided = developer_portal.review_appeal(appeal["id"], "approved", note="Limiter confirmed", actor_id=OWNER)
+    decided = portal.review_appeal(appeal["id"], "approved", note="Limiter confirmed", actor_id=OWNER)
 
     assert decided["status"] == "approved"
-    access = developer_portal.developer_access("42")
+    access = portal.developer_access("42")
     assert access["suspended"] is False
     assert access["enabled"] is True
     assert access["suspension"] is None
-    assert developer_portal.suspension_for_user("42") is None
-    assert developer_portal.authenticate(raw) is None
-    replacement, replacement_raw = developer_portal.create_key("42", "replacement", ["economy:read"])
+    assert portal.suspension_for_user("42") is None
+    assert portal.authenticate(raw) is None
+    replacement, replacement_raw = portal.create_key("42", "replacement", ["economy:read"])
     assert replacement["prefix"] == replacement_raw[:18]
 
 
 def test_owner_reviews_an_appeal_through_the_portal_api(store):
     grant(scopes=("economy:read",))
     accepted_key(scopes=("economy:read",))
-    developer_portal.suspend_developer(
+    portal.suspend_developer(
         "42",
         reason="Automated abuse detection: test threshold.",
         trigger="sustained_request_rate",
     )
-    appeal = developer_portal.submit_appeal("42", "Limiter is now shared across workers.")
+    appeal = portal.submit_appeal("42", "Limiter is now shared across workers.")
     owner = signed_in_client(OWNER)
 
     queue = owner.get("/api/developer/appeals")
@@ -332,14 +338,11 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"verification-image"
 
 @pytest.fixture
 def application_store(store, monkeypatch):
-    monkeypatch.setattr(developer_applications.config, "DATA_DIR", str(store))
-    monkeypatch.setattr(developer_applications, "_STORE", None)
-    monkeypatch.setattr(developer_applications, "_STORE_STAMP", None)
-    monkeypatch.setattr(developer_applications, "_MEMBERSHIP_CACHE", {})
-    monkeypatch.setattr(developer_applications, "_runtime_bot", lambda: None)
-    monkeypatch.setattr(developer_applications, "shared_guild_count", lambda _app: 0)
+    monkeypatch.setattr(applications, "_MEMBERSHIP_CACHE", {})
+    monkeypatch.setattr(applications, "_runtime_bot", lambda: None)
+    monkeypatch.setattr(applications, "shared_guild_count", lambda _app: 0)
     monkeypatch.setattr(
-        developer_portal,
+        portal,
         "resolve_identity",
         lambda user_id: {
             "username": f"user-{user_id}",
@@ -367,7 +370,7 @@ def submit_application(client, *, bot_id="1545846783253545081", scopes="warns:re
 
 def test_application_registration_review_and_app_bound_key(application_store, monkeypatch):
     grant(scopes=("warns:read", "warns:write"))
-    developer_portal.accept_policy("42")
+    portal.accept_policy("42")
     developer = signed_in_client("42")
 
     submitted = submit_application(developer)
@@ -404,7 +407,7 @@ def test_application_registration_review_and_app_bound_key(application_store, mo
     )
     assert created.status_code == 201
     secret = created.get_json()["secret"]
-    authenticated = developer_portal.authenticate(secret)
+    authenticated = portal.authenticate(secret)
     assert authenticated["application"]["id"] == app_id
     assert authenticated["scopes"] == ["warns:read"]
 
@@ -418,7 +421,7 @@ def test_application_registration_review_and_app_bound_key(application_store, mo
 
 def test_restricted_scopes_cannot_be_self_requested(application_store):
     grant(scopes=("warns:read", "blacklist:read"))
-    developer_portal.accept_policy("42")
+    portal.accept_policy("42")
 
     response = submit_application(signed_in_client("42"), scopes="blacklist:read")
 
@@ -429,7 +432,7 @@ def test_restricted_scopes_cannot_be_self_requested(application_store):
 
 def test_denied_application_can_be_resubmitted_and_owner_only_is_enforced(application_store):
     grant(scopes=("warns:read",))
-    developer_portal.accept_policy("42")
+    portal.accept_policy("42")
     developer = signed_in_client("42")
     app_id = submit_application(developer).get_json()["application"]["id"]
     owner = signed_in_client(OWNER)
@@ -457,7 +460,7 @@ def test_denied_application_can_be_resubmitted_and_owner_only_is_enforced(applic
 
 def test_warn_api_uses_shared_guild_rule_and_emits_write_results(application_store, monkeypatch):
     grant(scopes=("warns:read", "warns:write"))
-    developer_portal.accept_policy("42")
+    portal.accept_policy("42")
     developer = signed_in_client("42")
     app_id = submit_application(developer, scopes="warns:read").get_json()["application"]["id"]
     owner = signed_in_client(OWNER)
@@ -502,7 +505,7 @@ def test_warn_api_uses_shared_guild_rule_and_emits_write_results(application_sto
     monkeypatch.setattr(developer_routes, "_guild", lambda _guild_id: object())
     monkeypatch.setattr(developer_routes, "run_on_bot_loop", lambda value, **_kwargs: value)
     monkeypatch.setattr(
-        developer_applications,
+        applications,
         "application_in_guild",
         lambda _app, guild_id: str(guild_id) == "123456789012345678",
     )
@@ -534,7 +537,7 @@ def test_warn_api_uses_shared_guild_rule_and_emits_write_results(application_sto
 
 def test_blacklist_write_requires_an_app_bound_trusted_scope(application_store, monkeypatch):
     grant(scopes=("warns:read", "blacklist:write"))
-    developer_portal.accept_policy("42")
+    portal.accept_policy("42")
     developer = signed_in_client("42")
     app_id = submit_application(developer, scopes="warns:read").get_json()["application"]["id"]
     owner = signed_in_client(OWNER)
@@ -568,22 +571,22 @@ def test_blacklist_write_requires_an_app_bound_trusted_scope(application_store, 
     assert response.get_json()["changed"] is True
 
     with pytest.raises(PermissionError, match="reviewed application"):
-        developer_portal.create_key("42", "generic blacklist", ["blacklist:write"])
+        portal.create_key("42", "generic blacklist", ["blacklist:write"])
 
 
 def test_webhook_configuration_requires_https_public_urls_and_keeps_the_secret(application_store):
     grant(scopes=("warns:read",))
-    developer_portal.accept_policy("42")
+    portal.accept_policy("42")
     app_id = submit_application(signed_in_client("42")).get_json()["application"]["id"]
-    developer_applications.review_application(
+    applications.review_application(
         app_id,
         "approved",
         scopes=["warns:read"],
         actor_id=OWNER,
-        allowed_scopes=list(developer_portal.ALL_SCOPES),
+        allowed_scopes=list(portal.ALL_SCOPES),
     )
 
-    first = developer_applications.configure_webhook(
+    first = applications.configure_webhook(
         app_id,
         "42",
         url="https://93.184.216.34/niko/events",
@@ -594,7 +597,7 @@ def test_webhook_configuration_requires_https_public_urls_and_keeps_the_secret(a
     assert first["events"] == ["warn.created", "warns.cleared"]
     assert first["secret"]
 
-    second = developer_applications.configure_webhook(
+    second = applications.configure_webhook(
         app_id,
         "42",
         url="https://93.184.216.34/niko/events",
@@ -605,19 +608,19 @@ def test_webhook_configuration_requires_https_public_urls_and_keeps_the_secret(a
     assert second["enabled"] is False
 
     with pytest.raises(ValueError, match="HTTPS"):
-        developer_applications.configure_webhook(app_id, "42", url="http://example.com", enabled=True, events=["warn.created"])
+        applications.configure_webhook(app_id, "42", url="http://example.com", enabled=True, events=["warn.created"])
     with pytest.raises(ValueError, match="public"):
-        developer_applications.configure_webhook(app_id, "42", url="https://127.0.0.1/niko", enabled=True, events=["warn.created"])
+        applications.configure_webhook(app_id, "42", url="https://127.0.0.1/niko", enabled=True, events=["warn.created"])
 
 
 def test_generic_keys_cannot_use_restricted_or_warn_scopes(store):
     grant(scopes=("economy:read", "blacklist:read", "warns:read"))
-    developer_portal.accept_policy("42")
+    portal.accept_policy("42")
 
     with pytest.raises(PermissionError, match="reviewed application"):
-        developer_portal.create_key("42", "too broad", ["blacklist:read"])
+        portal.create_key("42", "too broad", ["blacklist:read"])
     with pytest.raises(PermissionError, match="app-bound"):
-        developer_portal.create_key("42", "warn sync", ["warns:read"])
+        portal.create_key("42", "warn sync", ["warns:read"])
 
 
 def test_webhook_events_are_signed_selected_and_guild_filtered(application_store, monkeypatch):
@@ -634,32 +637,32 @@ def test_webhook_events_are_signed_selected_and_guild_filtered(application_store
             "secret": "test-secret",
         },
     }
-    monkeypatch.setattr(developer_applications, "approved_applications", lambda: [record])
-    monkeypatch.setattr(developer_portal, "developer_access", lambda _user_id: {"enabled": True, "scopes": ["warns:read"]})
+    monkeypatch.setattr(applications, "approved_applications", lambda: [record])
+    monkeypatch.setattr(portal, "developer_access", lambda _user_id: {"enabled": True, "scopes": ["warns:read"]})
 
     async def shared(_app, guild_id):
         return str(guild_id) == "123"
 
-    monkeypatch.setattr(developer_applications, "application_in_guild_async", shared)
+    monkeypatch.setattr(applications, "application_in_guild_async", shared)
     delivered = []
 
     async def capture(application_id, payload, *, attempts=3):
         delivered.append((application_id, payload))
         return True
 
-    monkeypatch.setattr(developer_webhooks, "_deliver", capture)
+    monkeypatch.setattr(webhooks, "_deliver", capture)
 
     async def dispatch():
-        await developer_webhooks.dispatch_guild_event_async("warn.created", "123", {"warn": {"id": 1}})
-        await developer_webhooks.dispatch_guild_event_async("warn.created", "999", {"warn": {"id": 2}})
-        await developer_webhooks.dispatch_guild_event_async("warn.deleted", "123", {"warn": {"id": 3}})
+        await webhooks.dispatch_guild_event_async("warn.created", "123", {"warn": {"id": 1}})
+        await webhooks.dispatch_guild_event_async("warn.created", "999", {"warn": {"id": 2}})
+        await webhooks.dispatch_guild_event_async("warn.deleted", "123", {"warn": {"id": 3}})
         await asyncio.sleep(0)
 
     asyncio.run(dispatch())
     assert len(delivered) == 1
     assert delivered[0][1]["guild_id"] == "123"
 
-    monkeypatch.setattr(developer_portal, "developer_access", lambda _user_id: {"enabled": True, "scopes": []})
+    monkeypatch.setattr(portal, "developer_access", lambda _user_id: {"enabled": True, "scopes": []})
     asyncio.run(dispatch())
     assert len(delivered) == 1
     assert delivered[0][1]["type"] == "warn.created"
@@ -667,16 +670,16 @@ def test_webhook_events_are_signed_selected_and_guild_filtered(application_store
 
     body = '{"hello":"world"}'
     expected = hmac.new(b"test-secret", b"123." + body.encode(), hashlib.sha256).hexdigest()
-    assert developer_webhooks._signature("test-secret", 123, body) == expected
+    assert webhooks._signature("test-secret", 123, body) == expected
 
 
 def test_owner_access_is_implicit_and_full(store):
-    access = developer_portal.developer_access(OWNER)
+    access = portal.developer_access(OWNER)
 
     assert access["enabled"] is True
     assert access["is_owner"] is True
     assert access["policy_accepted"] is True
-    assert access["scopes"] == list(developer_portal.ALL_SCOPES)
+    assert access["scopes"] == list(portal.ALL_SCOPES)
 
 
 def test_portal_blocks_key_creation_until_the_guidelines_are_accepted(store):
@@ -720,3 +723,118 @@ def test_only_the_owner_can_manage_developer_access(store):
     developer = signed_in_client("42")
     assert developer.get("/api/developer/access").status_code == 403
     assert developer.get("/api/developer/me").get_json()["access"]["enabled"] is True
+
+
+# ── MongoDB storage ──────────────────────────────────────────────────────────
+
+
+class _FakeCollection:
+    """The small pymongo surface the developer store uses."""
+
+    def __init__(self):
+        self.documents = {}
+
+    def find_one(self, query):
+        return self.documents.get(query.get("_id"))
+
+    def replace_one(self, query, document, upsert=False):
+        self.documents[query["_id"]] = deepcopy(document)
+
+    def update_one(self, query, update, upsert=False):
+        key = query.get("_id")
+        if key in self.documents:
+            return
+        document = {"_id": key}
+        document.update(deepcopy(update.get("$setOnInsert") or {}))
+        self.documents[key] = document
+
+    def delete_one(self, query):
+        self.documents.pop(query.get("_id"), None)
+
+
+class _FakeDatabase:
+    def __init__(self):
+        self.collections = {}
+
+    def __getitem__(self, name):
+        return self.collections.setdefault(name, _FakeCollection())
+
+
+class _FakeMongoClient:
+    def __init__(self):
+        self.databases = {}
+
+    def __getitem__(self, name):
+        return self.databases.setdefault(name, _FakeDatabase())
+
+    def close(self):
+        pass
+
+
+def use_fake_mongo(monkeypatch):
+    client = _FakeMongoClient()
+    monkeypatch.setenv("MONGODB_URL", "mongodb://developer-portal.invalid")
+    monkeypatch.setattr(
+        storage,
+        "_connect",
+        lambda: storage._MongoBackend(
+            client, "discord_bot_developer_portal"
+        ),
+    )
+    storage.reset()
+    return client
+
+
+def test_the_portal_uses_a_database_of_its_own(monkeypatch):
+    monkeypatch.setenv("MONGODB_DATABASE", "niko")
+
+    assert storage._mongo_database() == "niko_developer_portal"
+
+
+def test_grants_and_keys_survive_a_restart_without_the_files(store, monkeypatch):
+    use_fake_mongo(monkeypatch)
+    grant(scopes=("economy:read",))
+    portal.accept_policy("42")
+    _, raw = portal.create_key("42", "migration", ["economy:read"])
+
+    # A redeploy: the old data directory is gone and every cache is empty, but
+    # the portal database still has the grant, the key and the hash pepper.
+    monkeypatch.setattr(webapp_config, "DATA_DIR", str(store / "gone"))
+    storage.reset()
+
+    authenticated = portal.authenticate(raw)
+    assert authenticated is not None
+    assert authenticated["user_id"] == "42"
+    assert portal.developer_access("42")["policy_accepted"] is True
+    assert portal.list_keys("42")[0]["prefix"] == raw[:18]
+
+
+def test_existing_files_are_imported_when_mongodb_is_first_used(store, monkeypatch):
+    grant(scopes=("economy:read",))
+    portal.accept_policy("42")
+    _, raw = portal.create_key("42", "migration", ["economy:read"])
+    assert (store / "developer_portal.json").is_file()
+    assert (store / "developer_api_secret").is_file()
+
+    client = use_fake_mongo(monkeypatch)
+
+    assert portal.authenticate(raw)["user_id"] == "42"
+    database = client["discord_bot_developer_portal"]
+    assert "portal" in database.collections
+    assert "api_key_pepper" in database.collections["meta"].documents
+
+
+def test_application_screenshots_follow_the_database(application_store, monkeypatch):
+    client = use_fake_mongo(monkeypatch)
+    grant(scopes=("warns:read",))
+    portal.accept_policy("42")
+
+    submitted = submit_application(signed_in_client("42"))
+    assert submitted.status_code == 201
+    app_id = submitted.get_json()["application"]["id"]
+
+    database = client["discord_bot_developer_portal"]
+    assert app_id in database.collections["screenshots"].documents
+
+    storage.reset()
+    assert applications.screenshot_bytes(app_id) == (PNG, "image/png")

@@ -111,7 +111,7 @@ This table covers every file or database where user/server data is persisted.
 | `data/ticket_config.json` | Per-guild ticket settings (no user data) | Server admin |
 | `data/database.db` | Giveaway entries: prize, end time, host User ID; participant User IDs | Bot owner manually |
 
-Deployments configured with `MONGODB_URL` keep the same records in MongoDB instead of, or alongside, the files above. The stores that live in the database include premium grants (`premium_users`), stored error reports (`error_reports`), and Discord proxy worker registrations (`proxy_workers`).
+Deployments configured with `MONGODB_URL` keep the same records in MongoDB instead of, or alongside, the files above. The stores that live in the database include premium grants (`premium_users`), stored error reports (`error_reports`), and Discord proxy worker registrations (`proxy_workers`). The developer portal's grants, hashed API keys, usage log, appeals, reviewed applications and verification screenshots live in their own database (`<MONGODB_DATABASE>_developer_portal`), apart from the bot's primary database.
 
 ---
 

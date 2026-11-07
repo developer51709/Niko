@@ -84,7 +84,7 @@ class _UtilsStub:
     async def log_action(self, guild, title, description, display_title=None):
         self.logged.append((display_title or title, description))
 
-    async def mute_member(self, guild, member, duration=60, reason=""):
+    async def mute_member(self, guild, member, duration=60, reason="", **kwargs):
         self.muted.append((member, reason))
 
 

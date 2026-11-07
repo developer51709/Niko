@@ -8,14 +8,16 @@ site's same-origin fetches, but an external caller has to use this API.
 Keys are never stored in plain text. The raw key is returned once, at creation;
 the store keeps a peppered hash and a short display prefix so the portal can show
 which key was used without ever being able to recreate it.
+
+Grants, keys, usage rows, appeals and the hash pepper live in the portal's own
+MongoDB database (see ``store``), not in the bot's primary database and
+not on the deployment's disk, which production does not keep between deploys.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
-import json
-import os
 import secrets
 import threading
 import time
@@ -29,8 +31,8 @@ from flask import g, request, session
 from config.ids import is_owner_id
 from utils import logging
 
-from . import config
-from .api_errors import error_response
+from ..api_errors import error_response
+from . import store
 
 #: Bump this when the developer guidelines change. A developer who accepted an
 #: older version sees the agreement again before creating another key.
@@ -99,13 +101,9 @@ RESTRICTED_SCOPES = frozenset(
     scope for scope, definition in SCOPES.items() if definition.get("restricted")
 )
 
-_STORE_NAME = "developer_portal.json"
-_SECRET_NAME = "developer_api_secret"
 _STORE_VERSION = 2
 _USAGE_LIMIT = 5000
 _LOCK = threading.RLock()
-_STORE: dict | None = None
-_STORE_STAMP: tuple[int, int] | None = None
 
 #: External requests are limited per source address before a key is even read,
 #: so an invalid or leaked key still cannot drive an unbounded scan.
@@ -134,46 +132,15 @@ _KEY_HITS: dict[str, dict] = {}
 _TRACK_LOCK = threading.RLock()
 
 
-def _store_path() -> str:
-    return os.path.join(config.DATA_DIR, _STORE_NAME)
-
-
-def _secret_path() -> str:
-    return os.path.join(config.DATA_DIR, _SECRET_NAME)
-
-
 def _pepper() -> bytes:
     """The stable secret mixed into key hashes.
 
     An environment variable wins so a deployment can manage it like the other
-    application secrets. A local deployment gets a generated file instead, which
-    is what keeps keys valid across a bot restart without asking the owner to
-    configure one more value before the first key can be created.
+    application secrets. Otherwise the value is generated once and stored with
+    the portal data, which is what keeps issued keys valid across restarts on a
+    host without a persistent disk.
     """
-    configured = os.environ.get("DEVELOPER_API_KEY_PEPPER", "").strip()
-    if configured:
-        return configured.encode("utf-8")
-    path = _secret_path()
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            value = handle.read().strip()
-        if value:
-            return value.encode("utf-8")
-    except OSError:
-        pass
-
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    value = secrets.token_urlsafe(48)
-    try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        # A simultaneous first request won the create race. Its file is the
-        # one every process should hash against.
-        with open(path, "r", encoding="utf-8") as handle:
-            return handle.read().strip().encode("utf-8")
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        handle.write(value)
-    return value.encode("utf-8")
+    return store.key_pepper()
 
 
 def _hash_key(raw_key: str) -> str:
@@ -207,44 +174,16 @@ def _normalise_store(document) -> dict:
 
 
 def _load() -> dict:
-    """Read the store once per file change, keeping concurrent writes safe."""
-    global _STORE, _STORE_STAMP
-    path = _store_path()
-    try:
-        stat = os.stat(path)
-        stamp = (stat.st_mtime_ns, stat.st_size)
-    except OSError:
-        stamp = None
+    """Read the portal document from its store.
 
-    with _LOCK:
-        # The first call must load even when the file does not exist yet.
-        if _STORE is not None and stamp == _STORE_STAMP:
-            return _STORE
-        try:
-            with open(path, "r", encoding="utf-8") as handle:
-                document = json.load(handle)
-        except (OSError, ValueError):
-            document = _empty_store()
-        _STORE = _normalise_store(document)
-        _STORE_STAMP = stamp
-        return _STORE
+    MongoDB is used whenever it is configured; the historical JSON file is the
+    local fallback (see ``store``).
+    """
+    return _normalise_store(store.load_document("portal"))
 
 
 def _save(document: dict) -> None:
-    global _STORE, _STORE_STAMP
-    path = _store_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    document = _normalise_store(document)
-    temporary = f"{path}.tmp"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(document, handle, indent=2)
-    os.replace(temporary, path)
-    try:
-        stat = os.stat(path)
-        _STORE_STAMP = (stat.st_mtime_ns, stat.st_size)
-    except OSError:
-        _STORE_STAMP = None
-    _STORE = document
+    store.save_document("portal", _normalise_store(document))
 
 
 def _now() -> float:
@@ -604,9 +543,9 @@ def create_key(user_id: str, name: str, scopes, *, application_id: str = "") -> 
         raise PermissionError("One or more permissions have not been granted to this account.")
     application = None
     if application_id:
-        from . import developer_applications
+        from . import applications
 
-        application = developer_applications.get_application(application_id)
+        application = applications.get_application(application_id)
         if not isinstance(application, dict) or str(application.get("owner_id")) != user_id:
             raise PermissionError("That application does not belong to this account.")
         if str(application.get("status")) != "approved":
@@ -885,7 +824,7 @@ def mark_appeal_notified(appeal_id: str) -> None:
 def _schedule_suspension_notice(user_id: str, suspension_id: str) -> None:
     """Deliver the suspension DM without holding up the API request."""
     try:
-        from . import runtime
+        from .. import runtime
 
         if runtime._discord_bot is None:
             return
@@ -902,7 +841,7 @@ def _schedule_suspension_notice(user_id: str, suspension_id: str) -> None:
 
 def _schedule_appeal_decision_notice(user_id: str, appeal_id: str) -> None:
     try:
-        from . import runtime
+        from .. import runtime
 
         if runtime._discord_bot is None:
             return
@@ -942,9 +881,9 @@ def authenticate(token: str, *, allow_suspended: bool = False) -> dict | None:
             application = None
             application_id = str(key.get("application_id") or "")
             if application_id:
-                from . import developer_applications
+                from . import applications
 
-                application = developer_applications.get_application(application_id)
+                application = applications.get_application(application_id)
                 if (
                     not isinstance(application, dict)
                     or str(application.get("owner_id")) != user_id
@@ -954,9 +893,9 @@ def authenticate(token: str, *, allow_suspended: bool = False) -> dict | None:
             def application_summary():
                 if not application:
                     return None
-                from . import developer_applications
+                from . import applications
 
-                return developer_applications.application_summary(application)
+                return applications.application_summary(application)
 
             if key.get("revoked_at"):
                 if allow_suspended and key.get("revoked_reason") == "developer_suspended" and access["suspended"]:
@@ -1380,7 +1319,7 @@ def resolve_identity(user_id: str) -> dict:
     The access roster is still usable when Discord is unavailable: the numeric
     id remains the stable identity and the owner can grant by id.
     """
-    from . import runtime
+    from .. import runtime
 
     user_id = str(user_id or "").strip()
     identity = {"username": "", "display_name": "", "avatar_url": None}

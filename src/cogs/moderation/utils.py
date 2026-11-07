@@ -4,6 +4,7 @@ import json
 import os
 import re
 import secrets
+import time
 import asyncio
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -22,6 +23,40 @@ CONFIG_FILE = os.path.join(DATA_DIR, "modconfig.json")
 # Moderation/automod config is stored in the main database (moderation_config),
 # migrated at startup from the legacy modconfig.json by events.startup.database.
 _MOD_COLLECTION = "moderation_config"
+
+#: Discord refuses a timeout longer than 28 days, so this is the longest a mute
+#: can run. A regular mute records it as the expiry; the watcher then logs the
+#: expiry with a button to reapply the mute.
+_MAX_TIMEOUT_SECONDS = 28 * 24 * 60 * 60
+
+#: How long after the bot writes a mute role or timeout its own gateway events
+#: are still recognised as its own, so a moderator's audit entry is not confused
+#: with the bot answering itself.
+_SELF_WRITE_TTL = 8.0
+
+#: The name the bot gives a mute role it has to create. Only used to recognise
+#: the role it is provisioning; an existing role is found by its pinned id.
+MUTE_ROLE_NAME = "Muted"
+
+#: How long a mute role's channel deny is still recognised as this bot's own
+#: write. The deny is written channel by channel, and each channel's gateway
+#: event has to be told apart from a moderator editing the same overwrite.
+_OVERWRITE_WRITE_TTL = 6.0
+
+
+def _parse_mute_until(value):
+    """A stored mute expiry as an aware datetime, or ``None``."""
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
 
 
 def _pool():
@@ -43,7 +78,7 @@ def _warn_row(row) -> dict:
 def _publish_warn_event(event_type: str, guild_id: int, data: dict) -> None:
     """Fan out a warning event without ever failing the database operation."""
     try:
-        from webapp.developer_webhooks import dispatch_guild_event
+        from webapp.developer.webhooks import dispatch_guild_event
 
         dispatch_guild_event(event_type, str(guild_id), data)
     except Exception as error:
@@ -341,6 +376,10 @@ class ModerationUtils(commands.Cog):
         # the load finishes would write DEFAULT_GUILD_CONFIG over the real
         # stored config and every toggle would "reset" on next restart.
         self._initial_load_done = asyncio.Event()
+        # (guild_id, user_id) -> monotonic time of a role/timeout write this bot
+        # just made. The logging cog reads it so its own changes are not treated
+        # as a moderator muting or unmuting the member a second time.
+        self._self_writes: dict = {}
         self.bot.loop.create_task(self._load_config_task())
         self.bot.loop.create_task(self.mute_watcher())
 
@@ -627,7 +666,15 @@ class ModerationUtils(commands.Cog):
             role = guild.get_role(int(stored))
             if role is not None:
                 return role
-        return discord.utils.get(guild.roles, name="Muted")
+        return discord.utils.get(guild.roles, name=MUTE_ROLE_NAME)
+
+    def is_mute_role(self, role: discord.Role) -> bool:
+        """Whether this role is the guild's mute role, by pin or by adoption."""
+        cfg = self.get_guild_config(role.guild.id)
+        pinned = cfg.get("mute_role_id")
+        if pinned:
+            return int(pinned) == role.id
+        return role.name == MUTE_ROLE_NAME
 
     def _remember_mute_role(self, guild: discord.Guild, role: discord.Role) -> None:
         """Pin the role used for mutes, so later lookups never guess by name."""
@@ -636,97 +683,430 @@ class ModerationUtils(commands.Cog):
             cfg["mute_role_id"] = role.id
             self.save_config(guild.id)
 
-    async def ensure_mute_role(self, guild: discord.Guild, *, verify_perms: bool = False) -> discord.Role:
-        """The guild's mute role, created (and pinned) only when it has none."""
+    def _mute_needs_deny(self, channel: discord.abc.GuildChannel, role: discord.Role) -> bool:
+        """Whether this channel still needs the mute role's deny.
+
+        A role-level permission is only the starting point, so the deny has to
+        live on the channel. It holds in channels that grant the member's other
+        roles nothing; the timeout applied first covers the rest.
+        """
+        try:
+            overwrite = channel.overwrites_for(role)
+        except Exception:
+            return False
+        return overwrite.send_messages is not False or overwrite.speak is not False
+
+    async def _deny_mute_in_channels(self, guild: discord.Guild, role: discord.Role,
+                                     *, reason: str) -> list:
+        """Deny sending and speaking to the mute role on every channel.
+
+        Channels that already deny it are skipped, so a repeat mute costs no
+        API calls; only a newly created channel, or a mute role that predates
+        this check (adopted by name, or created by another bot), is written. A
+        channel allow for another of the member's roles still beats this deny —
+        the timeout applied before it is what makes the mute hold there.
+
+        The channels written are returned so the whole batch is logged as one
+        entry once it is done, rather than one entry per channel.
+        """
+        repaired = []
+        for channel in guild.channels:
+            if not self._mute_needs_deny(channel, role):
+                continue
+            # Marked per channel so the logger can tell this bot's bulk write
+            # from a moderator editing the same overwrite right after it.
+            self._mark_self_write(guild.id, channel.id, f"overwrite:{role.id}")
+            try:
+                await channel.set_permissions(
+                    role,
+                    send_messages=False,
+                    speak=False,
+                    add_reactions=False,
+                    use_application_commands=False,
+                    use_external_apps=False,
+                    reason=reason,
+                )
+                repaired.append(channel)
+            except Exception:
+                continue
+        return repaired
+
+    async def ensure_mute_role(self, guild: discord.Guild) -> discord.Role:
+        """The guild's mute role, created (and pinned) only when it has none.
+
+        A role that has to be created is logged straight away, so the channel
+        denies written right after can update that one entry instead of adding
+        a second message to the log.
+        """
         role = self.find_mute_role(guild)
-        created = False
-        if role is None:
-            perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
-            role = await guild.create_role(name="Muted", permissions=perms, reason="Create mute role")
-            created = True
-        if created or verify_perms:
-            for channel in guild.channels:
-                try:
-                    await channel.set_permissions(
-                        role,
-                        send_messages=False,
-                        speak=False,
-                        add_reactions=False,
-                        use_application_commands=False,
-                        use_external_apps=False,
-                        reason="Verify mute role permissions",
-                    )
-                except Exception:
-                    continue
+        if role is not None:
+            self._remember_mute_role(guild, role)
+            return role
+        perms = discord.Permissions(send_messages=False, speak=False, add_reactions=False)
+        role = await guild.create_role(name=MUTE_ROLE_NAME, permissions=perms, reason="Create mute role")
         self._remember_mute_role(guild, role)
+        # The role-create listener leaves this one entry to us, so creating the
+        # role and denying it in every channel is one message, not many.
+        self._mark_self_write(guild.id, role.id, "role_create")
+        logger = self.bot.get_cog("ServerLogger") if hasattr(self.bot, "get_cog") else None
+        if logger is not None:
+            try:
+                await logger.log_mute_role_setup(guild, role, created=True)
+            except Exception as e:
+                from utils import logging
+                logging.error("Moderation", f"Could not log the mute role in {guild.id}: {e}")
         return role
 
-    async def mute_member(self, guild: discord.Guild, member: discord.Member, duration=None, reason=None):
-        role = await self.ensure_mute_role(guild)
+    def _mark_self_write(self, guild_id: int, user_id: int, kind: str) -> None:
+        """Remember that this bot is the one changing the member's mute state."""
+        now = time.monotonic()
+        for key, at in list(self._self_writes.items()):
+            if now - at > _SELF_WRITE_TTL:
+                del self._self_writes[key]
+        self._self_writes[(int(guild_id), int(user_id), kind)] = now
+
+    def is_self_write(self, guild_id: int, user_id: int, kind: str, *,
+                      ttl: float | None = None) -> bool:
+        """Whether this bot wrote the member's mute role or timeout just now.
+
+        The two are tracked apart: a role a moderator hands out right after the
+        bot applied the timeout is still theirs to take off again.
+        """
+        at = self._self_writes.get((int(guild_id), int(user_id), kind))
+        window = _SELF_WRITE_TTL if ttl is None else ttl
+        return at is not None and time.monotonic() - at <= window
+
+    def is_own_overwrite(self, guild_id: int, channel_id: int, role_id: int) -> bool:
+        """Whether this bot just wrote the role's permission overwrite here."""
+        return self.is_self_write(
+            guild_id, channel_id, f"overwrite:{int(role_id)}",
+            ttl=_OVERWRITE_WRITE_TTL,
+        )
+
+    async def _apply_mute_role(self, guild: discord.Guild, member: discord.Member,
+                              *, reason: str) -> discord.Role | None:
+        """Add the mute role and repair its channel denies, best effort.
+
+        The timeout is what holds the mute, so a hierarchy or permission problem
+        here must not turn a working mute into an error message: it is logged
+        and the mute carries on without the badge.
+        """
         try:
-            await member.add_roles(role, reason=reason or "Muted")
-        except Exception:
+            role = await self.ensure_mute_role(guild)
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Could not create the mute role in {guild.id}: {e}")
+            return None
+        # A moderator who handed out the role themselves has already added it;
+        # adding it again would only write a pointless audit entry.
+        if role not in member.roles:
+            self._mark_self_write(guild.id, member.id, "role")
             try:
-                member = guild.get_member(member.id)
-                await member.add_roles(role, reason=reason or "Muted")
+                await member.add_roles(role, reason=reason)
             except Exception:
-                pass
-
-        until = None
-        if duration:
-            until = (datetime.now(timezone.utc) + timedelta(seconds=duration)).isoformat()
-
-        pool = _pool()
-        if pool is not None:
+                fresh = guild.get_member(member.id)
+                if fresh is not None:
+                    try:
+                        await fresh.add_roles(role, reason=reason)
+                    except Exception as e:
+                        from utils import logging
+                        logging.error("Moderation", f"Could not add the mute role to {member.id} in {guild.id}: {e}")
+                        return None
+                else:
+                    from utils import logging
+                    logging.error("Moderation", f"Could not add the mute role to {member.id} in {guild.id}: member not in guild")
+                    return None
+        changed = await self._deny_mute_in_channels(guild, role, reason=reason)
+        logger = self.bot.get_cog("ServerLogger") if hasattr(self.bot, "get_cog") else None
+        if logger is not None:
             try:
-                if pool.db_type == "mongodb":
-                    await pool.collection("mutes").insert_one({
-                        "guild_id": guild.id,
-                        "user_id": member.id,
+                await logger.log_mute_role_setup(guild, role, channels=changed)
+            except Exception as e:
+                from utils import logging
+                logging.error("Moderation", f"Could not log the mute role in {guild.id}: {e}")
+        return role
+
+    async def _record_mute(self, guild_id: int, user_id: int, until,
+                           reason=None) -> None:
+        """Store the mute row the watcher, rejoin and role logic all read."""
+        pool = _pool()
+        if pool is None:
+            return
+        if isinstance(until, datetime):
+            until = until.isoformat()
+        try:
+            if pool.db_type == "mongodb":
+                await pool.collection("mutes").replace_one(
+                    {"guild_id": int(guild_id), "user_id": int(user_id)},
+                    {
+                        "guild_id": int(guild_id),
+                        "user_id": int(user_id),
                         "reason": reason,
                         "until": until,
                         "created_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                else:
-                    await pool.execute(
-                        "INSERT INTO mutes (guild_id, user_id, reason, until) "
-                        "VALUES ($1, $2, $3, $4)",
-                        guild.id, member.id, reason, until,
-                    )
-            except Exception as e:
-                from utils import logging
-                logging.error("Moderation", f"Failed to save mute for {member.id}: {e}")
+                    },
+                    upsert=True,
+                )
+            else:
+                # One row per member: re-muting or adopting a timeout replaces
+                # the expiry instead of stacking a second row on top of it.
+                await pool.execute(
+                    "DELETE FROM mutes WHERE guild_id = $1 AND user_id = $2",
+                    int(guild_id), int(user_id),
+                )
+                await pool.execute(
+                    "INSERT INTO mutes (guild_id, user_id, reason, until) "
+                    "VALUES ($1, $2, $3, $4)",
+                    int(guild_id), int(user_id), reason, until,
+                )
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to save mute for {user_id}: {e}")
 
-    async def unmute_member(self, member: discord.Member, reason=None):
-        """Take the mute role off a member.
+    async def get_mute_record(self, guild_id: int, user_id: int):
+        """The stored mute row for a member, or ``None``."""
+        pool = _pool()
+        if pool is None:
+            return None
+        try:
+            if pool.db_type == "mongodb":
+                return await pool.collection("mutes").find_one({
+                    "guild_id": int(guild_id), "user_id": int(user_id),
+                })
+            rows = await pool.fetch(
+                "SELECT id, reason, until FROM mutes WHERE guild_id = $1 AND user_id = $2",
+                int(guild_id), int(user_id),
+            )
+            return rows[0] if rows else None
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to read mute for {user_id}: {e}")
+            return None
 
+    async def has_mute(self, guild_id: int, user_id: int) -> bool:
+        """Whether this member is on record as muted."""
+        return await self.get_mute_record(guild_id, user_id) is not None
+
+    async def log_mute(self, guild: discord.Guild, member, title: str, action: str, *,
+                       method: str, actor=None, reason=None, until=None,
+                       duration=None) -> None:
+        """Write the one entry a mute change produces, however it happened.
+
+        Every way of muting or unmuting — the command, the role, a timeout put
+        on or cleared in Discord, automod, expiry, a returning member — lands in
+        the moderation log as this entry, so a change never also shows up as a
+        separate timeout or role entry. ``method`` is the line that says which
+        of them was used.
+        """
+        get_cog = getattr(self.bot, "get_cog", None)
+        logger = get_cog("ServerLogger") if get_cog else None
+        if logger is None:
+            return
+        body = (
+            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Action:** {action}\n"
+            f"**Method:** {method}"
+        )
+        if duration is not None:
+            body += f"\n**Duration:** {duration}s"
+        if until is not None:
+            stamp = int(until.timestamp())
+            body += f"\n**Expires:** <t:{stamp}:F> (<t:{stamp}:R>)"
+        if actor is not None:
+            body += f"\n**Moderator:** {actor.mention}"
+        body += f"\n**Reason:** {reason or 'No reason provided'}"
+        await logger.log_event(
+            guild, "moderation", title, body,
+            target_id=member.id, action_key=title,
+        )
+
+    async def mute_member(self, guild: discord.Guild, member: discord.Member,
+                          duration=None, reason=None, *, method: str = "Command",
+                          actor=None) -> bool:
+        """Silence a member with Discord's timeout, backed by the mute role.
+
+        The timeout is what makes the mute hold: a role's permissions are only a
+        starting point, because a channel overwrite that allows another of the
+        member's roles (the verified role in a server behind a verification
+        gate) grants the permission straight back. A timeout ignores channel
+        permissions entirely, so it cannot be talked around.
+
+        The mute role goes on as well, so channels whose denies do hold keep the
+        member quiet too, but it is not what the mute depends on.
+
+        Every mute records an expiry at the timeout's own end, including a
+        regular mute: Discord caps a timeout at 28 days, so that is where it
+        ends. The watcher lifts it there and logs the expiry with a button to
+        reapply it.
+
+        ``False`` means the timeout itself was refused — the one failure a
+        moderator must not be told succeeded.
+        """
+        seconds = min(int(duration), _MAX_TIMEOUT_SECONDS) if duration else _MAX_TIMEOUT_SECONDS
+        self._mark_self_write(guild.id, member.id, "timeout")
+        try:
+            await member.timeout(timedelta(seconds=seconds), reason=reason or "Muted")
+        except (discord.Forbidden, discord.HTTPException) as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to time out {member.id} in {guild.id}: {e}")
+            return False
+
+        await self._apply_mute_role(guild, member, reason=reason or "Muted")
+
+        # Recorded at the timeout's own end so the watcher can lift the mute
+        # there and log it; a regular mute has no other expiry to go by.
+        until = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+        await self._record_mute(guild.id, member.id, until, reason)
+
+        title = "Tempmute" if duration else "Mute"
+        await self.log_mute(
+            guild, member, title, title, method=method, actor=actor,
+            reason=reason, until=until,
+            duration=seconds if duration else None,
+        )
+        return True
+
+    async def _remove_mute_role(self, member: discord.Member, reason: str = "Unmuted") -> None:
+        """Take the mute role off, without provisioning one when none exists."""
+        role = self.find_mute_role(member.guild)
+        if role is not None and role in member.roles:
+            self._mark_self_write(member.guild.id, member.id, "role")
+            try:
+                await member.remove_roles(role, reason=reason)
+            except discord.HTTPException:
+                pass
+
+    async def _delete_mute_record(self, guild_id: int, user_id: int) -> None:
+        pool = _pool()
+        if pool is None:
+            return
+        try:
+            if pool.db_type == "mongodb":
+                await pool.collection("mutes").delete_many({
+                    "guild_id": int(guild_id),
+                    "user_id": int(user_id),
+                })
+            else:
+                await pool.execute(
+                    "DELETE FROM mutes WHERE guild_id = $1 AND user_id = $2",
+                    int(guild_id), int(user_id),
+                )
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to remove mute for {user_id}: {e}")
+
+    async def unmute_member(self, member: discord.Member, reason=None, *,
+                            method: str = "Command", actor=None) -> None:
+        """Clear a member's timeout and take the mute role off.
+
+        Both halves are undone: mutes are enforced by the timeout, and members
+        muted by an older build (or by the role alone) only need the role gone.
         Deliberately never provisions a role: unmuting someone in a server that
         has never muted anybody used to create a "Muted" role and rewrite every
         channel's permissions for it.
         """
-        role = self.find_mute_role(member.guild)
-        if role is not None and role in member.roles:
-            try:
-                await member.remove_roles(role, reason=reason or "Unmuted")
-            except discord.HTTPException:
-                pass
+        audit_reason = reason or (f"Unmuted by {actor}" if actor else "Unmuted")
+        was_muted = await self.has_mute(member.guild.id, member.id)
+        self._mark_self_write(member.guild.id, member.id, "timeout")
+        try:
+            await member.timeout(None, reason=audit_reason)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
 
-        pool = _pool()
-        if pool is not None:
-            try:
-                if pool.db_type == "mongodb":
-                    await pool.collection("mutes").delete_many({
-                        "guild_id": member.guild.id,
-                        "user_id": member.id,
-                    })
-                else:
-                    await pool.execute(
-                        "DELETE FROM mutes WHERE guild_id = $1 AND user_id = $2",
-                        member.guild.id, member.id,
-                    )
-            except Exception as e:
-                from utils import logging
-                logging.error("Moderation", f"Failed to remove mute for {member.id}: {e}")
+        await self._remove_mute_role(member, audit_reason)
+        await self._delete_mute_record(member.guild.id, member.id)
+        if was_muted:
+            await self.log_mute(
+                member.guild, member, "Unmute", "Unmute",
+                method=method, actor=actor, reason=reason,
+            )
+
+    async def release_mute(self, guild: discord.Guild, member: discord.Member, *,
+                           actor=None, reason=None, expired: bool = False) -> bool:
+        """Lift a mute whose timeout has already ended.
+
+        Only for this bot's own mutes, which the record identifies: Discord
+        removes the timeout itself, so there is nothing to clear here, and the
+        role comes off with the record. A timeout a moderator cleared by hand is
+        an unmute; one that ran out is the mute expiring, and its entry keeps the
+        Mute quick action. A timeout this bot never applied is not a mute and
+        must be left to whoever applied it.
+        """
+        if not await self.has_mute(guild.id, member.id):
+            return False
+
+        await self._remove_mute_role(member, "Mute expired" if expired else "Unmuted")
+        await self._delete_mute_record(guild.id, member.id)
+
+        if expired:
+            await self.log_mute(
+                guild, member, "Mute Expired", "Mute expired",
+                method="Timeout ran out", reason=reason,
+            )
+        else:
+            await self.log_mute(
+                guild, member, "Unmute", "Unmute",
+                method="Timeout", actor=actor, reason=reason,
+            )
+        return True
+
+    async def adopt_role_mute(self, guild: discord.Guild, member: discord.Member,
+                              actor=None, reason=None) -> bool:
+        """Treat the Muted role being handed out as a mute.
+
+        Staff can use the role itself as the mute control: putting it on applies
+        the timeout and records the mute, so the role doubles as the visible
+        indicator that somebody is muted.
+        """
+        if await self.has_mute(guild.id, member.id):
+            return False
+
+        return await self.mute_member(
+            guild, member, duration=None, reason=reason,
+            method="Muted role", actor=actor,
+        )
+
+    async def adopt_role_unmute(self, guild: discord.Guild, member: discord.Member,
+                                actor=None, reason=None) -> bool:
+        """Treat the Muted role coming off as an unmute."""
+        if not await self.has_mute(guild.id, member.id):
+            return False
+
+        await self.unmute_member(
+            member, reason=reason, method="Muted role", actor=actor,
+        )
+        return True
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        """Put a still-running mute back on a member who comes back.
+
+        Somebody who left while muted keeps their record: the role Discord
+        stripped with them is only the badge, and the record is what says the
+        mute was never lifted. Rejoining inside the remaining time restores the
+        role and the rest of the timeout; coming back after it has run out just
+        clears the record.
+        """
+        record = await self.get_mute_record(member.guild.id, member.id)
+        if not record:
+            return
+        until = _parse_mute_until(record.get("until"))
+        now = datetime.now(timezone.utc)
+        if until is None or until <= now:
+            await self._delete_mute_record(member.guild.id, member.id)
+            return
+
+        remaining = int((until - now).total_seconds())
+        self._mark_self_write(member.guild.id, member.id, "timeout")
+        try:
+            await member.timeout(timedelta(seconds=remaining), reason="Mute still active")
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+        await self._apply_mute_role(member.guild, member, reason="Mute still active")
+        await self.log_mute(
+            member.guild, member, "Mute", "Mute",
+            method="Rejoined server", reason=record.get("reason"), until=until,
+        )
 
     async def mute_watcher(self):
         """Periodically check for expired mutes and unmute users."""
@@ -737,45 +1117,34 @@ class ModerationUtils(commands.Cog):
             if pool is not None:
                 try:
                     if pool.db_type == "mongodb":
-                        expired = []
-                        async for doc in pool.collection("mutes").find({"until": {"$ne": None}}):
-                            until_str = doc.get("until")
-                            if until_str:
-                                try:
-                                    until_dt = datetime.fromisoformat(until_str)
-                                except Exception:
-                                    continue
-                                if now >= until_dt:
-                                    expired.append(doc)
-                        for doc in expired:
-                            guild = self.bot.get_guild(int(doc["guild_id"]))
-                            if not guild:
-                                continue
-                            member = guild.get_member(int(doc["user_id"]))
-                            if member:
-                                try:
-                                    await self.unmute_member(member, reason="Mute expired")
-                                except Exception:
-                                    pass
+                        records = [
+                            doc async for doc in pool.collection("mutes").find({"until": {"$ne": None}})
+                        ]
                     else:
-                        rows = await pool.fetch(
-                            "SELECT id, guild_id, user_id, until FROM mutes WHERE until IS NOT NULL"
+                        records = await pool.fetch(
+                            "SELECT id, guild_id, user_id, until, reason FROM mutes WHERE until IS NOT NULL"
                         )
-                        for row in rows:
-                            try:
-                                until_dt = datetime.fromisoformat(row["until"])
-                            except Exception:
-                                continue
-                            if now >= until_dt:
-                                guild = self.bot.get_guild(int(row["guild_id"]))
-                                if not guild:
-                                    continue
-                                member = guild.get_member(int(row["user_id"]))
-                                if member:
-                                    try:
-                                        await self.unmute_member(member, reason="Mute expired")
-                                    except Exception:
-                                        pass
+                    for record in records:
+                        until = _parse_mute_until(record.get("until"))
+                        if until is None or now < until:
+                            continue
+                        guild = self.bot.get_guild(int(record["guild_id"]))
+                        if not guild:
+                            continue
+                        member = guild.get_member(int(record["user_id"]))
+                        if member is None:
+                            # They left while muted. Discord cleared the timeout
+                            # with them, there is no role to take off, and the
+                            # mute has run out — nobody can rejoin inside it now,
+                            # so the record is finished.
+                            await self._delete_mute_record(guild.id, record["user_id"])
+                            continue
+                        try:
+                            await self.release_mute(
+                                guild, member, reason=record.get("reason"), expired=True
+                            )
+                        except Exception:
+                            pass
                 except Exception as e:
                     from utils import logging
                     logging.error("Moderation", f"Mute watcher error: {e}")

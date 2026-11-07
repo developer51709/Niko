@@ -44,10 +44,11 @@ function ago(timestamp: number | null | undefined, t: Translate) {
 /**
  * The owner's update page.
  *
- * One switch per area, because each area is applied differently: files for the
- * website, a reload for cogs, a module purge for utilities, a Flask rebuild for
- * the API, a ready-handler rebind for the startup writers, and an in-place
- * restart for the bot core. The page names what the
+ * One switch per area, because each area is applied differently: shared config
+ * modules are written first, files for the website, a reload for cogs, a module
+ * purge for utilities, the schema re-run for the database, a Flask rebuild for
+ * the API, re-imported gateway events, a ready-handler rebind for the startup
+ * writers, and an in-place restart for the bot core. The page names what the
  * selected areas will do before anything is written, and reports what each one
  * actually did afterwards. Areas and the apply panel sit side by side on a
  * desktop and stack on a phone, where the apply panel follows the list.

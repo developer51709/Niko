@@ -10,13 +10,15 @@ events or create app-bound keys. The review depends on a screenshot of Discord's
 application page with the profile menu open: the submitted client ID, the bot
 resolved from Discord, and the visible profile name all have to agree. That is a
 human check; automation only stores and serves the evidence safely here.
+
+The applications and their screenshots live in the developer portal's own
+MongoDB database (see ``store``). Production has no persistent disk,
+so neither the review queue nor the evidence it depends on can be a file there.
 """
 
 from __future__ import annotations
 
 import ipaddress
-import json
-import os
 import re
 import secrets
 import socket
@@ -27,14 +29,10 @@ from urllib.parse import urlsplit, urlunsplit
 
 from utils import logging
 
-from . import config
+from . import store
 
-_STORE_NAME = "developer_applications.json"
-_SCREENSHOT_DIR = "developer_application_screenshots"
 _STORE_VERSION = 1
 _LOCK = threading.RLock()
-_STORE: dict | None = None
-_STORE_STAMP: tuple[int, int] | None = None
 
 MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
 MAX_NAME = 80
@@ -79,14 +77,6 @@ _MEMBERSHIP_CACHE: dict[tuple[str, str], tuple[float, bool]] = {}
 _MEMBERSHIP_TTL = 300.0
 
 
-def _store_path() -> str:
-    return os.path.join(config.DATA_DIR, _STORE_NAME)
-
-
-def _screenshot_dir() -> str:
-    return os.path.join(config.DATA_DIR, _SCREENSHOT_DIR)
-
-
 def _empty_store() -> dict:
     return {"version": _STORE_VERSION, "applications": {}}
 
@@ -102,45 +92,12 @@ def _normalise_store(document) -> dict:
 
 
 def _load() -> dict:
-    global _STORE, _STORE_STAMP
-    path = _store_path()
-    try:
-        stat = os.stat(path)
-        stamp = (stat.st_mtime_ns, stat.st_size)
-    except OSError:
-        stamp = None
-    with _LOCK:
-        if _STORE is not None and stamp == _STORE_STAMP:
-            return _STORE
-        try:
-            with open(path, "r", encoding="utf-8") as handle:
-                document = json.load(handle)
-        except (OSError, ValueError):
-            document = _empty_store()
-        _STORE = _normalise_store(document)
-        _STORE_STAMP = stamp
-        return _STORE
+    """Read the application store (MongoDB, or the local JSON fallback)."""
+    return _normalise_store(store.load_document("applications"))
 
 
 def _save(document: dict) -> None:
-    global _STORE, _STORE_STAMP
-    path = _store_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    document = _normalise_store(document)
-    temporary = f"{path}.tmp"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(document, handle, indent=2)
-    os.replace(temporary, path)
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-    try:
-        stat = os.stat(path)
-        _STORE_STAMP = (stat.st_mtime_ns, stat.st_size)
-    except OSError:
-        _STORE_STAMP = None
-    _STORE = document
+    store.save_document("applications", _normalise_store(document))
 
 
 def _now() -> float:
@@ -162,9 +119,7 @@ def detect_image_type(raw: bytes, reported: str = "") -> str | None:
 
 def _screenshot_for(app: dict) -> dict | None:
     shot = app.get("screenshot")
-    if not isinstance(shot, dict) or not shot.get("path"):
-        return None
-    if not os.path.isfile(os.path.join(config.DATA_DIR, str(shot["path"]))):
+    if not isinstance(shot, dict) or not shot.get("content_type"):
         return None
     return {
         "url": f"/api/developer/applications/{app.get('id')}/screenshot",
@@ -306,31 +261,9 @@ def _store_screenshot(application_id: str, raw: bytes, content_type: str) -> dic
         raise ValueError("Upload a screenshot of the application overview page.")
     if len(raw) > MAX_SCREENSHOT_BYTES:
         raise ValueError("Screenshots must be 8 MB or smaller.")
-    extension = _IMAGE_TYPES.get(content_type)
-    if extension is None:
+    if content_type not in _IMAGE_TYPES:
         raise ValueError("Upload a PNG, JPEG, GIF, or WebP screenshot.")
-    directory = _screenshot_dir()
-    os.makedirs(directory, exist_ok=True)
-    for name in os.listdir(directory):
-        if name.startswith(f"{application_id}."):
-            try:
-                os.remove(os.path.join(directory, name))
-            except OSError:
-                pass
-    filename = f"{application_id}.{extension}"
-    path = os.path.join(directory, filename)
-    with open(path, "wb") as handle:
-        handle.write(raw)
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-    return {
-        "path": os.path.join(_SCREENSHOT_DIR, filename),
-        "content_type": content_type,
-        "size": len(raw),
-        "uploaded_at": _now(),
-    }
+    return store.save_screenshot(application_id, raw, content_type)
 
 
 def create_or_resubmit(
@@ -493,29 +426,22 @@ def delete_application(application_id: str, owner_id: str) -> bool:
             return False
         if str(app.get("status")) != "denied":
             raise ValueError("Only a denied application can be removed. Approved apps keep their keys.")
-        screenshot = app.get("screenshot") if isinstance(app.get("screenshot"), dict) else {}
-        path = screenshot.get("path")
-        if path:
-            try:
-                os.remove(os.path.join(config.DATA_DIR, str(path)))
-            except OSError:
-                pass
+        store.delete_screenshot(application_id)
         store["applications"].pop(application_id, None)
         _save(store)
     return True
 
 
-def screenshot_path(application_id: str) -> tuple[str, str] | None:
-    app = _load()["applications"].get(str(application_id or ""))
+def screenshot_bytes(application_id: str) -> tuple[bytes, str] | None:
+    """The stored verification screenshot, whichever backend holds it."""
+    application_id = str(application_id or "")
+    app = _load()["applications"].get(application_id)
     if not isinstance(app, dict):
         return None
     shot = app.get("screenshot")
-    if not isinstance(shot, dict) or not shot.get("path"):
+    if not isinstance(shot, dict) or not shot.get("content_type"):
         return None
-    path = os.path.join(config.DATA_DIR, str(shot["path"]))
-    if not os.path.isfile(path):
-        return None
-    return path, str(shot.get("content_type") or "application/octet-stream")
+    return store.load_screenshot(application_id)
 
 
 def _normalise_webhook_url(value) -> str:
@@ -649,7 +575,7 @@ def shared_guild_count(app: dict) -> int:
 
 
 def _runtime_bot():
-    from . import runtime
+    from .. import runtime
 
     return runtime._discord_bot
 
@@ -692,7 +618,7 @@ async def application_in_guild_async(app: dict, guild_id: str) -> bool:
 
 def application_in_guild(app: dict, guild_id: str) -> bool:
     """Synchronous wrapper for request handlers running off the bot loop."""
-    from . import runtime
+    from .. import runtime
 
     try:
         return bool(runtime.run_on_bot_loop(application_in_guild_async(app, guild_id), timeout=6))

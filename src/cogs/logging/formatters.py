@@ -297,6 +297,9 @@ _ACTION_BUTTONS: dict[str, list[str]] = {
     "Mute": ["unmute"],
     "Tempmute": ["unmute"],
     "Timeout": ["kick", "ban"],
+    # A mute that ran out is usually one the team meant to keep, so the entry
+    # carries the action that puts it back on.
+    "Mute Expired": ["mute"],
     "Anti-Spam": ["kick", "ban"],
     "Anti-Link": ["kick", "ban"],
     "Bad Word Filter": ["kick", "ban"],
@@ -524,12 +527,47 @@ class UnmuteButton(discord.ui.Button):
         if not mod_utils:
             return await interaction.response.send_message(_act(interaction, "act_mod_unavailable"), ephemeral=True)
         try:
-            await mod_utils.unmute_member(member, reason=f"Quick action by {interaction.user}")
+            await mod_utils.unmute_member(
+                member, method="Quick action", actor=interaction.user)
             await interaction.response.send_message(
                 _act(interaction, "act_unmuted", member=member), ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(
                 _act(interaction, "act_unmute_failed", error=e), ephemeral=True)
+
+
+class MuteButton(discord.ui.Button):
+    """Put a mute back on the member an expired one was about."""
+
+    def __init__(self, guild_id: int, target_id: int, lang: str = "en"):
+        super().__init__(label=_t(lang, "btn_mute"), style=discord.ButtonStyle.secondary,
+                         emoji=get_emoji("log_mute"), row=0)
+        self.guild_id = guild_id
+        self.target_id = target_id
+
+    async def callback(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.moderate_members:
+            return await interaction.response.send_message(
+                _act(interaction, "act_no_perm_mute"), ephemeral=True)
+        guild = interaction.client.get_guild(self.guild_id)
+        if not guild:
+            return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
+        member = guild.get_member(self.target_id)
+        if not member:
+            return await interaction.response.send_message(_act(interaction, "act_member_left"), ephemeral=True)
+        mod_utils = interaction.client.get_cog("ModerationUtils")
+        if not mod_utils:
+            return await interaction.response.send_message(_act(interaction, "act_mod_unavailable"), ephemeral=True)
+        try:
+            muted = await mod_utils.mute_member(
+                guild, member, reason=f"Quick action by {interaction.user}",
+                method="Quick action", actor=interaction.user)
+        except Exception as e:
+            return await interaction.response.send_message(
+                _act(interaction, "act_mute_failed", error=e), ephemeral=True)
+        if not muted:
+            return await interaction.response.send_message(_act(interaction, "act_bot_no_perm_mute"), ephemeral=True)
+        await interaction.response.send_message(_act(interaction, "act_muted", member=member), ephemeral=True)
 
 
 class VoiceDisconnectButton(discord.ui.Button):
@@ -663,6 +701,8 @@ def _build_action_buttons(action_key: str, guild_id: int, target_id: int | None,
             btns.append(UnbanButton(guild_id, target_id, lang))
         elif b == "unmute" and target_id:
             btns.append(UnmuteButton(guild_id, target_id, lang))
+        elif b == "mute" and target_id:
+            btns.append(MuteButton(guild_id, target_id, lang))
         elif b == "unlock" and channel_id:
             btns.append(UnlockButton(guild_id, channel_id, lang))
         elif b == "voice_mute" and target_id:
