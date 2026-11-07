@@ -9,6 +9,7 @@ from config import links
 from config.emojis import get_emoji
 from utils.image.economy_card import fetch_avatar_bytes
 from utils.image.spotify_card import render_spotify_card
+from utils.loading_cards import loading_card_url
 from ._messages import msg
 
 from utils.command_locales import command_texts
@@ -44,7 +45,9 @@ def _spotify_loading_card_view(card_type: str) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
         discord.ui.MediaGallery(discord.MediaGalleryItem(
-            media=f"{_spotify_loading_cards_base()}/{SPOTIFY_LOADING_CARD_FILE}",
+            media=loading_card_url(
+                _spotify_loading_cards_base(), SPOTIFY_LOADING_CARD_FILE
+            ),
         )),
         accent_colour=discord.Colour(0x1DB954),
     ))

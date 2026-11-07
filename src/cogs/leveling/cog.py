@@ -10,6 +10,7 @@ import typing
 from types import SimpleNamespace
 from utils.image.level_card import render_level_card
 from utils.image.economy_card import fetch_avatar_bytes
+from utils.loading_cards import loading_card_url
 
 from utils.command_locales import command_texts
 from utils.ratelimit import mass_role_limiter
@@ -36,9 +37,10 @@ def _loading_cards_base() -> str:
     ``PUBLIC_URL`` names the site a deployment is reachable on, so a beta
     instance loads its own copy of the GIFs instead of production's. The
     canonical website is the fallback when the variable is unset or blank.
+    The leveling GIFs live under ``leveling/`` in that folder.
     """
     origin = os.environ.get("PUBLIC_URL", "").strip().rstrip("/")
-    return f"{origin or WEBSITE}/assets/loading-cards/leveling"
+    return f"{origin or WEBSITE}/assets/loading-cards"
 
 
 def _loading_card_view(card_type: str) -> discord.ui.LayoutView:
@@ -55,7 +57,9 @@ def _loading_card_view(card_type: str) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(
         discord.ui.MediaGallery(discord.MediaGalleryItem(
-            media=f"{_loading_cards_base()}/{card_type}.gif",
+            media=loading_card_url(
+                _loading_cards_base(), f"leveling/{card_type}.gif"
+            ),
         )),
         accent_colour=discord.Colour(ACCENT_BRAND),
     ))

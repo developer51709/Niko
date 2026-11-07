@@ -6,9 +6,11 @@ renderers fails here instead of shipping mismatched images.  They also guard
 against the old café palette creeping back in.
 """
 
+import hashlib
 import os
 import re
 import sys
+import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
@@ -30,6 +32,7 @@ from cogs.economy.data import (  # noqa: E402
     _shop_loading_file,
 )
 from utils.economy_jobs import shop_loading_row_counts  # noqa: E402
+from utils.loading_cards import loading_card_url, short_asset_hash  # noqa: E402
 from cogs.leveling.cog import (  # noqa: E402
     LEVELING_LOADING_CARD_TYPES,
     _loading_card_view as _leveling_loading_card_view,
@@ -37,6 +40,17 @@ from cogs.leveling.cog import (  # noqa: E402
 from cogs.casino import blackjack as casino_blackjack  # noqa: E402
 from cogs.tickets import views as ticket_views  # noqa: E402
 from utils.tickets.config import TicketConfig  # noqa: E402
+
+LOADING_CARDS_FOLDER = ROOT / "web" / "public" / "assets" / "loading-cards"
+
+
+def _loading_gif_url(base: str, file_name: str) -> str:
+    """A loading-card URL with the short hash of the generated GIF."""
+    digest = hashlib.sha256(
+        (LOADING_CARDS_FOLDER / file_name).read_bytes()
+    ).hexdigest()[:8]
+    return f"{base}/{file_name}?hash={digest}"
+
 
 # Every colour the pre-theme café cards drew with.
 CAFE_RGB = (
@@ -202,7 +216,9 @@ class EconomyLoadingCardTests(unittest.TestCase):
                     gallery = view.children[0].children[0]
                     self.assertEqual(
                         str(gallery.items[0].media.url),
-                        f"{WEBSITE}/assets/loading-cards/economy/{card_type}.gif",
+                        _loading_gif_url(
+                            f"{WEBSITE}/assets/loading-cards", f"economy/{card_type}.gif"
+                        ),
                     )
 
     def test_loading_view_follows_public_url_for_beta_instances(self):
@@ -215,7 +231,10 @@ class EconomyLoadingCardTests(unittest.TestCase):
                     gallery = view.children[0].children[0]
                     self.assertEqual(
                         str(gallery.items[0].media.url),
-                        f"https://beta.example.com/assets/loading-cards/economy/{card_type}.gif",
+                        _loading_gif_url(
+                            "https://beta.example.com/assets/loading-cards",
+                            f"economy/{card_type}.gif",
+                        ),
                     )
 
 
@@ -263,7 +282,9 @@ class ShopLoadingCardSizeTests(unittest.TestCase):
         gallery = container.children[0]
         self.assertEqual(
             str(gallery.items[0].media.url),
-            f"{WEBSITE}/assets/loading-cards/economy/{_shop_loading_file(3)}",
+            _loading_gif_url(
+                f"{WEBSITE}/assets/loading-cards", f"economy/{_shop_loading_file(3)}"
+            ),
         )
         self.assertEqual([type(item).__name__ for item in container.children], [
             "MediaGallery", "TextDisplay", "ActionRow",
@@ -299,7 +320,9 @@ class LevelingLoadingCardTests(unittest.TestCase):
                     gallery = view.children[0].children[0]
                     self.assertEqual(
                         str(gallery.items[0].media.url),
-                        f"{WEBSITE}/assets/loading-cards/leveling/{card_type}.gif",
+                        _loading_gif_url(
+                            f"{WEBSITE}/assets/loading-cards", f"leveling/{card_type}.gif"
+                        ),
                     )
 
     def test_loading_view_follows_public_url_for_beta_instances(self):
@@ -312,8 +335,47 @@ class LevelingLoadingCardTests(unittest.TestCase):
                     gallery = view.children[0].children[0]
                     self.assertEqual(
                         str(gallery.items[0].media.url),
-                        f"https://beta.example.com/assets/loading-cards/leveling/{card_type}.gif",
+                        _loading_gif_url(
+                            "https://beta.example.com/assets/loading-cards",
+                            f"leveling/{card_type}.gif",
+                        ),
                     )
+
+
+class LoadingCardCacheBustingTests(unittest.TestCase):
+    """Redesigned GIFs must get a new URL so Discord cannot serve the old one."""
+
+    def test_urls_carry_the_short_content_hash(self):
+        for relative in (
+            "spotify.gif",
+            "economy/balance.gif",
+            "economy/shop.gif",
+            f"economy/{_shop_loading_file(2)}",
+            "leveling/rank.gif",
+        ):
+            with self.subTest(card=relative):
+                url = loading_card_url("https://example.com/assets/loading-cards", relative)
+                self.assertEqual(
+                    url,
+                    _loading_gif_url("https://example.com/assets/loading-cards", relative),
+                )
+                self.assertRegex(url, r"\?hash=[0-9a-f]{8}$")
+
+    def test_the_hash_follows_the_file_contents(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "card.gif"
+            path.write_bytes(b"first design")
+            before = short_asset_hash(path)
+            path.write_bytes(b"second design, taller")
+            after = short_asset_hash(path)
+        self.assertRegex(before, r"^[0-9a-f]{8}$")
+        self.assertNotEqual(before, after)
+
+    def test_a_missing_gif_falls_back_to_the_plain_url(self):
+        self.assertEqual(
+            loading_card_url(f"{WEBSITE}/assets/loading-cards", "missing.gif"),
+            f"{WEBSITE}/assets/loading-cards/missing.gif",
+        )
 
 
 class OldCafeThemeRemovedTests(unittest.TestCase):

@@ -62,7 +62,7 @@
     "avatar_no_banner": "Dieser Nutzer hat weder ein Server- noch ein globales Banner.",
     "avatar_banner_server": "Server-Banner",
     "avatar_banner_global": "Globales Banner",
-    "spotify_open_button": "In Spotify öffnen",
+    "spotify_open_button": "Spotify öffnen",
     "uptime_days": "{days}T {hours}Std {minutes}Min",
     "uptime_hours": "{hours}Std {minutes}Min",
     "uptime_minutes": "{minutes}Min",

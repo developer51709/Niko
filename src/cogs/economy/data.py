@@ -27,6 +27,7 @@ from discord.ext import commands, tasks
 
 from utils import logging as log
 from utils.paginator import PaginatedView, paginate
+from utils.loading_cards import loading_card_url
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
 from utils.prefix_manager import resolve_prefix
@@ -1044,9 +1045,10 @@ def _loading_cards_base() -> str:
     ``PUBLIC_URL`` names the site a deployment is reachable on, so a beta
     instance loads its own copy of the GIFs instead of production's. The
     canonical website is the fallback when the variable is unset or blank.
+    The economy GIFs live under ``economy/`` in that folder.
     """
     origin = os.environ.get("PUBLIC_URL", "").strip().rstrip("/")
-    return f"{origin or WEBSITE}/assets/loading-cards/economy"
+    return f"{origin or WEBSITE}/assets/loading-cards"
 
 
 def _shop_loading_file(rows: int | None) -> str:
@@ -1099,7 +1101,7 @@ def _loading_card_view(
     view = discord.ui.LayoutView()
     container = discord.ui.Container(
         discord.ui.MediaGallery(discord.MediaGalleryItem(
-            media=f"{_loading_cards_base()}/{file_name}",
+            media=loading_card_url(_loading_cards_base(), f"economy/{file_name}"),
         )),
         accent_colour=ACCENT_BROWN,
     )

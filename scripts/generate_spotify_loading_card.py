@@ -38,10 +38,7 @@ from generate_economy_loading_cards import (  # noqa: E402
     _skeleton_panel,
 )
 
-from utils.image._font_resolver import font_getlength  # noqa: E402
 from utils.image.economy_card import (  # noqa: E402
-    ACCENT,
-    ACCENT_BRIGHT,
     _bold,
     _make_canvas,
 )
@@ -53,10 +50,16 @@ from utils.image.spotify_card import (  # noqa: E402
     BAR_Y,
     CARD_H,
     CARD_W,
-    SPOTIFY_GREEN,
-    SPOTIFY_GREEN_DARK,
+    FOOTER_RULE_Y,
+    HEADER_MARK,
+    HEADER_Y,
+    PAD,
     TEXT_W,
     TEXT_X,
+    TITLE_INK,
+    _spotify_mark,
+    _tracked,
+    _tracked_width,
 )
 
 OUT_DIR = ROOT / "web" / "public" / "assets" / "loading-cards"
@@ -75,43 +78,45 @@ CARD_LAYOUTS: dict[str, tuple[int, int, str]] = {
 CARD_FILE = "spotify.gif"
 
 
-def _wordmark(canvas: Image.Image, width: int, *, inset: int = 36, top: int = 28) -> None:
-    draw = ImageDraw.Draw(canvas)
-    draw.text((inset, top), "NIKO SPOTIFY", fill=ACCENT, font=_bold(16))
+def _wordmark(canvas: Image.Image, width: int, *, inset: int = PAD, top: int = HEADER_Y) -> None:
+    """The same icon-only attribution and chip the finished card draws."""
+    _spotify_mark(canvas, inset, top, HEADER_MARK)
 
     label = "NOW PLAYING"
     font = _bold(11)
-    text_w = int(font_getlength(font, label))
-    pill_w, pill_h = text_w + 44, 28
-    px, py = width - pill_w - inset, top - 4
+    pill_w, pill_h = int(_tracked_width(font, label)) + 46, 30
+    px, py = width - pill_w - inset, top + 5
 
     pill = Image.new("RGBA", (pill_w, pill_h), (0, 0, 0, 0))
     pd = ImageDraw.Draw(pill)
     pd.rounded_rectangle(
         [0, 0, pill_w - 1, pill_h - 1],
         radius=pill_h // 2,
-        fill=(0, 0, 0, 130),
-        outline=SPOTIFY_GREEN_DARK,
+        fill=(255, 255, 255, 18),
+        outline=(255, 255, 255, 60),
         width=1,
     )
-    pd.ellipse([13, pill_h // 2 - 3, 19, pill_h // 2 + 3], fill=SPOTIFY_GREEN)
-    pd.text((28, 6), label, fill=ACCENT_BRIGHT, font=font)
+    mid = pill_h // 2
+    pd.ellipse([12, mid - 6, 24, mid + 6], fill=(255, 255, 255, 40))
+    pd.ellipse([15, mid - 3, 21, mid + 3], fill=(255, 255, 255, 220))
+    _tracked(pd, (29, 8), label, font, TITLE_INK)
     canvas.alpha_composite(pill, (px, py))
 
 
 def _draw_nowplaying(canvas: Image.Image, width: int, height: int, t: float) -> None:
-    # Album art on the left.
-    _skeleton_panel(canvas, ART_X, ART_Y, ART_SIZE, ART_SIZE, 18, t, 0.02)
+    # Album art on the left, where the cover lands in the finished card.
+    _skeleton_panel(canvas, ART_X, ART_Y, ART_SIZE, ART_SIZE, 8, t, 0.02)
 
-    # Track title, artist and album.
-    _skeleton_panel(canvas, TEXT_X, 78, min(430, TEXT_W), 26, 8, t, 0.08)
-    _skeleton_panel(canvas, TEXT_X, 118, min(250, TEXT_W), 16, 7, t, 0.14)
-    _skeleton_panel(canvas, TEXT_X, 149, min(180, TEXT_W), 12, 6, t, 0.18)
+    # Track title, artist and album, centred beside the art like the render.
+    _skeleton_panel(canvas, TEXT_X, 174, min(400, TEXT_W), 34, 10, t, 0.08)
+    _skeleton_panel(canvas, TEXT_X, 224, min(240, TEXT_W), 18, 8, t, 0.14)
+    _skeleton_panel(canvas, TEXT_X, 256, min(170, TEXT_W), 14, 7, t, 0.18)
 
-    # Track progress and its times.
-    _skeleton_panel(canvas, TEXT_X, BAR_Y, TEXT_W, BAR_H, BAR_H // 2, t, 0.24)
-    _skeleton_panel(canvas, TEXT_X, BAR_Y + 18, 44, 10, 5, t, 0.30)
-    _skeleton_panel(canvas, TEXT_X + TEXT_W - 44, BAR_Y + 18, 44, 10, 5, t, 0.32)
+    # Track progress runs the full card width, with its times underneath.
+    _skeleton_panel(canvas, PAD, BAR_Y, width - PAD * 2, BAR_H, BAR_H // 2, t, 0.24)
+    _skeleton_panel(canvas, PAD, BAR_Y + 18, 40, 10, 5, t, 0.30)
+    _skeleton_panel(canvas, width - PAD - 40, BAR_Y + 18, 40, 10, 5, t, 0.32)
+    _skeleton_panel(canvas, PAD, FOOTER_RULE_Y, width - PAD * 2, 1, 0, t, 0.34)
 
 
 _DRAWERS = {
