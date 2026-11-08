@@ -90,7 +90,20 @@ class Options:
     #: blocks the child's event loop for seconds at a time (gateway handshake,
     #: presence, banner, AI warm-up); a 12s window killed a bot that had just
     #: come online, and the restart loop repeated it forever.
-    heartbeat_timeout: float = 60.0
+    #:
+    #: This window is a *stall report*, not a death certificate.  A container
+    #: sharing a throttled CPU with other projects stops being scheduled for
+    #: minutes at a time while it is still serving, so silence past this point
+    #: only marks the child as stalled.  Whether it is gone is answered by its
+    #: process, never by the clock.
+    heartbeat_timeout: float = 300.0
+    #: How long a child must stay *completely* silent before the supervisor
+    #: treats it as hung rather than slow.  Only a live process is ever stopped
+    #: for this, and only after it has sent nothing at all for the whole
+    #: window; a child whose heartbeat resumes is left running.  ``0`` derives
+    #: the window from ``heartbeat_timeout`` (4x) so short test windows still
+    #: escalate instead of waiting for the production value.
+    stall_timeout: float = 0.0
     #: A child that has just reported ready is still finishing its startup
     #: chain (caches, presence, command feed) and may stall for many seconds at
     #: a time on a throttled shared CPU.  Missed heartbeats are ignored for
@@ -186,6 +199,8 @@ class Child:
     ready_at: float | None = None
     last_heartbeat: float = 0.0
     last_event_at: float = 0.0
+    #: Set while the child is past its heartbeat window but still alive.
+    stalled: bool = False
     last_error: str | None = None
     readiness: dict[str, Any] | None = None
     returncode: int | None = None
@@ -992,15 +1007,63 @@ class Supervisor:
             LOG.warning("%s", self.last_error)
         finally:
             if not child.exit_event.is_set() and not self._stopping:
-                # A silent control channel is a child failure, not a healthy
-                # child we should wait on forever.
-                await self._terminate_child(child, "control channel closed")
+                await self._channel_closed(child)
+
+    async def _channel_closed(self, child: Child) -> None:
+        """Decide what a closed lifecycle socket means for a child.
+
+        A child closes its reporter on the way out.  A host that stops the
+        container, or a deploy that restarts the service, sends SIGTERM to the
+        children directly, so the socket closes seconds before the process is
+        gone while it drains.  Killing it here turned that orderly exit into a
+        supervisor-reported stop: the log blamed the supervisor for a process
+        that was already leaving, the restart budget was charged with a failure,
+        and the drain was cut short.  Waiting the shutdown window first lets the
+        real exit, and its code, be what the supervisor acts on.
+
+        A child that keeps running after its channel closed is different: the
+        supervisor has no lifecycle control over it any more, so it is replaced
+        once the window passes.
+        """
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(
+                child.exit_event.wait(), timeout=self.options.shutdown_timeout
+            )
+        if child.exit_event.is_set() or self._stopping:
+            return
+        if not self._child_alive(child):
+            # The channel ended because the process did, which is an exit the
+            # supervisor should report by its code, not a stop it ordered.
+            LOG.info(
+                "child %s pid=%s closed its control channel and its process is gone",
+                child.name,
+                child.pid,
+            )
+            return
+        self.last_error = "child closed its control channel but kept running"
+        LOG.warning(
+            "child pid=%s closed its control channel but is still running",
+            child.pid,
+        )
+        await self._terminate_child(child, "control channel closed")
 
     async def _handle_child_event(self, child: Child, payload: dict[str, Any]) -> None:
         event = str(payload.get("event") or "")
         child.last_event_at = time.monotonic()
         if event == "heartbeat":
+            resumed = child.stalled
+            child.stalled = False
             child.last_heartbeat = child.last_event_at
+            if resumed:
+                # The child was slow, not hung: it must never be restarted for
+                # a heartbeat that was merely late.
+                LOG.info(
+                    "child %s pid=%s is heartbeating again; leaving it running",
+                    child.name,
+                    child.pid,
+                )
+                self._record("child_stall_cleared", child=child.name)
+                self._write_status()
             return
         if event == "state":
             event = str(payload.get("state") or "")
@@ -1087,21 +1150,116 @@ class Supervisor:
         moment = time.monotonic() if now is None else now
         return moment - child.ready_at < self.options.ready_grace
 
+    def _stall_window(self) -> float:
+        """How long a live child may stay silent before it counts as hung."""
+        configured = self.options.stall_timeout
+        if configured and configured > 0:
+            return configured
+        return max(self.options.heartbeat_timeout, 0.1) * 4.0
+
+    @staticmethod
+    def _pid_alive(pid: int) -> bool:
+        """Whether *pid* is a live process, without asking the process itself.
+
+        ``os.kill(pid, 0)`` is a pure existence probe on POSIX.  On Windows the
+        same call terminates the process (the signal value becomes its exit
+        code), so the probe is skipped there and the exit status asyncio already
+        tracks is the only answer available.
+        """
+        if pid <= 0:
+            return False
+        if sys.platform.startswith("win"):
+            return True
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return True
+        return True
+
+    def _child_alive(self, child: Child) -> bool:
+        """Whether the child's *process* is still running.
+
+        The supervisor's own bookkeeping is the first answer, the pid probe is
+        the second.  A container throttled by its host can starve the keepalive
+        socket while the process is healthy, so a missed heartbeat is never
+        read as a closed process.
+        """
+        if child.exit_event.is_set():
+            return False
+        if getattr(child.proc, "returncode", None) is not None:
+            return False
+        return self._pid_alive(child.pid)
+
     async def _watchdog(self, child: Child) -> None:
         interval = max(0.05, min(0.25, self.options.heartbeat_timeout / 4.0))
+        stall_window = self._stall_window()
         while not child.exit_event.is_set():
             await asyncio.sleep(interval)
             if child.exit_event.is_set():
                 return
             now = time.monotonic()
             if child.ready:
-                if not self._settling(child, now) and now - child.last_heartbeat > self.options.heartbeat_timeout:
-                    self.last_error = (
-                        f"child heartbeat missed by {now - child.last_heartbeat:.2f}s"
-                    )
-                    LOG.warning("%s", self.last_error)
-                    await self._terminate_child(child, "heartbeat timeout")
-                    return
+                silence = now - child.last_heartbeat
+                if not self._settling(child, now) and silence > self.options.heartbeat_timeout:
+                    if not self._child_alive(child):
+                        # The process is already gone.  Its exit code is the
+                        # real story and the wait task reports it; there is
+                        # nothing here to stop.
+                        self._record(
+                            "child_gone",
+                            child=child.name,
+                            silence=round(silence, 2),
+                        )
+                        LOG.info(
+                            "child %s last heartbeated %.0fs ago and its process is "
+                            "gone; reporting it as an exit, not a stop",
+                            child.name,
+                            silence,
+                        )
+                        # Wake the supervision loop even if the wait task is
+                        # slow to be scheduled: the process is verifiably gone,
+                        # so its exit is the truth to act on.  Carry its code
+                        # over so the restart log names the real exit.
+                        if (
+                            child.returncode is None
+                            and getattr(child.proc, "returncode", None) is not None
+                        ):
+                            child.returncode = child.proc.returncode
+                        child.exit_event.set()
+                        return
+                    if not child.stalled:
+                        child.stalled = True
+                        child.last_error = (
+                            f"no heartbeat for {silence:.2f}s (process is still running)"
+                        )
+                        self.last_error = child.last_error
+                        self._record(
+                            "child_stalled",
+                            child=child.name,
+                            pid=child.pid,
+                            silence=round(silence, 2),
+                        )
+                        LOG.warning(
+                            "child %s pid=%s has sent no heartbeat for %.0fs but its "
+                            "process is still running; treating it as a slow host",
+                            child.name,
+                            child.pid,
+                            silence,
+                        )
+                        self._refresh_state()
+                        self._write_status()
+                    if silence > stall_window:
+                        self.last_error = (
+                            f"child {child.name} sent nothing for {silence:.0f}s; "
+                            "restarting a process that is still alive but hung"
+                        )
+                        LOG.warning("%s", self.last_error)
+                        await self._terminate_child(child, "heartbeat stalled")
+                        return
                 slot = self._slot_of(child)
                 if (
                     child.ready_at is not None
@@ -1565,6 +1723,11 @@ class Supervisor:
             "api_port": child.api_port,
             "started_at": child.started_at,
             "last_heartbeat": child.last_heartbeat,
+            "silent_for": round(time.monotonic() - child.last_heartbeat, 2),
+            # A missed heartbeat is a stall, not a closed process: report what
+            # the OS says about the pid alongside the clock.
+            "alive": self._child_alive(child),
+            "stalled": child.stalled,
             "last_error": child.last_error,
             "readiness": child.readiness,
             "returncode": child.returncode,
@@ -1831,7 +1994,14 @@ def parse_args(argv: list[str] | None = None) -> Options:
     parser.add_argument("--control-socket", type=Path, default=ROOT / "data" / "run" / "supervisor.sock")
     parser.add_argument("--lock-file", type=Path, default=ROOT / "data" / "run" / "supervisor.lock")
     parser.add_argument("--startup-timeout", type=float, default=900.0)
-    parser.add_argument("--heartbeat-timeout", type=float, default=60.0)
+    parser.add_argument("--heartbeat-timeout", type=float, default=300.0)
+    parser.add_argument(
+        "--stall-timeout",
+        type=float,
+        default=0.0,
+        help="silence, in seconds, before a still-running child counts as hung "
+        "(0 derives it from --heartbeat-timeout)",
+    )
     parser.add_argument("--ready-grace", type=float, default=900.0)
     parser.add_argument("--shutdown-timeout", type=float, default=8.0)
     parser.add_argument("--restart-backoff-initial", type=float, default=1.0)
@@ -1867,6 +2037,7 @@ def parse_args(argv: list[str] | None = None) -> Options:
         lock_file=args.lock_file,
         startup_timeout=args.startup_timeout,
         heartbeat_timeout=args.heartbeat_timeout,
+        stall_timeout=args.stall_timeout,
         ready_grace=args.ready_grace,
         shutdown_timeout=args.shutdown_timeout,
         restart_backoff_initial=args.restart_backoff_initial,

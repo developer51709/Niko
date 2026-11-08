@@ -1015,16 +1015,6 @@ async def _save_lottery_to_db(bot, state: dict) -> None:
         log.error("Economy", f"Could not save lottery to database: {e}")
 
 
-async def _get_all_users_from_db(bot) -> dict:
-    """Get all users from database for ranking."""
-    try:
-        rows = await bot.cxn.fetch("SELECT user_id, balance, bank FROM economy_users")
-        return {str(row["user_id"]): {"balance": row["balance"], "bank": row["bank"]} for row in rows}
-    except Exception as e:
-        log.error("Economy", f"Error fetching all users from database: {e}")
-    return {}
-
-
 # ── Small layout helpers ────────────────────────────────────────────────────
 # The brand accent every other Niko view uses (staff, support server, nitro,
 # transcripts), so economy containers are no longer their own bespoke colour.

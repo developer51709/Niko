@@ -354,15 +354,23 @@ class Leveling(commands.Cog):
             int(guild_id), int(user_id), xp, level
         )
 
-    async def _get_user_rank(self, guild_id, user_id) -> int:
-        rows = await self.bot.cxn.fetch(
-            "SELECT user_id FROM levels WHERE guild_id = $1 ORDER BY level DESC, xp DESC",
-            int(guild_id)
-        )
-        for i, row in enumerate(rows, 1):
-            if row["user_id"] == int(user_id):
-                return i
-        return len(rows) or 1
+    async def _get_user_rank(self, guild_id, level: int, xp: int) -> int:
+        """The member's rank in this guild, counted by the database.
+
+        Reading every row in the guild and scanning it here put the guild's
+        whole XP table into the bot's memory for one rank card, while that card
+        was still rendering.  Counting the rows ahead of this member answers the
+        same question without moving the table.
+        """
+        try:
+            ahead = await self.bot.cxn.fetchval(
+                "SELECT COUNT(*) FROM levels WHERE guild_id = $1 "
+                "AND (level > $2 OR (level = $2 AND xp > $3))",
+                int(guild_id), int(level), int(xp)
+            )
+        except Exception:
+            return 1
+        return int(ahead or 0) + 1
 
     async def _show_loading_card(self, ctx, card_type: str):
         """Show the matching animated loading card while a render is in flight.
@@ -667,7 +675,7 @@ class Leveling(commands.Cog):
         current_level = user_data["level"]
         current_xp    = user_data["xp"]
         next_level_xp = self.get_xp_for_level(current_level)
-        rank          = await self._get_user_rank(guild_id, user_id)
+        rank          = await self._get_user_rank(guild_id, current_level, current_xp)
 
         if ctx.interaction:
             await ctx.interaction.response.defer()

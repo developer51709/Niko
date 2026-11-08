@@ -96,6 +96,14 @@ A child that has not reported `ready` is not expected to heartbeat at all:
 startup failures normally exit the process, which the supervisor sees
 immediately, and a boot that never finishes is bounded by `--startup-timeout`.
 
+A missed heartbeat is a *stall report*, never a death certificate.  A container
+sharing a throttled CPU can stop being scheduled for minutes while its process
+is healthy, so the watchdog checks the child's pid before acting: a process
+that is gone is reported by its exit code, and a process that is still running
+is left alone unless it has sent nothing at all for `--stall-timeout` (by
+default four times `--heartbeat-timeout`).  A heartbeat that resumes clears the
+stall and the child keeps running.
+
 The real bot will add database, critical-cog, startup-error, and shard checks in
 Part 2; Part 1 proves the transport and state machine without those dependencies.
 

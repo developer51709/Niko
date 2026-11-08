@@ -245,23 +245,24 @@ class EconomyCog(
             self._credit(data, amount, kind, note)
         return _check_achievements(data)
 
-    async def _net_rank(self, uid: str) -> int | None:
-        # Get all users from database for ranking
-        all_users = await _get_all_users_from_db(self.bot)
-        
-        # Include current user from cache if not in database yet
-        if uid in self.economy_data and uid not in all_users:
-            data = self.economy_data[uid]
-            all_users[uid] = {"balance": data.get("balance", 0), "bank": data.get("bank", 0)}
-        
-        sorted_users = sorted(
-            ((u, d.get("balance", 0) + d.get("bank", 0)) for u, d in all_users.items()),
-            key=lambda x: x[1], reverse=True,
-        )
-        for i, (u, _) in enumerate(sorted_users, start=1):
-            if u == uid:
-                return i
-        return None
+    async def _net_rank(self, net_worth: int) -> int | None:
+        """Global net-worth rank, counted by the database in one query.
+
+        Ranking used to read every economy account and sort it in the bot, so
+        each rank card built a copy of the whole table in memory on the event
+        loop -- a spike in exactly the process that is also rendering the card.
+        The dashboard ranks the same way, with a count of the accounts above
+        this one, so the bot and the website agree.
+        """
+        try:
+            higher = await self.bot.cxn.fetchval(
+                "SELECT COUNT(*) FROM economy_users WHERE net_worth > ?",
+                int(net_worth),
+            )
+        except Exception as e:
+            log.error("Economy", f"Error computing net-worth rank: {e}")
+            return None
+        return int(higher or 0) + 1
 
     async def _show_loading_card(self, ctx, card_type: str, **kwargs):
         """Show the matching animated loading card while a render is in flight.
@@ -290,7 +291,8 @@ class EconomyCog(
         job      = get_job(data.get("job"))
         cap      = bank_cap(int(data.get("bank_tier", 0)))
         tier_name = bank_name(int(data.get("bank_tier", 0)))
-        rank     = await self._net_rank(str(target.id))
+        net_worth = int(data.get("balance", 0)) + int(data.get("bank", 0))
+        rank     = await self._net_rank(net_worth)
 
         buf = await render_balance_card(
             avatar_bytes=avatar_bytes,
@@ -299,7 +301,7 @@ class EconomyCog(
             bank=int(data.get("bank", 0)),
             bank_cap_v=cap,
             bank_tier_name=tier_name,
-            net_worth=int(data.get("balance", 0)) + int(data.get("bank", 0)),
+            net_worth=net_worth,
             level=lvl,
             xp_in_level=max(0, in_lvl),
             xp_for_next=nxt,

@@ -176,6 +176,51 @@ def test_a_crash_is_restarted_without_losing_the_public_server(supervisor):
     marker.unlink(missing_ok=True)
 
 
+def test_a_child_that_closes_its_channel_and_exits_is_not_killed(supervisor):
+    """A shutting-down child closes its channel before its process is gone.
+
+    A host that stops the container, or a deploy restart, sends SIGTERM to the
+    children directly: the reporter closes, the child drains for a moment and
+    the process exits.  Killing it on the closed channel blamed the supervisor
+    for a process that was already leaving and charged the restart budget with
+    a stop the supervisor never asked for.
+    """
+    handle = supervisor(
+        "close-channel",
+        shutdown_timeout=3.0,
+        env={"FAKE_CHILD_CLOSE_EXIT_AFTER": "0.4"},
+    )
+    handle.wait_ready()
+    old_pid = handle.status()["child"]["pid"]
+
+    restarted = handle.wait_for_new_child(old_pid, timeout=10)
+    assert restarted["child_starts"] >= 2
+    final = handle.status()
+    # The child exited by itself, so no stop reason may name the channel close
+    # as a supervisor-initiated stop.
+    assert final["last_stop_reason"] == "child exit"
+    handle.wait_ready()
+
+
+def test_a_child_that_keeps_running_without_a_channel_is_replaced(supervisor):
+    """A live process with no lifecycle channel cannot be supervised."""
+    close_once = Path("/tmp") / f"niko-supervisor-close-{os.getpid()}-{time.time_ns()}"
+    close_once.unlink(missing_ok=True)
+    handle = supervisor(
+        "close-channel",
+        shutdown_timeout=0.5,
+        env={"FAKE_CHILD_CLOSE_ONCE": str(close_once)},
+    )
+    handle.wait_ready()
+    old_pid = handle.status()["child"]["pid"]
+
+    restarted = handle.wait_for_new_child(old_pid, timeout=10)
+    assert restarted["child_starts"] >= 2
+    assert handle.status()["last_stop_reason"] == "control channel closed"
+    handle.wait_ready()
+    close_once.unlink(missing_ok=True)
+
+
 def test_health_stays_available_while_the_child_hangs_before_listening(supervisor):
     handle = supervisor(
         "hang-before-api",

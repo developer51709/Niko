@@ -311,7 +311,7 @@ class CurrencyMixin:
         target = member or ctx.author
         data = await self.get_user_economy_data(target.id)
         nw = int(data["balance"]) + int(data["bank"])
-        rank = await self._net_rank(str(target.id))
+        rank = await self._net_rank(nw)
         body = T(
             lang, "networth_body",
             name=target.display_name,

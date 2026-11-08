@@ -12,6 +12,9 @@ Modes are selected with ``FAKE_CHILD_MODE``:
     hang-before-api  report process_started and never bind the API
     hang-after-ready become ready, then stop heartbeating but keep serving
     ignore-sigterm   become ready and ignore SIGTERM
+    close-channel    become ready, then close the lifecycle socket while the
+                     process keeps serving (a host SIGTERM or an in-place exec
+                     is what that looks like to the supervisor)
     leak-child       become ready and spawn a grandchild that outlives boot
 
 Additional test knobs:
@@ -25,6 +28,10 @@ Additional test knobs:
     FAKE_CHILD_STAGE_HOLD       stage name to stop at (after reporting it)
     FAKE_CHILD_STAGE_HOLD_ONCE  marker path: only the first child holds, later
                                 runs boot normally, so recovery can be tested
+    FAKE_CHILD_CLOSE_ONCE       marker path: only the first child closes its
+                                lifecycle socket, later runs stay connected
+    FAKE_CHILD_CLOSE_EXIT_AFTER seconds after closing the socket before
+                                os._exit(7); 0 keeps the process serving
     FAKE_CHILD_EFFECT_DIR       directory: append one line per boot to
                                 ``boots.log``, modelling a startup side effect
 """
@@ -304,6 +311,25 @@ def main(argv: list[str] | None = None) -> int:
                     print(line, flush=True)
 
             threading.Thread(target=flood, name="fake-flood", daemon=True).start()
+
+        if mode == "close-channel":
+            # The reporter goes away while the process itself is still healthy,
+            # which is all the supervisor can see when the host signals the
+            # children directly or the child replaces its own image.
+            close_once = (os.environ.get("FAKE_CHILD_CLOSE_ONCE") or "").strip()
+            if not (close_once and Path(close_once).exists()):
+                if close_once:
+                    Path(close_once).write_text("closed", encoding="utf-8")
+                reporter.close()
+                close_exit = float(os.environ.get("FAKE_CHILD_CLOSE_EXIT_AFTER", "0") or 0)
+                if close_exit > 0:
+                    def exit_after_close() -> None:
+                        time.sleep(close_exit)
+                        os._exit(7)
+
+                    threading.Thread(
+                        target=exit_after_close, name="fake-close-exit", daemon=True
+                    ).start()
 
         if mode == "leak-child":
             grandchild = subprocess.Popen(
