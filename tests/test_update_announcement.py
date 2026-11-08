@@ -79,44 +79,50 @@ def view_labels(view) -> list[str]:
     return [str(part.label) for part in walk(view) if getattr(part, "label", None)]
 
 
-def test_update_announcement_carries_the_docs_and_changelog_links():
+def test_update_announcement_carries_the_changelog_and_site_links():
     ctx = run_announce()
     view = ctx.sent[0]
 
     assert ctx.message.deleted, "an announcement should replace the invoking message"
     urls = view_urls(view)
-    assert AdministrationCommands.UPDATE_DOCS_URL in urls
-    assert AdministrationCommands.UPDATE_PORTAL_URL in urls
     assert AdministrationCommands.UPDATE_CHANGELOG_URL in urls
+    assert AdministrationCommands.UPDATE_COMMANDS_URL in urls
+    assert AdministrationCommands.UPDATE_SUPPORT_URL in urls
     # The update announcement carries exactly the three links it is announced
-    # with: the documentation, the portal, and the changelog entry. (The Support
-    # Server button belongs to the policy notice, which ``_policy_view`` still
-    # carries.)
-    assert view_labels(view) == ["Developer docs", "Open the portal", "What's new"]
+    # with: the changelog entry, the command list, and the support server.
+    assert view_labels(view) == ["What's new", "All commands", "Support server"]
 
     text = view_text(view)
-    assert "`/api/v1`" in text
-    assert "`niko_dev_`" in text
-    assert "HMAC-SHA256" in text
-    assert "`/dashboard/developer`" in text
-    assert "`/developers`" in text
-    assert "invite-only" in text
-    # The update stays free, and the announcement says so up front.
-    assert "The bot stays free" in text
+    assert "`.fm`" in text
+    assert "`/fm overview`" in text
+    assert "`/fm link`" in text
+    assert "`/fm whoknows`" in text
+    assert "`/fm recent`" in text
+    assert "`/fm taste`" in text
+    # Linking stores a session key, never a password.
+    assert "session key" in text
+    assert "approval page" in text
+    # The feature stays free, and the announcement says so up front.
+    assert "the bot stays free" in text
 
 
 def test_changelog_entry_covers_the_current_update():
     """The announced entry must describe the features the announcement names."""
     changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
-    entry = changelog.split('slug: "developer-api-and-portal"', 1)[1].split("\n  },", 1)[0]
+    entry = changelog.split('slug: "lastfm-listening-stats"', 1)[1].split("\n  },", 1)[0]
     lowered = entry.lower()
 
-    assert "api/v1" in entry
-    assert "niko_dev_" in entry
-    assert "developer portal" in lowered
-    assert "documentation" in lowered
-    assert "webhook" in lowered
-    assert "scope" in lowered
+    assert "`.fm`" in entry
+    assert "last.fm" in lowered
+    assert "whoknows" in lowered
+    assert "crowns" in lowered
+    assert "taste" in lowered
+    assert "album art" in lowered
+    assert "session key" in lowered
+    # The approval flow is the reason the website gained a callback.
+    assert "/api/lastfm/callback" in entry
+    # The loading cards are part of the release, not an internal detail.
+    assert "loading card" in lowered
 
 
 def test_changelog_entry_is_the_newest_release():
@@ -143,13 +149,12 @@ def test_changelog_entry_covers_the_legal_update():
 
 
 def test_announcement_links_point_at_pages_that_exist():
-    """A renamed docs route or changelog slug must fail here, not in Discord."""
-    assert AdministrationCommands.UPDATE_DOCS_URL == f"{links.WEBSITE}/developers"
-    assert AdministrationCommands.UPDATE_PORTAL_URL == f"{links.WEBSITE}/dashboard/developer"
+    """A renamed route or changelog slug must fail here, not in Discord."""
+    assert AdministrationCommands.UPDATE_COMMANDS_URL == f"{links.WEBSITE}/commands"
+    assert AdministrationCommands.UPDATE_SUPPORT_URL == links.SUPPORT_SERVER
 
     router = (ROOT / "web/src/router.ts").read_text(encoding="utf-8")
-    assert 'path === "/developers"' in router
-    assert '"/dashboard/developer' in router
+    assert 'path === "/commands"' in router
 
     changelog_slug = AdministrationCommands.UPDATE_CHANGELOG_URL.removeprefix(f"{links.WEBSITE}/changelog/")
     assert AdministrationCommands.UPDATE_CHANGELOG_URL == f"{links.WEBSITE}/changelog/{changelog_slug}"
@@ -175,7 +180,7 @@ def test_the_small_lottery_card_entry_is_not_published():
     assert 'slug: "lottery-card-and-channel"' not in changelog
 
 
-def test_staff_announce_posts_the_update_with_both_links():
+def test_staff_announce_posts_the_update_with_every_link():
     """``.staff announce`` is the path staff actually use, so cover it too."""
     bot = commands.Bot(command_prefix=".", intents=discord.Intents.none())
     asyncio.run(bot.add_cog(StaffCog(bot)))
@@ -184,9 +189,9 @@ def test_staff_announce_posts_the_update_with_both_links():
     asyncio.run(command.callback(AdministrationCommands(), ctx, ""))
 
     urls = view_urls(ctx.sent[0])
-    assert AdministrationCommands.UPDATE_DOCS_URL in urls
-    assert AdministrationCommands.UPDATE_PORTAL_URL in urls
     assert AdministrationCommands.UPDATE_CHANGELOG_URL in urls
+    assert AdministrationCommands.UPDATE_COMMANDS_URL in urls
+    assert AdministrationCommands.UPDATE_SUPPORT_URL in urls
 
 
 def test_announce_role_policy_is_the_head_admin_allow_listed_name():
@@ -201,7 +206,7 @@ def test_announce_can_still_post_the_community_policy():
 
     assert "Community Policy" in view_text(view)
     assert "Read the Community Policy" in view_labels(view)
-    assert AdministrationCommands.UPDATE_DOCS_URL not in view_urls(view)
+    assert AdministrationCommands.UPDATE_CHANGELOG_URL not in view_urls(view)
 
 
 def test_unknown_announce_topic_explains_itself():

@@ -4,6 +4,7 @@ from discord import app_commands
 from config.ids import SUPPORT_GUILD
 
 from utils.i18n import get_lang
+from utils.image.cards import edit_with_card
 from utils.locales import load_locales
 
 from .data import *
@@ -321,7 +322,7 @@ class EconomyCog(
                 _CARD_T(lang, "card_footer_earn", prefix=prefix),
             ],
         )
-        await message.edit(view=view, attachments=[discord.File(buf, "balance.png")])
+        await edit_with_card(message, view=view, buffer=buf, filename="balance.png")
 
     async def _send_reward_card(
         self,
@@ -355,7 +356,7 @@ class EconomyCog(
             image_name="reward.png",
             footer_lines=[announce] if announce else [],
         )
-        await message.edit(view=view, attachments=[discord.File(buf, "reward.png")])
+        await edit_with_card(message, view=view, buffer=buf, filename="reward.png")
 
     # ── Lottery announcements ────────────────────────────────────────────────
     async def _lottery_channel(self):

@@ -222,6 +222,10 @@ PRIMARY_KEYS: dict = {
     "error_reports": "code",
     # Bot-wide usage counters, one row per (day or "lifetime", bucket, name).
     "bot_analytics": ("scope", "bucket", "name"),
+    # Last.fm listening. The index is keyed by guild as well as member, because
+    # a crown is only a crown inside one server.
+    "lastfm_users": "user_id",
+    "lastfm_artist_index": ("guild_id", "user_id", "artist_key"),
 }
 
 

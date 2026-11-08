@@ -5,6 +5,7 @@ from discord import app_commands
 from io import BytesIO
 from PIL import Image
 
+from utils.image.cards import reply_with_card, send_card
 from utils.image.extractor import extract_image_from_message
 from utils.image.pil_tools import (
     grayscale,
@@ -63,6 +64,17 @@ EFFECT_ORDER = (
     "vignette",
     "oil_paint",
 )
+
+
+def gif_size(output: BytesIO) -> tuple[int, int]:
+    """The rendered GIF's pixel size, measured without leaving it open.
+
+    ``Image.open`` keeps the stream and its decoder alive on the image object, so
+    the probe is closed again instead of holding the frame stack next to the
+    upload that is about to be sent.
+    """
+    with Image.open(output) as probe:
+        return probe.size
 
 
 def build_cv2_container(
@@ -168,14 +180,15 @@ class EffectSelect(discord.ui.Select):
         loop = asyncio.get_event_loop()
         output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
-        img = Image.open(output)
-        width, height = img.size
-        output.seek(0)
+        width, height = gif_size(output)
 
         title = tr(interaction, f"fx_{effect}_label")
-        file = discord.File(output, filename=filename)
         view = build_cv2_container(title, filename, width, height, interaction)
-        await interaction.followup.send(view=view, file=file, ephemeral=True)
+        await send_card(
+            lambda card: interaction.followup.send(view=view, file=card, ephemeral=True),
+            buffer=output,
+            filename=filename,
+        )
 
 
 class EffectSelectView(discord.ui.View):
@@ -223,13 +236,16 @@ class CaptionModal(discord.ui.Modal):
         loop = asyncio.get_event_loop()
         output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
-        img = Image.open(output)
-        width, height = img.size
-        output.seek(0)
+        width, height = gif_size(output)
 
-        file = discord.File(output, filename=filename)
         view = build_cv2_container(title, filename, width, height, self.locale)
-        await interaction.response.send_message(view=view, file=file, ephemeral=True)
+        await send_card(
+            lambda card: interaction.response.send_message(
+                view=view, file=card, ephemeral=True
+            ),
+            buffer=output,
+            filename=filename,
+        )
 
 
 class MemeModal(discord.ui.Modal):
@@ -267,16 +283,17 @@ class MemeModal(discord.ui.Modal):
         loop = asyncio.get_event_loop()
         output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
-        img = Image.open(output)
-        width, height = img.size
-        output.seek(0)
+        width, height = gif_size(output)
 
         filename = "meme.gif"
-        file = discord.File(output, filename=filename)
         view = build_cv2_container(
             tr(self.locale, "fx_meme_label"), filename, width, height, self.locale
         )
-        await interaction.followup.send(view=view, file=file, ephemeral=True)
+        await send_card(
+            lambda card: interaction.followup.send(view=view, file=card, ephemeral=True),
+            buffer=output,
+            filename=filename,
+        )
 
 
 class RotateModal(discord.ui.Modal):
@@ -316,17 +333,18 @@ class RotateModal(discord.ui.Modal):
         loop = asyncio.get_event_loop()
         output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
 
-        img = Image.open(output)
-        width, height = img.size
-        output.seek(0)
+        width, height = gif_size(output)
 
         filename = "rotated.gif"
-        file = discord.File(output, filename=filename)
         view = build_cv2_container(
             tr(self.locale, "img_title_rotate", angle=f"{angle:g}"),
             filename, width, height, self.locale,
         )
-        await interaction.followup.send(view=view, file=file, ephemeral=True)
+        await send_card(
+            lambda card: interaction.followup.send(view=view, file=card, ephemeral=True),
+            buffer=output,
+            filename=filename,
+        )
 
 
 # ──────────────────────── cog ──────────────────────
@@ -354,18 +372,12 @@ class ImageTools(commands.Cog):
             # Run heavy image processing in a thread pool to avoid blocking the event loop
             loop = asyncio.get_event_loop()
             output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
-            img = Image.open(output)
-            width, height = img.size
-            output.seek(0)
+            width, height = gif_size(output)
 
-        file = discord.File(output, filename=filename)
         view = build_cv2_container(
             tr(ctx, f"fx_{effect}_label"), filename, width, height, ctx
         )
-        try:
-            await ctx.reply(view=view, file=file)
-        except Exception:
-            await ctx.send(view=view, file=file)
+        await reply_with_card(ctx, view=view, buffer=output, filename=filename)
 
     # ──────────── original prefix commands ─────────
 
@@ -419,17 +431,11 @@ class ImageTools(commands.Cog):
         async with ctx.typing():
             loop = asyncio.get_event_loop()
             output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
-            img = Image.open(output)
-            width, height = img.size
-            output.seek(0)
-        file = discord.File(output, filename="caption_top.gif")
+            width, height = gif_size(output)
         view = build_cv2_container(
             tr(ctx, "img_title_caption", text=text), "caption_top.gif", width, height, ctx
         )
-        try:
-            await ctx.reply(view=view, file=file)
-        except Exception:
-            await ctx.send(view=view, file=file)
+        await reply_with_card(ctx, view=view, buffer=output, filename="caption_top.gif")
 
     @commands.command(name="captionbottom", help=CMDS.help("captionbottom"))
     async def caption_bottom_prefix(self, ctx: commands.Context, *, text: str):
@@ -441,18 +447,14 @@ class ImageTools(commands.Cog):
         async with ctx.typing():
             loop = asyncio.get_event_loop()
             output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
-            img = Image.open(output)
-            width, height = img.size
-            output.seek(0)
-        file = discord.File(output, filename="caption_bottom.gif")
+            width, height = gif_size(output)
         view = build_cv2_container(
             tr(ctx, "img_title_caption_bottom", text=text),
             "caption_bottom.gif", width, height, ctx,
         )
-        try:
-            await ctx.reply(view=view, file=file)
-        except Exception:
-            await ctx.send(view=view, file=file)
+        await reply_with_card(
+            ctx, view=view, buffer=output, filename="caption_bottom.gif"
+        )
 
     # ──────────── new prefix commands ────────────
 
@@ -506,18 +508,12 @@ class ImageTools(commands.Cog):
         async with ctx.typing():
             loop = asyncio.get_event_loop()
             output = await loop.run_in_executor(None, lambda: process_image_animated(raw, processor))
-            img = Image.open(output)
-            width, height = img.size
-            output.seek(0)
-        file = discord.File(output, filename="rotated.gif")
+            width, height = gif_size(output)
         view = build_cv2_container(
             tr(ctx, "img_title_rotate", angle=f"{angle:g}"),
             "rotated.gif", width, height, ctx,
         )
-        try:
-            await ctx.reply(view=view, file=file)
-        except Exception:
-            await ctx.send(view=view, file=file)
+        await reply_with_card(ctx, view=view, buffer=output, filename="rotated.gif")
 
     @commands.command(name="mirror", help=CMDS.help("mirror"),
     )

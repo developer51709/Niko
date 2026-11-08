@@ -253,6 +253,9 @@ class SpotifyCommandFlowTests(unittest.TestCase):
 
         attachments = ctx.message.edit_kwargs["attachments"]
         self.assertEqual(attachments[0].filename, "spotify.png")
+        # The PNG is handed back as soon as Discord has it: the card is never
+        # reused, so keeping the buffer would only cost the host memory.
+        self.assertTrue(attachments[0].fp.closed)
         card = ctx.message.edit_kwargs["view"].children[0]
         self.assertEqual(str(card.children[0].items[0].media.url), "attachment://spotify.png")
 

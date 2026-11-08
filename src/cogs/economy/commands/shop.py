@@ -10,6 +10,7 @@ from ..data import (
     add_xp, bank_name, bank_cap, bank_rate, max_bank_tier,
 )
 from utils.image.economy_card import render_shop_card, render_inventory_card, fetch_avatar_bytes
+from utils.image.cards import edit_with_card
 
 from utils.command_locales import command_texts
 from utils.i18n import get_lang
@@ -349,7 +350,7 @@ class ShopMixin:
             )
             card = await render_shop_card(items=items, balance=int(data.get("balance", 0)), category=cat_filter)
             view = _ShopActionView(self, lang=lang, image_name="shop.png")
-            return await message.edit(view=view, attachments=[discord.File(card, "shop.png")])
+            return await edit_with_card(message, view=view, buffer=card, filename="shop.png")
         if ctx.interaction:
             await ctx.interaction.followup.send(view=view)
         else:
@@ -627,4 +628,4 @@ class ShopMixin:
             sections=sections,
         )
         view = _card_view(_t(lang, "bag_title", name=target.display_name), "inventory.png", [])
-        await message.edit(view=view, attachments=[discord.File(card, "inventory.png")])
+        await edit_with_card(message, view=view, buffer=card, filename="inventory.png")

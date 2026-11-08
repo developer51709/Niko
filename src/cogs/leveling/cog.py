@@ -9,6 +9,7 @@ import random
 import typing
 from types import SimpleNamespace
 from utils.image.level_card import render_level_card
+from utils.image.cards import edit_with_card
 from utils.image.economy_card import fetch_avatar_bytes
 from utils.loading_cards import loading_card_url
 
@@ -704,14 +705,13 @@ class Leveling(commands.Cog):
         )
 
         # Build CV2 LayoutView with MediaGallery
-        file = discord.File(card_image, filename="level_card.png")
         view = discord.ui.LayoutView()
         container = discord.ui.Container(
             discord.ui.MediaGallery(discord.MediaGalleryItem(media="attachment://level_card.png")),
             accent_colour=discord.Colour.from_rgb(*accent) if accent else discord.Colour(ACCENT_BRAND),
         )
         view.add_item(container)
-        await message.edit(view=view, attachments=[file])
+        await edit_with_card(message, view=view, buffer=card_image, filename="level_card.png")
 
     # ── LEADERBOARD SUBCOMMAND ─────────────────────
 

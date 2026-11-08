@@ -135,6 +135,39 @@ def test_a_network_failure_is_caught(cog):
     assert "could not be reached" in _wording(error).lower()
 
 
+def test_the_generated_image_is_released_once_it_is_sent(cog):
+    """The provider's PNG is uploaded once, so its buffer is handed back."""
+    sent = {}
+
+    class _Typing:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    class Ctx:
+        prefix = "."
+        author = SimpleNamespace(id=1)
+        guild = SimpleNamespace(preferred_locale="en-US")
+
+        def typing(self):
+            return _Typing()
+
+        async def reply(self, **kwargs):
+            sent.update(kwargs)
+
+        async def send(self, **kwargs):
+            sent.update(kwargs)
+
+    asyncio.run(cog.generate.callback(cog, Ctx(), prompt="a red cat"))
+
+    image = sent["file"]
+    assert image.filename == "generated_image.png"
+    # Nothing keeps the bytes after the send: no cache, no open stream.
+    assert image.fp.closed
+
+
 def test_generation_is_rate_limited_per_user(cog):
     command = cog.generate
     cooldown = command._buckets._cooldown

@@ -231,6 +231,48 @@ async def _create_tables(bot):
         "ON verification_challenges (user_id)"
     )
 
+    # ── Last.fm listening (the /fm cog) ───────────────────────────────────
+    # A member links their Last.fm handle once; every listening command reads
+    # from that link. ``checked_at`` records the last time the handle was seen
+    # to exist on Last.fm, so a renamed or deleted account is re-checked rather
+    # than trusted forever.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS lastfm_users (
+            user_id     INTEGER PRIMARY KEY,
+            username    TEXT NOT NULL,
+            session_key TEXT,
+            linked_at   REAL NOT NULL,
+            checked_at  REAL NOT NULL DEFAULT 0
+        )
+    """)
+    # Web auth (the website's linking callback) stores the session key Last.fm
+    # returns. It is the proof the member owns the handle, so it is kept beside
+    # the name; a table created before the flow existed needs the column added.
+    try:
+        await bot.cxn.execute("ALTER TABLE lastfm_users ADD COLUMN session_key TEXT")
+    except Exception:
+        pass  # column already exists; MongoDB is schema-less
+
+    # The guild artist index is what makes ``whoknows`` and ``crowns`` fast:
+    # one row per (guild, member, artist) holding that member's playcount. It is
+    # filled from the members' own top artists when they use /fm (or /fm
+    # update), never by scanning every member of a server.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS lastfm_artist_index (
+            guild_id    INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            artist_key  TEXT NOT NULL,
+            artist_name TEXT NOT NULL,
+            playcount   INTEGER NOT NULL DEFAULT 0,
+            updated_at  REAL NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_id, user_id, artist_key)
+        )
+    """)
+    await bot.cxn.execute(
+        "CREATE INDEX IF NOT EXISTS lastfm_artist_index_lookup "
+        "ON lastfm_artist_index (guild_id, artist_key)"
+    )
+
     # ── Official staff broadcasts (dashboard composer) ─────────────────────
     # The composer lives in the staff workspace now, so a broadcast is a stored
     # record rather than a Discord view. Media is kept base64-encoded beside the

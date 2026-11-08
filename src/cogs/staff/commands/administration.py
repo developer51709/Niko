@@ -77,17 +77,17 @@ class AdministrationCommands:
         view.add_item(container)
         await ctx.send(view=view)
 
-    #: The release ``.staff announce`` announces. The docs page, the portal and
-    #: the changelog entry are named in one place, so the buttons can never point
-    #: at a page that was renamed or retired alongside the update.
-    UPDATE_TITLE = "Niko now has a developer API 🛠️"
-    UPDATE_DOCS_URL = f"{links.WEBSITE}/developers"
-    UPDATE_PORTAL_URL = f"{links.WEBSITE}/dashboard/developer"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/developer-api-and-portal"
+    #: The release ``.staff announce`` announces. The changelog entry and the
+    #: pages the buttons open are named in one place, so a button can never
+    #: point at a page that was renamed or retired alongside the update.
+    UPDATE_TITLE = "Last.fm is here 🎧"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/lastfm-listening-stats"
+    UPDATE_COMMANDS_URL = f"{links.WEBSITE}/commands"
+    UPDATE_SUPPORT_URL = links.SUPPORT_SERVER
 
     @StaffCommands.staff.command(name="announce", help=CMDS.help("announce"), hidden=True)
     async def announce(self, ctx, topic: str = ""):
-        """Announce a release, with links to its docs page and changelog entry.
+        """Announce a release, with links to its changelog entry and pages.
 
         ``.staff announce`` posts the current update, ``.staff announce policy``
         posts the community policy notice.
@@ -107,7 +107,7 @@ class AdministrationCommands:
         await ctx.send(view=view)
 
     def _update_announcement_view(self) -> discord.ui.LayoutView:
-        """The current release announcement, with its docs and changelog links."""
+        """The current release announcement, with its changelog and site links."""
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
@@ -115,55 +115,49 @@ class AdministrationCommands:
             ),
             discord.ui.TextDisplay(
                 content=(
-                    "**Niko is a platform now, not just a bot.** There is a documented API, a portal to "
-                    "run integrations from, and a reference that answers the questions before the first "
-                    "line of code.\n\n"
-                    "**`/api/v1` covers the data integrations actually need.** Economy standings and "
-                    "profiles, server leveling leaderboards and member XP, Discord user profiles, warning "
-                    "cases, and the user and server blacklist — each endpoint behind a scope, so a key "
-                    "can only read what it was approved for.\n\n"
-                    "**Warnings arrive instead of being polled.** Register a bot application and Niko "
-                    "posts warning events to your HTTPS endpoint with an `X-Niko-Signature` HMAC-SHA256 "
-                    "header, an at-least-once delivery id to deduplicate on, and a **Send test event** "
-                    "button that reports the last delivery's status.\n\n"
-                    "**The portal is the workspace.** `/dashboard/developer` holds your scopes, "
-                    "applications, API keys, webhook settings and request log. Registration is a form "
-                    "with the required Discord Developer Portal screenshot, the owner reviews it with "
-                    "the scopes you asked for, and keys start with `niko_dev_` — hashed at rest, shown "
-                    "exactly once, and revoked the moment you ask.\n\n"
-                    "**The documentation answers the next question.** `/developers` walks through the "
-                    "quickstart, authentication, versioning, permissions, every endpoint with request "
-                    "and response examples, signature verification, rate limits and appeals, "
-                    "maintenance windows, error codes and the developer policies.\n\n"
-                    "**Access is invite-only for now.** Approved developers get the portal; anyone can "
-                    "read the documentation today and open a support ticket when their integration is "
-                    "ready.\n\n"
-                    "-# The bot stays free. The API ships for approved integrations at no cost."
+                    "You can link a Last.fm account to Niko now, which brings the whole `.fm` suite "
+                    "with it.\n\n"
+                    "`.fm` on its own is now playing: album art, the track, the artist, the album, and a "
+                    "red dot while the scrobble is live. If nothing's playing you get your last scrobble "
+                    "instead of an empty card.\n\n"
+                    "There's a lot more under it. `/fm overview` has your totals and top artists, albums and "
+                    "tracks for whatever period you ask for. `/fm chart` is a ranked top ten, "
+                    "`/fm recent` is your last scrobbles with their artwork, and `/fm artist` or "
+                    "`/fm album` gives you one page with your own playcount next to Last.fm's.\n\n"
+                    "Your server gets a music board too. `/fm whoknows` takes an artist and shows who "
+                    "here actually listens to them, `/fm crowns` shows who listens to each artist the "
+                    "most, and `/fm taste` compares two libraries to see how much they overlap. All of "
+                    "it comes from the artists Niko sees while drawing cards, so it fills in once people "
+                    "start using the commands.\n\n"
+                    "Before anyone asks, no passwords. `/fm link` opens Last.fm's own approval page and "
+                    "sends you back to niko.sryze.cc. We only keep a session key, and `/fm unlink` "
+                    "deletes it.\n\n"
+                    "-# Last.fm is opt-in and the bot stays free as always."
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(
-                content="-# Read the documentation, open the portal, or see the full breakdown below."
+                content="-# Full breakdown on the site. If something acts up, the support server is open."
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.ActionRow(
-                discord.ui.Button(
-                    label="Developer docs",
-                    style=discord.ButtonStyle.link,
-                    url=self.UPDATE_DOCS_URL,
-                    emoji=get_emoji("docs")
-                ),
-                discord.ui.Button(
-                    label="Open the portal",
-                    style=discord.ButtonStyle.link,
-                    url=self.UPDATE_PORTAL_URL,
-                    emoji=get_emoji("website")
-                ),
                 discord.ui.Button(
                     label="What's new",
                     style=discord.ButtonStyle.link,
                     url=self.UPDATE_CHANGELOG_URL,
                     emoji=get_emoji("megaphone")
+                ),
+                discord.ui.Button(
+                    label="All commands",
+                    style=discord.ButtonStyle.link,
+                    url=self.UPDATE_COMMANDS_URL,
+                    emoji=get_emoji("link")
+                ),
+                discord.ui.Button(
+                    label="Support server",
+                    style=discord.ButtonStyle.link,
+                    url=self.UPDATE_SUPPORT_URL,
+                    emoji=get_emoji("discord")
                 )
             )
         ))

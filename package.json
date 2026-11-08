@@ -1,11 +1,11 @@
 {
   "name": "niko-dashboard",
   "private": true,
-  "version": "2.28.0",
+  "version": "2.29.0",
   "type": "module",
   "scripts": {
     "dev": "vite --config web/vite.config.ts",
-    "prebuild": "node scripts/generate_site_icons.mjs && python3 scripts/generate_economy_loading_cards.py && python3 scripts/generate_leveling_loading_cards.py && python3 scripts/generate_spotify_loading_card.py && python3 scripts/generate_ticket_banner.py && python3 scripts/generate_discovery_cards.py && python3 scripts/generate_placeholder_images.py",
+    "prebuild": "node scripts/generate_site_icons.mjs && python3 scripts/generate_economy_loading_cards.py && python3 scripts/generate_leveling_loading_cards.py && python3 scripts/generate_spotify_loading_card.py && python3 scripts/generate_lastfm_loading_cards.py && python3 scripts/generate_ticket_banner.py && python3 scripts/generate_discovery_cards.py && python3 scripts/generate_placeholder_images.py",
     "build": "vite build --config web/vite.config.ts",
     "typecheck": "tsc --noEmit"
   },

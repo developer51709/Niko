@@ -582,6 +582,13 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/welcome.png"
     },
+    "/changelog/lastfm-listening-stats": {
+      "title": "Niko Listens: Last.fm Cards and Server Boards — Niko changelog",
+      "description": "`.fm` now answers with what you are playing. A new Last.fm cog draws every answer as a card — now playing, your library at a glance, charts for any period, one artist or album beside your own playcount, and a scrobble history with album art — and turns the server into a music board: who listens to an artist, who holds the crown for each one, and how closely two members' taste overlaps. Linking goes through Last.fm's own approval page with a callback on the website, so Niko never asks for a password.",
+      "section": "Changelog · v2.29.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/lastfm-listening-stats.png"
+    },
     "/changelog/developer-api-and-portal": {
       "title": "Build with Niko: The Developer API — Niko changelog",
       "description": "Niko has a documented developer platform. `/api/v1` serves economy standings and profiles, server leveling data, Discord user profiles, warning cases, and the user and server blacklist behind per-key scopes, while signed webhooks deliver warning events instead of forcing a poll. The API has its own documentation site at `/developers` and a portal at `/dashboard/developer` where approved developers register applications, create one-time keys, read their request log, and manage webhooks.",

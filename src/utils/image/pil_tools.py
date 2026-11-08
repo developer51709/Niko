@@ -24,15 +24,23 @@ DISCORD_EMOJI_RE = re.compile(r"<a?:[A-Za-z0-9_~\-]+:(\d+)>")
 def get_emoji_url(emoji_id: str) -> str:
     return f"https://cdn.discordapp.com/emojis/{emoji_id}.png"
 
-# Cache to avoid re-downloading
-_EMOJI_CACHE = {}
+# Cache to avoid re-downloading. The images are small (72px squares), but the
+# key space is not: a caption can name any custom emoji, and an unbounded cache
+# would keep a raster for every one of them for the life of the process.
+_EMOJI_CACHE: dict[str, Image.Image] = {}
+_EMOJI_CACHE_LIMIT = 256
 
 def _load_image_from_url(url: str) -> Image.Image:
-    if url in _EMOJI_CACHE:
-        return _EMOJI_CACHE[url].copy()
+    cached = _EMOJI_CACHE.get(url)
+    if cached is not None:
+        return cached.copy()
 
     r = requests.get(url, timeout=5)
-    img = Image.open(BytesIO(r.content)).convert("RGBA")
+    with Image.open(BytesIO(r.content)) as source:
+        img = source.convert("RGBA")
+    while len(_EMOJI_CACHE) >= _EMOJI_CACHE_LIMIT:
+        # Oldest arrival first; a dropped emoji is only a CDN request away.
+        _EMOJI_CACHE.pop(next(iter(_EMOJI_CACHE)), None)
     _EMOJI_CACHE[url] = img
     return img.copy()
 
@@ -145,38 +153,46 @@ def draw_text_with_emojis(
 
 def process_image_animated(raw: BytesIO, effect_fn):
     img = Image.open(raw)
+    try:
+        if not getattr(img, "is_animated", False):
+            return effect_fn(raw)
 
-    if not getattr(img, "is_animated", False):
-        return effect_fn(raw)
+        frames = []
+        durations = []
 
-    frames = []
-    durations = []
+        for frame_index in range(img.n_frames):
+            img.seek(frame_index)
+            frame = img.convert("RGBA")
 
-    for frame_index in range(img.n_frames):
-        img.seek(frame_index)
-        frame = img.convert("RGBA")
+            buf = BytesIO()
+            frame.save(buf, format="PNG")
+            frame.close()
+            buf.seek(0)
 
-        buf = BytesIO()
-        frame.save(buf, format="PNG")
-        buf.seek(0)
+            with Image.open(effect_fn(buf)) as processed:
+                frames.append(processed.convert("RGBA"))
+            buf.close()
+            durations.append(img.info.get("duration", 50))
 
-        processed = Image.open(effect_fn(buf)).convert("RGBA")
-        frames.append(processed)
-        durations.append(img.info.get("duration", 50))
-
-    out = BytesIO()
-    frames[0].save(
-        out,
-        format="GIF",
-        save_all=True,
-        append_images=frames[1:],
-        loop=0,
-        duration=durations,
-        disposal=2,
-        # transparency=0,
-    )
-    out.seek(0)
-    return out
+        out = BytesIO()
+        frames[0].save(
+            out,
+            format="GIF",
+            save_all=True,
+            append_images=frames[1:],
+            loop=0,
+            duration=durations,
+            disposal=2,
+            # transparency=0,
+        )
+        # Every RGBA frame is still resident here, and the caller is about to
+        # upload the GIF; hand them back now instead of when the loop is collected.
+        for frame in frames:
+            frame.close()
+        out.seek(0)
+        return out
+    finally:
+        img.close()
 
 
 def _open_rgba(raw: BytesIO) -> Image.Image:

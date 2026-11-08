@@ -8,6 +8,7 @@ from discord.ext import commands
 from config import links
 from config.emojis import get_emoji
 from utils.image.economy_card import fetch_avatar_bytes
+from utils.image.cards import edit_with_card
 from utils.image.spotify_card import render_spotify_card
 from utils.loading_cards import loading_card_url
 from ._messages import msg
@@ -126,7 +127,4 @@ class SpotifyMixin:
 
         view = discord.ui.LayoutView()
         view.add_item(container)
-        await message.edit(
-            view=view,
-            attachments=[discord.File(buf, "spotify.png")],
-        )
+        await edit_with_card(message, view=view, buffer=buf, filename="spotify.png")

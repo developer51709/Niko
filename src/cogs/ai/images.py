@@ -22,6 +22,7 @@ from config import links
 from config.emojis import get_emoji
 from utils import logging
 from utils.i18n import make_flat_msg
+from utils.image.cards import reply_with_card
 from utils.locales import load_locales
 
 from utils.command_locales import command_texts
@@ -33,6 +34,9 @@ CMDS = command_texts(__package__)
 
 PROVIDER_URL = "https://image.pollinations.ai/prompt"
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=60)
+
+#: The attachment name the card gallery points at.
+GENERATED_FILE = "generated_image.png"
 
 #: Seconds one member must wait between generations. `IMAGE_GEN_COOLDOWN=15`
 #: makes it faster; there is no way to turn the limit off. The cooldown applies
@@ -122,17 +126,16 @@ class AiImageTools(commands.Cog):
             except Exception:
                 return await ctx.send(view=self._error_view(ctx, detail))
 
-        image.seek(0)
-        file = discord.File(image, filename="generated_image.png")
         view = self.build_cv2_container(
             msg(ctx, "generated_title", image=get_emoji("image")),
             msg(ctx, "generated_prompt", prompt=discord.utils.escape_markdown(prompt[:200])),
-            file.filename,
+            GENERATED_FILE,
         )
-        try:
-            await ctx.reply(view=view, file=file)
-        except Exception:
-            await ctx.send(view=view, file=file)
+        # The provider's image is sent once and never reused, so the helper frees
+        # the buffer as soon as Discord has uploaded it.
+        await reply_with_card(
+            ctx, view=view, buffer=image, filename=GENERATED_FILE
+        )
 
     @commands.command(
         name="edit",
