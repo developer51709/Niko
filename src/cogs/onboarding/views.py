@@ -1899,7 +1899,7 @@ class CaptchaVerifyButton(discord.ui.Button):
             discord.ui.ActionRow(
                 discord.ui.Button(
                     label=_t(interaction, "web_button"),
-                    style=discord.ui.ButtonStyle.link,
+                    style=discord.ButtonStyle.link,
                     url=link,
                     emoji=get_emoji('tick'),
                 )

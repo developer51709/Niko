@@ -435,6 +435,69 @@ def test_a_role_change_removes_the_link_so_it_cannot_be_replayed(monkeypatch):
     assert client.get(f"/verify/{challenge['token']}").status_code == 410
 
 
+class FakeResponse:
+    """Records which kind of interaction response the button chose."""
+
+    def __init__(self):
+        self.kind = None
+        self.kwargs = {}
+
+    async def send_message(self, **kwargs):
+        self.kind, self.kwargs = "send_message", kwargs
+
+    async def defer(self, **kwargs):
+        self.kind, self.kwargs = "defer", kwargs
+
+    async def edit_message(self, **kwargs):
+        self.kind, self.kwargs = "edit_message", kwargs
+
+
+def test_the_verify_button_answers_with_the_challenge_link(monkeypatch):
+    """Pressing Verify in web mode replies at once, with a link button.
+
+    Building the reply raised, so the interaction was never answered: Discord
+    showed a failed interaction and the member got no link at all.
+    """
+    from cogs.onboarding import views
+
+    pool, bot = prepare(monkeypatch)
+
+    async def _get_config(guild_id):
+        return CURRENT_CONFIG["cfg"]
+
+    monkeypatch.setattr(views, "get_config", _get_config)
+
+    interaction = SimpleNamespace(
+        user=SimpleNamespace(id=20),
+        client=bot,
+        response=FakeResponse(),
+        guild=None,
+        locale=None,
+    )
+    # The panel itself has to build before anyone can press it.
+    views.CaptchaPanelView(10, mode="web")
+    button = views.CaptchaVerifyButton(10, "Verificar")
+
+    run(button.callback(interaction))
+
+    assert interaction.response.kind == "send_message"
+    assert interaction.response.kwargs["ephemeral"] is True
+    payload = interaction.response.kwargs["view"].to_components()
+    link = next(
+        child
+        for component in payload[0]["components"]
+        if component.get("type") == 1
+        for child in component["components"]
+        if child.get("style") == 5
+    )
+    # The link the button hands out is the page the member then opens.
+    token = link["url"].rsplit("/", 1)[-1]
+    assert run(store.get(pool, token))["user_id"] == 20
+    page = app.test_client().get(f"/verify/{token}")
+    assert page.status_code == 200
+    assert b"Sage Gardens" in page.data
+
+
 def test_a_wrong_answer_burns_an_attempt_and_shows_a_new_code(monkeypatch):
     pool, _bot = prepare(monkeypatch)
     challenge = issue(pool)

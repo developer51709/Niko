@@ -34,6 +34,14 @@ LOCAL_API_PATHS = (
     "/api/updates",
 )
 
+#: Public pages that read the live bot's database instead of anything the
+#: dashboard child owns. The challenge page is the browser half of web
+#: verification: it looks up, answers and consumes the challenge row and then
+#: applies the roles, so it must run where the bot and its pool do. The bare
+#: ``/verify`` page is deliberately *not* forwarded — it is the always-on ad
+#: entry, and it has to keep answering while the bot child restarts.
+FORWARDED_PUBLIC_PREFIX = "/verify/"
+
 #: Headers that describe one hop rather than the request or its response.
 HOP_BY_HOP = {
     "connection",
@@ -50,6 +58,11 @@ HOP_BY_HOP = {
 
 
 def should_forward(path: str) -> bool:
+    if path.startswith(FORWARDED_PUBLIC_PREFIX):
+        # A challenge token is always in the path, so the prefix matches every
+        # form, image and submission and never the entry page, at ``/verify``
+        # or its trailing-slash alias.
+        return path.rstrip("/") != "/verify"
     if not path.startswith("/api/"):
         return False
     return not any(
@@ -140,6 +153,15 @@ class BotBridge:
         headers["X-Forwarded-Proto"] = (
             environ.get("HTTP_X_FORWARDED_PROTO") or environ.get("wsgi.url_scheme", "http")
         )
+        # This process is the bot child's peer, so the member's own address has
+        # to travel with the request: the web captcha refuses proxies and VPNs
+        # by client IP, and a loopback peer would read as a private address that
+        # is always allowed. The chain stays left-to-right, so the original
+        # client is still first.
+        peer = (environ.get("REMOTE_ADDR") or "").strip()
+        if peer:
+            chain = (headers.get("X-Forwarded-For") or "").strip()
+            headers["X-Forwarded-For"] = f"{chain}, {peer}" if chain else peer
 
         body = None
         try:

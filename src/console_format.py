@@ -52,4 +52,12 @@ class ConsoleFormatter(logging.Formatter):
         module_part = f"{BOLD}{CYAN}{module:<{self._MODULE_WIDTH}}{Style.RESET_ALL}"
         msg_part    = f"{level_color}{record.getMessage()}{Style.RESET_ALL}"
 
-        return f"  {time_part}  {level_part}  {module_part}  {msg_part}"
+        line = f"  {time_part}  {level_part}  {module_part}  {msg_part}"
+        # Tracebacks are part of the message. A formatter that returns only the
+        # first line turns every "Ignoring exception" into an unreadable rumour.
+        detail = self.formatException(record.exc_info) if record.exc_info else record.exc_text
+        if detail:
+            line = f"{line}\n{GRAY}{detail}{Style.RESET_ALL}"
+        if record.stack_info:
+            line = f"{line}\n{GRAY}{self.formatStack(record.stack_info)}{Style.RESET_ALL}"
+        return line

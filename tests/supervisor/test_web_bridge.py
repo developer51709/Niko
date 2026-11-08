@@ -25,23 +25,48 @@ class _Upstream(BaseHTTPRequestHandler):
     def log_message(self, _format, *_args):
         pass
 
+    def _reply(self, status: int, body: bytes, content_type: str):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _details(self, parts) -> bytes:
+        return json.dumps(
+            {
+                "from": "bot",
+                "query": parts.query,
+                "cookie": self.headers.get("Cookie"),
+                "proto": self.headers.get("X-Forwarded-Proto"),
+                "client": self.headers.get("X-Forwarded-For"),
+            }
+        ).encode()
+
     def do_GET(self):
         parts = urlsplit(self.path)
         if parts.path == "/api/status":
-            body = json.dumps(
-                {
-                    "from": "bot",
-                    "query": parts.query,
-                    "cookie": self.headers.get("Cookie"),
-                    "proto": self.headers.get("X-Forwarded-Proto"),
-                }
-            ).encode()
+            body = self._details(parts)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Set-Cookie", "a=1; Path=/")
+            self.send_header("Set-Cookie", "a=1; Path=/")  # noqa: E501
             self.end_headers()
             self.wfile.write(body)
+            return
+        if parts.path.startswith("/verify/"):
+            self._reply(200, b"<html>challenge" + parts.path.encode() + b"</html>", "text/html")
+            return
+        self.send_response(404)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_POST(self):
+        parts = urlsplit(self.path)
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length else b""
+        if parts.path.startswith("/verify/"):
+            self._reply(200, body or b"<html>submitted</html>", "text/html")
             return
         self.send_response(404)
         self.send_header("Content-Length", "0")
@@ -83,6 +108,66 @@ def test_only_live_bot_api_paths_are_forwarded():
     assert should_forward("/assets/app.js") is False
 
 
+def test_web_verification_pages_are_forwarded_but_the_ad_entry_is_not():
+    # The challenge page, its image and its form all read the bot's database.
+    assert should_forward("/verify/abc123") is True
+    assert should_forward("/verify/abc123/captcha.png") is True
+    # The ad entry page has no dependency, so it stays up without the bot.
+    assert should_forward("/verify") is False
+    assert should_forward("/verify/") is False
+
+
+def test_a_forwarded_challenge_page_keeps_its_status_and_body():
+    server, port = _serve_upstream()
+    try:
+        client = Client(BotBridge(_local_app, BotRoute(env_port=port)), Response)
+        response = client.get("/verify/abc123")
+        assert response.status_code == 200
+        assert response.mimetype == "text/html"
+        assert response.get_data(as_text=True) == "<html>challenge/verify/abc123</html>"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_forwarded_answer_reaches_the_bot_with_its_form_body():
+    server, port = _serve_upstream()
+    try:
+        client = Client(BotBridge(_local_app, BotRoute(env_port=port)), Response)
+        response = client.post("/verify/abc123", data={"answer": "K7QM2"})
+        assert response.status_code == 200
+        assert response.get_data(as_text=True) == "answer=K7QM2"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_forwarded_request_carries_the_members_address_not_the_loopback():
+    server, port = _serve_upstream()
+    try:
+        client = Client(BotBridge(_local_app, BotRoute(env_port=port)), Response)
+        # A proxy in front of the dashboard already named the client; the
+        # dashboard adds itself, so the address the bot judges is still first.
+        response = client.get(
+            "/api/status",
+            headers={"X-Forwarded-For": "203.0.113.9"},
+            environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+        )
+        chain = response.get_json()["client"].split(", ")
+        assert chain[0] == "203.0.113.9"
+        assert chain[-1] == "127.0.0.1"
+        # With no proxy header at all the peer is still named, so the bot never
+        # judges the loopback address this process connects from.
+        direct = client.get(
+            "/api/status",
+            environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+        ).get_json()["client"]
+        assert direct == "127.0.0.1"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_a_restarted_bot_route_is_not_pinned_to_the_startup_port(monkeypatch):
     asked = []
 
@@ -107,6 +192,7 @@ def test_forwarded_request_keeps_the_path_headers_and_cookies():
         response = client.get(
             "/api/status?view=all",
             headers={"X-Forwarded-Proto": "https"},
+            environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
         )
         assert response.status_code == 200
         payload = response.get_json()
@@ -115,6 +201,7 @@ def test_forwarded_request_keeps_the_path_headers_and_cookies():
             "query": "view=all",
             "cookie": "session=abc",
             "proto": "https",
+            "client": "127.0.0.1",
         }
         assert response.headers.get("Set-Cookie") == "a=1; Path=/"
     finally:
