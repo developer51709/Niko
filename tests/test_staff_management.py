@@ -226,7 +226,8 @@ def test_suspension_removes_and_lift_restores_official_discord_roles():
     asyncio.run(check())
 
 
-def test_public_roster_hides_suspended_and_former_profiles(monkeypatch):
+def _patch_public_roster(monkeypatch):
+    """A roster where one member is public and three must stay hidden."""
     pool = SqlitePool()
     _seed(pool, user_id=101, role="moderator", status="active", visible=1)
     _seed(pool, user_id=102, role="support", status="active", visible=0)
@@ -247,6 +248,11 @@ def test_public_roster_hides_suspended_and_former_profiles(monkeypatch):
             "activities": [], "custom_status": None, "activity": None,
         },
     )
+    return pool
+
+
+def test_public_roster_hides_suspended_and_former_profiles(monkeypatch):
+    _patch_public_roster(monkeypatch)
 
     public = staff._load_staff_rows()
     ids = {member["id"] for member in public}
@@ -264,6 +270,36 @@ def test_public_roster_hides_suspended_and_former_profiles(monkeypatch):
 
     hidden = staff._load_staff_rows()
     assert all(member["staff_status"] == "active" for member in hidden)
+
+
+def test_public_team_api_needs_no_key_and_keeps_the_roster_privacy(monkeypatch):
+    """The team page is public, so its data route is unauthenticated.
+
+    A bare client sends no key and no same-origin headers — the website's other
+    data routes answer that with ``AUTH_KEY_REQUIRED``. The roster's own
+    visibility flag is the guard here instead.
+    """
+    _patch_public_roster(monkeypatch)
+    client = app.test_client()
+
+    listed = client.get("/api/team")
+    assert listed.status_code == 200
+    # The owner seed row is always listed; the hidden profiles above are not.
+    listed_ids = {member["id"] for member in listed.get_json()}
+    assert "101" in listed_ids
+    assert listed_ids.isdisjoint({"102", "103", "104"})
+
+    member = client.get("/api/team/101")
+    assert member.status_code == 200
+    assert member.get_json()["id"] == "101"
+
+    # A member who hid their listing, and suspended or former staff, stay a 404.
+    for hidden_key in ("102", "103", "104"):
+        assert client.get(f"/api/team/{hidden_key}").status_code == 404
+
+    # The website's other data routes keep the portal gate: this change is about
+    # the public roster, not the developer API.
+    assert client.get("/api/v1/economy/leaderboard").status_code == 401
 
 
 def test_data_deletion_clears_the_public_staff_profile_but_not_the_role():

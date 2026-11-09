@@ -42,6 +42,15 @@ LOCAL_API_PATHS = (
 #: entry, and it has to keep answering while the bot child restarts.
 FORWARDED_PUBLIC_PREFIX = "/verify/"
 
+#: The staff README card is drawn from the live roster: the staff rows, the
+#: gateway presence behind its status, and the member's avatar. The dashboard
+#: child has none of those — it was rendering every member except the seeded
+#: owner as "This profile is not public right now." — so the card is rendered
+#: where the data lives. The bot's own ``/bot/card.svg`` is deliberately not
+#: forwarded: it reads ``bot_stats.json`` and has to survive the same restart.
+STAFF_CARD_PREFIX = "/staff/"
+STAFF_CARD_SUFFIX = "/card.svg"
+
 #: Headers that describe one hop rather than the request or its response.
 HOP_BY_HOP = {
     "connection",
@@ -63,6 +72,8 @@ def should_forward(path: str) -> bool:
         # form, image and submission and never the entry page, at ``/verify``
         # or its trailing-slash alias.
         return path.rstrip("/") != "/verify"
+    if path.startswith(STAFF_CARD_PREFIX) and path.endswith(STAFF_CARD_SUFFIX):
+        return True
     if not path.startswith("/api/"):
         return False
     return not any(

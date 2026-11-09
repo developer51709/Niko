@@ -1,7 +1,6 @@
 """Flask routes for team."""
 
 from .. import server as _server
-from ..developer import portal
 from ..staff_card import avatar_data_url, render_staff_card, validate_accent
 
 globals().update({
@@ -11,13 +10,21 @@ globals().update({
 })
 
 @app.route("/api/team")
-@portal.allow_site_or_key("users:read")
 def api_team():
+    """The public team roster: active staff with a public profile.
+
+    Deliberately unauthenticated. The team page is public, so a visitor's
+    browser, a crawler and a README card all read the same roster, and the
+    privacy guard lives in the rows: ``_load_staff_rows`` only returns staff who
+    are active *and* have ``public_visible`` on, so a member who hides their
+    profile never reaches this response. The website's other data routes keep
+    the portal gate; this one must not borrow a developer key's authentication
+    for data the site already shows to everyone.
+    """
     return jsonify(_load_staff_rows())
 
 
 @app.route("/api/team/<profile_key>")
-@portal.allow_site_or_key("users:read")
 def api_team_member(profile_key):
     # Accepts both `/team/<username>` and the permanent `/team/<user id>` link.
     member = _find_staff_member(profile_key)
@@ -26,9 +33,14 @@ def api_team_member(profile_key):
     return jsonify(member)
 
 
-@app.route("/staff/<user_id>/card.svg")
-def api_staff_card(user_id):
+@app.route("/staff/<profile_key>/card.svg")
+def api_staff_card(profile_key):
     """Public SVG card a staff member can embed in a GitHub README.
+
+    ``profile_key`` is the permanent user id or the ``/team/<handle>`` username —
+    the same pair ``/team/<profile_key>`` and ``/api/team/<profile_key>`` accept.
+    Matching only the id made a README that used the shareable handle draw the
+    neutral "not public" card for a profile that was public all along.
 
     GitHub fetches this through its image proxy inside an ``<img>``, so the
     document must stand on its own: the avatar is inlined as a data URI and the
@@ -37,7 +49,7 @@ def api_staff_card(user_id):
     README image never breaks.
     """
     try:
-        member = next((item for item in _load_staff_rows() if item["id"] == str(user_id)), None)
+        member = _find_staff_member(profile_key)
     except Exception:
         # A database hiccup must not turn every README into a broken image.
         member = None

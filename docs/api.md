@@ -61,10 +61,12 @@ from an API subdomain also exposes the same handlers at `/v1/*`; the `/api`
 segment is omitted there. Unversioned aliases are not supported.
 
 Every v1 endpoint returns user data and requires a developer key. The website's
-internal leaderboard, profile, team, and transcript routes are not a substitute:
-they accept only the site's own same-origin fetches (or a developer key where a
-key is supplied), so a crawler cannot read them directly. Transcripts are
-first-party only and are never available through an API key.
+internal leaderboard and profile routes are not a substitute: they accept only
+the site's own same-origin fetches (or a developer key where a key is supplied),
+so a crawler cannot read them directly. The public team roster is the exception:
+`/api/team` and `/api/team/<handle|id>` need no key or session, because the team
+page is public, and each staff member's own visibility flag decides what they
+return. Transcripts are first-party only and are never available through a key.
 
 Access is invite-only. A developer joins the support server, opens a ticket,
 and is approved by the bot owner. The owner grants scopes per Discord account in
