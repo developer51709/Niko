@@ -420,13 +420,14 @@ class LockdownRestoreTests(LockdownTestCase):
 
 class LockdownGuardTests(LockdownTestCase):
     def test_poll_votes_are_refused_while_the_poll_is_locked(self):
-        from cogs.social.polls import PollVoteButton
+        from cogs.social.polls import cast_vote
 
         manager = self.blacklist()
         bot = SimpleNamespace(cxn=self.pool)
 
         frozen = FakeInteraction(message_id=OPEN_POLL)
-        asyncio.run(PollVoteButton(bot, OPEN_POLL, 0, False).callback(frozen))
+        frozen.client = bot
+        asyncio.run(cast_vote(frozen, OPEN_POLL, 0))
         self.assertEqual(self.pool.count("poll_votes"), 0)
         self.assertEqual(frozen.sent, [guild_lockdown.paused_message(frozen)])
 
@@ -438,18 +439,20 @@ class LockdownGuardTests(LockdownTestCase):
             LATE_POLL, GUILD, 500, 99, "New poll", '["Yes", "No"]', 0, "2026-01-01 00:00:00",
         ))
         blocked = FakeInteraction(message_id=LATE_POLL)
-        asyncio.run(PollVoteButton(bot, LATE_POLL, 0, False).callback(blocked))
+        blocked.client = bot
+        asyncio.run(cast_vote(blocked, LATE_POLL, 0))
         self.assertEqual(self.pool.count("poll_votes"), 0)
         self.assertEqual(blocked.sent, [guild_lockdown.paused_message(blocked)])
 
     def test_giveaway_entries_are_refused_while_the_giveaway_is_frozen(self):
-        from cogs.giveaway.views import _GiveawayJoinBtn, _giveaway_paused
+        from cogs.giveaway.views import _giveaway_paused, join_giveaway
 
         manager = self.blacklist()
         bot = SimpleNamespace(cxn=self.pool)
 
         frozen = FakeInteraction(message_id=OPEN_GIVEAWAY)
-        asyncio.run(_GiveawayJoinBtn(bot, OPEN_GIVEAWAY).callback(frozen))
+        frozen.client = bot
+        asyncio.run(join_giveaway(frozen, OPEN_GIVEAWAY))
         self.assertEqual(self.pool.count("participants"), 0)
         self.assertEqual(frozen.sent, [guild_lockdown.paused_message(frozen)])
 

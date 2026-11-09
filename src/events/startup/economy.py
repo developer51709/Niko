@@ -1,26 +1,31 @@
 """
-Startup — preload economy user data into the in-memory cache.
+Startup — reset the economy account cache.
 
-The leaderboard ranks members from the economy cog's in-memory cache, which is
-populated lazily as members use economy commands. This step warms that cache
-from the database on boot so every member with saved economy data shows up on
-the leaderboard immediately, even before they interact with an economy command
-after a restart.
+The economy cog caches the accounts its commands are working with, capped to the
+most recently used ones (``EconomyCog.get_user_economy_data``). It used to warm
+that cache with every row of ``economy_users`` on boot, so an in-memory
+leaderboard was complete before anyone ran a command. The leaderboard is the
+website's now — it reads the table itself — and the warm-up cost ~15 KB of memory
+per member with saved data (plus a query per member), which is why this step only
+drops anything cached before the database was reachable.
 """
 
 from utils import logging
 
 
 async def preload_economy_cache(bot):
-    """Populate the economy cog's cache with all users from the database."""
+    """Drop economy accounts cached before the database was reachable."""
     cog = bot.get_cog("EconomyCog")
     if cog is None:
-        logging.warning("Economy", "EconomyCog not loaded; skipping economy cache warm-up.")
+        logging.warning("Economy", "EconomyCog not loaded; skipping economy cache reset.")
         return
     try:
-        # Drop anything cached before the database was reachable so the warm
-        # cache below reflects the shared store, not a partial first pass.
+        # Nothing is warmed here any more: accounts are loaded by the commands
+        # that need them and evicted once they go idle. Clearing first keeps a
+        # partial first pass from outliving the database becoming reachable.
         cog.economy_data.clear()
-        await cog.prime_cache()
+        used = getattr(cog, "_account_used", None)
+        if used is not None:
+            used.clear()
     except Exception as exc:
-        logging.error("Economy", f"Failed to warm up economy cache: {exc}")
+        logging.error("Economy", f"Failed to reset economy cache: {exc}")

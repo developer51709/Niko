@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from discord.ui.view import ViewStore
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -197,3 +199,25 @@ def test_the_roulette_result_view_carries_the_persistent_button():
     result = roulette_module.build_result_view(ctx, True, 7, "🔴 Red", "red", 100, 100)
     assert result.timeout is None
     assert "casino:roulette:again:42" in repr(result.to_components())
+
+
+def test_the_roulette_result_view_costs_no_stored_view():
+    """One result card per spin: discord.py must not keep any of them."""
+    ctx = SimpleNamespace(author=SimpleNamespace(id=42))
+    result = roulette_module.build_result_view(ctx, True, 7, "🔴 Red", "red", 100, 100)
+    store = ViewStore.__new__(ViewStore)
+    store._views = {}
+    store._synced_message_views = {}
+    store._modals = {}
+    store._dynamic_items = {}
+
+    async def register():
+        store.add_view(result, message_id=1)
+
+    asyncio.run(register())
+
+    # The custom-id pattern is registered once, by class; the card itself is not
+    # kept, so neither is the ctx and the interaction it holds.
+    assert store._synced_message_views == {}
+    assert store._views == {}
+    assert len(store._dynamic_items) == 1

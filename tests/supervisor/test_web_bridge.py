@@ -117,6 +117,18 @@ def test_web_verification_pages_are_forwarded_but_the_ad_entry_is_not():
     assert should_forward("/verify/") is False
 
 
+def test_staff_readme_cards_are_drawn_by_the_bot_child():
+    # The card reads the live staff roster, gateway presence and the member's
+    # avatar; the dashboard child has none of them, so a card rendered there
+    # called every member except the seeded owner "not public".
+    assert should_forward("/staff/42/card.svg") is True
+    assert should_forward("/staff/soren.xd/card.svg") is True
+    # The bot's own README card reads bot_stats.json and has to keep answering
+    # while the bot child restarts, so it stays local.
+    assert should_forward("/bot/card.svg") is False
+    assert should_forward("/team/soren.xd") is False
+
+
 def test_a_forwarded_challenge_page_keeps_its_status_and_body():
     server, port = _serve_upstream()
     try:

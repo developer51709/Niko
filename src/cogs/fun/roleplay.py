@@ -46,6 +46,11 @@ from discord.ext import commands
 from utils import logging as log
 from utils.i18n import get_lang, make_flat_msg
 from utils.locales import load_locales
+from utils.stateless_views import (
+    CallbackOnlyButton,
+    CallbackOnlyLayoutView,
+    CallbackOnlySelect,
+)
 
 from utils.command_locales import command_texts
 
@@ -169,22 +174,17 @@ async def fetch_nekos_gif(action: str) -> str | None:
     return None
 
 
-class _RoleplayLayoutView(discord.ui.LayoutView):
-    """LayoutView that bypasses discord.py's in-memory per-message view store.
+def _roleplay_view() -> discord.ui.LayoutView:
+    """A layout that discord.py never stores per message.
 
-    discord.py registers every dispatchable view against the message it was
-    sent on and would then try to invoke a *button callback* when it is
-    clicked. These buttons deliberately have no callback — every click is
-    resolved from the ``roleplay_actions`` table by the cog's
-    ``on_interaction`` listener, which is what lets them keep working after a
-    restart (there is no view store to lose). Reporting "not dispatchable"
-    keeps the layout out of the per-message store so each click reaches the
-    listener exactly once, instead of also tripping a callback-less dispatch
-    on messages sent earlier in the same process.
+    Every click here is resolved by the cog's ``on_interaction`` listener (the
+    back buttons from the ``roleplay_actions`` table, the picker from its custom
+    id), and the items carry no callback, so there is nothing for the view store
+    to dispatch to. The button and select report themselves as non-dispatchable
+    as well, which keeps the card out of the store on the paths that register a
+    view directly. See ``utils.stateless_views``.
     """
-
-    def is_dispatchable(self) -> bool:
-        return False
+    return CallbackOnlyLayoutView()
 
 
 def build_roleplay_view(
@@ -217,7 +217,7 @@ def build_roleplay_view(
         label = back_label or back_action
         if emoji and not label.startswith(emoji):
             label = f"{emoji} {label}"
-        button = discord.ui.Button(
+        button = CallbackOnlyButton(
             label=label,
             style=discord.ButtonStyle.secondary,
             custom_id=f"{BACK_PREFIX}{back_action}",
@@ -226,7 +226,7 @@ def build_roleplay_view(
         items.append(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
         items.append(discord.ui.ActionRow(button))
 
-    view = _RoleplayLayoutView()
+    view = _roleplay_view()
     view.add_item(discord.ui.Container(*items))
     return view
 
@@ -286,7 +286,7 @@ def build_picker_view(*, target_id: int, hint: str, lang: str = "en") -> discord
     interaction can be resolved with zero stored view state — the same model
     as the back buttons.
     """
-    select = discord.ui.Select(
+    select = CallbackOnlySelect(
         custom_id=f"{PICK_PREFIX}{int(target_id)}",
         placeholder=_STRINGS.get(lang, {}).get("pick_placeholder") or _STRINGS["en"]["pick_placeholder"],
         min_values=1,
@@ -299,7 +299,7 @@ def build_picker_view(*, target_id: int, hint: str, lang: str = "en") -> discord
             description=CMDS.text(f"{action}.help"),
         )
 
-    view = _RoleplayLayoutView()
+    view = _roleplay_view()
     view.add_item(
         discord.ui.Container(
             discord.ui.TextDisplay(content="### 🎭 Roleplay"),

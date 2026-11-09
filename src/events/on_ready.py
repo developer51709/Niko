@@ -48,7 +48,7 @@ async def handle_ready(bot):
     ] = [
         ("init_database", "Initializing the database", init_database),
         ("load_cogs", "Loading cogs", load_cogs),
-        ("preload_economy_cache", "Warming economy cache", preload_economy_cache),
+        ("preload_economy_cache", "Resetting economy cache", preload_economy_cache),
         ("preload_ai_config", "Warming AI settings cache", preload_ai_config),
         ("print_banner", "Printing startup banner", print_banner),
         ("write_commands", "Writing command data", write_commands),

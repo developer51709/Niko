@@ -21,6 +21,7 @@ from discord.ext import commands
 from config.emojis import get_emoji
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
+from utils.stateless_views import CallbackOnlyButton
 
 from utils.command_locales import command_texts
 
@@ -35,29 +36,25 @@ msg = make_flat_msg(MESSAGES)
 # ───────────────────────────────────────────────────
 #  VOTE BUTTONS
 # ───────────────────────────────────────────────────
+#
+# The suggestion id travels in the custom id and the vote is applied to the
+# cog's database-backed record, so the card needs no stored view: a vote on a
+# suggestion posted before a restart still works, with nothing registered.
 
-class _UpBtn(discord.ui.Button):
+SUGGEST_UP_PREFIX = "sug_up:"
+SUGGEST_DOWN_PREFIX = "sug_down:"
+
+
+class _UpBtn(CallbackOnlyButton):
     def __init__(self, sid: int):
         super().__init__(emoji=f"{get_emoji('thumbs_up')}", style=discord.ButtonStyle.success,
-                         custom_id=f"sug_up:{sid}")
-        self.sid = sid
-
-    async def callback(self, interaction: discord.Interaction):
-        cog: "Suggestions" = interaction.client.get_cog("Suggestions")
-        if cog:
-            await cog.handle_vote(interaction, self.sid, +1)
+                         custom_id=f"{SUGGEST_UP_PREFIX}{int(sid)}")
 
 
-class _DownBtn(discord.ui.Button):
+class _DownBtn(CallbackOnlyButton):
     def __init__(self, sid: int):
         super().__init__(emoji=f"{get_emoji('thumbs_down')}", style=discord.ButtonStyle.danger,
-                         custom_id=f"sug_down:{sid}")
-        self.sid = sid
-
-    async def callback(self, interaction: discord.Interaction):
-        cog: "Suggestions" = interaction.client.get_cog("Suggestions")
-        if cog:
-            await cog.handle_vote(interaction, self.sid, -1)
+                         custom_id=f"{SUGGEST_DOWN_PREFIX}{int(sid)}")
 
 
 def _build_view(s: dict, ctx_like) -> discord.ui.LayoutView:
@@ -93,12 +90,30 @@ class Suggestions(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         # The cache is only a hot-path representation. The main database is
-        # authoritative and is loaded before persistent views are registered.
+        # authoritative and is loaded here; votes are answered from it.
         self.data = {"guilds": {}}
 
     async def cog_load(self):
         await self._load_database()
-        await self._register_persistent_views()
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Answer the up/down buttons from their custom ids.
+
+        The suggestion id is in the custom id, so nothing is stored per message
+        and no view is re-registered at startup.
+        """
+        if interaction.type is not discord.InteractionType.component:
+            return
+        custom_id = (interaction.data or {}).get("custom_id") or ""
+        for prefix, direction in ((SUGGEST_UP_PREFIX, +1), (SUGGEST_DOWN_PREFIX, -1)):
+            if not custom_id.startswith(prefix):
+                continue
+            try:
+                sid = int(custom_id[len(prefix):])
+            except ValueError:
+                return
+            return await self.handle_vote(interaction, sid, direction)
 
     @staticmethod
     def _decode_json(value, default):
@@ -127,20 +142,6 @@ class Suggestions(commands.Cog):
             suggestion["voters"] = self._decode_json(suggestion.get("voters"), {})
             suggestion["verdict"] = self._decode_json(suggestion.get("verdict"), None)
             guild["items"][str(suggestion["id"])] = suggestion
-
-    async def _register_persistent_views(self):
-        registered = 0
-        for guild in self.data["guilds"].values():
-            for suggestion in guild["items"].values():
-                if suggestion.get("status") != "open" or not suggestion.get("message_id"):
-                    continue
-                try:
-                    self.bot.add_view(_build_view(suggestion, None), message_id=suggestion["message_id"])
-                    registered += 1
-                except Exception as exc:
-                    print(f"[Suggestions] Could not register view for {suggestion['message_id']}: {exc}")
-        if registered:
-            print(f"[Suggestions] Registered {registered} persistent suggestion view(s)")
 
     def _g(self, gid: int) -> dict:
         return self.data["guilds"].setdefault(str(gid), {
@@ -215,10 +216,6 @@ class Suggestions(commands.Cog):
         await self._persist_config(ctx.guild.id, g)
         await self._persist_suggestion(ctx.guild.id, s)
         self.bot.dispatch("sticky_feature_message", ctx.guild.id, ch.id)
-        try:
-            self.bot.add_view(_build_view(s, ctx), message_id=sent.id)
-        except Exception:
-            pass
 
         if ctx.interaction:
             await ctx.send(f"{get_emoji('tick')} {msg(ctx, 'submitted', channel=ch.mention, id=sid)}", ephemeral=True)

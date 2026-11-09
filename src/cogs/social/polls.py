@@ -12,10 +12,12 @@ Builder panel (like giveaway/triggers):
   - Add options via modal (≤10)
   - Each option rendered with its own ActionRow → Edit (modal) / Delete
   - Channel picker (defaults to invoking channel)
-  - Send Poll validates (question + ≥2 options), posts the poll,
-    registers the persistent vote view, and deletes the panel message.
+  - Send Poll validates (question + ≥2 options), posts the poll with vote
+    buttons whose custom ids carry the poll id and option, and deletes the
+    panel message.
   - Cancel / timeout handling
-Vote buttons persist across restarts via bot.add_view(..., message_id=...)
+Vote buttons work across restarts because the click is resolved from its custom
+id and the poll row, so no view is registered or kept in memory.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from utils.blacklist_manager import BlacklistManager
 from utils.i18n import make_flat_msg
 from utils.guild_lockdown import paused_message as polls_paused
 from utils.locales import load_locales
+from utils.stateless_views import CallbackOnlyButton
 
 from utils.command_locales import command_texts
 
@@ -127,109 +130,114 @@ async def _build_active_poll_view(bot, message_id: int, guild) -> discord.ui.Lay
     view = discord.ui.LayoutView(timeout=None)
     children: list = [discord.ui.TextDisplay(content=text)]
     if not closed:
-        btns = [PollVoteButton(bot, message_id, i, disabled=False) for i in range(len(options))]
+        btns = [PollVoteButton(message_id, i) for i in range(len(options))]
         for i in range(0, len(btns), 5):
             children.append(discord.ui.ActionRow(*btns[i:i+5]))
     view.add_item(discord.ui.Container(*children, accent_colour=discord.Color.blurple()))
     return view
 
 
-def _make_persistent_poll_view(bot, message_id: int, option_count: int) -> discord.ui.LayoutView:
-    """View registered via bot.add_view for persistence across restarts.
-
-    Discord routes interactions by custom_id, so the TextDisplay content can be
-    a minimal placeholder — the real message content is already on Discord and
-    will be refreshed on the next vote. The button custom_ids must match the
-    live poll view exactly (poll_vote_{mid}_{idx}).
-    """
-    view = discord.ui.LayoutView(timeout=None)
-    btns = [PollVoteButton(bot, message_id, i, disabled=False) for i in range(option_count)]
-    rows = []
-    for i in range(0, len(btns), 5):
-        rows.append(discord.ui.ActionRow(*btns[i:i+5]))
-    placeholder = discord.ui.TextDisplay(content=f"-# poll {message_id}")
-    container = discord.ui.Container(placeholder, *rows, accent_colour=discord.Color.blurple())
-    view.add_item(container)
-    return view
-
-
 # ───────────────────────────────────────────────────
 #  VOTE BUTTON
 # ───────────────────────────────────────────────────
+#
+# A vote button carries the poll id and the option index in its custom id, and
+# the handler rebuilds the card from the database. So a poll needs no stored
+# view and nothing registered at startup: a vote on a poll posted months ago, or
+# before a restart, is answered from the id alone.
 
-class PollVoteButton(discord.ui.Button):
-    def __init__(self, bot, poll_id: int, idx: int, disabled: bool):
+POLL_VOTE_PREFIX = "poll_vote_"
+
+
+class PollVoteButton(CallbackOnlyButton):
+    """Vote button for one option; its custom id names the poll and option."""
+
+    def __init__(self, poll_id: int, idx: int, disabled: bool = False):
         super().__init__(
             emoji=NUMBER_EMOJIS[idx],
             style=discord.ButtonStyle.secondary,
-            custom_id=f"poll_vote_{poll_id}_{idx}",
+            custom_id=f"{POLL_VOTE_PREFIX}{int(poll_id)}_{int(idx)}",
             disabled=disabled,
         )
-        self.bot = bot
-        self.poll_id = poll_id
-        self.idx = idx
 
-    async def callback(self, interaction: discord.Interaction):
-        bot = self.bot
-        # fetch poll
-        poll = await bot.cxn.fetchrow("SELECT * FROM polls WHERE message_id = $1", self.poll_id)
-        if not poll or poll.get("closed"):
-            return await interaction.response.send_message(msg(interaction, "ended"), ephemeral=True)
-        # Polls of a blacklisted server are locked rather than closed, so the tally
-        # survives the blacklist. The lock is checked here too: component buttons
-        # never pass through the slash-command blacklist gate.
-        if poll.get("locked") or BlacklistManager().is_guild_blacklisted(int(interaction.guild_id or 0)):
-            return await interaction.response.send_message(polls_paused(interaction), ephemeral=True)
-        uid = interaction.user.id
-        options = _options_from_row(poll)
-        if self.idx >= len(options):
-            return await interaction.response.send_message(msg(interaction, "not_found"), ephemeral=True)
-        # toggle vote
-        existing = await bot.cxn.fetchrow("SELECT option_idx FROM poll_votes WHERE message_id = $1 AND user_id = $2", self.poll_id, uid)
-        added = False
-        opt_name = options[self.idx]
-        if existing is None:
-            await bot.cxn.execute("INSERT INTO poll_votes (message_id, user_id, option_idx) VALUES ($1, $2, $3)", self.poll_id, uid, self.idx)
-            added = True
+
+def _vote_from_custom_id(custom_id: str) -> tuple[int, int] | None:
+    try:
+        poll_id, idx = custom_id[len(POLL_VOTE_PREFIX):].split("_", 1)
+        return int(poll_id), int(idx)
+    except (TypeError, ValueError):
+        return None
+
+
+async def cast_vote(interaction: discord.Interaction, poll_id: int, idx: int) -> None:
+    """Record (or toggle off) the member's vote and refresh the poll card."""
+    bot = interaction.client
+    # fetch poll
+    poll = await bot.cxn.fetchrow("SELECT * FROM polls WHERE message_id = $1", poll_id)
+    if not poll or poll.get("closed"):
+        return await interaction.response.send_message(msg(interaction, "ended"), ephemeral=True)
+    # Polls of a blacklisted server are locked rather than closed, so the tally
+    # survives the blacklist. The lock is checked here too: component buttons
+    # never pass through the slash-command blacklist gate.
+    if poll.get("locked") or BlacklistManager().is_guild_blacklisted(int(interaction.guild_id or 0)):
+        return await interaction.response.send_message(polls_paused(interaction), ephemeral=True)
+    uid = interaction.user.id
+    options = _options_from_row(poll)
+    if idx >= len(options):
+        return await interaction.response.send_message(msg(interaction, "not_found"), ephemeral=True)
+    # toggle vote
+    existing = await bot.cxn.fetchrow("SELECT option_idx FROM poll_votes WHERE message_id = $1 AND user_id = $2", poll_id, uid)
+    added = False
+    opt_name = options[idx]
+    if existing is None:
+        await bot.cxn.execute("INSERT INTO poll_votes (message_id, user_id, option_idx) VALUES ($1, $2, $3)", poll_id, uid, idx)
+        added = True
+    else:
+        prev = int(existing["option_idx"])
+        if prev == idx:
+            await bot.cxn.execute("DELETE FROM poll_votes WHERE message_id = $1 AND user_id = $2", poll_id, uid)
+            added = False
         else:
-            prev = int(existing["option_idx"])
-            if prev == self.idx:
-                await bot.cxn.execute("DELETE FROM poll_votes WHERE message_id = $1 AND user_id = $2", self.poll_id, uid)
-                added = False
-            else:
-                await bot.cxn.execute("UPDATE poll_votes SET option_idx = $1 WHERE message_id = $2 AND user_id = $3", self.idx, self.poll_id, uid)
-                added = True
-        # rebuild view with fresh counts and edit message
-        view = await _build_active_poll_view(bot, self.poll_id, interaction.guild)
-        if view is None:
-            return
+            await bot.cxn.execute("UPDATE poll_votes SET option_idx = $1 WHERE message_id = $2 AND user_id = $3", idx, poll_id, uid)
+            added = True
+    # rebuild view with fresh counts and edit message
+    view = await _build_active_poll_view(bot, poll_id, interaction.guild)
+    if view is None:
+        return
+    try:
+        await interaction.response.edit_message(view=view)
+    except discord.InteractionResponded:
         try:
-            # Re-register persistent view so future edits keep working
-            # (bot.add_view is idempotent)
-            try:
-                bot.add_view(_make_persistent_poll_view(bot, self.poll_id, len(options)), message_id=self.poll_id)
-            except Exception:
-                pass
-            await interaction.response.edit_message(view=view)
-        except discord.InteractionResponded:
-            try:
-                await interaction.followup.edit_message(message_id=interaction.message.id, view=view)
-            except Exception:
-                pass
-        except Exception:
-            try:
-                await interaction.message.edit(view=view)
-                await interaction.response.defer()
-            except Exception:
-                pass
-        # followup vote confirm
-        try:
-            if added:
-                await interaction.followup.send(msg(interaction, "vote_added", opt=opt_name), ephemeral=True)
-            else:
-                await interaction.followup.send(msg(interaction, "vote_removed"), ephemeral=True)
+            await interaction.followup.edit_message(message_id=interaction.message.id, view=view)
         except Exception:
             pass
+    except Exception:
+        try:
+            await interaction.message.edit(view=view)
+            await interaction.response.defer()
+        except Exception:
+            pass
+    # followup vote confirm
+    try:
+        if added:
+            await interaction.followup.send(msg(interaction, "vote_added", opt=opt_name), ephemeral=True)
+        else:
+            await interaction.followup.send(msg(interaction, "vote_removed"), ephemeral=True)
+    except Exception:
+        pass
+
+
+async def handle_component(interaction: discord.Interaction) -> bool:
+    """Route a poll vote from its custom id; True when it was a vote."""
+    if interaction.type is not discord.InteractionType.component:
+        return False
+    custom_id = (interaction.data or {}).get("custom_id") or ""
+    if not custom_id.startswith(POLL_VOTE_PREFIX):
+        return False
+    target = _vote_from_custom_id(custom_id)
+    if target is not None:
+        await cast_vote(interaction, *target)
+    return True
 
 
 # ───────────────────────────────────────────────────
@@ -508,7 +516,7 @@ class PollSetupView(discord.ui.LayoutView):
                 await interaction.response.defer()
         except Exception:
             pass
-        # send stub then persistent view
+        # Send a stub, then swap the real card in (its buttons carry the ids).
         stub_text = f"### {get_emoji('lightbulb')} {question}\n" + "\n".join(f"**{NUMBER_EMOJIS[i]}** {o} — `0` votes (0%)" for i, o in enumerate(options)) + f"\n\n-# Click a button to vote · poll by <@{self.host_id}>"
         stub_view = discord.ui.LayoutView()
         stub_view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=stub_text), accent_colour=discord.Color.blurple()))
@@ -518,17 +526,13 @@ class PollSetupView(discord.ui.LayoutView):
             "INSERT INTO polls (message_id, guild_id, channel_id, author_id, question, options, closed, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
             sent.id, guild.id, channel.id, self.host_id, question, json.dumps(options), 0, datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
-        # build real active view and register persistence
+        # build the real active view; its buttons carry the poll's custom ids
         active = await _build_active_poll_view(self.bot, sent.id, guild)
         if active:
             try:
                 await sent.edit(view=active)
             except Exception:
                 pass
-        try:
-            self.bot.add_view(_make_persistent_poll_view(self.bot, sent.id, len(options)), message_id=sent.id)
-        except Exception:
-            pass
         # delete the builder panel message as requested — this is the UX the
         # spec asks for: clicking Send Poll removes the setup panel entirely.
         try:
@@ -586,18 +590,15 @@ class Polls(commands.Cog):
             pass
         # migrate legacy JSON file if present
         await self._migrate_json()
-        # re-register persistent vote views for every open poll
-        try:
-            active = await self.bot.cxn.fetch("SELECT message_id, options FROM polls WHERE closed = 0")
-            for row in active:
-                mid = int(row["message_id"])
-                opts = _options_from_row(row)
-                try:
-                    self.bot.add_view(_make_persistent_poll_view(self.bot, mid, len(opts)), message_id=mid)
-                except Exception:
-                    continue
-        except Exception:
-            pass
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Answer vote buttons from their custom ids.
+
+        The poll id and option live in the custom id, so no vote view is stored
+        and there is nothing to re-register for open polls at startup.
+        """
+        await handle_component(interaction)
 
     async def _migrate_json(self):
         import os

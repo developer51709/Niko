@@ -18,6 +18,7 @@ from xml.etree import ElementTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from webapp import staff as staff_data  # noqa: E402
 from webapp import staff_card  # noqa: E402
 from webapp.routes import team_routes  # noqa: E402
 from webapp.server import app  # noqa: E402
@@ -210,7 +211,9 @@ class CardRouteTests(unittest.TestCase):
         staff_card._avatar_cache.clear()
 
     def get(self, path, rows):
-        with patch.object(team_routes, "_load_staff_rows", return_value=rows), \
+        # ``_find_staff_member`` reads the roster through ``webapp.staff``, which
+        # is the same module the team routes resolve a profile key with.
+        with patch.object(staff_data, "_load_staff_rows", return_value=rows), \
              patch.object(team_routes, "avatar_data_url", return_value=None):
             return app.test_client().get(path)
 
@@ -225,10 +228,29 @@ class CardRouteTests(unittest.TestCase):
         ElementTree.fromstring(body)
         self.assertIn("Nova Example", body)
 
+    def test_the_shareable_handle_serves_the_same_card_as_the_id(self):
+        """A README links ``/team/<handle>``; the card must accept that handle."""
+        roster = [member(handle="nova")]
+        by_handle = self.get("/staff/nova/card.svg", roster).get_data(as_text=True)
+        by_id = self.get("/staff/42/card.svg", roster).get_data(as_text=True)
+        self.assertIn("Nova Example", by_handle)
+        self.assertNotIn("This profile is not public right now.", by_handle)
+        self.assertIn("@nova", by_handle)
+        # Same member, same saved presentation: the two URLs cannot disagree.
+        self.assertEqual(by_handle, by_id)
+
+    def test_handle_matching_ignores_case(self):
+        body = self.get("/staff/NoVa/card.svg", [member(handle="nova")]).get_data(as_text=True)
+        self.assertIn("Nova Example", body)
+
+    def test_unknown_handle_gets_the_neutral_card(self):
+        body = self.get("/staff/nobody/card.svg", [member(handle="nova")]).get_data(as_text=True)
+        self.assertIn("This profile is not public right now.", body)
+
     def test_activity_changes_between_requests(self):
         first_member = member(activities=[SPOTIFY_ACTIVITY])
         second_member = member(activities=[GAME_ACTIVITY])
-        with patch.object(team_routes, "_load_staff_rows", side_effect=[[first_member], [second_member]]), \
+        with patch.object(staff_data, "_load_staff_rows", side_effect=[[first_member], [second_member]]), \
              patch.object(team_routes, "avatar_data_url", return_value=None), \
              patch.object(staff_card, "activity_art_data_url", return_value=None):
             client = app.test_client()
@@ -243,7 +265,7 @@ class CardRouteTests(unittest.TestCase):
     def test_each_request_reads_the_roster_again(self):
         online = member(status="online")
         offline = member(status="offline")
-        with patch.object(team_routes, "_load_staff_rows", side_effect=[[online], [offline]]) as roster, \
+        with patch.object(staff_data, "_load_staff_rows", side_effect=[[online], [offline]]) as roster, \
              patch.object(team_routes, "avatar_data_url", return_value=None):
             client = app.test_client()
             first = client.get("/staff/42/card.svg").get_data(as_text=True)

@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from config.emojis import get_emoji  # noqa: E402
 from cogs.giveaway.cog import Giveaway  # noqa: E402
 from cogs.logging.formatters import LOG_EMOJI_KEYS  # noqa: E402
-from cogs.giveaway.views import _GiveawayJoinBtn, _MgmtSelectBtn  # noqa: E402
+from cogs.giveaway.views import _MgmtSelectBtn, join_giveaway  # noqa: E402
 from database import PRIMARY_KEYS, SQLitePool  # noqa: E402
 from events.startup import database as database_setup  # noqa: E402
 
@@ -193,11 +193,13 @@ class GiveawayBanTests(unittest.TestCase):
         return ctx
 
     def _join(self, member_id, *, message_id=1000, guild_id=GUILD, bot=False):
-        button = _GiveawayJoinBtn(self.bot, message_id)
         interaction = FakeInteraction(
             guild_id=guild_id, user=FakeUser(member_id, bot=bot), message_id=message_id
         )
-        asyncio.run(button.callback(interaction))
+        # The button's custom id carries the giveaway, so the click goes straight
+        # to the handler that reads the row; nothing is stored per message.
+        interaction.client = self.bot
+        asyncio.run(join_giveaway(interaction, message_id))
         return interaction
 
     def _end(self, message_id=1000, *, guild_id=GUILD):

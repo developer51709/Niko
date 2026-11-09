@@ -23,6 +23,20 @@ _CARD_T = locale_t(load_locales("cogs.economy", "currency"))
 # Draw announcements read the support server's own language.
 _LOTTO_T = locale_t(load_locales("cogs.economy", "lottery"))
 
+# ── Account cache ────────────────────────────────────────────────────────────
+# A loaded account is ~15 KB in memory (transaction log, inventory, achievements,
+# season baselines), so caching every member who has ever run an economy command
+# made the process grow with each execution until it held the whole table. The
+# cache is a least-recently-used map of the accounts commands are working with:
+# it trims itself to ``ACCOUNT_CACHE_LIMIT`` idle accounts, may sit above that
+# while an unusual number of members are active at once, and never exceeds
+# ``ACCOUNT_CACHE_MAX`` (~30 MB).
+ACCOUNT_CACHE_LIMIT = 1024
+ACCOUNT_CACHE_MAX = 2048
+# How long an account has to be untouched before trimming may drop it. Longer
+# than any command keeps one: a casino view holds its account for the game.
+ACCOUNT_CACHE_IDLE_SECONDS = 120.0
+
 
 class EconomyCog(
     CurrencyMixin,
@@ -45,8 +59,12 @@ class EconomyCog(
             os.makedirs("data/economy_data")
             log.success("Economy", "economy_data directory created. Continuing…")
 
-        # Use database instead of JSON files
-        self.economy_data: dict[str, dict] = {}  # Cache for performance
+        # Use database instead of JSON files. The cache holds the accounts in
+        # play, in LRU order (see ACCOUNT_CACHE_LIMIT), not the whole table.
+        self.economy_data: dict[str, dict] = {}
+        # When each cached account was last loaded, so an account a command is
+        # still working with is never evicted under it.
+        self._account_used: dict[str, float] = {}
         self.lottery: dict = {}  # Will be loaded from database in setup
 
         # Right-click a user → the same level + wallet card, without typing a
@@ -156,10 +174,13 @@ class EconomyCog(
             log.warning("Economy", f"Rejected non-integer user_id: {user_id!r}")
             return _migrate_user(_default_user())
         uid = str(user_id)
+        now = time.time()
 
-        # Check cache first
+        # Check cache first. Re-inserting a hit puts the account at the end of
+        # the cache, which is the recency order eviction works from.
         if uid in self.economy_data:
-            data = self.economy_data[uid]
+            data = self.economy_data.pop(uid)
+            self.economy_data[uid] = data
         else:
             # Try to load from database
             data = await _get_user_from_db(self.bot, user_id)
@@ -171,11 +192,38 @@ class EconomyCog(
                 self.economy_data[uid] = data
                 await _save_user_to_db(self.bot, user_id, data)
 
+        used = getattr(self, "_account_used", None)
+        if used is None:
+            self._account_used = used = {}
+        used[uid] = now
+        self._trim_account_cache(now)
+
         # The account is handed to the command now and the command is what will
         # move the counters, so this is the last moment a seasonal badge's
         # window baseline can still be the value the window opened with.
         ensure_season_baselines(data)
         return _migrate_user(data)
+
+    def _trim_account_cache(self, now: float) -> None:
+        """Drop the least recently used accounts past the cache cap.
+
+        Above ``ACCOUNT_CACHE_LIMIT`` only accounts that have been idle for
+        ``ACCOUNT_CACHE_IDLE_SECONDS`` are dropped: the accounts a command may
+        still be holding are the most recently used ones, not the oldest, and
+        anything the bot just touched was saved by the command that touched it.
+        Above ``ACCOUNT_CACHE_MAX`` the oldest goes regardless, so a burst of
+        activity cannot turn the cap into no cap at all.
+        """
+        used = getattr(self, "_account_used", {})
+        while len(self.economy_data) > ACCOUNT_CACHE_LIMIT:
+            oldest = next(iter(self.economy_data))
+            if (
+                len(self.economy_data) <= ACCOUNT_CACHE_MAX
+                and now - used.get(oldest, 0.0) < ACCOUNT_CACHE_IDLE_SECONDS
+            ):
+                return
+            self.economy_data.pop(oldest, None)
+            used.pop(oldest, None)
 
     async def save_user_economy_data(self, user_id) -> None:
         """Save a single user's data to database."""
@@ -186,38 +234,6 @@ class EconomyCog(
         uid = str(user_id)
         if uid in self.economy_data:
             await _save_user_to_db(self.bot, user_id, self.economy_data[uid])
-
-    async def prime_cache(self) -> None:
-        """Load every economy user from the database into the in-memory cache.
-
-        ``self.economy_data`` is normally populated lazily as members interact
-        with economy commands, so the leaderboard would only reflect users who
-        have been active since the last restart. Warming the cache at startup
-        means every member with saved data — including those who have not used
-        an economy command since the last restart — is ranked immediately.
-        """
-        cxn = getattr(self.bot, "cxn", None)
-        if cxn is None:
-            log.warning("Economy", "Database not ready; skipping economy cache warm-up.")
-            return
-        try:
-            rows = await cxn.fetch("SELECT user_id FROM economy_users")
-        except Exception as exc:
-            log.error("Economy", f"Could not query economy users for cache warm-up: {exc}")
-            return
-
-        loaded = 0
-        for row in rows:
-            uid = str(row["user_id"])
-            if uid in self.economy_data:
-                continue
-            data = await _get_user_from_db(self.bot, int(row["user_id"]))
-            if data:
-                self.economy_data[uid] = data
-                loaded += 1
-
-        if loaded:
-            log.info("Economy", f"Warmed up cache with {loaded} economy users.")
 
     # ── Internal helpers ─────────────────────────────────────────────────────
     def _credit(self, data: dict, amount: int, kind: str, note: str = ""):

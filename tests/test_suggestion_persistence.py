@@ -13,14 +13,17 @@ def test_main_database_has_suggestion_config_and_message_tables():
     assert "channel_id INTEGER NOT NULL" in source
 
 
-def test_suggestions_load_database_before_registering_views():
+def test_suggestions_load_database_before_answering_buttons():
     source = (ROOT / "src/cogs/social/suggestions.py").read_text(encoding="utf-8")
     assert "async def cog_load(self)" in source
     assert "await self._load_database()" in source
-    assert "await self._register_persistent_views()" in source
     assert "SELECT guild_id, channel_id, next_id FROM suggestion_config" in source
     assert "SELECT * FROM suggestions" in source
-    assert "self.bot.add_view(_build_view(suggestion, None), message_id=suggestion[\"message_id\"])" in source
+    # A vote is resolved from the custom id and the stored suggestion, so no
+    # per-message view is registered at startup or sent for the message.
+    assert "add_view(" not in source
+    assert "_register_persistent_views" not in source
+    assert "async def on_interaction(self, interaction: discord.Interaction):" in source
 
 
 def test_suggestion_changes_write_to_main_database():

@@ -12,6 +12,7 @@ from utils.blacklist_manager import BlacklistManager
 from utils.guild_lockdown import paused_message
 from utils.i18n import get_lang
 from utils.locales import load_locales
+from utils.stateless_views import CallbackOnlyButton
 
 
 # ─────────────────────────────────────────────────────────────
@@ -196,113 +197,147 @@ def _guild_msg(guild, key: str, **kwargs) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
-#  MAIN MESSAGE BUTTONS  (per-giveaway custom_id for isolation)
+#  MAIN MESSAGE BUTTONS  (the custom_id carries the giveaway)
 # ─────────────────────────────────────────────────────────────
+#
+# The buttons never belong to a stored view. Their custom ids carry the
+# giveaway's message id and ``handle_component`` loads the row from the database
+# on every click, so a giveaway costs no memory per message and keeps working
+# after a restart (and on messages posted before one) without anything being
+# registered at startup.
 
-class _GiveawayJoinBtn(discord.ui.Button):
-    """Join button — custom_id encodes the giveaway message_id."""
+GIVEAWAY_JOIN_PREFIX = "giveaway_join_"
+GIVEAWAY_MANAGE_PREFIX = "giveaway_manage_"
 
-    def __init__(self, bot, message_id: int, guild=None):
+
+class _GiveawayJoinBtn(CallbackOnlyButton):
+    """Join button — its custom id names the giveaway it belongs to."""
+
+    def __init__(self, message_id: int, guild=None):
         super().__init__(
             label=_guild_msg(guild, "btn_join"),
             style=discord.ButtonStyle.primary,
             emoji=f"{get_emoji('giveaway')}",
-            custom_id=f"giveaway_join_{message_id}",
+            custom_id=f"{GIVEAWAY_JOIN_PREFIX}{int(message_id)}",
         )
-        self._bot = bot
-
-    async def callback(self, interaction: discord.Interaction):
-        message_id = interaction.message.id
-        user_id    = interaction.user.id
-
-        giveaway = await self._bot.cxn.fetchrow(
-            "SELECT host_id, ended, requirements, locked FROM giveaways WHERE message_id = $1",
-            message_id,
-        )
-        if not giveaway:
-            return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'no_exist')}", ephemeral=True)
-        if giveaway["ended"]:
-            return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_ended')}", ephemeral=True)
-        # Blacklisted servers keep their giveaway rows but cannot take entries.
-        if _giveaway_paused(giveaway, interaction.guild_id):
-            return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
-        if user_id == giveaway["host_id"]:
-            return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_host')}", ephemeral=True)
-        if interaction.user.bot:
-            return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_bot')}", ephemeral=True)
-        # A giveaway ban is set by the server's managers and wins over every
-        # other check, so a banned member is told why instead of being asked to
-        # meet requirements they will never satisfy.
-        if await _giveaway_banned(self._bot, interaction.guild_id, user_id):
-            return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_banned')}", ephemeral=True)
-
-        # Enforce host-configured requirements (account age, server age, roles, boost).
-        reqs = _load_reqs(giveaway["requirements"])
-        if isinstance(interaction.user, discord.Member):
-            failure = _check_member_meets_reqs(interaction.user, reqs)
-            if failure:
-                return await interaction.response.send_message(failure, ephemeral=True)
-
-        existing = await self._bot.cxn.fetchval(
-            "SELECT 1 FROM participants WHERE message_id = $1 AND user_id = $2",
-            message_id, user_id
-        )
-        if existing:
-            return await interaction.response.send_message(msg(interaction, 'join_already'), ephemeral=True)
-
-        await self._bot.cxn.execute(
-            "INSERT INTO participants (message_id, user_id) VALUES ($1, $2)", message_id, user_id
-        )
-        await interaction.response.send_message(msg(interaction, 'join_success'), ephemeral=True)
 
 
-class _GiveawayManageBtn(discord.ui.Button):
-    """Manage button — opens ephemeral panel for host / server admins."""
+class _GiveawayManageBtn(CallbackOnlyButton):
+    """Manage button — opens the ephemeral panel for the host / admins."""
 
-    def __init__(self, bot, message_id: int, guild=None):
+    def __init__(self, message_id: int, guild=None):
         super().__init__(
             label=_guild_msg(guild, "btn_manage"),
             style=discord.ButtonStyle.secondary,
             emoji=f"{get_emoji('settings')}",
-            custom_id=f"giveaway_manage_{message_id}",
+            custom_id=f"{GIVEAWAY_MANAGE_PREFIX}{int(message_id)}",
         )
-        self._bot = bot
 
-    async def callback(self, interaction: discord.Interaction):
-        message_id = interaction.message.id
 
-        giveaway = await self._bot.cxn.fetchrow(
-            "SELECT message_id, channel_id, guild_id, prize, winners_count, host_id, ended "
-            "FROM giveaways WHERE message_id = $1", message_id
+def _id_from_custom_id(custom_id: str, prefix: str) -> int | None:
+    try:
+        return int(custom_id[len(prefix):])
+    except (TypeError, ValueError):
+        return None
+
+
+async def join_giveaway(interaction: discord.Interaction, message_id: int | None = None) -> None:
+    """Answer the Join button: enter the member in the named giveaway."""
+    bot = interaction.client
+    if message_id is None:
+        message_id = getattr(getattr(interaction, "message", None), "id", None)
+    if message_id is None:
+        return
+    user_id = interaction.user.id
+
+    giveaway = await bot.cxn.fetchrow(
+        "SELECT host_id, ended, requirements, locked FROM giveaways WHERE message_id = $1",
+        message_id,
+    )
+    if not giveaway:
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'no_exist')}", ephemeral=True)
+    if giveaway["ended"]:
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_ended')}", ephemeral=True)
+    # Blacklisted servers keep their giveaway rows but cannot take entries.
+    if _giveaway_paused(giveaway, interaction.guild_id):
+        return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
+    if user_id == giveaway["host_id"]:
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_host')}", ephemeral=True)
+    if interaction.user.bot:
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_bot')}", ephemeral=True)
+    # A giveaway ban is set by the server's managers and wins over every
+    # other check, so a banned member is told why instead of being asked to
+    # meet requirements they will never satisfy.
+    if await _giveaway_banned(bot, interaction.guild_id, user_id):
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_banned')}", ephemeral=True)
+
+    # Enforce host-configured requirements (account age, server age, roles, boost).
+    reqs = _load_reqs(giveaway["requirements"])
+    if isinstance(interaction.user, discord.Member):
+        failure = _check_member_meets_reqs(interaction.user, reqs)
+        if failure:
+            return await interaction.response.send_message(failure, ephemeral=True)
+
+    existing = await bot.cxn.fetchval(
+        "SELECT 1 FROM participants WHERE message_id = $1 AND user_id = $2",
+        message_id, user_id
+    )
+    if existing:
+        return await interaction.response.send_message(msg(interaction, 'join_already'), ephemeral=True)
+
+    await bot.cxn.execute(
+        "INSERT INTO participants (message_id, user_id) VALUES ($1, $2)", message_id, user_id
+    )
+    await interaction.response.send_message(msg(interaction, 'join_success'), ephemeral=True)
+
+
+async def open_manage_panel(interaction: discord.Interaction, message_id: int | None = None) -> None:
+    """Answer the Manage button: open the panel for the host or an admin."""
+    bot = interaction.client
+    if message_id is None:
+        message_id = getattr(getattr(interaction, "message", None), "id", None)
+    if message_id is None:
+        return
+
+    giveaway = await bot.cxn.fetchrow(
+        "SELECT message_id, channel_id, guild_id, prize, winners_count, host_id, ended "
+        "FROM giveaways WHERE message_id = $1", message_id
+    )
+    if not giveaway:
+        return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
+    if giveaway["ended"]:
+        return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
+    if _giveaway_paused(None, giveaway.get("guild_id")):
+        return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
+
+    is_host  = interaction.user.id == giveaway["host_id"]
+    is_admin = getattr(interaction.user.guild_permissions, "manage_guild", False)
+    if not (is_host or is_admin):
+        return await interaction.response.send_message(
+            msg(interaction, "no_perm_manage"), ephemeral=True
         )
-        if not giveaway:
-            return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
-        if giveaway["ended"]:
-            return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
-        if _giveaway_paused(None, giveaway.get("guild_id")):
-            return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
 
-        is_host  = interaction.user.id == giveaway["host_id"]
-        is_admin = interaction.user.guild_permissions.manage_guild
-        if not (is_host or is_admin):
-            return await interaction.response.send_message(
-                msg(interaction, "no_perm_manage"), ephemeral=True
-            )
-
-        panel = _build_manage_panel(self._bot, giveaway, interaction.guild)
-        await interaction.response.send_message(view=panel, ephemeral=True)
+    panel = _build_manage_panel(bot, giveaway, interaction.guild)
+    await interaction.response.send_message(view=panel, ephemeral=True)
 
 
-def _make_persistent_view(bot, message_id: int, guild=None) -> discord.ui.View:
+async def handle_component(interaction: discord.Interaction) -> bool:
+    """Route a giveaway button click from its custom id.
+
+    Returns True when the interaction was one of ours, so the cog's
+    ``on_interaction`` listener can say so. No view is read, stored or
+    registered: the message id in the custom id is the whole state.
     """
-    A timeout=None View registered with bot.add_view(view, message_id=...).
-    Each active giveaway gets its own registered view, keyed by message_id,
-    so button interactions from different giveaway messages never interfere.
-    """
-    view = discord.ui.View(timeout=None)
-    view.add_item(_GiveawayJoinBtn(bot, message_id, guild))
-    view.add_item(_GiveawayManageBtn(bot, message_id, guild))
-    return view
+    if interaction.type is not discord.InteractionType.component:
+        return False
+    custom_id = (interaction.data or {}).get("custom_id") or ""
+    if custom_id.startswith(GIVEAWAY_JOIN_PREFIX):
+        await join_giveaway(interaction, _id_from_custom_id(custom_id, GIVEAWAY_JOIN_PREFIX))
+        return True
+    if custom_id.startswith(GIVEAWAY_MANAGE_PREFIX):
+        await open_manage_panel(interaction, _id_from_custom_id(custom_id, GIVEAWAY_MANAGE_PREFIX))
+        return True
+    return False
 
 
 # ─────────────────────────────────────────────────────────────
@@ -448,10 +483,14 @@ def _build_content_view(prize: str, end_timestamp: int, winners_count: int,
     return view
 
 
-def _build_active_view(bot, message_id: int, prize: str, end_timestamp: int,
+def _build_active_view(message_id: int, prize: str, end_timestamp: int,
                        winners_count: int, author_mention: str,
                        guild=None) -> discord.ui.LayoutView:
-    """Full active giveaway view with interactive Join + Manage buttons."""
+    """Full active giveaway view with Join + Manage buttons.
+
+    The buttons are callback-only: their custom ids carry ``message_id`` and the
+    cog's listener answers them, so this view is never stored by discord.py.
+    """
     s      = "s" if winners_count > 1 else ""
     footer = _guild_msg(guild, "footer_active", count=winners_count, s=s)
 
@@ -468,8 +507,8 @@ def _build_active_view(bot, message_id: int, prize: str, end_timestamp: int,
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.ActionRow(
-            _GiveawayJoinBtn(bot, message_id, guild),
-            _GiveawayManageBtn(bot, message_id, guild),
+            _GiveawayJoinBtn(message_id, guild),
+            _GiveawayManageBtn(message_id, guild),
         ),
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=f"-# {footer} <t:{end_timestamp}:f>"),
@@ -922,13 +961,12 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         )
         sent = await channel.send(view=content_view)
 
-        # Step 2: register persistent buttons + edit them in.
+        # Step 2: edit the buttons in. Their custom ids carry this message's
+        # id, so nothing has to be registered or kept alive for them.
         active_view = _build_active_view(
-            self.bot, sent.id, s.prize, end_timestamp, s.winners,
+            sent.id, s.prize, end_timestamp, s.winners,
             author_mention, guild,
         )
-        persistent_view = _make_persistent_view(self.bot, sent.id, guild)
-        self.bot.add_view(persistent_view, message_id=sent.id)
         await sent.edit(view=active_view)
 
         # Step 3: persist everything to the DB, including requirements.

@@ -88,32 +88,15 @@ class Giveaway(commands.Cog):
             f"{_ACTIVE_GIVEAWAY_FILTER} AND end_time NOT LIKE '____-%'"
         )
 
-        await self.register_persistent_views()
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Answer giveaway buttons from their custom ids.
 
-    async def register_persistent_views(self) -> int:
-        """Register the buttons for every active stored giveaway at startup."""
-        active = await self.bot.cxn.fetch(
-            "SELECT message_id FROM giveaways WHERE "
-            f"{_ACTIVE_GIVEAWAY_FILTER}"
-        )
-        registered = 0
-        for row in active:
-            message_id = row["message_id"]
-            try:
-                view = _make_persistent_view(self.bot, message_id)
-                self.bot.add_view(view, message_id=message_id)
-                registered += 1
-            except Exception as exc:
-                logging.error(
-                    "Giveaway",
-                    f"Could not register persistent buttons for giveaway {message_id}: {exc}",
-                )
-
-        logging.info(
-            "Giveaway",
-            f"Registered persistent buttons for {registered}/{len(active)} active giveaway(s)",
-        )
-        return registered
+        The buttons carry the giveaway's message id, so no per-giveaway view is
+        stored and there is nothing to re-register at startup: the row is read
+        from the database when the button is pressed.
+        """
+        await handle_component(interaction)
 
     async def cog_unload(self):
         self.check_giveaways.cancel()
