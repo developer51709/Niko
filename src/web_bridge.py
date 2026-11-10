@@ -32,6 +32,11 @@ LOCAL_API_PATHS = (
     # source files while its own bot child restarts, and the supervisor's
     # loopback-only force route is never reachable through the bridge.
     "/api/updates",
+    # Only the bot child answers the Discord relay, and only for the supervisor's
+    # per-run credential.  The dashboard child answers this path itself (with a
+    # 403 for anyone who does not hold the credential) so a public request can
+    # never reach the bot's egress through the bridge.
+    "/api/internal",
 )
 
 #: Public pages that read the live bot's database instead of anything the

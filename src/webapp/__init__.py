@@ -37,6 +37,7 @@ from .routes import (  # noqa: E402,F401
     lavalink_routes,
     interaction_routes,
     verification_routes,
+    internal_routes,
 )
 
 __all__ = ["app", "configure_bot", "public_base_url", "redirect_uri"]

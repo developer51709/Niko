@@ -253,6 +253,11 @@ class Supervisor:
         #: makes the loopback-only update entry point unusable by anything else
         #: on the host, including a reverse-proxied public request.
         self._internal_token = secrets.token_urlsafe(32)
+        # The dashboard child cannot borrow the bot's Discord client, so it asks
+        # the bot child to make its Discord calls.  That one need must not hand
+        # it `_internal_token`, which also opens updates and the database child:
+        # the relay gets a credential of its own, good for nothing else.
+        self._relay_token = secrets.token_urlsafe(32)
         self._supervise_task: asyncio.Task | None = None
         self._shutdown_event = asyncio.Event()
         self._restart_signal = asyncio.Event()
@@ -934,6 +939,7 @@ class Supervisor:
             "NIKO_CHILD_NAME",
             "NIKO_WEB_ROLE",
             "NIKO_INTERNAL_TOKEN",
+            "NIKO_RELAY_TOKEN",
             "NIKO_BOT_API_PORT",
             "NIKO_DB_API_PORT",
             "NIKO_SPLIT_WEB",
@@ -968,6 +974,11 @@ class Supervisor:
             # credential: the bot runs updates and reads the database, the
             # database child serves it.  The dashboard child never gets it.
             env["NIKO_INTERNAL_TOKEN"] = self._internal_token
+        if slot.spec.name in {"bot", "web"}:
+            # The bot child answers the Discord relay and the dashboard child
+            # asks it, so both need the relay credential.  It opens that one
+            # route and nothing else.
+            env["NIKO_RELAY_TOKEN"] = self._relay_token
         if slot.spec.name == "bot" and self.options.split_db:
             db_port = self._live_api_port("db")
             if db_port:

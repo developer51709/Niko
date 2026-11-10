@@ -56,6 +56,43 @@ children. Replacing it with a state mirror/RPC contract (the design review's
 Part 4 goal) removes Flask from the bot child and closes the version-skew window
 described next.
 
+## 2a. The dashboard child reaches Discord through the bot child
+
+Splitting the processes also split the Discord egress. Before the split the
+dashboard borrowed the bot's own HTTP client in-process, so its OAuth token
+exchange, session refresh, user fetch and membership reads travelled with the
+bot's `User-Agent` and, when failover had armed it, the Webshare proxy. In the
+dashboard child there is no such client: `discord_request` fell back to a bare
+`requests` call from the host's own address. On a host whose address Cloudflare
+has banned for the Discord API that is every browser path to Discord failing —
+sign-in included — while the bot keeps answering commands, which is exactly what
+production saw.
+
+`src/webapp/discord_api.py` therefore hands those calls to the bot child when it
+has no bot of its own:
+
+- `POST /api/internal/discord` on the bot child's loopback API
+  (`webapp/routes/internal_routes.py`) takes `{method, url, kwargs}`, makes the
+  call with `discord_request` where the bot lives, and returns the status,
+  headers and base64 body;
+- the route accepts only Discord API URLs, only the request options
+  `discord_request` is called with, and only the supervisor's per-run
+  `NIKO_RELAY_TOKEN` — so it is not a public relay even where the dashboard is
+  reachable directly;
+- that credential is minted for this hop alone and handed to the `bot` and `web`
+  children only. `NIKO_INTERNAL_TOKEN`, which also opens updates and the database
+  child, still never reaches the dashboard: one capability, one credential, and
+  a dashboard that is reached by the public cannot borrow the bot's loopback API
+  beyond making a Discord call;
+- a process with no bot answers `503` instead of pretending to have egress, and
+  `web_bridge.should_forward` keeps `/api/internal/*` out of the public bridge;
+- a single-process deployment never relays: the bot is right there, and the
+  local path is unchanged.
+
+The dashboard still owns its cookies, sessions and routes; only the HTTP call
+moves, which keeps the sign-in a redirect through the site and puts the OAuth
+token exchange back on the egress the bot is already using.
+
 ## 2b. The database child
 
 The pool used to live inside the bot because the bot was the entry point. Now
@@ -88,7 +125,8 @@ and the control `route` command; a failed call drops the cached port and asks
 again, so a replaced database child is picked up without a bot restart.
 
 Only the bot and db children get `NIKO_INTERNAL_TOKEN`; the database child
-refuses to start without it. Named databases are limited to the configured
+refuses to start without it. The relay credential (§2a) is separate and is the
+only secret the dashboard child shares with the bot child. Named databases are limited to the configured
 `MONGODB_DATABASE` and its `_`-suffixed siblings.
 
 The combined fallback (`--no-split-web`) keeps the historical in-process pool,

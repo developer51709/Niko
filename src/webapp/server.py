@@ -91,7 +91,12 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 # the apex and a section subdomain. It is fixed at import from PUBLIC_URL — the
 # canonical apex — because a cookie domain cannot depend on the host that
 # happens to be answering; "" leaves cookies host-only.
-app.config["SESSION_COOKIE_DOMAIN"] = config.session_cookie_domain()
+# ``None`` rather than "" when the site shares no domain: Flask passes the value
+# straight to ``dump_cookie``, which emits an empty ``Domain=`` attribute for an
+# empty string. Browsers drop a cookie whose domain is empty, so a deployment
+# without subdomain routing would finish the sign-in and lose the session on the
+# very next request.
+app.config["SESSION_COOKIE_DOMAIN"] = config.session_cookie_domain() or None
 
 # ── Instance state ────────────────────────────────────────────────────────────
 

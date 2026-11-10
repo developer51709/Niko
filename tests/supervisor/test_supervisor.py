@@ -31,6 +31,32 @@ def test_child_environment_carries_the_control_socket_path(tmp_path):
     assert "PORT" not in env
 
 
+def test_the_dashboard_child_gets_the_relay_credential_and_not_the_internal_one(
+    tmp_path, monkeypatch
+):
+    """The dashboard needs the bot child's Discord egress, not the bot's keys.
+
+    Without a credential the dashboard child silently falls back to asking
+    Discord directly, which is the one thing a host banned from the Discord API
+    cannot do.  It must not get ``NIKO_INTERNAL_TOKEN`` for it: that credential
+    also opens updates and the database child.
+    """
+    monkeypatch.setenv("NIKO_RELAY_TOKEN", "inherited-from-the-shell")
+    options = Options(
+        control_socket=tmp_path / "supervisor.sock", split_web=True, split_db=True
+    )
+    supervisor = Supervisor(options)
+
+    web = supervisor._child_environment(9, supervisor._slots["web"])
+    bot = supervisor._child_environment(9, supervisor._slots["bot"])
+
+    assert web["NIKO_RELAY_TOKEN"] == supervisor._relay_token
+    assert "NIKO_INTERNAL_TOKEN" not in web
+    assert bot["NIKO_RELAY_TOKEN"] == supervisor._relay_token
+    assert bot["NIKO_INTERNAL_TOKEN"] == supervisor._internal_token
+    assert supervisor._relay_token != supervisor._internal_token
+
+
 def _child(name: str, port: int | None, **fields) -> Child:
     return Child(
         proc=SimpleNamespace(pid=1),

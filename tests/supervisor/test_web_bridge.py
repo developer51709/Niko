@@ -104,6 +104,9 @@ def test_only_live_bot_api_paths_are_forwarded():
     assert should_forward("/api/updates/force") is False
     assert should_forward("/api/updates/push") is False
     assert should_forward("/api/health") is False
+    # The Discord relay belongs to the bot child and is answered only for the
+    # supervisor's run credential; the public bridge must never hand it over.
+    assert should_forward("/api/internal/discord") is False
     assert should_forward("/dashboard") is False
     assert should_forward("/assets/app.js") is False
 
