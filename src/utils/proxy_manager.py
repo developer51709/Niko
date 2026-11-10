@@ -25,6 +25,14 @@ Interaction callbacks are deliberately *not* this manager's problem: Discord
 never counts them against the global limit, and
 ``utils.interaction_priority`` keeps them from queueing behind it.
 
+discord.py reads ``http.proxy`` for its own REST calls, but not for webhook
+executions: its webhook adapter takes the raw aiohttp session and passes
+``proxy=None``, so the logging cog's webhook entries left the host's own IP and
+were answered with Cloudflare's ``Error 1015`` while every other call was
+already proxied. The session hook therefore gives a Discord API request that
+carries no proxy of its own the armed one; CDN downloads keep the direct route
+so the Webshare allowance is only spent on the calls the IP is banned for.
+
 While the proxy is active a background task performs exactly one tiny
 *unproxied* request to Discord's gateway endpoint every 10 minutes.  The
 moment that probe confirms the direct IP is no longer rate limited (any
@@ -187,6 +195,26 @@ async def cloudflare_throttle(response) -> str | None:
 
     body = await _read_response_text(response)
     return interstitial_signature(response, body)
+
+
+#: The hosts Discord's API answers on.  ``cdn.discordapp.com`` is deliberately
+#: not one of them: images are not what the egress IP is banned for, and the
+#: Webshare allowance is measured in gigabytes.
+_DISCORD_API_HOSTS = {
+    "discord.com",
+    "discordapp.com",
+    "canary.discord.com",
+    "ptb.discord.com",
+}
+
+
+def _is_discord_api_url(url: str) -> bool:
+    """Whether ``url`` is a Discord API call, as opposed to a CDN download."""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url)
+    hostname = (parts.hostname or "").lower().rstrip(".")
+    return hostname in _DISCORD_API_HOSTS and parts.path.startswith("/api/")
 
 
 def _live_session(http):
@@ -363,6 +391,7 @@ class WebshareProxyManager:
         manager = self
 
         async def hooked_request(method, url, **kwargs):
+            manager._use_armed_proxy(str(url), kwargs)
             try:
                 resp = await original_request(method, url, **kwargs)
             except Exception as exc:
@@ -387,6 +416,25 @@ class WebshareProxyManager:
 
         session._request = hooked_request
         self._hooked_session = session
+
+    def _use_armed_proxy(self, url: str, kwargs: dict) -> None:
+        """Give a Discord API request that has no proxy of its own the armed one.
+
+        discord.py applies ``http.proxy`` in ``HTTPClient.request``, so its own
+        REST calls are covered. Its webhook adapter does not go through there: it
+        uses the aiohttp session directly with ``proxy=None``, which left every
+        webhook execution — the logging cog's entries above all — on the host's
+        own address, answering Cloudflare's ``Error 1015`` while the rest of the
+        bot was proxied and rotating the proxy for a limit it had just failed to
+        avoid.
+        """
+        if not self.enabled or self._proxy_url is None:
+            return
+        if kwargs.get("proxy"):
+            return
+        if not _is_discord_api_url(url):
+            return
+        kwargs["proxy"] = self._proxy_url
 
     async def failover_login(self, error, *, reason: str | None = None) -> bool:
         """Arm or rotate Webshare egress after a blocked login attempt.

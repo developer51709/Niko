@@ -279,6 +279,84 @@ def test_the_body_is_still_readable_after_the_global_check():
     asyncio.run(scenario())
 
 
+# ── Webhook egress ────────────────────────────────────────────────────────────
+# discord.py applies http.proxy in HTTPClient.request, but its webhook adapter
+# builds the request from the aiohttp session directly and passes proxy=None.
+# Every logging-webhook entry therefore left the banned host unproxied and came
+# back as Cloudflare's 1015 page, while the rest of the bot was already proxied.
+
+WEBHOOK_URL = "https://discord.com/api/v10/webhooks/123456789/token"
+
+
+def test_a_webhook_execution_uses_the_armed_proxy():
+    async def scenario():
+        session = FakeSession(FakeResponse(204))
+        manager, http, _ = _attach(session)
+        manager._apply_proxy(dict(PROXY_ONE), reason="Cloudflare throttle (cf-error-details)")
+        session.calls.clear()
+
+        # The arguments discord.py's webhook adapter actually passes.
+        await session._request(
+            "POST",
+            WEBHOOK_URL,
+            data=b"{}",
+            headers={},
+            params=None,
+            proxy=None,
+            proxy_auth=None,
+        )
+
+        assert session.calls == [http.proxy]
+        assert session.calls[0] == "http://user-one:pass-one@10.0.0.1:80"
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_request_with_its_own_proxy_is_left_alone():
+    async def scenario():
+        session = FakeSession(FakeResponse(204))
+        manager, http, _ = _attach(session)
+        manager._apply_proxy(dict(PROXY_ONE), reason="Cloudflare throttle (cf-error-details)")
+        session.calls.clear()
+
+        await session._request("GET", WEBHOOK_URL, proxy="http://other.test:3128")
+
+        assert session.calls == ["http://other.test:3128"]
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_cdn_download_keeps_the_direct_route():
+    async def scenario():
+        session = FakeSession(FakeResponse(200, body=b"png"))
+        manager, http, _ = _attach(session)
+        manager._apply_proxy(dict(PROXY_ONE), reason="Cloudflare throttle (cf-error-details)")
+        session.calls.clear()
+
+        await session._request("GET", "https://cdn.discordapp.com/avatars/1/2.png")
+
+        assert session.calls == [None]
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_direct_webhook_is_never_given_a_proxy_that_is_not_armed():
+    async def scenario():
+        session = FakeSession(FakeResponse(204))
+        manager, http, _ = _attach(session)
+
+        await session._request("POST", WEBHOOK_URL, proxy=None)
+
+        assert session.calls == [None]
+        assert http.proxy is None
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
 # ── Login egress ──────────────────────────────────────────────────────────────
 # discord.py builds its HTTP session inside login(), so the request hook above
 # never sees the login request.  A shared hosting IP that Cloudflare bans
