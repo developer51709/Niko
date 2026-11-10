@@ -17,7 +17,11 @@ from utils.abuse_detection import record_request, strike_notice
 from utils.gateway import patch_identify
 from utils.interaction_endpoint import install_interaction_endpoint
 from utils.interaction_priority import install_interaction_priority
-from utils.proxy_manager import WebshareProxyManager
+from utils.proxy_manager import (
+    WebshareProxyManager,
+    login_block_reason,
+    login_with_failover,
+)
 from utils.discord_proxy import DiscordProxyManager
 from utils import analytics, logging
 from utils.i18n import get_lang
@@ -85,6 +89,40 @@ bot.discord_proxy = DiscordProxyManager()
 bot.discord_proxy.attach(bot)
 if WEBSHARE_API_KEY and bot.proxy_manager.attach(bot):
     logging.info("ProxyManager", "Webshare proxy failover armed.")
+
+#: Console-friendly limit for an error whose text may be a whole HTML page.
+_ERROR_LOG_LIMIT = 400
+
+
+def _one_line(text: str, limit: int = _ERROR_LOG_LIMIT) -> str:
+    """Collapse an exception's text onto one bounded log line.
+
+    ``discord.HTTPException`` carries the entire response body, so a Cloudflare
+    block page logged as-is floods the console for a hundred lines per restart.
+    """
+    collapsed = " ".join(str(text).split())
+    if len(collapsed) > limit:
+        collapsed = collapsed[:limit] + "…"
+    return collapsed
+
+
+def _login_failure_message(error) -> str:
+    """A single line describing why the bot could not log in."""
+    reason = login_block_reason(error)
+    if reason:
+        return (
+            f"Discord login blocked: {reason} (HTTP {getattr(error, 'status', '?')}). "
+            "The shared IP is throttled; Webshare could not provide a working "
+            "egress, so the next attempt waits for the supervisor's backoff."
+        )
+    status = getattr(error, "status", None)
+    if status:
+        # HTTPException's own text is the response body; use it rather than
+        # str(error), which repeats the headers and the whole page.
+        body = _one_line(getattr(error, "text", "") or "", 200)
+        detail = f"{status}: {body}" if body else f"HTTP {status}"
+        return f"Error connecting to Discord: {detail}"
+    return f"Error connecting to Discord: {_one_line(error) or type(error).__name__}"
 
 
 # ── Slash-command blacklist gate ─────────────────────────────────────────────
@@ -302,6 +340,22 @@ if __name__ == "__main__":
         try:
             await _run()
         finally:
+            # The supervisor answers a reported readiness failure with SIGTERM,
+            # which can arrive while this process is already leaving.  A signal
+            # handler still installed then writes to a self-pipe the closing loop
+            # has released — asyncio prints "Bad file descriptor" for it, in the
+            # middle of the very incident being reported.  Uninstalling first
+            # makes a late signal a plain process exit instead.
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None:
+                for sig in (signal.SIGINT, signal.SIGTERM):
+                    try:
+                        loop.remove_signal_handler(sig)
+                    except (NotImplementedError, RuntimeError, ValueError):
+                        pass
             task = _heartbeat_task
             _heartbeat_task = None
             if task is not None:
@@ -387,8 +441,16 @@ if __name__ == "__main__":
                 # Windows or unsupported loop may raise here; ignore
                 pass
 
+        # Fetch the Webshare list before the first Discord request.  Login is the
+        # one request the request hook cannot watch, because discord.py creates
+        # its session inside ``login()``; a prefetched list is what lets a
+        # blocked login switch egress without another Webshare API round-trip.
+        if bot.proxy_manager is not None:
+            bot.proxy_manager.attach(bot)
+            await bot.proxy_manager.prefetch()
+
         try:
-            await bot.login(str(TOKEN))
+            await login_with_failover(bot, str(TOKEN))
             # Slash commands, buttons, selects and modals answer through the
             # interaction callback, which Discord never counts against the global
             # rate limit. Installing this before the gateway connects keeps those
@@ -427,11 +489,25 @@ if __name__ == "__main__":
                         logging.warning("DiscordProxy", f"Could not load proxy workers after login: {e}")
                 bot.discord_proxy.attach(bot)
             if bot.proxy_manager is not None:
+                # Login replaced the session; hook the live one so the limits the
+                # gateway and REST calls hit are seen for the rest of the run.
                 bot.proxy_manager.attach(bot)
-                await bot.proxy_manager.prefetch()
             await bot.connect()
         except Exception as e:
-            logging.error("Startup", f"Error connecting to Discord: {e}")
+            message = _login_failure_message(e)
+            logging.error("Startup", message)
+            # The prefetch session outlives a failed login otherwise, and aiohttp
+            # says so on the way out — one more line in the log this failure
+            # already fills.
+            if bot.proxy_manager is not None:
+                try:
+                    await bot.proxy_manager.close()
+                except Exception:
+                    pass
+            # Tell the supervisor *why* the child is leaving.  A blocked egress
+            # is an owner-fixable incident, so the dashboard names it instead of
+            # reporting a bare exit code and restarting blindly.
+            _report("readiness_failed", reason=message)
         finally:
             try:
                 await bot.close()

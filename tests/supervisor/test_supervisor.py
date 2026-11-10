@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import psutil
+import pytest
 import requests
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -502,3 +503,30 @@ def test_one_hundred_restarts_do_not_leak_processes_or_descriptors(supervisor):
     handle.stop()
     time.sleep(0.2)
     assert handle.descendants() == []
+
+
+def test_a_child_that_never_boots_backs_off_far_longer_than_a_crash(tmp_path):
+    """A boot that never reaches ready is not a transient crash.
+
+    A blocked egress IP (Cloudflare 1015) or a rejected token fails the same way
+    on every attempt, so restarting it on the crash schedule only repeats the
+    failure, re-sends the blocked login and adds a frame per attempt to the log.
+    """
+    supervisor = Supervisor(
+        Options(control_socket=tmp_path / "supervisor.sock", restart_backoff_max=30.0)
+    )
+    assert supervisor._restart_ceiling(never_ready=False) == 30.0
+    assert supervisor._restart_ceiling(never_ready=True) == 300.0
+
+    # Short test windows stay short: the ceiling is derived from the configured
+    # one instead of being a fixed five minutes.
+    quick = Supervisor(
+        Options(control_socket=tmp_path / "quick.sock", restart_backoff_max=0.05)
+    )
+    assert quick._restart_ceiling(never_ready=True) == pytest.approx(0.5)
+
+    # A ceiling someone raised above the cap is never lowered by this.
+    generous = Supervisor(
+        Options(control_socket=tmp_path / "generous.sock", restart_backoff_max=600.0)
+    )
+    assert generous._restart_ceiling(never_ready=True) == 600.0

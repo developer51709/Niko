@@ -16,6 +16,11 @@ recovery — Discord answers it over a different egress IP — so the manager ar
 the proxy for that too.  While a proxy is already active, another global limit
 rotates to a different proxy instead of reusing the IP that is being limited.
 
+The login request is the one Discord call the request hook cannot watch —
+discord.py builds its session inside ``login()`` — so ``login_with_failover``
+reads the block from the login exception, arms the proxy, and retries in the
+same process instead of dying into a restart loop that repeats the block.
+
 Interaction callbacks are deliberately *not* this manager's problem: Discord
 never counts them against the global limit, and
 ``utils.interaction_priority`` keeps them from queueing behind it.
@@ -142,6 +147,33 @@ async def is_global_rate_limit(response) -> bool:
     return isinstance(payload, dict) and bool(payload.get("global"))
 
 
+def login_block_reason(error) -> str | None:
+    """Why a ``bot.login()`` failure means "move egress", or None.
+
+    Login is the one Discord request the session hook cannot see: discord.py
+    builds its own aiohttp session inside ``login()``, so a shared hosting IP
+    that Cloudflare has throttled (``Error 1015``) fails the very first request
+    (``GET /users/@me``) before any proxy is armed.  The block is read from the
+    exception instead — its ``response`` carries Cloudflare's status and
+    headers, its ``text`` the page — and any 429 (Cloudflare throttle or plain
+    Discord rate limit) is the same recovery because both follow the egress IP.
+
+    A JSON Discord error, a connection error or a bad token is *not* a block:
+    a different IP would not fix any of them, so those keep the real failure.
+    """
+    status = getattr(error, "status", None)
+    if status not in (403, 429, 503):
+        return None
+    response = getattr(error, "response", None)
+    body = getattr(error, "text", "") or ""
+    signature = interstitial_signature(response, body)
+    if signature:
+        return f"Cloudflare throttle ({signature})"
+    if status == 429:
+        return "Discord rate limit"
+    return None
+
+
 async def cloudflare_throttle(response) -> str | None:
     """Cloudflare's own interstitial signature on a 429, or None.
 
@@ -155,6 +187,98 @@ async def cloudflare_throttle(response) -> str | None:
 
     body = await _read_response_text(response)
     return interstitial_signature(response, body)
+
+
+def _live_session(http):
+    """discord.py's aiohttp session, or None before ``static_login`` makes one."""
+    session = getattr(http, "_HTTPClient__session", None)
+    if session is not None and hasattr(session, "_request"):
+        return session
+    return None
+
+
+def _discord_missing():
+    """discord.py's ``MISSING`` sentinel, imported only when a retry needs it.
+
+    This module stays importable without discord for the dashboard and the
+    tests; the sentinel is only needed to make ``static_login`` rebuild the
+    connector it shares with the session that was just closed.
+    """
+    from discord.utils import MISSING
+
+    return MISSING
+
+
+#: Retries for a login the direct IP is blocked from, and the waits between
+#: them.  One retry is normally the whole recovery; the extras only cover a
+#: proxy that is itself refused, where the manager rotates to another one.
+LOGIN_ATTEMPTS = 3
+LOGIN_RETRY_DELAYS = (2.0, 5.0)
+
+
+def _proxy_connection_failure(error, manager) -> bool:
+    """Whether a login failed because the armed proxy could not be reached.
+
+    That failure carries no response to read, so it has no Cloudflare signature
+    to classify — but the recovery is the same one the request hook applies to a
+    connection error mid-run: the proxy is dead, so move to another one.
+    """
+    return (
+        manager is not None
+        and getattr(manager, "enabled", False)
+        and isinstance(error, (aiohttp.ClientError, OSError))
+    )
+
+
+async def login_with_failover(
+    client,
+    token: str,
+    *,
+    attempts: int = LOGIN_ATTEMPTS,
+    delays: tuple[float, ...] = LOGIN_RETRY_DELAYS,
+) -> None:
+    """Log ``client`` in, moving to Webshare egress when its IP is blocked.
+
+    ``client.login()`` builds discord.py's aiohttp session itself, so the request
+    hook cannot see the login request.  A shared hosting IP that Cloudflare has
+    banned (``Error 1015``) therefore answers that first request with its block
+    page and no proxy is ever armed — which is the restart loop where the bot
+    dies, restarts, and repeats the same blocked login forever.  Catching the
+    block on the exception keeps the same process and retries on a working
+    egress.  Any other failure (a bad token, a connection error, a JSON Discord
+    error) is not an egress problem and is re-raised untouched.
+    """
+    manager = getattr(client, "proxy_manager", None)
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            await client.login(token)
+            return
+        except Exception as exc:
+            reason = login_block_reason(exc)
+            if reason is None and _proxy_connection_failure(exc, manager):
+                reason = "The Webshare proxy refused the connection"
+            if reason is None or manager is None or attempt >= attempts:
+                raise
+            logging.warning(
+                "ProxyManager",
+                f"{reason} blocked the Discord login — retrying through "
+                f"Webshare (attempt {attempt} of {attempts}).",
+            )
+            if not await manager.failover_login(exc, reason=reason):
+                raise
+            # login() created this attempt's session; release it so the retry
+            # opens a clean one that carries the new proxy.  A failure before
+            # that point has no session to release.
+            if _live_session(client.http) is not None:
+                await client.http.close()
+                client.http.clear()
+                # aiohttp closes the connector together with its session, and
+                # discord.py only builds a new one when it has none: leave the
+                # closed connector in place and the retry's session is born
+                # closed, so it fails with "Session is closed" before it ever
+                # reaches Discord.
+                client.http.connector = _discord_missing()
+            await asyncio.sleep(delays[min(attempt - 1, len(delays) - 1)] if delays else 0.0)
 
 
 class WebshareProxyManager:
@@ -231,10 +355,7 @@ class WebshareProxyManager:
         """The discord aiohttp session, or None while it does not exist yet."""
         if self.http is None:
             return None
-        session = getattr(self.http, "_HTTPClient__session", None)
-        if session is not None and hasattr(session, "_request"):
-            return session
-        return None
+        return _live_session(self.http)
 
     def _install_hook(self, session) -> None:
         """Wrap Discord requests to detect rate limits and apply configured routing."""
@@ -266,6 +387,36 @@ class WebshareProxyManager:
 
         session._request = hooked_request
         self._hooked_session = session
+
+    async def failover_login(self, error, *, reason: str | None = None) -> bool:
+        """Arm or rotate Webshare egress after a blocked login attempt.
+
+        The same recovery as the request hook, driven from the exception a
+        failed ``login()`` raised instead of from a response the hook saw.
+        Returns True when a proxy is active for the retry.  ``reason`` lets the
+        caller name a failure the exception cannot classify by itself, such as a
+        proxy that refused the connection.
+
+        A fresh proxy is armed by setting ``http.proxy``, which discord.py reads
+        on every request and gateway websocket it opens — so the retried login
+        and the connection that follows it both use the new egress.
+        """
+        reason = reason or login_block_reason(error)
+        if reason is None or self.http is None:
+            return False
+        if self.enabled and self._active_proxy is not None:
+            # The active proxy's IP is the limited one (or the proxy is dead), so
+            # a retry on it only repeats the failure; move to another proxy when
+            # one is available, and say so, because retrying the same one is not
+            # a recovery.
+            before = (self._active_proxy.get("proxy_address"), self._active_proxy.get("port"))
+            self.rotate(reason=reason, immediate=True)
+            if self._active_proxy is None:
+                return False
+            after = (self._active_proxy.get("proxy_address"), self._active_proxy.get("port"))
+            return self.enabled and after != before
+        await self.enable(reason=reason)
+        return self.enabled
 
     async def handle_rate_limit(self, response) -> None:
         """Move egress to Webshare when Discord or Cloudflare limits this IP.

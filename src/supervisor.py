@@ -747,7 +747,7 @@ class Supervisor:
                             self._write_status()
                             await self._wait_for_wake()
                         else:
-                            await self._backoff(slot)
+                            await self._backoff(slot, never_ready=True)
                         continue
                     self._refresh_state()
                     self._write_status()
@@ -778,9 +778,15 @@ class Supervisor:
 
                 slot.restarts += 1
                 slot.failures += 1
+                # A child that reported why it was leaving keeps that reason: for
+                # a boot that never reached ready the exit code says nothing,
+                # while "readiness failed: Discord login blocked (Cloudflare
+                # throttle)" is the actionable part the owner needs.
+                report = child.last_error or ""
                 slot.last_error = (
                     f"{name} exited with code {child.returncode}"
                     + (f" ({child.stop_reason})" if child.stop_reason else "")
+                    + (f": {report}" if report else "")
                 )
                 slot.last_stop_reason = child.stop_reason or "child exit"
                 slot.state = "restarting"
@@ -808,7 +814,7 @@ class Supervisor:
                     self._write_status()
                     await self._wait_for_wake()
                     continue
-                await self._backoff(slot)
+                await self._backoff(slot, never_ready=child.ready_at is None)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -1397,12 +1403,34 @@ class Supervisor:
         # itself, so this line is terminal-only.
         print(f"{text}{suffix}", file=sys.stderr, flush=True)
 
-    async def _backoff(self, slot: ChildSlot | None = None) -> None:
+    def _restart_ceiling(self, never_ready: bool) -> float:
+        """The longest a restart may wait, given why the child last died.
+
+        A crash is usually transient, so it walks up to ``restart_backoff_max``.
+        A child that never reported ready failed at *boot* — a blocked egress IP
+        (Cloudflare 1015), a rejected token, a missing dependency — and none of
+        those clear in the half minute a crash backoff waits.  Restarting it that
+        often only repeats the same failure, re-sends the blocked login request
+        and floods the log with one frame per attempt, so those failures walk up
+        to ten times the configured ceiling instead.  The multiplication keeps a
+        short test window short and a production window at five minutes.
+        """
+        ceiling = self.options.restart_backoff_max
+        if not never_ready:
+            return ceiling
+        return max(ceiling, min(ceiling * 10, 300.0))
+
+    async def _backoff(
+        self,
+        slot: ChildSlot | None = None,
+        *,
+        never_ready: bool = False,
+    ) -> None:
         failures = slot.failures if slot is not None else self.consecutive_failures
         exponent = max(0, failures - 1)
         delay = min(
             self.options.restart_backoff_initial * (2**exponent),
-            self.options.restart_backoff_max,
+            self._restart_ceiling(never_ready),
         )
         self._record(
             "restart_backoff",

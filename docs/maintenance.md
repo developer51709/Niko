@@ -201,6 +201,10 @@ A Cloudflare `Error 1015` throttle is the same recovery, because a different egr
 
 While a proxy is already active, another limit rotates to a different proxy instead of reusing the IP that is being limited — spaced out to one rotation per limit burst, since rotating on every 429 in the same burst only burns through the proxy list. A proxy that cannot be connected to is rotated immediately rather than retried, and the 10-minute recovery probe still returns the bot to the direct IP once that works.
 
+Login is the one Discord call the request hook cannot watch, because `discord.py` builds its aiohttp session inside `login()`. That is the call a Cloudflare `Error 1015` on a shared hosting IP answers first, so `utils.proxy_manager.login_with_failover` reads the block from the login exception itself (`response` status plus the interstitial body), arms or rotates the proxy, releases the failed attempt's session, and retries in the same process. Without it the child died on the blocked login before any proxy could be armed and the supervisor restarted it into the identical block. Only a throttle moves egress — a rejected token or a plain Discord JSON error is re-raised, because another IP cannot fix it. The WebShare list is prefetched before login rather than after, so the first failover needs no Webshare API round-trip.
+
+A login that still fails after those retries is reported to the supervisor as `readiness failed` with the reason (the Cloudflare signature, not the block page) so the dashboard names the incident. The supervisor then backs off much further for a child that never reached ready — see **Restart policy** in `docs/supervisor-part-1.md` — instead of restarting every 30 seconds.
+
 ## Monitoring
 - Check the console logs for errors.
 - Run `python3 src/supervisor.py` under a process manager like PM2 or systemd (if not on Replit); the supervisor keeps the bot and dashboard children alive and restarts them after a crash.

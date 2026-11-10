@@ -118,7 +118,11 @@ starting → active → restarting → starting → active
 
 - Unexpected child exit increments `restart_count` and enters `restarting`.
 - The supervisor applies exponential backoff:
-  `min(initial * 2^(failures-1), max)`.
+  `min(initial * 2^(failures-1), max)`. A child that exits *before it ever
+  reported ready* failed at boot — a Cloudflare-blocked egress IP, a rejected
+  token, a missing dependency — and the same failure would just repeat, so
+  those failures walk up to ten times `max` (capped at five minutes) instead of
+  restarting every 30s.
 - A control-socket restart is deliberate: it terminates the child and starts a
   replacement without counting a crash or applying backoff.
 - A missed heartbeat or startup timeout terminates the child with SIGTERM,
