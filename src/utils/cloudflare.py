@@ -30,6 +30,11 @@ _PAGE_MARKERS = (
 # HTML at all, so its numeric error codes are matched on their own.
 _ERROR_CODE = re.compile(r"(?:error code|cloudflare error)\s*:?\s*10\d\d")
 
+# The interstitial's footer names the client address it refused ("Your IP:
+# 203.0.113.7"), which is the one fact that tells a real block of a proxy apart
+# from a request that never left through it.
+_EGRESS_IP = re.compile(r"your ip:?\s*(?:<[^>]*>\s*)*([0-9a-fA-F.:]{3,45})")
+
 _BLOCK_STATUSES = {403, 429, 503}
 
 
@@ -76,6 +81,21 @@ def _evidence(headers, body: str) -> str | None:
     if "cloudflare" in lowered and ("<html" in lowered or "<!doctype html" in lowered):
         return "cloudflare block page"
     return None
+
+
+def blocked_egress_ip(body: str) -> str | None:
+    """The client address Cloudflare's block page says it refused, if it says.
+
+    Cloudflare prints ``Your IP: <address>`` in the interstitial's footer.  That
+    address is the egress the block belongs to: if it is the proxy the request
+    went through, the proxy really is blocked; if it is something else, the
+    request did not leave through the proxy and blacklisting the proxy for it
+    would throw away a working endpoint.
+    """
+    match = _EGRESS_IP.search((body or "").lower())
+    if not match:
+        return None
+    return match.group(1).strip(".:-") or None
 
 
 def interstitial_signature(response, body_fallback: str = "") -> str | None:

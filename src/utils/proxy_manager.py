@@ -16,6 +16,28 @@ recovery — Discord answers it over a different egress IP — so the manager ar
 the proxy for that too.  While a proxy is already active, another global limit
 rotates to a different proxy instead of reusing the IP that is being limited.
 
+A proxy Cloudflare answers with ``Error 1015`` is *banned around*, not rotated
+past once: that block follows the proxy's own IP, so the manager records the
+endpoint and never selects it again for the rest of the ban window.  Without
+that memory rotation was random over the whole list — the same banned proxy
+came back around, every burst re-tried the IP Cloudflare had just refused, and
+the console repeated one failure with no progress behind it.  When every proxy
+the plan offers is blocked the manager says so once and stopsrotating instead of looping through them.
+
+A block is only charged to the proxy whose address Cloudflare refused.  The
+block page names it when it can, and when it does not the proxy is asked what
+address it egresses from (``_probe_egress``); a mismatch or an unanswered check
+keeps the proxy in rotation, so a clean endpoint is never blacklisted for a
+refusal that was not its own.
+
+That record is also written to ``data/proxy_bans.json``: the supervisor restarts
+the bot child when a blocked login kills it, and a fresh process used to forget
+which proxies had just been refused, so every restart walked back onto the same
+two banned IPs.  A blocked login now walks the whole available list in one
+process (``login_with_failover`` sizes its attempts from the proxies that are
+left) and skips whatever earlier processes already found blocked.
+
+
 The login request is the one Discord call the request hook cannot watch —
 discord.py builds its session inside ``login()`` — so ``login_with_failover``
 reads the block from the login exception, arms the proxy, and retries in the
@@ -47,17 +69,23 @@ import json
 import os
 import random
 import time
+from pathlib import Path
 
 import aiohttp
 import requests
 
 from utils import logging
-from utils.cloudflare import interstitial_signature
+from utils.cloudflare import blocked_egress_ip, interstitial_signature
 
 # ── Config ───────────────────────────────────────────────────────────────────
 WEBSHARE_API_KEY_ENV = "WEBSHARE_API_KEY"
 PROXY_LIST_URL = "https://proxy.webshare.io/api/v2/proxy/list/"
 GATEWAY_PROBE_URL = "https://discord.com/api/v10/gateway"
+#: An address echo service the egress check asks what IP it saw.  Discord's own
+#: block page does not always print ``Your IP``, so when it stays silent the
+#: same question is put to the proxy itself through this plain-text endpoint.
+EGRESS_PROBE_URL = "https://checkip.amazonaws.com"
+_EGRESS_PROBE_TIMEOUT = 5.0
 
 # Webshare's list API requires a ``mode``: "direct" returns a usable
 # ``proxy_address``/``port``/credentials per proxy (what this failover needs),
@@ -71,6 +99,15 @@ _BACKBONE_PORT_FALLBACK = 80
 VERIFY_INTERVAL_SECONDS = 600      # probe the direct IP every 10 minutes
 PROXY_CACHE_TTL_SECONDS = 3600     # refetch the Webshare list after 1 hour
 ROTATE_COOLDOWN_SECONDS = 20       # at most one rotation per limit burst
+#: How long a proxy Cloudflare blocked (or that refused the connection) is kept
+#: out of rotation.  Long enough that the bot never loops on a banned IP during
+#: a burst, short enough that a long-lived process can retry an endpoint
+#: Cloudflare has since forgiven without needing a restart.
+PROXY_BAN_TTL_SECONDS = 3600
+#: Where the blocked-proxy record survives a restart.  The supervisor restarts
+#: the bot child when a blocked login ends it, and a process that starts with an
+#: empty memory tries the same refused IPs again.
+PROXY_BANS_PATH = Path(__file__).resolve().parents[2] / "data" / "proxy_bans.json"
 _FETCH_TIMEOUT_SECONDS = 10
 _PAGE_SIZE = 100
 
@@ -112,6 +149,32 @@ def _header_is_true(value) -> bool:
     if value is None:
         return False
     return str(value).strip().lower() not in {"", "0", "false", "none"}
+
+
+async def _probe_egress(session, proxy_url: str) -> str | None:
+    """The address ``proxy_url`` egresses from, or None when it cannot say.
+
+    This is the check that keeps a clean proxy out of the blocked list.  A
+    Cloudflare block belongs to an IP; the only way to know whether that IP is
+    the proxy's is to ask a service outside Discord which address it saw the
+    request arrive from.  A matching answer means the block really is that
+    proxy's; a different one means the request never left through the proxy;
+    no answer means there is no verdict and the block is not charged to anyone.
+    """
+    from ipaddress import ip_address
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=_EGRESS_PROBE_TIMEOUT)
+        async with session.get(EGRESS_PROBE_URL, proxy=proxy_url, timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            text = (await resp.read()).decode("utf-8", "replace").strip()
+    except Exception:
+        return None
+    try:
+        return str(ip_address(text))
+    except ValueError:
+        return None
 
 
 async def _read_response_text(response) -> str:
@@ -176,10 +239,25 @@ def login_block_reason(error) -> str | None:
     body = getattr(error, "text", "") or ""
     signature = interstitial_signature(response, body)
     if signature:
-        return f"Cloudflare throttle ({signature})"
+        return _cloudflare_reason(signature, blocked_egress_ip(body))
     if status == 429:
         return "Discord rate limit"
     return None
+
+
+def _cloudflare_reason(signature: str, egress: str | None) -> str:
+    """``Cloudflare throttle (...)`` naming the address Cloudflare refused.
+
+    The address is what makes a block attributable: without it a log line says a
+    proxy is banned but not whether the request actually left through it.
+    """
+    detail = f"{signature}, egress {egress}" if egress else signature
+    return f"Cloudflare throttle ({detail})"
+
+
+def _login_block_egress(error) -> str | None:
+    """The address Cloudflare refused on a blocked login, when its page says so."""
+    return blocked_egress_ip(getattr(error, "text", "") or "")
 
 
 async def cloudflare_throttle(response) -> str | None:
@@ -237,10 +315,22 @@ def _discord_missing():
     return MISSING
 
 
-#: Retries for a login the direct IP is blocked from, and the waits between
-#: them.  One retry is normally the whole recovery; the extras only cover a
-#: proxy that is itself refused, where the manager rotates to another one.
+#: Attempts a blocked login makes when it cannot consult the proxy list, and the
+#: floor when it can — ``_login_attempts`` adds one attempt per available proxy.
+#: The waits between attempts follow.
+#: Transport failures that prove the proxy itself could not be used.  A read
+#: timeout or a dropped response is just as likely to be Discord's side, and
+#: banning a proxy for one of those takes a working egress out of rotation.
+PROXY_CONNECTION_ERRORS = (
+    aiohttp.ClientProxyConnectionError,
+    aiohttp.ClientHttpProxyError,
+)
+
 LOGIN_ATTEMPTS = 3
+#: Webshare's datacenter addresses get blocked in numbers, so a start that is
+#: blocked on its first proxy has to be able to walk the whole list instead of
+#: dying after two and repeating those two IPs on the next restart.
+LOGIN_ATTEMPTS_MAX = 12
 LOGIN_RETRY_DELAYS = (2.0, 5.0)
 
 
@@ -254,15 +344,33 @@ def _proxy_connection_failure(error, manager) -> bool:
     return (
         manager is not None
         and getattr(manager, "enabled", False)
-        and isinstance(error, (aiohttp.ClientError, OSError))
+        and isinstance(error, PROXY_CONNECTION_ERRORS)
     )
+
+
+def _login_attempts(manager) -> int:
+    """How many logins a blocked start may spend before giving up.
+
+    One attempt per proxy the plan still offers, so a blocked start finds out
+    whether *any* Webshare address works instead of dying after two and walking
+    back onto the same pair on the next restart.  ``LOGIN_ATTEMPTS`` is the floor
+    for a manager that cannot report its list.
+    """
+    available = getattr(manager, "_unbanned_proxies", None)
+    if not callable(available):
+        return LOGIN_ATTEMPTS
+    try:
+        count = len(available())
+    except Exception:
+        return LOGIN_ATTEMPTS
+    return max(LOGIN_ATTEMPTS, min(LOGIN_ATTEMPTS_MAX, 1 + count))
 
 
 async def login_with_failover(
     client,
     token: str,
     *,
-    attempts: int = LOGIN_ATTEMPTS,
+    attempts: int | None = None,
     delays: tuple[float, ...] = LOGIN_RETRY_DELAYS,
 ) -> None:
     """Log ``client`` in, moving to Webshare egress when its IP is blocked.
@@ -275,9 +383,16 @@ async def login_with_failover(
     block on the exception keeps the same process and retries on a working
     egress.  Any other failure (a bad token, a connection error, a JSON Discord
     error) is not an egress problem and is re-raised untouched.
+
+    A blocked start walks the proxy list rather than spending two attempts and
+    exiting: each retry retires the proxy that was refused and rotates onto one
+    that has not been tried, so one restart is enough to learn whether any
+    Webshare address works instead of the supervisor restarting into the same
+    two banned IPs.
     """
     manager = getattr(client, "proxy_manager", None)
-    for attempt in range(1, max(1, attempts) + 1):
+    total = _login_attempts(manager) if attempts is None else attempts
+    for attempt in range(1, max(1, total) + 1):
         try:
             await client.login(token)
             return
@@ -285,12 +400,12 @@ async def login_with_failover(
             reason = login_block_reason(exc)
             if reason is None and _proxy_connection_failure(exc, manager):
                 reason = "The Webshare proxy refused the connection"
-            if reason is None or manager is None or attempt >= attempts:
+            if reason is None or manager is None or attempt >= total:
                 raise
             logging.warning(
                 "ProxyManager",
                 f"{reason} blocked the Discord login — retrying through "
-                f"Webshare (attempt {attempt} of {attempts}).",
+                f"Webshare (attempt {attempt} of {total}).",
             )
             if not await manager.failover_login(exc, reason=reason):
                 raise
@@ -332,6 +447,14 @@ class WebshareProxyManager:
         self._loop = None
         self._verify_interval = VERIFY_INTERVAL_SECONDS
         self._rotated_at = 0.0
+        # Endpoint -> wall-clock time it was blocked, so rotation can skip the
+        # proxies that are already known to fail instead of picking at random.
+        # Wall clock because the record outlives the process (see _load_bans).
+        self._banned_proxies: dict[tuple, float] = {}
+        self._load_bans()
+        # Whether the "nothing is usable" message has been said, so a blocked
+        # list does not turn every request into another warning line.
+        self._shortage_reported = False
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
     def attach(self, bot) -> bool:
@@ -395,18 +518,15 @@ class WebshareProxyManager:
             try:
                 resp = await original_request(method, url, **kwargs)
             except Exception as exc:
-                # A proxy that cannot be reached would otherwise keep every
-                # request failing until the 10-minute recovery probe runs.
-                if manager.enabled and kwargs.get("proxy") and isinstance(exc, (aiohttp.ClientError, OSError)):
-                    try:
-                        manager.rotate(reason="The active Webshare proxy refused the connection", immediate=True)
-                    except Exception:
-                        # The caller has to see the connection error it actually hit.
-                        pass
+                try:
+                    await manager._note_proxy_failure(exc, kwargs.get("proxy"))
+                except Exception:
+                    # The caller has to see the connection error it actually hit.
+                    pass
                 raise
             if manager._should_monitor(str(url)) and not manager._discord_proxy_relayed():
                 try:
-                    await manager.handle_rate_limit(resp)
+                    await manager.handle_rate_limit(resp, proxy=kwargs.get("proxy"))
                 except Exception as exc:
                     # Monitoring must never turn a Discord response into a bot
                     # error: the caller still gets the response it asked for.
@@ -452,44 +572,75 @@ class WebshareProxyManager:
         reason = reason or login_block_reason(error)
         if reason is None or self.http is None:
             return False
+        egress = _login_block_egress(error)
         if self.enabled and self._active_proxy is not None:
             # The active proxy's IP is the limited one (or the proxy is dead), so
             # a retry on it only repeats the failure; move to another proxy when
             # one is available, and say so, because retrying the same one is not
-            # a recovery.
-            before = (self._active_proxy.get("proxy_address"), self._active_proxy.get("port"))
-            self.rotate(reason=reason, immediate=True)
+            # a recovery.  The refused endpoint is retired first, so rotation
+            # cannot hand the retry the same blocked proxy back.
+            before = self._proxy_key(self._active_proxy)
+            if not await self._retire_active_proxy(reason, egress):
+                # The refused address was not this proxy, so another proxy is not
+                # the fix: stop rather than spend the rest of the list on it.
+                return False
             if self._active_proxy is None:
                 return False
-            after = (self._active_proxy.get("proxy_address"), self._active_proxy.get("port"))
-            return self.enabled and after != before
+            return self.enabled and self._proxy_key(self._active_proxy) != before
         await self.enable(reason=reason)
         return self.enabled
 
-    async def handle_rate_limit(self, response) -> None:
+    async def handle_rate_limit(self, response, *, proxy: str | None = None) -> None:
         """Move egress to Webshare when Discord or Cloudflare limits this IP.
 
         Called for every Discord response, so the two checks are cheap: they only
-        read a body on a 429, and an ordinary 200 returns immediately.
+        read a body on a 429, and an ordinary 200 returns immediately.  ``proxy``
+        is the connection the request actually used, so a block is charged to the
+        egress that earned it rather than to whatever proxy is armed.
         """
         if await is_global_rate_limit(response):
-            await self._arm_for_limit("Discord global rate limit")
+            await self._arm_for_limit("Discord global rate limit", via=proxy)
             return
         throttle = await cloudflare_throttle(response)
         if throttle:
-            await self._arm_for_limit(f"Cloudflare throttle ({throttle})")
+            egress = blocked_egress_ip(await _read_response_text(response))
+            await self._arm_for_limit(
+                _cloudflare_reason(throttle, egress),
+                via=proxy,
+                blocked=True,
+                egress=egress,
+            )
 
-    async def _arm_for_limit(self, reason: str) -> None:
+    async def _arm_for_limit(
+        self,
+        reason: str,
+        *,
+        via: str | None = None,
+        blocked: bool = False,
+        egress: str | None = None,
+    ) -> None:
         """Use a proxy for a limited direct IP, or a fresh one while proxied.
 
         The limit follows the egress IP, so a limit that arrives while a proxy is
         already active means that proxy's IP is the limited one: rotating keeps
-        the bot off it without ever falling back to the direct IP.
+        the bot off it without ever falling back to the direct IP.  ``via`` is
+        the proxy that carried the limited request — without it a Cloudflare
+        block on a direct request (a CDN fallback, say) would take a working
+        proxy out of rotation for a block it had nothing to do with.  ``blocked``
+        marks the IP-level Cloudflare throttle, which retires the proxy instead of
+        merely rotating past it once.
         """
         if not self.api_key or self.http is None:
             return
         if self.enabled and self._active_proxy is not None:
-            self.rotate(reason=reason)
+            if via != self._proxy_url:
+                # The block did not arrive through the armed proxy, so it says
+                # nothing about it: the proxy stays exactly as it is.
+                return
+            if blocked:
+                await self._retire_active_proxy(reason, egress)
+            else:
+                self.rotate(reason=reason)
             return
         await self.enable(reason=reason)
 
@@ -530,7 +681,19 @@ class WebshareProxyManager:
         if not proxies:
             self._last_error = "No usable Webshare proxies were returned."
             return False
-        self._apply_proxy(random.choice(proxies), reason=reason or "Discord global rate limit")
+        usable = [proxy for proxy in proxies if not self._proxy_is_banned(proxy)]
+        if not usable:
+            self._last_error = (
+                f"All {len(proxies)} Webshare proxies are blocked; the direct IP is the only egress left."
+            )
+            if not self._shortage_reported:
+                self._shortage_reported = True
+                logging.error(
+                    "ProxyManager",
+                    f"Every Webshare proxy ({len(proxies)}) is Cloudflare-blocked — not arming one.",
+                )
+            return False
+        self._apply_proxy(random.choice(usable), reason=reason or "Discord global rate limit")
         self._rotated_at = time.monotonic()
         self._last_error = None
         return True
@@ -585,7 +748,11 @@ class WebshareProxyManager:
                 return
             if await self._enable_webshare(reason):
                 return
-            logging.warning("ProxyManager", "No Webshare proxy is available — staying on the direct IP.")
+            # Say it once: a blocked direct IP asks for a proxy on every request,
+            # and repeating this line per request is the flood, not the diagnosis.
+            if not self._shortage_reported:
+                self._shortage_reported = True
+                logging.warning("ProxyManager", "No Webshare proxy is available — staying on the direct IP.")
 
     def disable(self) -> None:
         """Drop the Webshare proxy and restore direct egress."""
@@ -601,26 +768,215 @@ class WebshareProxyManager:
 
         Rate-limited egress arrives in bursts, so rotations are spaced out: one
         fresh IP per limit event is the recovery, and rotating on every 429 in the
-        same burst would only burn through the proxy list.  A proxy that cannot be
-        connected to is the exception — it is retried immediately, because the
-        request that found it has already failed.
+        same burst would only burn through the proxy list.  A proxy that is
+        blocked (Cloudflare ``Error 1015``) or cannot be connected to is the
+        exception — it is retired immediately, because the request that found it
+        has already failed and trying it again cannot succeed.
+
+        Rotation only ever lands on a proxy that is not known to be blocked: the
+        point of rotating is to leave a failing egress behind, so returning to an
+        endpoint Cloudflare is refusing is strictly worse than staying put.
         """
         if self._active_proxy is None:
             return
         if not immediate and time.monotonic() - self._rotated_at < ROTATE_COOLDOWN_SECONDS:
             return
-        # Compare endpoints rather than object identity: a refreshed Webshare list
-        # holds new dicts for the same proxies, and rotating onto the IP that is
-        # being limited would recover nothing.
-        active = (self._active_proxy.get("proxy_address"), self._active_proxy.get("port"))
-        candidates = [
-            proxy for proxy in self._cached_proxies()
-            if (proxy.get("proxy_address"), proxy.get("port")) != active
-        ]
+        candidates = self._unbanned_proxies(exclude=self._active_proxy)
         if not candidates:
+            self._report_no_alternatives()
             return
         self._apply_proxy(random.choice(candidates), reason=reason)
         self._rotated_at = time.monotonic()
+
+    async def _note_proxy_failure(self, error, proxy_used) -> bool:
+        """React to a request that failed at the transport, without guessing.
+
+        Failing to *connect* to the proxy proves that endpoint is unusable, so it
+        is retired and never handed out again.  Any other transport failure (a
+        read timeout, a dropped response) can just as easily be Discord's side, so
+        the request moves to another proxy while the one that failed stays in the
+        list — banning it would spend a working egress on a guess.
+        """
+        if not self.enabled or not proxy_used:
+            return False
+        if not isinstance(error, (aiohttp.ClientError, OSError)):
+            return False
+        if isinstance(error, PROXY_CONNECTION_ERRORS):
+            # Already proven unusable; there is nothing to verify with a probe.
+            await self._retire_active_proxy(
+                "The active Webshare proxy refused the connection", verify=False
+            )
+        else:
+            self.rotate(reason="The active Webshare proxy dropped the request", immediate=True)
+        return True
+
+    async def _retire_active_proxy(
+        self, reason: str, egress: str | None = None, *, verify: bool = True
+    ) -> bool:
+        """Stop using the active proxy and move to another one now.
+
+        A Cloudflare block and a refused connection are facts about that exact
+        endpoint, so the proxy is recorded as unusable before rotating away: the
+        next limit must find a different one rather than the IP that just failed.
+        ``egress`` is the address Cloudflare named, when it named one.
+
+        Returns False when the block was provably *not* this proxy's: moving to
+        another proxy cannot fix a block that belongs to some other address, so
+        callers that retry on a fresh egress should stop instead of sweeping the
+        list.  The proxy is still rotated off, just not blacklisted.
+        """
+        if self._active_proxy is None:
+            return False
+        attributable = await self._ban_if_attributable(
+            self._active_proxy, reason, egress, verify=verify
+        )
+        self.rotate(reason=reason, immediate=True)
+        return attributable
+
+    async def _ban_if_attributable(
+        self, proxy: dict, reason: str, egress: str | None, *, verify: bool
+    ) -> bool:
+        """Record ``proxy`` as blocked only when the block is provably its own.
+
+        The address Cloudflare refused decides this: when the block page names
+        it, that is the answer; when the page stays quiet, the proxy is asked
+        what address it egresses from.  A different address means the request
+        never left through the proxy, so the proxy is left in rotation — that is
+        how a clean endpoint stops being marked banned for someone else's block.
+        With no answer at all there is no verdict, and "no verdict" does not
+        become a ban either: the proxy is moved off but stays in the list.
+
+        Returns False only for a proven mismatch, where changing proxies cannot
+        help because the refused address was never the proxy's.
+        """
+        address = (proxy.get("proxy_address") or "").strip().lower()
+        seen = (egress or "").strip().lower()
+        note = None
+        if not seen and verify and self._proxy_url is not None:
+            seen = (await _probe_egress(self._ensure_session(), self._proxy_url) or "").lower()
+            note = f"egress confirmed {seen}" if seen == address else None
+        where = f"{proxy.get('proxy_address')}:{proxy.get('port')}"
+        if seen and address and seen != address:
+            logging.warning(
+                "ProxyManager",
+                f"{reason} — the egress is {seen}, not {where}; Cloudflare refused an "
+                f"address that is not this proxy, so it stays in rotation.",
+            )
+            return False
+        if not seen and verify:
+            logging.warning(
+                "ProxyManager",
+                f"{reason} — there is no egress address to check {where} against; "
+                f"moving off it without blocking it.",
+            )
+            return True
+        self._ban_proxy(proxy, reason, note=note)
+        return True
+
+    @staticmethod
+    def _proxy_key(proxy: dict | None) -> tuple | None:
+        """Identity of a proxy endpoint, stable across refreshed Webshare lists."""
+        if not proxy:
+            return None
+        return (proxy.get("proxy_address"), proxy.get("port"), proxy.get("username"))
+
+    def _proxy_is_banned(self, proxy: dict) -> bool:
+        """Whether ``proxy`` was blocked recently enough to stay out of rotation."""
+        key = self._proxy_key(proxy)
+        if key is None:
+            return False
+        blocked_at = self._banned_proxies.get(key)
+        if blocked_at is None:
+            return False
+        if time.time() - blocked_at >= PROXY_BAN_TTL_SECONDS:
+            del self._banned_proxies[key]
+            return False
+        return True
+
+    def _ban_proxy(self, proxy: dict, reason: str, note: str | None = None) -> None:
+        """Record that Cloudflare (or the proxy itself) refuses this endpoint."""
+        key = self._proxy_key(proxy)
+        if key is None or key in self._banned_proxies:
+            return
+        self._banned_proxies[key] = time.time()
+        self._save_bans()
+        detail = f" ({note})" if note else ""
+        logging.warning(
+            "ProxyManager",
+            f"{reason} — Webshare proxy {proxy.get('proxy_address')}:{proxy.get('port')} "
+            f"will not be used again for {PROXY_BAN_TTL_SECONDS // 60} minutes{detail}.",
+        )
+
+    def _load_bans(self) -> None:
+        """Restore the blocked endpoints an earlier process recorded.
+
+        The supervisor restarts the bot child when a blocked login ends it, and
+        without this the restarted child starts with an empty record: every
+        restart walked back onto the IPs the previous one had just been refused
+        by, which is the loop that made the block look permanent.
+        """
+        try:
+            entries = json.loads(
+                PROXY_BANS_PATH.read_text(encoding="utf-8")
+            ).get("banned", [])
+        except (OSError, ValueError, AttributeError):
+            # No record yet, or one this process cannot read: it is a cache of
+            # what failed, not state worth failing a start over.
+            return
+        now = time.time()
+        for entry in entries:
+            try:
+                address, port, username, blocked_at = entry
+                blocked_at = float(blocked_at)
+            except (TypeError, ValueError):
+                continue
+            if now - blocked_at < PROXY_BAN_TTL_SECONDS:
+                self._banned_proxies[(address, port, username)] = blocked_at
+
+    def _save_bans(self) -> None:
+        """Persist the blocked endpoints for the next process in this container."""
+        now = time.time()
+        entries = [
+            [address, port, username, blocked_at]
+            for (address, port, username), blocked_at in self._banned_proxies.items()
+            if now - blocked_at < PROXY_BAN_TTL_SECONDS
+        ]
+        try:
+            PROXY_BANS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            PROXY_BANS_PATH.write_text(json.dumps({"banned": entries}), encoding="utf-8")
+        except OSError as exc:
+            logging.warning(
+                "ProxyManager",
+                f"Could not record the blocked Webshare proxies: {exc}",
+            )
+
+    def _unbanned_proxies(self, exclude: dict | None = None) -> list[dict]:
+        """Cached proxies that are neither blocked nor the one being replaced."""
+        excluded = self._proxy_key(exclude)
+        return [
+            proxy for proxy in self._cached_proxies(allow_stale=True)
+            if self._proxy_key(proxy) != excluded and not self._proxy_is_banned(proxy)
+        ]
+
+    def _report_no_alternatives(self) -> None:
+        """Say once that every proxy is blocked, instead of looping over them.
+
+        Repeating the message on every blocked request is the console flood this
+        replaces; the state itself is already visible through ``_last_error``.
+        """
+        if self._shortage_reported:
+            return
+        self._shortage_reported = True
+        active = self._active_proxy or {}
+        self._last_error = "Every available Webshare proxy is blocked or unreachable."
+        blocked = len(self._banned_proxies)
+        detail = f"{blocked} blocked" if blocked else "no proxy list"
+        logging.error(
+            "ProxyManager",
+            f"No unblocked Webshare proxy is left to rotate to ({detail}) — keeping "
+            f"{active.get('proxy_address')}:{active.get('port')} rather than retrying a "
+            f"proxy Cloudflare is refusing.",
+        )
 
     def _apply_proxy(self, proxy: dict, reason: str = "Discord global rate limit") -> None:
         self._proxy_url = (
@@ -633,6 +989,7 @@ class WebshareProxyManager:
             self.http.proxy = self._proxy_url
             self.http.proxy_auth = None
         self.enabled = True
+        self._shortage_reported = False
         logging.warning(
             "ProxyManager",
             f"{reason} — routed through Webshare proxy "
@@ -640,10 +997,13 @@ class WebshareProxyManager:
         )
         self._ensure_verify_task()
 
-    def _cached_proxies(self) -> list[dict]:
+    def _cached_proxies(self, *, allow_stale: bool = False) -> list[dict]:
         if (
             self._proxies
-            and time.monotonic() - self._proxies_fetched_at < PROXY_CACHE_TTL_SECONDS
+            and (
+                allow_stale
+                or time.monotonic() - self._proxies_fetched_at < PROXY_CACHE_TTL_SECONDS
+            )
         ):
             return self._proxies
         return []

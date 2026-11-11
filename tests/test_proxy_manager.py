@@ -32,10 +32,43 @@ from utils.proxy_manager import (
 DISCORD_URL = "https://discord.com/api/v10/users/@me"
 PROXY_ONE = {"username": "user-one", "password": "pass-one", "proxy_address": "10.0.0.1", "port": 80}
 PROXY_TWO = {"username": "user-two", "password": "pass-two", "proxy_address": "10.0.0.2", "port": 80}
+PROXY_THREE = {"username": "user-three", "password": "pass-three", "proxy_address": "10.0.0.3", "port": 80}
 CLOUDFLARE_THROTTLE_PAGE = (
     "<html><head><title>Attention Required! | Cloudflare</title></head>"
     "<body>error code: 1015</body></html>"
 )
+
+
+def _cloudflare_page_with_ip(address: str) -> str:
+    """The interstitial Cloudflare serves, footer address included."""
+    return (
+        "<html><head><title>Attention Required! | Cloudflare</title></head><body>"
+        '<div id="cf-error-details"><h1>Error 1015</h1>'
+        f"<p>Your IP: {address}</p></div></body></html>"
+    )
+
+
+async def _no_egress_probe(session, proxy_url):
+    """The egress check cannot say which address a request left from."""
+    return None
+
+
+async def _egress_is_the_proxy(session, proxy_url):
+    """A working proxy egresses from its own address — no network needed."""
+    from urllib.parse import urlsplit
+
+    return urlsplit(proxy_url).hostname
+
+
+@pytest.fixture(autouse=True)
+def _isolated_proxy_bans(tmp_path, monkeypatch):
+    """Keep every test off the real ban file and off the network."""
+    import utils.proxy_manager as proxy_manager_module
+
+    monkeypatch.setattr(
+        proxy_manager_module, "PROXY_BANS_PATH", tmp_path / "proxy_bans.json"
+    )
+    monkeypatch.setattr(proxy_manager_module, "_probe_egress", _egress_is_the_proxy)
 
 
 class FakeResponse:
@@ -64,6 +97,13 @@ class FakeSession:
         return self.response
 
 
+class ProxyRefused(aiohttp.ClientProxyConnectionError):
+    """aiohttp's connect-to-proxy failure, without its connector plumbing."""
+
+    def __init__(self):
+        Exception.__init__(self, "proxy refused the connection")
+
+
 class ProxyFailSession:
     """A session whose proxied requests fail at the connection."""
 
@@ -73,7 +113,20 @@ class ProxyFailSession:
     async def _request(self, method, url, **kwargs):
         if kwargs.get("proxy"):
             self.proxied_calls += 1
-            raise aiohttp.ClientConnectionError("proxy refused the connection")
+            raise ProxyRefused()
+        return FakeResponse(200)
+
+
+class TransientFailSession:
+    """A session whose proxied requests time out without the proxy failing."""
+
+    def __init__(self):
+        self.proxied_calls = 0
+
+    async def _request(self, method, url, **kwargs):
+        if kwargs.get("proxy"):
+            self.proxied_calls += 1
+            raise aiohttp.ServerTimeoutError("no response through the proxy")
         return FakeResponse(200)
 
 
@@ -213,6 +266,9 @@ def test_a_limit_burst_rotates_once_and_then_moves_on():
         await session._request("GET", DISCORD_URL)
         assert manager._active_proxy["proxy_address"] == "10.0.0.2"
         assert http.proxy == "http://user-two:pass-two@10.0.0.2:80"
+        # Discord's own global limit is not proof that a proxy's IP is banned, so
+        # rotating past it must not cost the proxy its place in the list.
+        assert manager._banned_proxies == {}
         await manager.close()
 
     asyncio.run(scenario())
@@ -226,11 +282,14 @@ def test_a_dead_proxy_rotates_instead_of_failing_every_request():
         await manager.enable()
         limited = manager._active_proxy
 
-        with pytest.raises(aiohttp.ClientConnectionError):
+        with pytest.raises(ProxyRefused):
             await session._request("GET", DISCORD_URL, proxy=http.proxy)
 
         assert manager._active_proxy is not limited
         assert manager._active_proxy["proxy_address"] != limited["proxy_address"]
+        # A refused connection is a fact about that endpoint, so it is retired
+        # instead of being handed the next request as well.
+        assert manager._proxy_key(limited) in manager._banned_proxies
         await manager.close()
 
     asyncio.run(scenario())
@@ -255,7 +314,7 @@ def test_a_failing_reaction_never_breaks_the_request():
         session = FakeSession(FakeResponse(429, {"X-RateLimit-Scope": "global"}, {"retry_after": 0.5}))
         manager, http, _ = _attach(session)
 
-        async def explode(response):
+        async def explode(response, **kwargs):
             raise RuntimeError("monitoring is broken")
 
         manager.handle_rate_limit = explode
@@ -275,6 +334,346 @@ def test_the_body_is_still_readable_after_the_global_check():
         assert await is_global_rate_limit(response) is True
         # aiohttp caches the body, so discord.py's own json_or_text still sees it.
         assert json.loads(await response.text())["global"] is True
+
+    asyncio.run(scenario())
+
+
+# ── Blocked proxies stay out of rotation ──────────────────────────────────────
+# Cloudflare's Error 1015 follows the proxy's own IP, and Webshare's datacenter
+# addresses get banned in numbers.  Rotating at random over the whole list meant
+# the manager kept landing back on the proxy that had just been refused: one
+# banned IP retried indefinitely, the list never really explored, and the block
+# pushed harder instead of being left alone.
+
+
+def test_a_cloudflare_blocked_proxy_is_never_selected_again():
+    async def scenario():
+        session = FakeSession(
+            FakeResponse(429, {"Server": "cloudflare"}, body=CLOUDFLARE_THROTTLE_PAGE)
+        )
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO, PROXY_THREE])
+
+        # The direct IP is blocked, so the first proxy is armed.
+        await session._request("GET", DISCORD_URL)
+        first = manager._proxy_key(manager._active_proxy)
+
+        # That proxy is blocked too: it is retired at once — inside the rotation
+        # cooldown the burst would otherwise respect — and the next proxy is used.
+        await session._request("GET", DISCORD_URL)
+        second = manager._proxy_key(manager._active_proxy)
+        assert second != first
+        assert first in manager._banned_proxies
+
+        await session._request("GET", DISCORD_URL)
+        third = manager._proxy_key(manager._active_proxy)
+        # Three distinct proxies in three requests, and the two that were refused
+        # are the only ones the rotation will never hand out again.
+        assert third not in {first, second}
+        assert set(manager._banned_proxies) == {first, second}
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def _capture_logs(monkeypatch):
+    """Record the module's ``logging.<level>(tag, message)`` lines."""
+    import utils.proxy_manager as proxy_manager_module
+
+    events = []
+
+    def record(level):
+        return lambda tag, message: events.append((level, message))
+
+    monkeypatch.setattr(
+        proxy_manager_module,
+        "logging",
+        SimpleNamespace(
+            info=record("info"),
+            warning=record("warning"),
+            error=record("error"),
+            success=record("success"),
+        ),
+    )
+    return events
+
+
+def test_a_fully_blocked_list_stops_rotating_and_says_so_once(monkeypatch):
+    events = _capture_logs(monkeypatch)
+
+    async def scenario():
+        session = FakeSession(
+            FakeResponse(429, {"Server": "cloudflare"}, body=CLOUDFLARE_THROTTLE_PAGE)
+        )
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE])
+
+        await manager.enable()
+        blocked = manager._proxy_url
+        for _ in range(4):
+            await session._request("GET", DISCORD_URL)
+
+        # The plan offers one proxy and Cloudflare refuses it: there is nowhere
+        # better to go, so the manager stays put and says so once instead of
+        # cycling through the same blocked endpoint on every request.
+        assert manager._proxy_url == blocked
+        errors = [message for level, message in events if level == "error"]
+        assert len(errors) == 1
+        assert "No unblocked Webshare proxy" in errors[0]
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_no_proxy_is_armed_when_every_one_is_blocked(monkeypatch):
+    events = _capture_logs(monkeypatch)
+
+    async def scenario():
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        for proxy in (PROXY_ONE, PROXY_TWO):
+            manager._ban_proxy(dict(proxy), "Cloudflare throttle (error code: 1015)")
+
+        for _ in range(3):
+            await manager.enable()
+
+        # Arming a blocked proxy would only route every request into the block
+        # the proxy exists to escape, and saying it three times is the flood.
+        assert not manager.enabled
+        assert http.proxy is None
+        errors = [message for level, message in events if level == "error"]
+        assert len(errors) == 1
+        assert "Every Webshare proxy" in errors[0]
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_block_on_a_direct_request_does_not_retire_the_working_proxy():
+    async def scenario():
+        session = FakeSession(FakeResponse(200, body=b"png"))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        await manager.enable()
+        armed = manager._proxy_url
+
+        # CDN downloads keep the direct route, so a block on one belongs to the
+        # hosting IP — retiring the proxy over it would throw away a good egress.
+        session.response = FakeResponse(
+            429, {"Server": "cloudflare"}, body=CLOUDFLARE_THROTTLE_PAGE
+        )
+        await session._request("GET", "https://cdn.discordapp.com/avatars/1/2.png")
+
+        assert manager._proxy_url == armed
+        assert manager._banned_proxies == {}
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+# ── A block is only charged to the proxy it names ─────────────────────────────
+# Cloudflare's interstitial prints ``Your IP: <address>``.  That address is the
+# egress the block belongs to, so it decides whether the armed proxy is really
+# the one Cloudflare refused — the difference between a banned proxy and a
+# request that never left through it.
+
+
+def test_a_block_that_names_the_proxy_itself_bans_it():
+    async def scenario():
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        await manager.enable()
+        armed = manager._active_proxy
+
+        response = FakeResponse(
+            429,
+            {"Server": "cloudflare"},
+            body=_cloudflare_page_with_ip(armed["proxy_address"]),
+        )
+        await manager.handle_rate_limit(response, proxy=http.proxy)
+
+        assert manager._proxy_key(armed) in manager._banned_proxies
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_block_that_names_another_address_does_not_ban_the_proxy():
+    async def scenario():
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        await manager.enable()
+        armed = manager._proxy_key(manager._active_proxy)
+
+        # The page names an address that is not the proxy we sent the request
+        # through, so the proxy is not what Cloudflare refused.  Banning it here
+        # is how a clean endpoint gets marked banned for an hour.
+        response = FakeResponse(
+            429,
+            {"Server": "cloudflare"},
+            body=_cloudflare_page_with_ip("203.0.113.9"),
+        )
+        await manager.handle_rate_limit(response, proxy=http.proxy)
+
+        assert manager._banned_proxies == {}
+        assert manager._proxy_key(manager._active_proxy) != armed
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_the_egress_check_keeps_a_proxy_that_is_not_the_refused_address(monkeypatch):
+    import utils.proxy_manager as proxy_manager_module
+
+    probed = []
+
+    async def egress_is_elsewhere(session, proxy_url):
+        probed.append(proxy_url)
+        return "203.0.113.9"
+
+    async def scenario():
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        monkeypatch.setattr(proxy_manager_module, "_probe_egress", egress_is_elsewhere)
+        await manager.enable()
+        armed = manager._proxy_key(manager._active_proxy)
+
+        # The page names no address, so the proxy is asked what address it
+        # egresses from.  It is not the proxy, so this block was never the
+        # proxy's to answer for.
+        response = FakeResponse(429, {"Server": "cloudflare"}, body=CLOUDFLARE_THROTTLE_PAGE)
+        await manager.handle_rate_limit(response, proxy=http.proxy)
+
+        assert probed
+        assert manager._banned_proxies == {}
+        assert manager._proxy_key(manager._active_proxy) != armed
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_the_egress_check_confirms_the_proxy_before_banning_it(monkeypatch):
+    import utils.proxy_manager as proxy_manager_module
+
+    async def scenario():
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        await manager.enable()
+        armed = manager._active_proxy
+
+        async def egress_is_the_proxy(session, proxy_url):
+            return armed["proxy_address"]
+
+        monkeypatch.setattr(proxy_manager_module, "_probe_egress", egress_is_the_proxy)
+
+        response = FakeResponse(429, {"Server": "cloudflare"}, body=CLOUDFLARE_THROTTLE_PAGE)
+        await manager.handle_rate_limit(response, proxy=http.proxy)
+
+        # The request did leave from that proxy, so the block really is its own.
+        assert manager._proxy_key(armed) in manager._banned_proxies
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_an_unanswered_egress_check_does_not_ban_the_proxy(monkeypatch):
+    import utils.proxy_manager as proxy_manager_module
+
+    async def scenario():
+        monkeypatch.setattr(proxy_manager_module, "_probe_egress", _no_egress_probe)
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        await manager.enable()
+        armed = manager._proxy_key(manager._active_proxy)
+
+        response = FakeResponse(429, {"Server": "cloudflare"}, body=CLOUDFLARE_THROTTLE_PAGE)
+        await manager.handle_rate_limit(response, proxy=http.proxy)
+
+        # No verdict from the check is not evidence against the proxy: it is
+        # rotated off but stays in the list rather than being blacklisted on a
+        # guess (the default probe in this file never answers).
+        assert manager._banned_proxies == {}
+        assert manager._proxy_key(manager._active_proxy) != armed
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_refused_connection_is_not_put_through_the_egress_check(monkeypatch):
+    import utils.proxy_manager as proxy_manager_module
+
+    probed = []
+
+    async def egress(session, proxy_url):
+        probed.append(proxy_url)
+        return None
+
+    async def scenario():
+        session = ProxyFailSession()
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        monkeypatch.setattr(proxy_manager_module, "_probe_egress", egress)
+        await manager.enable()
+
+        with pytest.raises(ProxyRefused):
+            await session._request("GET", DISCORD_URL, proxy=http.proxy)
+
+        # A proxy that will not connect has already proven itself unusable; the
+        # probe cannot reach it either, so it is not spent on one.
+        assert not probed
+        assert manager._banned_proxies
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_login_block_that_names_another_address_does_not_spend_the_proxy():
+    async def scenario():
+        manager, http = _login_manager(proxies=[PROXY_ONE, PROXY_TWO])
+        await manager.enable()
+        armed = manager._proxy_key(manager._active_proxy)
+        block = FakeLoginFailure(
+            429, _cloudflare_page_with_ip("203.0.113.9"), {"Server": "cloudflare"}
+        )
+        client = FakeLoginClient(manager, [block])
+
+        with pytest.raises(FakeLoginFailure):
+            await login_with_failover(client, "token", delays=(0,))
+
+        # Cloudflare refused an address that is not the proxy, so no other proxy
+        # can clear it: fail fast instead of sweeping the list, and leave the
+        # proxy in rotation.
+        assert client.logins == 1
+        assert manager._banned_proxies == {}
+        assert manager._proxy_key(manager._active_proxy) != armed
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+def test_the_block_reason_quotes_the_address_cloudflare_refused():
+    page = FakeLoginFailure(
+        429, _cloudflare_page_with_ip("64.137.96.74"), {"Server": "cloudflare"}
+    )
+
+    # The address travels with the reason, so every later line about this block
+    # says which egress it belongs to instead of leaving it to be assumed.
+    assert login_block_reason(page) == (
+        "Cloudflare throttle (cf-error-details, egress 64.137.96.74)"
+    )
+
+
+def test_a_timeout_through_the_proxy_moves_on_without_banning_it():
+    async def scenario():
+        session = TransientFailSession()
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        await manager.enable()
+        armed = manager._proxy_key(manager._active_proxy)
+
+        with pytest.raises(aiohttp.ServerTimeoutError):
+            await session._request("GET", DISCORD_URL, proxy=http.proxy)
+
+        # A slow answer is not proof the proxy is blocked: the next request moves
+        # to another proxy, but this one keeps its place in the list.
+        assert manager._proxy_key(manager._active_proxy) != armed
+        assert manager._banned_proxies == {}
+        await manager.close()
 
     asyncio.run(scenario())
 
@@ -648,7 +1047,7 @@ def test_a_dead_proxy_on_the_login_retry_rotates_to_another_one():
         manager, http = _login_manager(proxies=[PROXY_ONE, PROXY_TWO])
         await manager.enable()
         limited = manager._active_proxy["proxy_address"]
-        client = FakeLoginClient(manager, [aiohttp.ClientOSError("proxy refused")])
+        client = FakeLoginClient(manager, [ProxyRefused()])
 
         await login_with_failover(client, "token", delays=(0,))
 
@@ -664,14 +1063,113 @@ def test_a_dead_proxy_without_a_replacement_reports_the_real_error():
     async def scenario():
         manager, http = _login_manager(proxies=[PROXY_ONE])
         await manager.enable()
-        failure = aiohttp.ClientOSError("proxy refused")
+        failure = ProxyRefused()
         client = FakeLoginClient(manager, [failure])
 
-        with pytest.raises(aiohttp.ClientOSError) as raised:
+        with pytest.raises(ProxyRefused) as raised:
             await login_with_failover(client, "token", delays=(0,))
 
         assert raised.value is failure
         assert client.logins == 1
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
+# ── Blocked proxies survive a restart ─────────────────────────────────────────
+# The supervisor restarts the bot child when a blocked login ends it.  With the
+# record in memory only, every restart began from an empty list and picked the
+# same IPs Cloudflare had just refused, so the block looked permanent.
+
+
+class AlwaysBlockedLoginClient:
+    """A client whose every login is answered by Cloudflare's 1015 page."""
+
+    def __init__(self, manager):
+        self.proxy_manager = manager
+        self.http = manager.http
+        self.logins = 0
+        self.proxies = []
+
+    async def login(self, token):
+        self.logins += 1
+        self.proxies.append(self.proxy_manager._proxy_url)
+        raise FakeLoginFailure(429, CLOUDFLARE_THROTTLE_PAGE, {"Server": "cloudflare"})
+
+
+def test_a_blocked_proxy_stays_blocked_after_a_restart():
+    import utils.proxy_manager as proxy_manager_module
+
+    async def scenario():
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        manager._ban_proxy(dict(PROXY_ONE), "Cloudflare throttle (error code: 1015)")
+        await manager.close()
+
+        # A new process, exactly as the supervisor starts it after a blocked login.
+        restarted = WebshareProxyManager("test-key")
+        restarted._proxies = [dict(PROXY_ONE), dict(PROXY_TWO)]
+        restarted._proxies_fetched_at = time.monotonic()
+        assert restarted._banned_proxies
+        assert [
+            restarted._proxy_key(proxy) for proxy in restarted._unbanned_proxies()
+        ] == [restarted._proxy_key(PROXY_TWO)]
+        assert proxy_manager_module.PROXY_BANS_PATH.exists()
+        await restarted.close()
+
+    asyncio.run(scenario())
+
+
+def test_a_ban_outside_the_window_is_not_restored():
+    import utils.proxy_manager as proxy_manager_module
+
+    proxy_manager_module.PROXY_BANS_PATH.write_text(
+        json.dumps(
+            {"banned": [[PROXY_ONE["proxy_address"], 80, "user-one", time.time() - 61 * 60]]}
+        ),
+        encoding="utf-8",
+    )
+
+    manager = WebshareProxyManager("test-key")
+
+    assert manager._banned_proxies == {}
+
+
+def test_an_unreadable_ban_record_does_not_stop_a_start():
+    import utils.proxy_manager as proxy_manager_module
+
+    proxy_manager_module.PROXY_BANS_PATH.write_text("{not json", encoding="utf-8")
+
+    manager = WebshareProxyManager("test-key")
+
+    assert manager._banned_proxies == {}
+
+
+def test_a_blocked_login_walks_the_whole_proxy_list_before_giving_up():
+    async def scenario():
+        proxies = [
+            {
+                "username": f"user-{index}",
+                "password": f"pass-{index}",
+                "proxy_address": f"10.0.0.{index}",
+                "port": 80,
+            }
+            for index in range(1, 6)
+        ]
+        manager, http = _login_manager(proxies=proxies)
+        client = AlwaysBlockedLoginClient(manager)
+
+        with pytest.raises(FakeLoginFailure):
+            await login_with_failover(client, "token", delays=(0,))
+
+        # One direct login plus one per proxy.  Stopping after two attempts left
+        # four addresses untried, and the next restart began from an empty record
+        # and walked the same pair again.
+        assert client.logins == 6
+        assert len({url for url in client.proxies if url}) == 5
+        # Every refused proxy is recorded for the next process, except the last
+        # one, whose attempt is the one that gives up.
+        assert len(manager._banned_proxies) == 4
         await manager.close()
 
     asyncio.run(scenario())
