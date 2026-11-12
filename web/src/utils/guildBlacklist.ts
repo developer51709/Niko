@@ -47,14 +47,34 @@ export function groupLockdownSteps(steps: LockdownStepResult[]) {
 }
 
 /** One-line outcome for the completion toast. */
-export function lockdownToastMessage(summary: GuildLockdownSummary) {
+export function lockdownToastMessage(_summary: GuildLockdownSummary) {
+  return "Guild blacklisted.";
+}
+
+/** The detail line under the completion toast. */
+export function lockdownToastDescription(summary: GuildLockdownSummary) {
   const { paused, skipped, failed } = groupLockdownSteps(summary.steps);
-  const parts = [
+  const counts = [
     paused.length ? `${paused.length} paused` : "",
     skipped.length ? `${skipped.length} skipped` : "",
     failed.length ? `${failed.length} failed` : "",
   ].filter(Boolean);
-  return `${summary.guildName} blacklisted${parts.length ? ` · ${parts.join(" · ")}` : ""}.`;
+  const headline = `${summary.guildName}${counts.length ? ` · ${counts.join(" · ")}` : ""}.`;
+  if (failed.length) {
+    return `${headline} Needs attention: ${failed.map((step) => step.label.replace(/…$/, "")).join(", ")}.`;
+  }
+  if (paused.length) {
+    return `${headline} ${paused.length} feature${paused.length === 1 ? "" : "s"} paused; saved settings are kept for an approved appeal.`;
+  }
+  return skipped.length
+    ? `${headline} No additional features needed changes; the blacklist entry is active.`
+    : `${headline} The blacklist entry is active.`;
+}
+
+/** Keep a long reason readable inside a toast without letting it take over. */
+export function summariseBlacklistReason(reason: string) {
+  const clean = reason.trim().replace(/\s+/g, " ");
+  return clean.length > 160 ? `${clean.slice(0, 159)}…` : clean;
 }
 
 /**
@@ -85,18 +105,31 @@ export async function blacklistGuildWithLockdown({
     onStep?.(step);
   };
 
+  const total = LOCKDOWN_STEPS.length;
+  const reasonSummary = summariseBlacklistReason(reason);
+  const description = `${guildName}${reasonSummary ? ` · ${reasonSummary}` : ""}`;
+  const stepDetail = (completed: number) => ({
+    description,
+    progress: {
+      value: completed / total,
+      label: `Step ${Math.min(completed + 1, total)} of ${total}`,
+    },
+  });
+
   const [databaseKey, databaseLabel] = LOCKDOWN_STEPS[0];
-  notifyLoading(databaseLabel, taskId);
+  notifyLoading(databaseLabel, taskId, stepDetail(0));
   try {
     await setStaffGuildBlacklist(guildId, "add", reason, csrfToken);
     record({ step: databaseKey, label: databaseLabel, status: "done", detail: "Blacklist entry saved." });
   } catch (error) {
-    notifyError(error instanceof Error ? error.message : "The guild could not be blacklisted.", taskId);
+    notifyError(error instanceof Error ? error.message : "The guild could not be blacklisted.", taskId, {
+      description: `${guildName} was not blacklisted; no features were paused.`,
+    });
     return null;
   }
 
-  for (const [step] of LOCKDOWN_STEPS.slice(1)) {
-    notifyLoading(LOCKDOWN_STEPS.find(([key]) => key === step)?.[1] || step, taskId);
+  for (const [index, [step]] of LOCKDOWN_STEPS.slice(1).entries()) {
+    notifyLoading(LOCKDOWN_STEPS.find(([key]) => key === step)?.[1] || step, taskId, stepDetail(index + 1));
     try {
       const result = await lockdownStaffGuild(guildId, step, csrfToken);
       record({ step: result.step, label: result.label, status: result.status, detail: result.detail });
@@ -111,6 +144,6 @@ export async function blacklistGuildWithLockdown({
   }
 
   const summary = { guildId, guildName, steps };
-  notifySuccess(lockdownToastMessage(summary), taskId);
+  notifySuccess(lockdownToastMessage(summary), taskId, { description: lockdownToastDescription(summary) });
   return summary;
 }

@@ -23,6 +23,7 @@
 @import "./styles/not-found.css";
 @import "./styles/flagged-media.css";
 @import "./styles/context-menu.css";
+@import "./styles/toast-v2.css";
 
 :root {
   /* One family for the whole site: public pages and the dashboard both inherit

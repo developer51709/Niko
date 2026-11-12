@@ -1151,7 +1151,7 @@ class ServerLogger(commands.Cog):
         return getattr(tags, "bot_id", None) is not None
 
     async def _log_application_added(self, member) -> None:
-        """One applications entry for a bot joining, with who and what.
+        """One server entry for a bot joining, with who and what.
 
         Discord also fires a member join, an invite join and a managed-role
         create for the same action. They are suppressed for bots so the one
@@ -1175,12 +1175,12 @@ class ServerLogger(commands.Cog):
         if entry is not None and entry.reason:
             body += f"\n**Reason:** {entry.reason}"
         await self.log_event(
-            guild, "applications", "Application Added", body,
+            guild, "server", "Application Added", body,
             target_id=member.id, action_key="Application Added",
         )
 
     async def _log_application_removed(self, member) -> None:
-        """One applications entry for a bot leaving, with who removed it."""
+        """One server entry for a bot leaving, with who removed it."""
         guild = member.guild
         entry = await self._application_audit_entry(
             guild, discord.AuditLogAction.integration_delete, member.id)
@@ -1206,7 +1206,7 @@ class ServerLogger(commands.Cog):
         if entry is not None and entry.reason:
             body += f"\n**Reason:** {entry.reason}"
         await self.log_event(
-            guild, "applications", "Application Removed", body,
+            guild, "server", "Application Removed", body,
             target_id=member.id, action_key="Application Removed",
         )
 
@@ -1216,7 +1216,7 @@ class ServerLogger(commands.Cog):
 
         # A bot joining is an application being added, not a person arriving.
         # Discord also fires an invite join and a managed-role create for it,
-        # so the applications entry replaces that trio.
+        # so the server entry replaces that trio.
         if getattr(member, "bot", False):
             await self._log_application_added(member)
             return
@@ -1342,7 +1342,7 @@ class ServerLogger(commands.Cog):
         guild = member.guild
 
         # A bot leaving is its application being removed; its managed role is
-        # deleted with it, so the applications entry is the whole story.
+        # deleted with it, so the server entry is the whole story.
         if getattr(member, "bot", False):
             await self._log_application_removed(member)
             return
@@ -2231,7 +2231,7 @@ class ServerLogger(commands.Cog):
     @commands.Cog.listener()
     async def on_guild_role_create(self, role: discord.Role):
         # A bot's managed role is created with the application itself; the
-        # applications entry is what says the app was added, and how.
+        # application entry is what says the app was added, and how.
         if self._is_application_role(role):
             return
 
@@ -2258,7 +2258,7 @@ class ServerLogger(commands.Cog):
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role: discord.Role):
         # The managed role goes with the application it belongs to; removing a
-        # bot is already one applications entry.
+        # bot is already one application entry.
         if self._is_application_role(role):
             return
 
@@ -2625,8 +2625,8 @@ class ServerLogger(commands.Cog):
             or await self._audit_latest(guild, discord.AuditLogAction.integration_update)
         if entry is None:
             return
-        # Bot applications have their own category and entry; this handler is
-        # for the other integrations (Twitch, YouTube, webhooks).
+        # Bot applications are logged as server entries; this handler is for
+        # the other integrations (Twitch, YouTube, webhooks).
         if str(getattr(entry.target, "type", "")).lower() == "discord":
             return
         body = (

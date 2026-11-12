@@ -21,7 +21,6 @@
   "filter.hybrid": "Hybride",
   "filter.context": "Menus contextuels",
   "filter.allCategories": "Toutes les catégories",
-  "registry.live": "Registre du bot en direct",
   "registry.hint": "Sélectionne une commande pour tous ses détails",
   "filters.reset": "Réinitialiser les filtres",
   "error.title": "Impossible de charger les commandes",

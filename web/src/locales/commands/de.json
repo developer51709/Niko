@@ -21,7 +21,6 @@
   "filter.hybrid": "Hybrid",
   "filter.context": "Kontextmenüs",
   "filter.allCategories": "Alle Kategorien",
-  "registry.live": "Live-Registry des Bots",
   "registry.hint": "Befehl auswählen für alle Details",
   "filters.reset": "Filter zurücksetzen",
   "error.title": "Befehle konnten nicht geladen werden",

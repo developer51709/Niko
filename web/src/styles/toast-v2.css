@@ -1,0 +1,161 @@
+/* Toast V2 experiment — goey-toast dressed in the site's palette.
+
+   goey-toast ships a dark theme of its own, but it is a neutral grey with bright
+   Material accents. Every experimental toast carries the `niko-toast-v2`
+   wrapper class (see `utils/toast`), so these overrides only touch the
+   experiment and leave the package's defaults intact. Variable overrides live
+   on the same wrapper that defines the package's dark theme, with one extra
+   class for specificity, so stylesheet order cannot flip the palette back. */
+
+.niko-toast-v2.gooey-wrapper {
+  font-family: var(--font-sans);
+  /* The stack already sits inside the viewport offset; never let a long toast
+     push the blob past the edge of a narrow phone. */
+  max-width: calc(100vw - 32px);
+}
+
+.niko-toast-v2.gooey-wrapper[data-theme="dark"] {
+  --gooey-fill: #14161a;
+  --gooey-border: rgba(255, 255, 255, .1);
+  --gooey-border-width: 1px;
+
+  --gooey-title-default: #f4f5f7;
+  --gooey-title-success: #8bd5b1;
+  --gooey-title-error: #e08b7f;
+  --gooey-title-warning: #e0b36a;
+  --gooey-title-info: #d5d9df;
+  --gooey-title-loading: #d5d9df;
+  --gooey-description: #b4bac3;
+  --gooey-timestamp: #858c96;
+  --gooey-close-fg: #b4bac3;
+
+  --gooey-progress-track: rgba(255, 255, 255, .08);
+  --gooey-progress-default: #aab1ba;
+  --gooey-progress-success: #8bd5b1;
+  --gooey-progress-error: #e08b7f;
+  --gooey-progress-warning: #e0b36a;
+  --gooey-progress-info: #aab1ba;
+
+  --gooey-action-default-bg: #26292e;
+  --gooey-action-default-fg: #d5d9df;
+  --gooey-action-default-bg-hover: #30343a;
+  --gooey-action-default-bg-active: #3a3e45;
+
+  --gooey-action-success-bg: rgba(139, 213, 177, .14);
+  --gooey-action-success-fg: #8bd5b1;
+  --gooey-action-success-bg-hover: rgba(139, 213, 177, .22);
+  --gooey-action-success-bg-active: rgba(139, 213, 177, .3);
+
+  --gooey-action-error-bg: rgba(224, 139, 127, .16);
+  --gooey-action-error-fg: #e08b7f;
+  --gooey-action-error-bg-hover: rgba(224, 139, 127, .24);
+  --gooey-action-error-bg-active: rgba(224, 139, 127, .32);
+
+  --gooey-action-warning-bg: rgba(224, 179, 106, .16);
+  --gooey-action-warning-fg: #e0b36a;
+  --gooey-action-warning-bg-hover: rgba(224, 179, 106, .24);
+  --gooey-action-warning-bg-active: rgba(224, 179, 106, .32);
+
+  --gooey-action-info-bg: rgba(170, 177, 186, .14);
+  --gooey-action-info-fg: #d5d9df;
+  --gooey-action-info-bg-hover: rgba(170, 177, 186, .22);
+  --gooey-action-info-bg-active: rgba(170, 177, 186, .3);
+}
+
+.niko-toast-v2 .gooey-title {
+  padding-bottom: 1px;
+  font-size: 12.5px;
+  letter-spacing: -.01em;
+}
+
+/* Titles stay on one line, as goey intends: the toast message is kept short
+   and the description carries any longer detail. */
+.niko-toast-v2 .gooey-header {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.niko-toast-v2 .gooey-description {
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+/* The package keeps expanded toasts at 300–380px. On desktop that stays a
+   readable measure; on a phone the toast is allowed to use the whole width the
+   stack has, so long copy wraps instead of running off the edge. */
+.niko-toast-v2 .gooey-contentExpanded {
+  min-width: min(300px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 32px));
+  padding-right: 24px;
+}
+
+.niko-toast-v2 .gooey-actionButton {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Rich descriptions: the toast's own copy, then a live progress bar. */
+.niko-toast-rich { display: grid; gap: 8px; }
+.niko-toast-description { display: block; overflow-wrap: anywhere; }
+
+.niko-toast-progress {
+  position: relative;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .1);
+}
+
+.niko-toast-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(139, 213, 177, .65), var(--sage));
+  transition: width .5s cubic-bezier(.22, 1, .36, 1);
+}
+
+.niko-toast-progress.is-indeterminate .niko-toast-progress-fill {
+  width: 42%;
+  animation: niko-toast-progress-slide 1.15s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+
+.niko-toast-progress-label {
+  color: var(--dim);
+  font: 700 9px "Space Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+@keyframes niko-toast-progress-slide {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(260%); }
+}
+
+/* The loading icon is ours because gooey-toast only spins for its promise API. */
+.niko-toast-v2 .gooey-iconWrapper { color: var(--accent-dark); }
+.niko-toast-spinner { animation: niko-toast-spin .9s linear infinite; }
+
+@keyframes niko-toast-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 600px) {
+  .niko-toast-v2 .gooey-contentExpanded {
+    min-width: min(300px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .niko-toast-spinner { animation: none; }
+  .niko-toast-progress-fill { transition: none; }
+  .niko-toast-progress.is-indeterminate .niko-toast-progress-fill {
+    width: 100%;
+    opacity: .55;
+    animation: none;
+  }
+}

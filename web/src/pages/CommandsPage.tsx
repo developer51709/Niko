@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCommands } from "../api";
 import { Footer } from "../components/Footer";
 import { Icon } from "../components/Icon";
@@ -68,13 +68,22 @@ const typeKeys: Record<CommandType, string> = {
   context: "type.context",
 };
 
-/** The small glyph tile that leads a card and the dialog header. */
-const typeSigils: Record<CommandType, string> = {
-  slash: "/",
-  prefix: ".",
-  hybrid: "/.",
-  context: "▸",
+/** The registry stores categories as lowercase slugs; these are their labels. */
+const CATEGORY_LABELS: Record<string, string> = {
+  economy: "Economy",
+  fun: "Fun",
+  music: "Music",
+  leveling: "Leveling",
+  moderation: "Moderation",
+  ai: "AI",
+  utility: "Utility",
+  community: "Community",
 };
+
+function categoryLabel(category: string) {
+  const key = category.toLowerCase();
+  return CATEGORY_LABELS[key] ?? (category ? category.charAt(0).toUpperCase() + category.slice(1) : "");
+}
 
 function normalizeType(command: Command): CommandType {
   return command.type && command.type in typeKeys ? command.type : "slash";
@@ -114,14 +123,94 @@ function detailValues(values?: string[]) {
   return (values || []).filter((value) => typeof value === "string" && value.trim());
 }
 
-function CommandDetailDialog({ command, onClose }: { command: Command; onClose: () => void }) {
+function commandKey(command: Command) {
+  return `${normalizeType(command)}-${command.context_type || ""}-${command.category}-${command.name}`;
+}
+
+type CommandSelection = { command: Command; key: string; originEl: HTMLButtonElement };
+
+function CommandDetailDialog({ command, originEl, onClose }: { command: Command; originEl: HTMLButtonElement; onClose: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
+  const [entered, setEntered] = useState(false);
   const { t } = useStrings("commands");
   const { describe, describeParameter } = useCommandCopy();
-  const close = useRef(onClose);
-  close.current = onClose;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const requestCloseRef = useRef<() => void>(() => {});
+  const openAnimation = useRef<Animation | null>(null);
+  const closeAnimation = useRef<Animation | null>(null);
+  const scrimAnimation = useRef<Animation | null>(null);
+  const enterTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const finalRect = useRef<DOMRect | null>(null);
+  const fallbackOrigin = useRef<DOMRect | null>(null);
+  const closing = useRef(false);
+  const closed = useRef(false);
+
+  // The popup is the card, expanded: measure both boxes before the first paint
+  // so the dialog can start exactly on top of the card and grow into place.
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    const scrim = scrimRef.current;
+    if (!dialog || !scrim) return;
+    const rect = dialog.getBoundingClientRect();
+    finalRect.current = rect;
+    fallbackOrigin.current = originEl.getBoundingClientRect();
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      scrim.style.opacity = "1";
+      setEntered(true);
+      return;
+    }
+
+    const origin = fallbackOrigin.current;
+    if (!origin.width || !origin.height || !rect.width || !rect.height) {
+      scrim.style.opacity = "1";
+      setEntered(true);
+      return;
+    }
+
+    // Only the dim layer fades; the dialog stays opaque so its title is visible
+    // from the first frame of the expansion.
+    scrim.style.opacity = "0";
+    const scrimAnim = scrim.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      { duration: 220, easing: "ease-out", fill: "both" },
+    );
+    const dialogAnim = dialog.animate(
+      [
+        {
+          transform: `translate(${origin.left - rect.left}px, ${origin.top - rect.top}px) scale(${origin.width / rect.width}, ${origin.height / rect.height})`,
+        },
+        { transform: "translate(0px, 0px) scale(1, 1)" },
+      ],
+      { duration: 440, easing: "cubic-bezier(.22, 1, .36, 1)", fill: "both" },
+    );
+    openAnimation.current = dialogAnim;
+    scrimAnimation.current = scrimAnim;
+    // Let the header travel with the expanding surface, then reveal the body
+    // and footer in place instead of stretching them with the card.
+    enterTimer.current = window.setTimeout(() => setEntered(true), 250);
+
+    return () => {
+      if (enterTimer.current !== null) {
+        window.clearTimeout(enterTimer.current);
+        enterTimer.current = null;
+      }
+      dialogAnim.cancel();
+      scrimAnim.cancel();
+    };
+  }, [originEl]);
+
+  useEffect(() => () => {
+    if (enterTimer.current !== null) window.clearTimeout(enterTimer.current);
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    closeAnimation.current?.cancel();
+    scrimAnimation.current?.cancel();
+  }, []);
 
   // Escape closes, Tab stays inside the dialog, and focus returns to the card
   // that opened it once the dialog unmounts.
@@ -131,7 +220,7 @@ function CommandDetailDialog({ command, onClose }: { command: Command; onClose: 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        close.current();
+        requestCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -178,15 +267,81 @@ function CommandDetailDialog({ command, onClose }: { command: Command; onClose: 
     }
   };
 
+  const finishClose = () => {
+    if (closed.current) return;
+    closed.current = true;
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    onCloseRef.current();
+  };
+
+  // Closing is the opening in reverse: the new sections fade out, then the
+  // surface contracts back onto the card it came from before unmounting.
+  const requestClose = () => {
+    if (closing.current) return;
+    closing.current = true;
+    setEntered(false);
+    if (enterTimer.current !== null) {
+      window.clearTimeout(enterTimer.current);
+      enterTimer.current = null;
+    }
+
+    const dialog = dialogRef.current;
+    const scrim = scrimRef.current;
+    const rect = finalRect.current;
+    const origin = originEl.isConnected ? originEl.getBoundingClientRect() : fallbackOrigin.current;
+    if (!dialog || !scrim || !rect || !origin || !origin.width || !origin.height) {
+      finishClose();
+      return;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      finishClose();
+      return;
+    }
+
+    // Read the live values before cancelling the opening animation so closing
+    // midway through it continues from wherever the dialog currently is.
+    const currentTransform = window.getComputedStyle(dialog).transform;
+    const currentScrimOpacity = window.getComputedStyle(scrim).opacity;
+    openAnimation.current?.cancel();
+    scrimAnimation.current?.cancel();
+    // The inline opacity is the pre-animation 0. Pin it to the value we just
+    // read so cancelling the opening animation cannot blink the scrim off.
+    scrim.style.opacity = currentScrimOpacity;
+
+    const dialogAnim = dialog.animate(
+      [
+        { transform: currentTransform === "none" ? "translate(0px, 0px) scale(1, 1)" : currentTransform },
+        {
+          transform: `translate(${origin.left - rect.left}px, ${origin.top - rect.top}px) scale(${origin.width / rect.width}, ${origin.height / rect.height})`,
+        },
+      ],
+      { duration: 340, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "both" },
+    );
+    closeAnimation.current = dialogAnim;
+    scrimAnimation.current = scrim.animate(
+      [{ opacity: currentScrimOpacity }, { opacity: 0 }],
+      { duration: 300, easing: "ease-in", fill: "both" },
+    );
+    dialogAnim.onfinish = finishClose;
+    // Animations can be cancelled by a browser tab switch; never leave the
+    // dialog stuck open waiting for a finish event that will not arrive.
+    closeTimer.current = window.setTimeout(finishClose, 400);
+  };
+
+  requestCloseRef.current = requestClose;
+
   return (
-    <div className="command-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section className="command-dialog" role="dialog" aria-modal="true" aria-labelledby="command-dialog-title" aria-describedby="command-dialog-description" ref={dialogRef}>
+    <div className="command-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) requestClose(); }}>
+      <div className="command-dialog-scrim" aria-hidden="true" ref={scrimRef} />
+      <section className={`command-dialog${entered ? " is-ready" : ""}`} role="dialog" aria-modal="true" aria-labelledby="command-dialog-title" aria-describedby="command-dialog-description" ref={dialogRef}>
         <header className="command-dialog-header">
           <div className="command-dialog-heading">
-            <span className="command-sigil command-sigil-large" aria-hidden="true">{typeSigils[type]}</span>
             <div className="command-dialog-title-group">
               <div className="command-dialog-kicker">
-                <span>{command.category}</span>
+                <span>{categoryLabel(command.category)}</span>
                 <i aria-hidden="true" />
                 <span>{t(typeKeys[type])}</span>
                 {type === "context" && <><i aria-hidden="true" /><span>{contextLabel(command, t)}</span></>}
@@ -194,7 +349,7 @@ function CommandDetailDialog({ command, onClose }: { command: Command; onClose: 
               <h2 id="command-dialog-title">{renderInvocation(command, t)}</h2>
             </div>
           </div>
-          <button className="dialog-close" type="button" onClick={onClose} aria-label={t("dialog.close")} title={t("dialog.close")} ref={closeRef}><Icon name="close" /></button>
+          <button className="dialog-close" type="button" onClick={requestClose} aria-label={t("dialog.close")} title={t("dialog.close")} ref={closeRef}><Icon name="close" /></button>
         </header>
         <div className="command-dialog-body">
           <p className="command-dialog-description" id="command-dialog-description">{describe(command)}</p>
@@ -254,7 +409,7 @@ function CommandDetailDialog({ command, onClose }: { command: Command; onClose: 
         </div>
         <footer className="command-dialog-footer">
           <span>{t("dialog.footer")}</span>
-          <button className="button button-primary button-small" type="button" onClick={onClose}>{t("dialog.done")}</button>
+          <button className="button button-primary button-small" type="button" onClick={requestClose}>{t("dialog.done")}</button>
         </footer>
       </section>
     </div>
@@ -265,7 +420,7 @@ export function CommandsPage() {
   const { t } = useStrings("commands");
   const { describe } = useCommandCopy();
   const [commands, setCommands] = useState<Command[]>([]);
-  const [selectedCommand, setSelectedCommand] = useState<Command | null>(null);
+  const [selected, setSelected] = useState<CommandSelection | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [type, setType] = useState<"all" | CommandType>("all");
@@ -283,11 +438,11 @@ export function CommandsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedCommand) return;
+    if (!selected) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
-  }, [selectedCommand]);
+  }, [selected]);
 
   const categories = useMemo(() => ["all", ...Array.from(new Set(commands.map((command) => command.category))).sort()], [commands]);
   const filtered = commands.filter((command) => {
@@ -334,11 +489,10 @@ export function CommandsPage() {
             </div>
             <div className="command-filter-row">
               <span className="command-filter-label" aria-hidden="true">{t("filter.category")}</span>
-              <div className="filter-list" role="group" aria-label={t("filter.categories")}>{categories.map((item) => <button type="button" className={category === item ? "filter active" : "filter"} aria-pressed={category === item} key={item} onClick={() => setCategory(item)}>{item === "all" ? t("filter.allCategories") : item}</button>)}</div>
+              <div className="filter-list" role="group" aria-label={t("filter.categories")}>{categories.map((item) => <button type="button" className={category === item ? "filter active" : "filter"} aria-pressed={category === item} key={item} onClick={() => setCategory(item)}>{item === "all" ? t("filter.allCategories") : categoryLabel(item)}</button>)}</div>
             </div>
           </div>
           <div className="command-toolbar-footer">
-            <span className="command-registry-note"><i aria-hidden="true" />{t("registry.live")}</span>
             {hasFilters
               ? <button className="command-reset" type="button" onClick={resetFilters}>{t("filters.reset")}</button>
               : <span className="command-registry-hint">{t("registry.hint")}</span>}
@@ -351,17 +505,24 @@ export function CommandsPage() {
           </div>
         )}
         {!loading && <div className="commands-grid">
-          {filtered.map((command) => <button className="command-card" type="button" key={`${normalizeType(command)}-${command.context_type || ""}-${command.category}-${command.name}`} onClick={() => setSelectedCommand(command)} aria-label={t("card.view", { name: command.name })}>
-            <span className="command-card-top">
-              <span className={`command-sigil is-${normalizeType(command)}`} aria-hidden="true">{typeSigils[normalizeType(command)]}</span>
+          {filtered.map((command) => {
+            const key = commandKey(command);
+            const isOrigin = selected?.key === key;
+            return <button
+              className={`command-card${isOrigin ? " is-origin" : ""}`}
+              type="button"
+              key={key}
+              onClick={(event) => setSelected({ command, key, originEl: event.currentTarget })}
+              aria-label={t("card.view", { name: command.name })}
+            >
               <span className="command-card-title">
                 <span className="command-name">{renderCardName(command, t)}</span>
                 <span className="command-type">{cardTypeHint(command, t)}</span>
               </span>
-            </span>
-            <span className="command-card-description">{describe(command)}</span>
-            <span className="command-card-footer"><span className="category-tag">{command.category}</span><span className="command-expand"><span>{t("card.details")}</span><Icon name="arrow" size={14} /></span></span>
-          </button>)}
+              <span className="command-card-description">{describe(command)}</span>
+              <span className="command-card-footer"><span className="category-tag">{categoryLabel(command.category)}</span><span className="command-expand"><span>{t("card.details")}</span><Icon name="arrow" size={14} /></span></span>
+            </button>;
+          })}
           {!error && !filtered.length && <div className="commands-empty">
             <span className="commands-empty-icon" aria-hidden="true"><Icon name="search" size={16} /></span>
             <strong>{t("empty.title")} {query.trim() ? `“${query.trim()}”` : t("empty.filters")}</strong>
@@ -371,7 +532,7 @@ export function CommandsPage() {
         </div>}
       </main>
       <Footer />
-      {selectedCommand && <CommandDetailDialog command={selectedCommand} onClose={() => setSelectedCommand(null)} />}
+      {selected && <CommandDetailDialog key={selected.key} command={selected.command} originEl={selected.originEl} onClose={() => setSelected(null)} />}
     </>
   );
 }

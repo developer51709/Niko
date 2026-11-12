@@ -16,6 +16,8 @@
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^4.7.0",
     "fontkit": "^2.0.4",
+    "framer-motion": "^13.4.1",
+    "goey-toast": "^0.6.0",
     "lucide-react": "^1.39.0",
     "motion": "^13.4.1",
     "ogl": "^1.0.11",

@@ -4,8 +4,8 @@ import { DiscordMarkdown } from "../components/DiscordMarkdown";
 import { DiscordStatusAvatar } from "../components/DiscordStatusAvatar";
 import { Icon } from "../components/Icon";
 import { LoadingCard } from "../components/LoadingCard";
-import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../utils/toast";
-import { LOCKDOWN_STATUS_LABELS, blacklistGuildWithLockdown, groupLockdownSteps } from "../utils/guildBlacklist";
+import { clearToasts, notifyError, notifyLoading, notifySuccess, type ToastDetail } from "../utils/toast";
+import { LOCKDOWN_STATUS_LABELS, blacklistGuildWithLockdown, groupLockdownSteps, summariseBlacklistReason } from "../utils/guildBlacklist";
 import type { GuildLockdownSummary } from "../utils/guildBlacklist";
 import { DashboardShell, type ShellTab } from "../components/dashboard/DashboardShell";
 import { ProxyWorkersView } from "../components/dashboard/ProxyWorkersView";
@@ -427,11 +427,25 @@ export function StaffDashboardPage() {
       }
       return;
     }
+    const userId = blacklistId;
+    const reasonSummary = summariseBlacklistReason(blacklistReason);
     await saveGuildAction(async () => {
-      await updateStaffBlacklist("user", "add", blacklistId, blacklistReason, auth.csrf_token);
+      await updateStaffBlacklist("user", "add", userId, blacklistReason, auth.csrf_token);
       setBlacklistEntries(await getStaffBlacklist());
       setBlacklistId("");
-    }, t("blacklist.userAdded"));
+    }, t("blacklist.userAdded"), {
+      loadingTitle: "Adding user to blacklist…",
+      loading: {
+        description: `Discord ID ${userId}${reasonSummary ? ` · ${reasonSummary}` : ""}`,
+        progress: { label: "Saving entry" },
+      },
+      success: {
+        description: `Discord ID ${userId} is blocked. The reason is recorded and an appeal can be reviewed.`,
+      },
+      error: {
+        description: `Discord ID ${userId} could not be added; refresh the list before retrying.`,
+      },
+    });
   };
   async function loadErrorReports() {
     setReportsLoading(true);
@@ -516,11 +530,16 @@ export function StaffDashboardPage() {
     catch (reason) { notifyError(reason instanceof Error ? reason.message : t("guilds.listUnavailable"), "staff-guilds"); }
     finally { setStaffGuildsLoading(false); }
   };
-  const saveGuildAction = async (action: () => Promise<unknown>, success: string) => {
+  const saveGuildAction = async (
+    action: () => Promise<unknown>,
+    success: string,
+    toasts?: { loadingTitle?: string; loading?: ToastDetail; success?: ToastDetail; error?: ToastDetail },
+  ) => {
     if (busyGuildAction) return;
-    setBusyGuildAction(true); notifyLoading(t("guildAction.applying"), "staff-guild-action");
-    try { await action(); notifySuccess(success, "staff-guild-action"); await refreshStaffGuilds(); }
-    catch (reason) { notifyError(reason instanceof Error ? reason.message : t("guildAction.failed"), "staff-guild-action"); }
+    setBusyGuildAction(true);
+    notifyLoading(toasts?.loadingTitle ?? t("guildAction.applying"), "staff-guild-action", toasts?.loading);
+    try { await action(); notifySuccess(success, "staff-guild-action", toasts?.success); await refreshStaffGuilds(); }
+    catch (reason) { notifyError(reason instanceof Error ? reason.message : t("guildAction.failed"), "staff-guild-action", toasts?.error); }
     finally { setBusyGuildAction(false); }
   };
   // Blacklisting is a sequence of reported steps, so it runs through its own

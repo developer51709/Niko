@@ -153,7 +153,7 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
     setBusy(true);
     setResult(null);
     setProgress(null);
-    notifyLoading(t("owner.updates.progressStarting"), TOAST_KEY);
+    notifyLoading(t("owner.updates.progressStarting"), TOAST_KEY, { progress: {} });
 
     // The apply request stays open until every area has been written; the bar,
     // the step list and the toast read the server's own run state meanwhile.
@@ -164,7 +164,11 @@ export function UpdatesView({ csrfToken }: { csrfToken?: string }) {
         if (pollRef.current !== token) return;
         setProgress(next);
         if (next.active) {
-          notifyLoading(stageLabel(next, next.area ? data?.areas[next.area]?.label : undefined, t), TOAST_KEY);
+          notifyLoading(stageLabel(next, next.area ? data?.areas[next.area]?.label : undefined, t), TOAST_KEY, {
+            progress: next.total > 0
+              ? { value: next.done.length / next.total, label: `${next.done.length}/${next.total}` }
+              : undefined,
+          });
         }
       } catch {
         // A bot restart can drop one poll; the next one lands on the new image.

@@ -65,12 +65,6 @@ CATEGORIES: dict[str, dict] = {
         "emoji_key": "welcome",
         "color": 0x9B59B6,
     },
-    "applications": {
-        "label": "Applications",
-        "description": "Apps and bots added to or removed from the server, with who did it and what they were granted",
-        "emoji_key": "bot",
-        "color": 0x00B4D8,
-    },
     "captcha": {
         "label": "Captcha",
         "description": "Captcha verifications — passes, failures, and kicks",
@@ -168,8 +162,8 @@ _TITLE_CATEGORY: dict[str, str] = {
     "Logging Updated": "server",
     "Member Joined": "members",
     "Member Left": "members",
-    "Application Added": "applications",
-    "Application Removed": "applications",
+    "Application Added": "server",
+    "Application Removed": "server",
     "Member Updated": "members",
     "Avatar Updated": "members",
     "Server Avatar Updated": "members",
@@ -251,9 +245,9 @@ LOG_EMOJI_KEYS: dict[str, str] = {
     # Members
     "Member Joined": "log_member_join",
     "Member Left": "log_member_leave",
-    # A bot joining or leaving is an application being added or removed. The
-    # applications category is its own list, so it gets the arrival/departure
-    # icons rather than reusing a member or automod one.
+    # A bot joining or leaving is an application being added or removed. It is
+    # logged with the server events, so it keeps arrival/departure icons rather
+    # than reusing a member or automod one.
     "Application Added": "join",
     "Application Removed": "leave",
     "Member Updated": "log_member_updated",

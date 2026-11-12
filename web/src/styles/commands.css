@@ -97,10 +97,9 @@
 }
 
 .command-toolbar-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--dim); }
-.command-registry-note { display: inline-flex; align-items: center; gap: 7px; font: 700 9px "Space Mono", monospace; text-transform: uppercase; letter-spacing: .12em; }
-.command-registry-note i { width: 6px; height: 6px; background: var(--sage); border-radius: 50%; box-shadow: 0 0 0 3px rgba(139, 213, 177, .16); animation: command-live-pulse 2.4s ease-in-out infinite; }
 .command-registry-hint { font-size: 10.5px; }
 .command-reset {
+  margin-left: auto;
   padding: 5px 10px;
   color: var(--accent-dark);
   background: transparent;
@@ -111,73 +110,33 @@
   transition: background .18s, border-color .18s;
 }
 .command-reset:hover { background: rgba(255, 255, 255, .08); border-color: rgba(213, 220, 229, .34); }
-@keyframes command-live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
-.site-content .commands-page .commands-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.site-content .commands-page .commands-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
 
+/* The same glass sheet as the toolbar, dialog, and other page cards. The
+   content stays minimal, but the surface belongs to the rest of the site. */
 .site-content .commands-page .command-card {
-  position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 162px;
-  padding: 17px 18px 15px;
-  overflow: hidden;
+  min-height: 150px;
+  padding: 16px;
   color: #f4f5f7;
   text-align: left;
-  background: rgba(10, 11, 14, .8);
-  border: 1px solid rgba(226, 234, 246, .15);
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
   border-radius: 16px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .06);
-  /* The registry holds 300+ cards, so they skip the backdrop blur that the
-     toolbar and dialog keep. */
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition: transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
-}
-/* A hairline of light along the top edge appears on hover, so the card lifts
-   without the border jumping in brightness. */
-.site-content .commands-page .command-card::after {
-  position: absolute;
-  top: 0;
-  right: 14px;
-  left: 14px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(232, 238, 247, .55), transparent);
-  opacity: 0;
-  content: "";
-  transition: opacity .24s ease;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
 .site-content .commands-page .command-card:hover {
-  transform: translateY(-2px);
-  background: rgba(18, 20, 24, .88);
-  border-color: rgba(213, 220, 229, .3);
-  box-shadow: 0 22px 46px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .08);
+  background: rgba(18, 20, 23, .9);
+  border-color: rgba(213, 220, 229, .26);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .08);
 }
-.site-content .commands-page .command-card:hover::after { opacity: 1; }
-.site-content .commands-page .command-card:focus-visible { transform: translateY(-2px); border-color: rgba(213, 220, 229, .5); }
-
-.command-card-top { display: flex; align-items: flex-start; gap: 11px; }
-.command-sigil {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  color: var(--accent-dark);
-  background: rgba(255, 255, 255, .07);
-  border: 1px solid rgba(226, 234, 246, .14);
-  border-radius: 9px;
-  font: 700 12px "Space Mono", monospace;
-  line-height: 1;
-}
-.command-sigil.is-hybrid { font-size: 9px; letter-spacing: -.02em; }
-.command-sigil.is-context { font-size: 13px; color: #a9b3c1; }
-.command-sigil-large { width: 42px; height: 42px; border-radius: 12px; font-size: 16px; }
-.command-sigil.is-hybrid.command-sigil-large { font-size: 11px; }
-.command-sigil.is-context.command-sigil-large { font-size: 18px; }
-.command-card:hover .command-sigil { background: rgba(255, 255, 255, .12); }
-
-.command-card-title { display: grid; gap: 4px; min-width: 0; padding-top: 2px; }
+.site-content .commands-page .command-card:focus-visible { border-color: rgba(213, 220, 229, .5); }
+.command-card-title { display: grid; gap: 4px; min-width: 0; }
 .site-content .commands-page .command-name {
   display: -webkit-box;
   min-width: 0;
@@ -197,44 +156,45 @@
   color: #7f8895;
   background: none;
   border-radius: 0;
-  font-size: 9px;
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
   text-overflow: ellipsis;
-  text-transform: uppercase;
-  letter-spacing: .11em;
+  text-transform: none;
   white-space: nowrap;
 }
 .site-content .commands-page .command-card-description {
   display: -webkit-box;
   flex: 1 1 auto;
-  margin: 14px 0 15px;
+  margin: 12px 0 14px;
   overflow: hidden;
   color: #b4bac3;
   font-size: 12.5px;
-  line-height: 1.62;
+  line-height: 1.6;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
 .site-content .commands-page .command-card-footer { align-items: center; gap: 10px; }
 .site-content .commands-page .category-tag {
-  padding: 4px 9px;
-  color: #9aa3b0;
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(226, 234, 246, .08);
-  border-radius: 999px;
-  text-transform: capitalize;
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: .02em;
+  padding: 0;
+  color: var(--dim);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font: 600 10px var(--font-sans);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.site-content .commands-page .command-expand { gap: 6px; color: var(--accent-dark); font-size: 10px; letter-spacing: .02em; }
-.site-content .commands-page .command-expand .icon { opacity: .6; transition: transform .18s ease, opacity .18s ease; }
-.site-content .commands-page .command-card:hover .command-expand .icon { opacity: 1; transform: translateX(3px); }
+.site-content .commands-page .command-expand { gap: 5px; color: var(--muted); font-size: 10px; letter-spacing: .02em; }
+.site-content .commands-page .command-expand .icon { opacity: .7; transition: transform .18s ease, opacity .18s ease; }
+.site-content .commands-page .command-card:hover .command-expand { color: var(--ink); }
+.site-content .commands-page .command-card:hover .command-expand .icon { opacity: 1; transform: translateX(2px); }
 
 /* Loading placeholders mirror the card's silhouette instead of one spinner. */
 .commands-skeleton .command-card-skeleton {
-  min-height: 162px;
-  padding: 17px 18px 15px;
+  min-height: 150px;
+  padding: 16px;
   background: rgba(9, 10, 12, .5);
   border: 1px solid rgba(226, 234, 246, .09);
   border-radius: 16px;
@@ -264,8 +224,21 @@
 .commands-page .inline-error strong { display: block; margin-bottom: 3px; color: var(--ink); font-size: 12px; }
 
 /* Detail dialog */
-.site-content .command-dialog-backdrop { background: rgba(3, 4, 5, .66); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+.site-content .command-card.is-origin { opacity: 0; pointer-events: none; }
+/* The doubled class outranks the shared dialog glass in styles.css, so the
+   dimming lives on the scrim and can fade independently of the dialog. */
+.site-content .command-dialog-backdrop.command-dialog-backdrop { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; animation: none; }
+.site-content .command-dialog-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 5, .66);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  pointer-events: none;
+}
 .site-content .command-dialog {
+  position: relative;
+  z-index: 1;
   width: min(760px, 100%);
   max-height: min(780px, calc(100vh - 48px));
   color: #f4f5f7;
@@ -275,12 +248,42 @@
   box-shadow: 0 42px 96px rgba(0, 0, 0, .58), inset 0 1px 0 rgba(255, 255, 255, .07);
   backdrop-filter: blur(26px) saturate(150%);
   -webkit-backdrop-filter: blur(26px) saturate(150%);
+  transform-origin: top left;
+  will-change: transform;
+  animation: none;
+}
+/* Same glass pane, hairline, radius and lift as the command cards. The doubled
+   class outranks the shared dialog surface in styles.css. */
+.site-content .command-dialog.command-dialog {
+  background: rgba(9, 10, 12, .78);
+  border: 1px solid rgba(226, 234, 246, .2);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+/* The title and description travel with the expanding card; the detail
+   sections and footer are new, so they fade in once the surface has opened
+   and fade out again before it contracts. */
+.site-content .command-dialog .command-detail-section,
+.site-content .command-dialog .command-dialog-footer {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity .22s ease, transform .26s cubic-bezier(.22, 1, .36, 1);
+}
+.site-content .command-dialog.is-ready .command-detail-section,
+.site-content .command-dialog.is-ready .command-dialog-footer {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 .site-content .command-dialog-header {
+  flex: 0 0 auto;
   align-items: flex-start;
   gap: 18px;
   padding: 22px 24px 20px;
-  background: rgba(255, 255, 255, .035);
+  background: transparent;
   border-bottom: 1px solid rgba(226, 234, 246, .12);
 }
 .command-dialog-heading { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -302,7 +305,16 @@
 .site-content .command-dialog .dialog-close { width: 32px; height: 32px; color: #9aa3b0; background: rgba(255, 255, 255, .04); border: 1px solid rgba(226, 234, 246, .14); border-radius: 10px; transition: background .18s, color .18s, border-color .18s; }
 .site-content .command-dialog .dialog-close:hover { color: #f4f5f7; background: rgba(255, 255, 255, .1); border-color: rgba(213, 220, 229, .3); }
 
-.site-content .command-dialog-body { display: grid; gap: 12px; padding: 22px 24px 24px; overscroll-behavior: contain; scrollbar-width: thin; }
+.site-content .command-dialog-body {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  padding: 22px 24px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
 .site-content .command-dialog .command-dialog-description { margin: 0 0 4px; color: #c2c9d3; font-size: 13px; line-height: 1.75; }
 
 .site-content .command-dialog .command-detail-section {
@@ -405,9 +417,10 @@
 }
 
 .site-content .command-dialog .command-dialog-footer {
+  flex: 0 0 auto;
   padding: 14px 24px;
   color: #7f8895;
-  background: rgba(255, 255, 255, .025);
+  background: transparent;
   border-top: 1px solid rgba(226, 234, 246, .12);
   font-size: 10px;
 }
@@ -439,16 +452,14 @@
   .site-content .commands-page .commands-grid { grid-template-columns: 1fr; gap: 9px; margin-top: 16px; }
   /* Shorter rows on phones: the registry holds hundreds of commands, so the
      card drops its fixed height and clamps the description to two lines. */
-  .site-content .commands-page .command-card { min-height: 0; padding: 14px 15px 13px; }
+  .site-content .commands-page .command-card { min-height: 0; padding: 14px 15px; }
   .site-content .commands-page .command-card-description { margin: 11px 0 12px; font-size: 12px; -webkit-line-clamp: 2; }
 
-  /* Phone-width dialogs are bottom sheets, so they anchor to the bottom edge
-     and leave room for the home indicator. */
-  .site-content .command-dialog-backdrop { align-items: end; padding: 0; }
-  .site-content .command-dialog { max-height: 92vh; border-radius: 20px 20px 0 0; }
+  /* Keep the popup centered at phone widths too, with enough room around it
+     for the glass edge and the home indicator. */
+  .site-content .command-dialog-backdrop { align-items: center; padding: 16px; }
+  .site-content .command-dialog { max-height: calc(100vh - 32px); border-radius: 16px; }
   .site-content .command-dialog-header { padding: 18px 18px 16px; }
-  .site-content .command-dialog-heading { gap: 11px; }
-  .command-sigil-large { width: 36px; height: 36px; border-radius: 10px; }
   .site-content .command-dialog-header h2 { font-size: 18px; }
   .site-content .command-dialog-header h2 code { font-size: .92em; }
   .site-content .command-dialog-body { gap: 10px; padding: 17px 18px 20px; }
@@ -459,9 +470,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .site-content .commands-page .command-card,
-  .site-content .commands-page .command-card:hover,
-  .site-content .commands-page .command-card:focus-visible { transform: none; }
-  .command-registry-note i,
   .command-card-skeleton span { animation: none; }
+  .site-content .command-dialog .command-detail-section,
+  .site-content .command-dialog .command-dialog-footer { transition: none; }
 }

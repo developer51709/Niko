@@ -21,7 +21,6 @@
   "filter.hybrid": "Hybrid",
   "filter.context": "Context menus",
   "filter.allCategories": "All categories",
-  "registry.live": "Live bot registry",
   "registry.hint": "Select a command for its full details",
   "filters.reset": "Reset filters",
   "error.title": "Could not load commands",

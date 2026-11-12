@@ -337,7 +337,7 @@ class MemberJoinMessageTests(unittest.TestCase):
 
 
 class ApplicationLogTests(unittest.TestCase):
-    """A bot's arrival and removal are one applications entry each."""
+    """A bot's arrival and removal are one server entry each."""
 
     def setUp(self):
         self.cog = logging_cog.ServerLogger(_bot())
@@ -347,7 +347,7 @@ class ApplicationLogTests(unittest.TestCase):
         self.guild.member_count = 42
         self.channel = SimpleNamespace(id=500)
         self.guild.get_channel = lambda channel_id: self.channel
-        self.cog._config = {str(GUILD_ID): {"applications": 500}}
+        self.cog._config = {str(GUILD_ID): {"server": 500}}
         self.cog._config_at = time.monotonic()
 
         async def no_invites():
@@ -368,6 +368,11 @@ class ApplicationLogTests(unittest.TestCase):
             display_avatar=SimpleNamespace(url="https://cdn.example/bot.png"),
         )
 
+    def test_applications_are_not_a_separate_log_category(self):
+        self.assertNotIn("applications", formatters.CATEGORIES)
+        self.assertEqual(formatters._TITLE_CATEGORY["Application Added"], "server")
+        self.assertEqual(formatters._TITLE_CATEGORY["Application Removed"], "server")
+
     def test_adding_a_bot_sends_only_the_application_entry(self):
         actor = SimpleNamespace(mention="<@7>", id=7)
         self.guild.entries = [
@@ -386,7 +391,7 @@ class ApplicationLogTests(unittest.TestCase):
 
         self.cog.log_event.assert_awaited_once()
         args, _ = self.cog.log_event.call_args
-        self.assertEqual(args[1], "applications")
+        self.assertEqual(args[1], "server")
         self.assertEqual(args[2], "Application Added")
         self.assertIn("**Added By:** <@7>", args[3])
         self.assertIn("`bot`, `applications.commands`", args[3])
@@ -415,7 +420,7 @@ class ApplicationLogTests(unittest.TestCase):
 
         self.cog.log_event.assert_awaited_once()
         args, _ = self.cog.log_event.call_args
-        self.assertEqual(args[1], "applications")
+        self.assertEqual(args[1], "server")
         self.assertEqual(args[2], "Application Removed")
         self.assertIn("**Removed By:** <@7>", args[3])
         self.assertIn("no longer needed", args[3])

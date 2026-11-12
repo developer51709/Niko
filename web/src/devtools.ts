@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 const SUPPORT_SERVER_BYPASS_KEY = "niko.devtools.bypass-support-server";
 const PRESENCE_PREVIEW_KEY = "niko.devtools.presence-preview";
-const MOTION_TRANSITION_KEY = "niko.devtools.motion-transition";
+const TOAST_V2_KEY = "niko.devtools.toast-v2";
 const SIDE_KEY = "niko.devtools.side";
 const CHANGE_EVENT = "niko:devtools-change";
 
@@ -103,11 +103,12 @@ export const devtools = {
   presencePreview: () => readValue(PRESENCE_PREVIEW_KEY),
   setPresencePreview: (value: string) => writeValue(PRESENCE_PREVIEW_KEY, value),
   /**
-   * The page transition the motion lab should open with. Kept per tab session
-   * like the other previews, so the lab remembers what was being judged.
+   * Replace every dashboard toast with the richer goey-toast stack. Off by
+   * default so the experiment is opt-in and cannot surprise an owner by
+   * remounting the toast host without them asking for it.
    */
-  motionTransition: () => readValue(MOTION_TRANSITION_KEY),
-  setMotionTransition: (value: string) => writeValue(MOTION_TRANSITION_KEY, value),
+  toastV2: () => readFlag(TOAST_V2_KEY),
+  setToastV2: (enabled: boolean) => writeFlag(TOAST_V2_KEY, enabled),
   /** Which edge the button sits on; the panel follows it. */
   side: readSide,
   setSide: writeSide,
