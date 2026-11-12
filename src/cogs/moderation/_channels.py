@@ -67,7 +67,10 @@ class ChannelsMixin:
     @commands.hybrid_command(description=CMDS.text("lock.description"),
                              help=CMDS.help("lock"))
     @commands.guild_only()
-    @commands.has_permissions(manage_channels=True)
+    # The overwrite endpoint only needs Manage Roles. Declaring Manage Channels
+    # here (which the body no longer uses) is what got the command rejected in
+    # review, because the published command registry reports this requirement.
+    @commands.has_permissions(manage_roles=True)
     async def lock(self, ctx):
         channel = self._lockable_channel(ctx)
         if channel is None:
@@ -86,7 +89,7 @@ class ChannelsMixin:
     @commands.hybrid_command(description=CMDS.text("unlock.description"),
                              help=CMDS.help("unlock"))
     @commands.guild_only()
-    @commands.has_permissions(manage_channels=True)
+    @commands.has_permissions(manage_roles=True)
     async def unlock(self, ctx):
         channel = self._lockable_channel(ctx)
         if channel is None:

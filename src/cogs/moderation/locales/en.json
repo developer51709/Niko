@@ -52,7 +52,7 @@
     "cannot_unban": "{cross} I don't have permission to unban that user.",
     "cannot_mute": "{cross} I couldn't mute **{member}**. Check that my role is above theirs and that I can moderate members.",
     "cannot_slowmode": "{cross} I can't set slowmode here — check that I have **Manage Channels**.",
-    "cannot_manage_channel": "{cross} I can't change this channel's permissions — check that I have **Manage Channels**.",
+    "cannot_manage_channel": "{cross} I can't change this channel's permissions — check that I have **Manage Roles**.",
     "slowmode_limit": "{cross} Slowmode can be at most `{max}` seconds ({hours} hours).",
     "nick_failed": "{cross} I can't change that member's nickname — they may outrank me.",
     "warnings_perms": "{cross} You need **Moderate Members** or **Manage Messages** to read warnings.",

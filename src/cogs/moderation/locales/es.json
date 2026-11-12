@@ -52,7 +52,7 @@
     "cannot_unban": "{cross} No tengo permiso para desbanear a ese usuario.",
     "cannot_mute": "{cross} No pude silenciar a **{member}**. Comprueba que mi rol esté por encima del suyo y que pueda moderar miembros.",
     "cannot_slowmode": "{cross} No puedo activar el modo lento aquí — revisa que tenga **Gestionar canales**.",
-    "cannot_manage_channel": "{cross} No puedo cambiar los permisos de este canal — revisa que tenga **Gestionar canales**.",
+    "cannot_manage_channel": "{cross} No puedo cambiar los permisos de este canal — revisa que tenga **Gestionar roles**.",
     "slowmode_limit": "{cross} El modo lento puede ser como máximo `{max}` segundos ({hours} horas).",
     "nick_failed": "{cross} No puedo cambiar ese apodo — puede que ese miembro esté por encima de mí.",
     "warnings_perms": "{cross} Necesitas **Moderar miembros** o **Gestionar mensajes** para leer advertencias.",

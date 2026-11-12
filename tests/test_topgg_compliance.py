@@ -139,6 +139,33 @@ def test_the_lock_commands_never_edit_the_channel():
     assert "set_everyone_send_messages(" in unlock_body
 
 
+def _declared_permissions(command):
+    """Permission names a command declares, read the way the command registry is."""
+    declared = set()
+    for check in getattr(command, "checks", ()) or ():
+        for cell in getattr(check, "__closure__", ()) or ():
+            try:
+                value = cell.cell_contents
+            except ValueError:
+                continue
+            if isinstance(value, dict):
+                declared.update(name for name, enabled in value.items() if enabled)
+    return declared
+
+
+def test_lock_and_unlock_declare_manage_roles_not_manage_channels():
+    """A rejected review, in code: the requirement has to match the endpoint."""
+    from cogs.moderation._channels import ChannelsMixin
+
+    for name in ("lock", "unlock"):
+        declared = _declared_permissions(getattr(ChannelsMixin, name))
+        assert declared == {"manage_roles"}, (
+            f"{name} declares {sorted(declared) or 'no permissions'}; writing the "
+            "@everyone overwrite only needs Manage Roles, and the published "
+            "command registry reports this requirement to reviewers"
+        )
+
+
 # ──────────────────────────────────────────────────
 #  Channel-posted panels are guarded
 # ──────────────────────────────────────────────────

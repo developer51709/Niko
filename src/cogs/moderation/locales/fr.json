@@ -52,7 +52,7 @@
     "cannot_unban": "{cross} Je n'ai pas la permission de débannir cet utilisateur.",
     "cannot_mute": "{cross} Je n'ai pas pu rendre **{member}** muet. Vérifie que mon rôle est au-dessus du sien et que je peux modérer les membres.",
     "cannot_slowmode": "{cross} Je ne peux pas régler le mode lent ici — vérifie que j'ai **Gérer les salons**.",
-    "cannot_manage_channel": "{cross} Je ne peux pas modifier les permissions de ce salon — vérifie que j'ai **Gérer les salons**.",
+    "cannot_manage_channel": "{cross} Je ne peux pas modifier les permissions de ce salon — vérifie que j'ai **Gérer les rôles**.",
     "slowmode_limit": "{cross} Le mode lent peut être de `{max}` secondes au maximum ({hours} heures).",
     "nick_failed": "{cross} Je ne peux pas changer le pseudo de ce membre — il a peut-être un rôle supérieur au mien.",
     "warnings_perms": "{cross} Il te faut **Modérer les membres** ou **Gérer les messages** pour lire les avertissements.",

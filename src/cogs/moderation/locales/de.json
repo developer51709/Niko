@@ -52,7 +52,7 @@
     "cannot_unban": "{cross} Ich habe keine Berechtigung, diesen Benutzer zu entbannen.",
     "cannot_mute": "{cross} Ich konnte **{member}** nicht stummschalten. Prüfe, ob meine Rolle über der Person steht und ich Mitglieder moderieren darf.",
     "cannot_slowmode": "{cross} Ich kann hier keinen Langsammodus setzen — prüfe, ob ich **Kanäle verwalten** darf.",
-    "cannot_manage_channel": "{cross} Ich kann die Berechtigungen dieses Kanals nicht ändern — prüfe, ob ich **Kanäle verwalten** darf.",
+    "cannot_manage_channel": "{cross} Ich kann die Berechtigungen dieses Kanals nicht ändern — prüfe, ob ich **Rollen verwalten** darf.",
     "slowmode_limit": "{cross} Der Langsammodus kann höchstens `{max}` Sekunden ({hours} Stunden) betragen.",
     "nick_failed": "{cross} Ich kann den Spitznamen nicht ändern — das Mitglied ist vielleicht höher als ich.",
     "warnings_perms": "{cross} Du brauchst **Mitglieder moderieren** oder **Nachrichten verwalten**, um Verwarnungen zu lesen.",
