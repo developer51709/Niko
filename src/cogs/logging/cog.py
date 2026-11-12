@@ -56,6 +56,12 @@ MAX_TRACKED_PROFILES = 20_000
 #: roles produces one entry rather than six.
 ENTRY_RETENTION_SECONDS = 30.0
 
+#: How long a join entry accepts the roles that follow the join. Onboarding
+#: autoroles land a moment after the member does, and they are part of the
+#: arrival, so the join entry stays open for them instead of leaving a second
+#: "Member Updated" entry behind.
+JOIN_ROLE_WINDOW = 30.0
+
 #: How long the entry posted for a newly created mute role waits for the
 #: channel denies written by the same mute, so that batch updates the message
 #: instead of adding a second entry.
@@ -361,6 +367,9 @@ class ServerLogger(commands.Cog):
         # retention window, so rapid changes to one member edit that entry.
         self._pending_entries: dict[tuple, _PendingEntry] = {}
         self._pending_locks: dict[tuple, asyncio.Lock] = {}
+        # (guild_id, member_id) → the role mentions added while that member's
+        # join entry is still being built, before it has a message to edit.
+        self._joining_roles: dict[tuple[int, int], list[str]] = {}
         # message id → the edit that is replacing a late-flagged image in it, so
         # two scan results arriving together cannot each rebuild the entry from
         # a copy that lacks the other one's placeholder.
@@ -686,16 +695,20 @@ class ServerLogger(commands.Cog):
             target_id=role.id, action_key="Mute Role Permissions",
         )
 
-    async def _mute_role_log_channel(self, guild: discord.Guild):
-        """The channel role events go to, or None when they are not logged."""
+    async def _log_channel(self, guild: discord.Guild, category: str):
+        """The channel a category logs to, or None when it is off or unset."""
         await self.config()
         cfg = self._get_cfg(guild.id)
-        if "roles" in cfg.get("disabled", []):
+        if category in cfg.get("disabled", []):
             return None
-        channel_id = cfg.get("roles")
+        channel_id = cfg.get(category)
         if not channel_id:
             return None
         return guild.get_channel(channel_id)
+
+    async def _mute_role_log_channel(self, guild: discord.Guild):
+        """The channel role events go to, or None when they are not logged."""
+        return await self._log_channel(guild, "roles")
 
     def _prune_mute_role_entries(self) -> None:
         """Forget mute role entries whose batch never came back."""
@@ -717,6 +730,52 @@ class ServerLogger(commands.Cog):
         if files or media_urls or revert:
             return None
         return (guild.id, category, title, target_id)
+
+    @staticmethod
+    def _join_entry_key(guild, member) -> tuple:
+        """The key of *this* join's entry, so a rejoin never edits the old one."""
+        joined_at = getattr(member, "joined_at", None)
+        stamp = int(joined_at.timestamp()) if joined_at else 0
+        return (guild.id, "members", "Member Joined", member.id, stamp)
+
+    def _remember_join_entry(self, guild, member, message, channel,
+                             body: str) -> None:
+        """Keep the join entry open for the roles added right after joining."""
+        # Joins are the only entries registered from a listener, so nothing
+        # else would ever expire them on a server with no member updates.
+        self._prune_pending()
+        heading, details = _split_entry_body(body)
+        self._pending_entries[self._join_entry_key(guild, member)] = _PendingEntry(
+            message, getattr(channel, "id", 0), heading, details,
+            time.monotonic() + JOIN_ROLE_WINDOW,
+        )
+
+    async def _extend_join_entry(self, guild, member,
+                                 detail_lines: list[str]) -> bool:
+        """Fold a just-after-join role change into that member's join entry.
+
+        Returns False when there is no open entry to edit (members logging is
+        off, the window closed, or the message was deleted), so the caller can
+        log the change the usual way instead.
+        """
+        key = self._join_entry_key(guild, member)
+        channel = await self._log_channel(guild, "members")
+        if channel is None:
+            return False
+        lock = self._pending_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            self._prune_pending()
+            pending = self._open_entry(key, channel)
+            if pending is None:
+                return False
+            body = (
+                f"**Member:** {member.mention} (`{member}`)\n"
+                + "\n".join(detail_lines)
+            )
+            return await self._extend_entry(
+                key, guild, channel, "members", "Member Joined", body, pending,
+                target_id=member.id, action_key="member_join",
+            )
 
     def _open_entry(self, key: tuple, channel) -> _PendingEntry | None:
         """The entry still inside its window, forgetting it once it has closed."""
@@ -1035,104 +1094,258 @@ class ServerLogger(commands.Cog):
             return None
         return None
 
+    async def _application_audit_entry(self, guild: discord.Guild, action,
+                                       application_id: int, *,
+                                       window: float = 15.0):
+        """The recent audit entry for an application, matched by either id.
+
+        An app's integration id and its application id are not always the same
+        snowflake, and the removal entry names the integration rather than the
+        bot user, so both are compared.
+        """
+        try:
+            async for entry in guild.audit_logs(limit=6, action=action):
+                if (discord.utils.utcnow() - entry.created_at).total_seconds() > window:
+                    break
+                target = getattr(entry, "target", None)
+                if application_id in (getattr(target, "id", None),
+                                      getattr(target, "application_id", None)):
+                    return entry
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+        return None
+
+    async def _application_scopes(self, guild: discord.Guild, member) -> list[str]:
+        """The scopes the added application was authorised for, when visible.
+
+        Discord keeps them on the guild integration rather than in the join
+        event, so a server that has not let the bot read integrations simply
+        gets the granted permissions without a scopes line.
+        """
+        fetch = getattr(guild, "integrations", None)
+        if fetch is None:
+            return []
+        try:
+            integrations = await fetch()
+        except (discord.Forbidden, discord.HTTPException):
+            return []
+        for integration in integrations:
+            application = getattr(integration, "application", None)
+            if member.id in (getattr(application, "id", None),
+                             getattr(integration, "id", None)):
+                return list(getattr(integration, "scopes", None) or [])
+        return []
+
+    @staticmethod
+    def _application_permissions(member):
+        """The permissions an application holds through its managed role."""
+        for role in getattr(member, "roles", ()) or ():
+            if getattr(role, "managed", False):
+                return role.permissions
+        return getattr(member, "guild_permissions", None) or discord.Permissions.none()
+
+    @staticmethod
+    def _is_application_role(role) -> bool:
+        """Whether a role belongs to a bot application rather than a person."""
+        tags = getattr(role, "tags", None)
+        return getattr(tags, "bot_id", None) is not None
+
+    async def _log_application_added(self, member) -> None:
+        """One applications entry for a bot joining, with who and what.
+
+        Discord also fires a member join, an invite join and a managed-role
+        create for the same action. They are suppressed for bots so the one
+        entry that says who added the app and what it was granted is all that
+        the server reads.
+        """
+        guild = member.guild
+        entry = await self._audit_entry(
+            guild, discord.AuditLogAction.bot_add, member.id)
+        actor = entry.user if entry else None
+        scopes = await self._application_scopes(guild, member)
+        permissions = self._application_permissions(member)
+
+        body = (
+            f"**Application:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+            f"**Added By:** {actor.mention if actor else 'Unknown'}"
+        )
+        if scopes:
+            body += "\n**Scopes:** " + ", ".join(f"`{scope}`" for scope in scopes)
+        body += f"\n**Granted Permissions:** {_permission_list(permissions, limit=15)}"
+        if entry is not None and entry.reason:
+            body += f"\n**Reason:** {entry.reason}"
+        await self.log_event(
+            guild, "applications", "Application Added", body,
+            target_id=member.id, action_key="Application Added",
+        )
+
+    async def _log_application_removed(self, member) -> None:
+        """One applications entry for a bot leaving, with who removed it."""
+        guild = member.guild
+        entry = await self._application_audit_entry(
+            guild, discord.AuditLogAction.integration_delete, member.id)
+        # A removed app can also leave through a kick or a ban; either entry
+        # names the person who did it.
+        if entry is None:
+            entry = await self._audit_entry(
+                guild, discord.AuditLogAction.kick, member.id)
+        if entry is None:
+            entry = await self._audit_entry(
+                guild, discord.AuditLogAction.ban, member.id)
+        actor = entry.user if entry else None
+        permissions = self._application_permissions(member)
+
+        body = (
+            f"**Application:** `{member}` (ID: `{member.id}`)\n"
+            f"**Removed By:** {actor.mention if actor else 'Unknown'}"
+        )
+        joined_at = getattr(member, "joined_at", None)
+        if joined_at:
+            body += f"\n**Joined:** <t:{int(joined_at.timestamp())}:R>"
+        body += f"\n**Permissions It Had:** {_permission_list(permissions, limit=15)}"
+        if entry is not None and entry.reason:
+            body += f"\n**Reason:** {entry.reason}"
+        await self.log_event(
+            guild, "applications", "Application Removed", body,
+            target_id=member.id, action_key="Application Removed",
+        )
+
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild = member.guild
-        # Discord renders ``<t:…>`` in every reader's own locale and timezone,
-        # so the creation time stays correct and relative no matter when the
-        # entry is read.
-        created_at = int(member.created_at.timestamp())
-        account_age = (datetime.now(timezone.utc) - member.created_at).days
-        age_warn = (
-            f"\n-# {get_emoji('danger')} New account — created <t:{created_at}:R>"
-            if account_age < 7 else ""
-        )
 
-        # ── Detect which invite was used ──────────
-        used_invite = None
-        used_vanity = False
+        # A bot joining is an application being added, not a person arriving.
+        # Discord also fires an invite join and a managed-role create for it,
+        # so the applications entry replaces that trio.
+        if getattr(member, "bot", False):
+            await self._log_application_added(member)
+            return
 
+        # Roles added while this entry is being built are part of the join:
+        # onboarding autoroles land in the same moment, and their update can
+        # reach the gateway before the invite lookup below has finished. The
+        # buffer catches those; roles that land after the entry is posted are
+        # folded into it by on_member_update.
+        buffered: list[str] = []
+        self._joining_roles[(guild.id, member.id)] = buffered
         try:
-            current_invites = await guild.invites()
-            cached = self._invite_cache.get(guild.id, {})
-            for inv in current_invites:
-                if inv.uses > cached.get(inv.code, 0):
-                    used_invite = inv
-                    break
-            # Rebuild cache but preserve the __vanity__ counter
-            new_cache = {inv.code: inv.uses for inv in current_invites}
-            if "__vanity__" in cached:
-                new_cache["__vanity__"] = cached["__vanity__"]
-            self._invite_cache[guild.id] = new_cache
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+            # Discord renders ``<t:…>`` in every reader's own locale and timezone,
+            # so the creation time stays correct and relative no matter when the
+            # entry is read.
+            created_at = int(member.created_at.timestamp())
+            account_age = (datetime.now(timezone.utc) - member.created_at).days
+            age_warn = (
+                f"\n-# {get_emoji('danger')} New account — created <t:{created_at}:R>"
+                if account_age < 7 else ""
+            )
 
-        # If no regular invite matched, check the vanity invite
-        if not used_invite and guild.vanity_url_code:
+            # ── Detect which invite was used ──────────
+            used_invite = None
+            used_vanity = False
+
             try:
-                vanity = await guild.vanity_invite()
-                if vanity and vanity.uses is not None:
-                    cached_vanity = self._invite_cache.get(guild.id, {}).get("__vanity__", 0)
-                    if vanity.uses > cached_vanity:
-                        used_vanity = True
-                        self._invite_cache.setdefault(guild.id, {})["__vanity__"] = vanity.uses
-            except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+                current_invites = await guild.invites()
+                cached = self._invite_cache.get(guild.id, {})
+                for inv in current_invites:
+                    if inv.uses > cached.get(inv.code, 0):
+                        used_invite = inv
+                        break
+                # Rebuild cache but preserve the __vanity__ counter
+                new_cache = {inv.code: inv.uses for inv in current_invites}
+                if "__vanity__" in cached:
+                    new_cache["__vanity__"] = cached["__vanity__"]
+                self._invite_cache[guild.id] = new_cache
+            except (discord.Forbidden, discord.HTTPException):
                 pass
 
-        # ── Build join-method label ───────────────
-        if used_invite:
-            join_method = f"Invite `{used_invite.code}`"
-        elif used_vanity:
-            join_method = f"Vanity URL (`/{guild.vanity_url_code}`)"
-        else:
-            join_method = "Unknown — OAuth2, Server Discovery, or deleted invite"
+            # If no regular invite matched, check the vanity invite
+            if not used_invite and guild.vanity_url_code:
+                try:
+                    vanity = await guild.vanity_invite()
+                    if vanity and vanity.uses is not None:
+                        cached_vanity = self._invite_cache.get(guild.id, {}).get("__vanity__", 0)
+                        if vanity.uses > cached_vanity:
+                            used_vanity = True
+                            self._invite_cache.setdefault(guild.id, {})["__vanity__"] = vanity.uses
+                except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+                    pass
 
-        # ── Log to invites category ───────────────
-        if used_invite:
-            inv_body = (
-                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-                f"**Invite Code:** `{used_invite.code}`\n"
-                f"**Created By:** {used_invite.inviter.mention if used_invite.inviter else 'Unknown'}\n"
-                f"**Total Uses:** {used_invite.uses}"
-            )
-            await self.log_event(
-                guild, "invites", "Invite Used", inv_body,
-                target_id=member.id
-            )
-        elif used_vanity:
-            vanity_body = (
-                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-                f"**Join Method:** Vanity URL (`/{guild.vanity_url_code}`)"
-            )
-            await self.log_event(
-                guild, "invites", "Vanity Invite Used", vanity_body,
-                target_id=member.id
-            )
-        else:
-            unknown_body = (
-                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-                f"**Join Method:** Unknown — likely OAuth2 authorization, Server Discovery, or a deleted invite"
-            )
-            await self.log_event(
-                guild, "invites", "Unknown Join Method", unknown_body,
-                target_id=member.id
-            )
+            # ── Build join-method label ───────────────
+            if used_invite:
+                join_method = f"Invite `{used_invite.code}`"
+            elif used_vanity:
+                join_method = f"Vanity URL (`/{guild.vanity_url_code}`)"
+            else:
+                join_method = "Unknown — OAuth2, Server Discovery, or deleted invite"
 
-        member_count = getattr(guild, "member_count", None)
-        body = (
-            f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
-            f"**Account Created:** <t:{created_at}:f> (<t:{created_at}:R>){age_warn}\n"
-            f"**Join Method:** {join_method}"
-            + (f"\n**Member Count:** `{member_count:,}`" if member_count else "")
-        )
-        await self.log_event(
-            guild, "members", "Member Joined", body,
-            target_id=member.id, action_key="member_join"
-        )
+            # ── Log to invites category ───────────────
+            if used_invite:
+                inv_body = (
+                    f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                    f"**Invite Code:** `{used_invite.code}`\n"
+                    f"**Created By:** {used_invite.inviter.mention if used_invite.inviter else 'Unknown'}\n"
+                    f"**Total Uses:** {used_invite.uses}"
+                )
+                await self.log_event(
+                    guild, "invites", "Invite Used", inv_body,
+                    target_id=member.id
+                )
+            elif used_vanity:
+                vanity_body = (
+                    f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                    f"**Join Method:** Vanity URL (`/{guild.vanity_url_code}`)"
+                )
+                await self.log_event(
+                    guild, "invites", "Vanity Invite Used", vanity_body,
+                    target_id=member.id
+                )
+            else:
+                unknown_body = (
+                    f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                    f"**Join Method:** Unknown — likely OAuth2 authorization, Server Discovery, or a deleted invite"
+                )
+                await self.log_event(
+                    guild, "invites", "Unknown Join Method", unknown_body,
+                    target_id=member.id
+                )
+
+            member_count = getattr(guild, "member_count", None)
+            body = (
+                f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
+                f"**Account Created:** <t:{created_at}:f> (<t:{created_at}:R>){age_warn}\n"
+                f"**Join Method:** {join_method}"
+                + (f"\n**Member Count:** `{member_count:,}`" if member_count else "")
+            )
+            included = list(dict.fromkeys(buffered))
+            if included:
+                body += f"\n**Roles Added:** {', '.join(included)}"
+
+            channel = await self._log_channel(guild, "members")
+            message = await self.log_event(
+                guild, "members", "Member Joined", body,
+                target_id=member.id, action_key="member_join"
+            )
+            if message is not None and channel is not None:
+                self._remember_join_entry(guild, member, message, channel, body)
+                # A role that arrived while the entry was being sent missed
+                # the body, but it is still inside the join window.
+                late = [mention for mention in dict.fromkeys(buffered)
+                        if mention not in included]
+                if late:
+                    await self._extend_join_entry(
+                        guild, member, [f"**Roles Added:** {', '.join(late)}"])
+        finally:
+            self._joining_roles.pop((guild.id, member.id), None)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         guild = member.guild
+
+        # A bot leaving is its application being removed; its managed role is
+        # deleted with it, so the applications entry is the whole story.
+        if getattr(member, "bot", False):
+            await self._log_application_removed(member)
+            return
 
         # ── Was this a kick or a ban rather than a plain leave? ──
         # Only kicks used to be checked, so a banned member also appeared as
@@ -1458,10 +1671,22 @@ class ServerLogger(commands.Cog):
             removed.discard(mute_role)
 
         changes = []
-        if added:
-            changes.append(f"**Roles Added:** {', '.join(r.mention for r in added)}")
+        role_lines: list[str] = []
+
+        # A role added while the join entry is still being built belongs to that
+        # entry: on_member_join reads this buffer into the body it posts.
+        joining = self._joining_roles.get((guild.id, after.id))
+        buffered_additions = bool(added and joining is not None)
+        if buffered_additions:
+            for role in added:
+                if role.mention not in joining:
+                    joining.append(role.mention)
+        elif added:
+            role_lines.append(
+                f"**Roles Added:** {', '.join(r.mention for r in added)}")
         if removed:
-            changes.append(f"**Roles Removed:** {', '.join(r.mention for r in removed)}")
+            role_lines.append(
+                f"**Roles Removed:** {', '.join(r.mention for r in removed)}")
         if added or removed or mute_added or mute_removed:
             # A role change is usually somebody else's doing; the gateway event
             # only says the roles changed, so the audit log names the actor.
@@ -1482,10 +1707,18 @@ class ServerLogger(commands.Cog):
                 else:
                     await mod_utils.adopt_role_unmute(
                         guild, after, role_actor, role_entry.reason if role_entry else None)
-            if role_actor is not None and role_actor != self.bot.user and (added or removed):
-                changes.append(f"**Roles Changed By:** {role_actor.mention}")
+            if role_actor is not None and role_actor != self.bot.user \
+                    and (removed or (added and not buffered_additions)):
+                role_lines.append(f"**Roles Changed By:** {role_actor.mention}")
                 if role_entry.reason:
-                    changes.append(f"**Reason:** {role_entry.reason}")
+                    role_lines.append(f"**Reason:** {role_entry.reason}")
+
+        # Roles added just after joining are part of the join entry, not a
+        # second "Member Updated" entry a few seconds later.
+        if added and role_lines and await self._extend_join_entry(
+                guild, after, role_lines):
+            role_lines = []
+        changes.extend(role_lines)
 
         # ── Boost / unboost ───────────────────────
         before_boost = getattr(before, "premium_since", None)
@@ -1997,6 +2230,11 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role: discord.Role):
+        # A bot's managed role is created with the application itself; the
+        # applications entry is what says the app was added, and how.
+        if self._is_application_role(role):
+            return
+
         entry = await self._audit_entry(
             role.guild, discord.AuditLogAction.role_create, role.id)
         responsible = entry.user if entry else None
@@ -2019,6 +2257,11 @@ class ServerLogger(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role: discord.Role):
+        # The managed role goes with the application it belongs to; removing a
+        # bot is already one applications entry.
+        if self._is_application_role(role):
+            return
+
         entry = await self._audit_entry(
             role.guild, discord.AuditLogAction.role_delete, role.id)
         responsible = entry.user if entry else None
@@ -2381,6 +2624,10 @@ class ServerLogger(commands.Cog):
             or await self._audit_latest(guild, discord.AuditLogAction.integration_delete) \
             or await self._audit_latest(guild, discord.AuditLogAction.integration_update)
         if entry is None:
+            return
+        # Bot applications have their own category and entry; this handler is
+        # for the other integrations (Twitch, YouTube, webhooks).
+        if str(getattr(entry.target, "type", "")).lower() == "discord":
             return
         body = (
             f"**Integration:** `{getattr(entry.target, 'name', 'unknown')}`\n"

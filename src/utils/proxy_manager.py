@@ -103,6 +103,13 @@ ROTATE_COOLDOWN_SECONDS = 20       # at most one rotation per limit burst
 #: out of rotation.  Long enough that the bot never loops on a banned IP during
 #: a burst, short enough that a long-lived process can retry an endpoint
 #: Cloudflare has since forgiven without needing a restart.
+#: How long a refused endpoint stays out of rotation.  A Cloudflare ``1015`` is a
+#: temporary rate limit — its own page says discord.com "has banned you
+#: temporarily" — so parking that proxy for an hour spends every egress the plan
+#: has and leaves the bot stranded long after the limit lifted.  An endpoint that
+#: cannot be connected to at all is dead rather than limited, and stays out for
+#: the full hour.
+PROXY_THROTTLE_TTL_SECONDS = 300
 PROXY_BAN_TTL_SECONDS = 3600
 #: Where the blocked-proxy record survives a restart.  The supervisor restarts
 #: the bot child when a blocked login ends it, and a process that starts with an
@@ -398,7 +405,8 @@ async def login_with_failover(
             return
         except Exception as exc:
             reason = login_block_reason(exc)
-            if reason is None and _proxy_connection_failure(exc, manager):
+            dead_proxy = reason is None and _proxy_connection_failure(exc, manager)
+            if dead_proxy:
                 reason = "The Webshare proxy refused the connection"
             if reason is None or manager is None or attempt >= total:
                 raise
@@ -407,7 +415,16 @@ async def login_with_failover(
                 f"{reason} blocked the Discord login — retrying through "
                 f"Webshare (attempt {attempt} of {total}).",
             )
-            if not await manager.failover_login(exc, reason=reason):
+            if not await manager.failover_login(
+                exc,
+                reason=reason,
+                # A proxy that will not connect is dead, not limited: no egress
+                # check can reach it and it stays out for the long window.  A
+                # Cloudflare block is a temporary rate limit, checked and parked
+                # only briefly so the pool can serve the bot again.
+                verify=not dead_proxy,
+                ttl=PROXY_BAN_TTL_SECONDS if dead_proxy else PROXY_THROTTLE_TTL_SECONDS,
+            ):
                 raise
             # login() created this attempt's session; release it so the retry
             # opens a clean one that carries the new proxy.  A failure before
@@ -447,9 +464,11 @@ class WebshareProxyManager:
         self._loop = None
         self._verify_interval = VERIFY_INTERVAL_SECONDS
         self._rotated_at = 0.0
-        # Endpoint -> wall-clock time it was blocked, so rotation can skip the
-        # proxies that are already known to fail instead of picking at random.
-        # Wall clock because the record outlives the process (see _load_bans).
+        # Endpoint -> wall-clock time its parking expires, so rotation can skip
+        # the proxies that are already known to fail instead of picking at
+        # random.  Wall clock because the record outlives the process (see
+        # _load_bans), and per-entry because a rate limit and a dead proxy are
+        # not out of rotation for the same length of time.
         self._banned_proxies: dict[tuple, float] = {}
         self._load_bans()
         # Whether the "nothing is usable" message has been said, so a blocked
@@ -556,14 +575,23 @@ class WebshareProxyManager:
             return
         kwargs["proxy"] = self._proxy_url
 
-    async def failover_login(self, error, *, reason: str | None = None) -> bool:
+    async def failover_login(
+        self,
+        error,
+        *,
+        reason: str | None = None,
+        verify: bool = True,
+        ttl: float = PROXY_THROTTLE_TTL_SECONDS,
+    ) -> bool:
         """Arm or rotate Webshare egress after a blocked login attempt.
 
         The same recovery as the request hook, driven from the exception a
         failed ``login()`` raised instead of from a response the hook saw.
         Returns True when a proxy is active for the retry.  ``reason`` lets the
         caller name a failure the exception cannot classify by itself, such as a
-        proxy that refused the connection.
+        proxy that refused the connection, and ``verify``/``ttl`` follow that
+        distinction: a dead proxy is not probed and is parked for the long
+        window, while a rate limit is checked and parked briefly.
 
         A fresh proxy is armed by setting ``http.proxy``, which discord.py reads
         on every request and gateway websocket it opens — so the retried login
@@ -580,7 +608,7 @@ class WebshareProxyManager:
             # a recovery.  The refused endpoint is retired first, so rotation
             # cannot hand the retry the same blocked proxy back.
             before = self._proxy_key(self._active_proxy)
-            if not await self._retire_active_proxy(reason, egress):
+            if not await self._retire_active_proxy(reason, egress, verify=verify, ttl=ttl):
                 # The refused address was not this proxy, so another proxy is not
                 # the fix: stop rather than spend the rest of the list on it.
                 return False
@@ -804,14 +832,21 @@ class WebshareProxyManager:
         if isinstance(error, PROXY_CONNECTION_ERRORS):
             # Already proven unusable; there is nothing to verify with a probe.
             await self._retire_active_proxy(
-                "The active Webshare proxy refused the connection", verify=False
+                "The active Webshare proxy refused the connection",
+                verify=False,
+                ttl=PROXY_BAN_TTL_SECONDS,
             )
         else:
             self.rotate(reason="The active Webshare proxy dropped the request", immediate=True)
         return True
 
     async def _retire_active_proxy(
-        self, reason: str, egress: str | None = None, *, verify: bool = True
+        self,
+        reason: str,
+        egress: str | None = None,
+        *,
+        verify: bool = True,
+        ttl: float = PROXY_THROTTLE_TTL_SECONDS,
     ) -> bool:
         """Stop using the active proxy and move to another one now.
 
@@ -828,13 +863,19 @@ class WebshareProxyManager:
         if self._active_proxy is None:
             return False
         attributable = await self._ban_if_attributable(
-            self._active_proxy, reason, egress, verify=verify
+            self._active_proxy, reason, egress, verify=verify, ttl=ttl
         )
         self.rotate(reason=reason, immediate=True)
         return attributable
 
     async def _ban_if_attributable(
-        self, proxy: dict, reason: str, egress: str | None, *, verify: bool
+        self,
+        proxy: dict,
+        reason: str,
+        egress: str | None,
+        *,
+        verify: bool,
+        ttl: float = PROXY_THROTTLE_TTL_SECONDS,
     ) -> bool:
         """Record ``proxy`` as blocked only when the block is provably its own.
 
@@ -870,7 +911,7 @@ class WebshareProxyManager:
                 f"moving off it without blocking it.",
             )
             return True
-        self._ban_proxy(proxy, reason, note=note)
+        self._ban_proxy(proxy, reason, note=note, ttl=ttl)
         return True
 
     @staticmethod
@@ -881,30 +922,37 @@ class WebshareProxyManager:
         return (proxy.get("proxy_address"), proxy.get("port"), proxy.get("username"))
 
     def _proxy_is_banned(self, proxy: dict) -> bool:
-        """Whether ``proxy`` was blocked recently enough to stay out of rotation."""
+        """Whether ``proxy`` is still parked out of rotation."""
         key = self._proxy_key(proxy)
         if key is None:
             return False
-        blocked_at = self._banned_proxies.get(key)
-        if blocked_at is None:
+        expires_at = self._banned_proxies.get(key)
+        if expires_at is None:
             return False
-        if time.time() - blocked_at >= PROXY_BAN_TTL_SECONDS:
+        if time.time() >= expires_at:
             del self._banned_proxies[key]
             return False
         return True
 
-    def _ban_proxy(self, proxy: dict, reason: str, note: str | None = None) -> None:
+    def _ban_proxy(
+        self,
+        proxy: dict,
+        reason: str,
+        note: str | None = None,
+        ttl: float = PROXY_THROTTLE_TTL_SECONDS,
+    ) -> None:
         """Record that Cloudflare (or the proxy itself) refuses this endpoint."""
         key = self._proxy_key(proxy)
         if key is None or key in self._banned_proxies:
             return
-        self._banned_proxies[key] = time.time()
+        self._banned_proxies[key] = time.time() + ttl
         self._save_bans()
         detail = f" ({note})" if note else ""
+        minutes = max(1, round(ttl / 60))
         logging.warning(
             "ProxyManager",
             f"{reason} — Webshare proxy {proxy.get('proxy_address')}:{proxy.get('port')} "
-            f"will not be used again for {PROXY_BAN_TTL_SECONDS // 60} minutes{detail}.",
+            f"will not be used again for {minutes} minutes{detail}.",
         )
 
     def _load_bans(self) -> None:
@@ -926,20 +974,20 @@ class WebshareProxyManager:
         now = time.time()
         for entry in entries:
             try:
-                address, port, username, blocked_at = entry
-                blocked_at = float(blocked_at)
+                address, port, username, expires_at = entry
+                expires_at = float(expires_at)
             except (TypeError, ValueError):
                 continue
-            if now - blocked_at < PROXY_BAN_TTL_SECONDS:
-                self._banned_proxies[(address, port, username)] = blocked_at
+            if expires_at > now:
+                self._banned_proxies[(address, port, username)] = expires_at
 
     def _save_bans(self) -> None:
         """Persist the blocked endpoints for the next process in this container."""
         now = time.time()
         entries = [
-            [address, port, username, blocked_at]
-            for (address, port, username), blocked_at in self._banned_proxies.items()
-            if now - blocked_at < PROXY_BAN_TTL_SECONDS
+            [address, port, username, expires_at]
+            for (address, port, username), expires_at in self._banned_proxies.items()
+            if expires_at > now
         ]
         try:
             PROXY_BANS_PATH.parent.mkdir(parents=True, exist_ok=True)

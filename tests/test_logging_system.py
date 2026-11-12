@@ -45,6 +45,22 @@ class _AsyncIter:
         return entry
 
 
+class FakeRole:
+    """A hashable stand-in for discord.Role (SimpleNamespace is unhashable)."""
+
+    def __init__(self, role_id=5, mention="<@&5>", **fields):
+        self.id = role_id
+        self.mention = mention
+        for name, value in fields.items():
+            setattr(self, name, value)
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        return isinstance(other, FakeRole) and other.id == self.id
+
+
 class FakeAuditEntry:
     def __init__(self, action, target, user, *, age=1.0, reason=None):
         self.action = action
@@ -318,6 +334,154 @@ class MemberJoinMessageTests(unittest.TestCase):
 
         self.assertIn(f"New account \u2014 created <t:{stamp}:R>", body)
         self.assertNotIn("only **", body)
+
+
+class ApplicationLogTests(unittest.TestCase):
+    """A bot's arrival and removal are one applications entry each."""
+
+    def setUp(self):
+        self.cog = logging_cog.ServerLogger(_bot())
+        self.cog.log_event = mock.AsyncMock()
+        self.guild = FakeGuild()
+        self.guild.vanity_url_code = None
+        self.guild.member_count = 42
+        self.channel = SimpleNamespace(id=500)
+        self.guild.get_channel = lambda channel_id: self.channel
+        self.cog._config = {str(GUILD_ID): {"applications": 500}}
+        self.cog._config_at = time.monotonic()
+
+        async def no_invites():
+            return []
+
+        self.guild.invites = no_invites
+
+    def bot(self, member_id=BOT_ID):
+        role = FakeRole(
+            role_id=7, mention="<@&7>", managed=True,
+            permissions=discord.Permissions(send_messages=True),
+        )
+        return SimpleNamespace(
+            id=member_id, name="Helper", mention=f"<@{member_id}>",
+            guild=self.guild, roles=[role], bot=True,
+            joined_at=discord.utils.utcnow() - timedelta(days=3),
+            created_at=discord.utils.utcnow() - timedelta(days=400),
+            display_avatar=SimpleNamespace(url="https://cdn.example/bot.png"),
+        )
+
+    def test_adding_a_bot_sends_only_the_application_entry(self):
+        actor = SimpleNamespace(mention="<@7>", id=7)
+        self.guild.entries = [
+            FakeAuditEntry(
+                discord.AuditLogAction.bot_add,
+                SimpleNamespace(id=BOT_ID), actor, reason="needed for tickets")]
+
+        async def integrations():
+            return [SimpleNamespace(
+                id=BOT_ID, application=SimpleNamespace(id=BOT_ID),
+                scopes=["bot", "applications.commands"])]
+
+        self.guild.integrations = integrations
+
+        _runner(self.cog.on_member_join(self.bot()))
+
+        self.cog.log_event.assert_awaited_once()
+        args, _ = self.cog.log_event.call_args
+        self.assertEqual(args[1], "applications")
+        self.assertEqual(args[2], "Application Added")
+        self.assertIn("**Added By:** <@7>", args[3])
+        self.assertIn("`bot`, `applications.commands`", args[3])
+        self.assertIn("send messages", args[3])
+        self.assertIn("needed for tickets", args[3])
+
+    def test_a_bot_managed_role_is_not_logged_as_a_role_creation(self):
+        role = SimpleNamespace(
+            guild=self.guild, id=7, name="Helper", managed=True,
+            tags=SimpleNamespace(bot_id=BOT_ID))
+
+        _runner(self.cog.on_guild_role_create(role))
+
+        self.cog.log_event.assert_not_awaited()
+
+    def test_removing_a_bot_logs_the_application_removed_entry(self):
+        actor = SimpleNamespace(mention="<@7>", id=7)
+        self.guild.entries = [
+            FakeAuditEntry(
+                discord.AuditLogAction.integration_delete,
+                SimpleNamespace(id=BOT_ID, application_id=BOT_ID, type="discord"),
+                actor, reason="no longer needed")]
+        member = self.bot()
+
+        _runner(self.cog.on_member_remove(member))
+
+        self.cog.log_event.assert_awaited_once()
+        args, _ = self.cog.log_event.call_args
+        self.assertEqual(args[1], "applications")
+        self.assertEqual(args[2], "Application Removed")
+        self.assertIn("**Removed By:** <@7>", args[3])
+        self.assertIn("no longer needed", args[3])
+
+
+class JoinRoleFoldingTests(unittest.TestCase):
+    """Roles added right after joining belong to the join entry."""
+
+    def setUp(self):
+        self.cog = logging_cog.ServerLogger(_bot())
+        self.guild = FakeGuild()
+        self.guild.vanity_url_code = None
+        self.guild.member_count = 42
+        self.channel = SimpleNamespace(id=500)
+        self.guild.get_channel = lambda channel_id: self.channel
+        self.message = SimpleNamespace(
+            edit=mock.AsyncMock(), delete=mock.AsyncMock())
+        self.cog.log_event = mock.AsyncMock(return_value=self.message)
+        self.cog._config = {str(GUILD_ID): {"members": 500}}
+        self.cog._config_at = time.monotonic()
+
+        async def no_invites():
+            return []
+
+        self.guild.invites = no_invites
+
+    def member(self, *, roles=(), joined_at):
+        return SimpleNamespace(
+            id=42, name="tester", mention="<@42>", guild=self.guild,
+            roles=list(roles), bot=False, joined_at=joined_at,
+            created_at=discord.utils.utcnow() - timedelta(days=400),
+            nick=None, premium_since=None, timed_out_until=None,
+            guild_avatar=None,
+            display_avatar=SimpleNamespace(url="https://cdn.example/member.png"),
+        )
+
+    def test_a_role_added_inside_the_window_edits_the_join_entry(self):
+        joined_at = discord.utils.utcnow() - timedelta(seconds=5)
+        _runner(self.cog.on_member_join(self.member(joined_at=joined_at)))
+
+        self.cog.log_event.reset_mock()
+        self.message.edit.reset_mock()
+        role = FakeRole()
+        before = self.member(joined_at=joined_at)
+        after = self.member(joined_at=joined_at, roles=[role])
+
+        _runner(self.cog.on_member_update(before, after))
+
+        self.message.edit.assert_awaited_once()
+        self.cog.log_event.assert_not_awaited()
+        pending = self.cog._pending_entries[
+            self.cog._join_entry_key(self.guild, after)]
+        self.assertIn(("Roles Added", "<@&5>"), pending.details)
+
+    def test_a_role_added_while_the_join_is_built_is_buffered(self):
+        joined_at = discord.utils.utcnow() - timedelta(seconds=5)
+        buffer: list[str] = []
+        self.cog._joining_roles[(GUILD_ID, 42)] = buffer
+        role = FakeRole()
+        before = self.member(joined_at=joined_at)
+        after = self.member(joined_at=joined_at, roles=[role])
+
+        _runner(self.cog.on_member_update(before, after))
+
+        self.assertEqual(buffer, ["<@&5>"])
+        self.cog.log_event.assert_not_awaited()
 
 
 class DashboardLoggingSyncTests(unittest.TestCase):

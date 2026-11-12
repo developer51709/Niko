@@ -30,10 +30,15 @@ _PAGE_MARKERS = (
 # HTML at all, so its numeric error codes are matched on their own.
 _ERROR_CODE = re.compile(r"(?:error code|cloudflare error)\s*:?\s*10\d\d")
 
-# The interstitial's footer names the client address it refused ("Your IP:
-# 203.0.113.7"), which is the one fact that tells a real block of a proxy apart
-# from a request that never left through it.
-_EGRESS_IP = re.compile(r"your ip:?\s*(?:<[^>]*>\s*)*([0-9a-fA-F.:]{3,45})")
+# The interstitial's footer names the client address it refused, which is the one
+# fact that tells a real block of a proxy apart from a request that never left
+# through it.  The live page hides it behind a "Click to reveal" button —
+# ``id="cf-footer-ip"`` holds the value, followed by the plain-text form on
+# pages that render it directly.
+_EGRESS_IP = re.compile(
+    r'id="cf-footer-ip"[^>]*>\s*([0-9a-fA-F.:]{3,45})'
+    r"|your ip:?\s*(?:<[^>]*>\s*)*([0-9a-fA-F.:]{3,45})"
+)
 
 _BLOCK_STATUSES = {403, 429, 503}
 
@@ -95,7 +100,7 @@ def blocked_egress_ip(body: str) -> str | None:
     match = _EGRESS_IP.search((body or "").lower())
     if not match:
         return None
-    return match.group(1).strip(".:-") or None
+    return (match.group(1) or match.group(2) or "").strip(".:-") or None
 
 
 def interstitial_signature(response, body_fallback: str = "") -> str | None:

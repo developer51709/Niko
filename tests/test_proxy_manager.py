@@ -23,6 +23,8 @@ import pytest
 from discord.utils import MISSING
 
 from utils.proxy_manager import (
+    PROXY_BAN_TTL_SECONDS,
+    PROXY_THROTTLE_TTL_SECONDS,
     WebshareProxyManager,
     is_global_rate_limit,
     login_block_reason,
@@ -45,6 +47,18 @@ def _cloudflare_page_with_ip(address: str) -> str:
         "<html><head><title>Attention Required! | Cloudflare</title></head><body>"
         '<div id="cf-error-details"><h1>Error 1015</h1>'
         f"<p>Your IP: {address}</p></div></body></html>"
+    )
+
+
+def _cloudflare_page_with_hidden_ip(address: str) -> str:
+    """The live 1015 page: the address sits behind "Click to reveal"."""
+    return (
+        "<html><head><title>Access denied | discord.com used Cloudflare to restrict access"
+        '</title></head><body><div id="cf-error-details"><h1>Error <span>1015</span></h1>'
+        '<span class="cf-footer-item">Your IP:'
+        ' <button type="button" id="cf-footer-ip-reveal">Click to reveal</button>'
+        f' <span class="hidden" id="cf-footer-ip">{address}</span></span>'
+        "</div></body></html>"
     )
 
 
@@ -647,6 +661,45 @@ def test_a_login_block_that_names_another_address_does_not_spend_the_proxy():
     asyncio.run(scenario())
 
 
+def test_the_live_block_page_address_is_read_behind_the_reveal_button():
+    page = FakeLoginFailure(
+        429, _cloudflare_page_with_hidden_ip("38.154.185.97"), {"Server": "cloudflare"}
+    )
+
+    # The live page puts "Click to reveal" between the label and the address, so
+    # the value lives in the cf-footer-ip element rather than next to the text.
+    assert login_block_reason(page) == (
+        "Cloudflare throttle (cf-error-details, egress 38.154.185.97)"
+    )
+
+
+def test_a_rate_limited_proxy_is_parked_briefly_and_a_dead_one_for_longer():
+    async def scenario():
+        session = FakeSession(FakeResponse(200))
+        manager, http, _ = _attach(session, proxies=[PROXY_ONE, PROXY_TWO])
+        throttled, dead = manager._proxies
+        now = time.time()
+
+        manager._ban_proxy(throttled, "Cloudflare throttle (error code: 1015)")
+        manager._ban_proxy(
+            dead,
+            "The active Webshare proxy refused the connection",
+            ttl=PROXY_BAN_TTL_SECONDS,
+        )
+
+        # A 1015 is temporary, so that endpoint comes back after the short window
+        # instead of costing the bot its whole pool for an hour.
+        assert manager._banned_proxies[manager._proxy_key(throttled)] <= (
+            now + PROXY_THROTTLE_TTL_SECONDS + 1
+        )
+        assert manager._banned_proxies[manager._proxy_key(dead)] >= (
+            now + PROXY_BAN_TTL_SECONDS - 1
+        )
+        await manager.close()
+
+    asyncio.run(scenario())
+
+
 def test_the_block_reason_quotes_the_address_cloudflare_refused():
     page = FakeLoginFailure(
         429, _cloudflare_page_with_ip("64.137.96.74"), {"Server": "cloudflare"}
@@ -1004,7 +1057,7 @@ def test_the_retry_really_reaches_discord_after_dropping_the_blocked_session():
 
         enabled = False
 
-        async def failover_login(self, error, *, reason=None):
+        async def failover_login(self, error, *, reason=None, **kwargs):
             self.enabled = (reason or login_block_reason(error)) is not None
             return self.enabled
 
