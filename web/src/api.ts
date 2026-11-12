@@ -45,6 +45,8 @@ import type {
   NotifierFollow,
   NotifierResponse,
   StaffMaintenanceResponse,
+  HoneypotResponse,
+  HoneypotSettings,
   OwnerLocales,
   OwnerLogsResponse,
   OwnerUpdates,
@@ -141,6 +143,23 @@ export const setOwnerLocaleTranslationCard = (translationCard: boolean, csrfToke
   method: "POST",
   headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
   body: JSON.stringify({ translation_card: translationCard }),
+});
+// ── Owner honeypot: persisted hits, bans, and autoban settings ──────────────
+export const getOwnerHoneypot = () => api<HoneypotResponse>("/api/owner/honeypot");
+export const banOwnerHoneypotIp = (ip: string, reason: string, csrfToken?: string) => api<HoneypotResponse>("/api/owner/honeypot/ban", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify({ ip, reason }),
+});
+export const unbanOwnerHoneypotIp = (ip: string, csrfToken?: string) => api<HoneypotResponse>("/api/owner/honeypot/unban", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify({ ip }),
+});
+export const saveOwnerHoneypotSettings = (settings: HoneypotSettings, csrfToken?: string) => api<HoneypotResponse>("/api/owner/honeypot/settings", {
+  method: "POST",
+  headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined,
+  body: JSON.stringify(settings),
 });
 /** What beta has that this deployment does not, area by area. */
 export const getOwnerUpdates = () => api<OwnerUpdates>("/api/owner/updates");

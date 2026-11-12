@@ -35,15 +35,20 @@ Two problems came out of that:
    notice explaining that there was nothing to find and where to report a
    vulnerability. The scans continued exactly as before.
 
-An IP ban was considered and rejected: there are no real credentials to
-protect here, and bans are trivial to bypass. The middle ground is to make the
-crawl unrewarding and quiet:
+The first version rejected IP bans because there are no real credentials to
+protect here. The owner page now offers them as an operational tool instead:
+repeated probes are recorded, and an address that keeps coming back can be
+refused across the site. The middle ground is still to make the crawl
+unrewarding and quiet:
 
 - a scanner that finds a plausible `.env` will keep reading, keep downloading
   `dump.sql`, and keep trying the fake keys — all of which costs it time and
   yields nothing;
 - every decoy answers `200`, and `utils/logging._QuietSuccessfulRequests`
   already drops successful access lines, so the per-path log flood disappears;
+- each probe is aggregated in the database under its source address (count,
+  first/last hit, last path and host, user agent), so the history survives a
+  restart without keeping a request list in the web process;
 - one compact line per probing address per minute records that it happened:
 
   ```
@@ -64,6 +69,8 @@ time-wasting version.
 | [`env.py`](env.py) | The 20 `.env` variants and the Vim swap file. |
 | [`configs.py`](configs.py) | Frontend bundles, JSON, PHP, YAML (Compose, Spring, Rails, k8s, litellm…) and CI files. |
 | [`stores.py`](stores.py) | Credential stores, private keys, shell history, the SQL dump and the backup ZIP. |
+| `../security.py` | Persistent hits, IP bans, autoban settings, and API rate windows. |
+| `../routes/honeypot_routes.py` | The owner page's API: hits, bans, and autoban controls. |
 | [`easter_eggs.py`](easter_eggs.py) | The rickroll frames and the host-to-animation mapping. |
 | [`nyancat.py`](nyancat.py) | Port of klange/nyancat's terminal renderer: palette, crop and counter. |
 | [`nyancat_frames.py`](nyancat_frames.py) | The vendored 12 × 64 × 64 Nyan Cat frames. |
@@ -90,6 +97,8 @@ Routes are registered in
   route or a file in the built site always wins;
 - responses carry `Cache-Control: no-store` and `X-Robots-Tag: noindex,
   nofollow`, so the decoys do not end up in search results;
+- the hit history lives in MongoDB (or the local JSON fallback), aggregated per
+  address, not in the web process's memory;
 - the log summary is throttled per `X-Forwarded-For` address, capped at 512
   tracked addresses.
 
@@ -157,11 +166,26 @@ To add a path, put a builder in the relevant module and register it in
 pytest tests/test_security_decoy_routes.py
 ```
 
+## Owner page and bans
+
+The staff workspace's **Honeypot** tab lists the aggregated hits with the source
+IP, last path and host, user agent, and first/last timestamps. The owner can ban
+an address from there, with an optional reason, and unban it later. A ban is
+checked before subdomain routing, so it applies to the website, every API and
+auth route, and every subdomain, not just the decoy paths.
+
+The same tab arms the autoban guard. The owner sets how many hits inside a
+counting window trigger a ban and how long that ban lasts. Manual bans and
+autobans both refuse loopback (`127.0.0.1`, `::1`), private, link-local, and
+reserved addresses: those are internal, so banning one would either lock out
+the deployment itself or have no effect on the internet. Bans are stored with
+the hits; the request guard reads a small active-ban cache and does not query
+the database on every page view.
+
 ## What it does not do
 
-- It does not block, rate-limit or ban anyone.
 - It does not cover paths outside the registry. A scanner inventing a new
   filename still gets the SPA's 404 (and one access-log line).
 - It does not record what a crawler does with the fake values; it only counts
-  the probes per address per minute.
+  the probes per address.
 - It never serves, reads or derives from a real secret.

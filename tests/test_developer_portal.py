@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from webapp import app, auth, staff  # noqa: E402
-from webapp import api_errors, config as webapp_config  # noqa: E402
+from webapp import api_errors, config as webapp_config, security  # noqa: E402
 from webapp.developer import applications, portal, webhooks  # noqa: E402
 from webapp.developer import store as storage  # noqa: E402
 from webapp.routes import developer_routes, public_routes  # noqa: E402
@@ -30,10 +30,13 @@ def store(tmp_path, monkeypatch):
     monkeypatch.delenv("MONGODB_URL", raising=False)
     monkeypatch.delenv("DEVELOPER_API_KEY_PEPPER", raising=False)
     storage.reset()
+    # The per-IP API window now lives in the security store rather than a map
+    # in the portal module; reset it after DATA_DIR changes so this test starts
+    # with an empty window and no bans from an earlier case.
+    security.reset()
     monkeypatch.setattr(portal, "is_owner_id", lambda user_id: str(user_id) == OWNER)
     monkeypatch.setattr(staff, "is_owner_id", lambda user_id: str(user_id) == OWNER)
     monkeypatch.setattr(auth, "_current_user_blacklist_entry", lambda: None)
-    monkeypatch.setattr(portal, "_IP_HITS", {})
     monkeypatch.setattr(portal, "_KEY_HITS", {})
     return tmp_path
 

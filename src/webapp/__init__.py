@@ -14,6 +14,7 @@ from .routes import (  # noqa: E402,F401
     staff_broadcast_routes,
     log_routes,
     owner_routes,
+    honeypot_routes,
     public_routes,
     developer_routes,
     developer_application_routes,

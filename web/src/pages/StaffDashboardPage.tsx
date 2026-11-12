@@ -16,6 +16,7 @@ import { MaintenanceView } from "../components/dashboard/MaintenanceView";
 import { LocaleSyncView } from "../components/staff/LocaleSyncView";
 import { UpdatesView } from "../components/staff/UpdatesView";
 import { LogsView } from "../components/staff/LogsView";
+import { HoneypotView } from "../components/staff/HoneypotView";
 import { ErrorReportDocument, ErrorReportIncidentControls, reportMatchesSearch } from "../components/staff/ErrorReportsPanel";
 import { Switch } from "../components/dashboard/Switch";
 import { ColorPicker } from "../components/dashboard/ColorPicker";
@@ -72,7 +73,7 @@ function reportStatus(status: string) {
 const CARD_THEMES = selectOptions([["dark", "Dark"], ["light", "Light"]]);
 const BLACKLIST_TYPES = selectOptions([["user", "User"], ["guild", "Guild"]]);
 
-type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "lavalink" | "maintenance" | "locales" | "updates" | "logs" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
+type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "lavalink" | "maintenance" | "honeypot" | "locales" | "updates" | "logs" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
 
 const OWNER_ROLES = ["owner"];
 
@@ -104,6 +105,7 @@ const TAB_ROLES: Record<StaffTab, string[]> = {
   "proxy-workers": OWNER_ROLES,
   lavalink: OWNER_ROLES,
   maintenance: OWNER_ROLES,
+  honeypot: OWNER_ROLES,
   locales: OWNER_ROLES,
   updates: OWNER_ROLES,
   logs: OWNER_ROLES,
@@ -353,6 +355,7 @@ export function StaffDashboardPage() {
   const canManageProxyWorkers = tabAllowedForRole(staff.role, "proxy-workers");
   const canManageLavalink = tabAllowedForRole(staff.role, "lavalink");
   const canManageMaintenance = tabAllowedForRole(staff.role, "maintenance");
+  const canManageHoneypot = tabAllowedForRole(staff.role, "honeypot");
   const canManageLocales = tabAllowedForRole(staff.role, "locales");
   const canManageUpdates = tabAllowedForRole(staff.role, "updates");
   const canViewLogs = tabAllowedForRole(staff.role, "logs");
@@ -778,6 +781,7 @@ export function StaffDashboardPage() {
     ...(canManageLavalink ? [{ id: "lavalink", label: t("tabs.lavalink"), icon: "guild_server" }] : []),
     ...(canManageNikoApplications ? [{ id: "team-recruitment", label: t("tabs.applications"), icon: "users", badge: nikoApplications.reduce((count, application) => count + application.submission_count, 0) }] : []),
     ...(canManageMaintenance ? [{ id: "maintenance", label: t("tabs.maintenance"), icon: "settings" }] : []),
+    ...(canManageHoneypot ? [{ id: "honeypot", label: t("tabs.honeypot"), icon: "shield" }] : []),
     ...(canManageLocales ? [{ id: "locales", label: t("tabs.locales"), icon: "doc" }] : []),
     ...(canManageUpdates ? [{ id: "updates", label: t("tabs.updates"), icon: "spark" }] : []),
     ...(canViewLogs ? [{ id: "logs", label: t("tabs.logs"), icon: "terminal" }] : []),
@@ -915,6 +919,7 @@ export function StaffDashboardPage() {
     {activeTab === "proxy-workers" && canManageProxyWorkers && <section id="staff-proxy-workers-panel" role="tabpanel" aria-labelledby="staff-proxy-workers-tab" className="staff-guild-operations"><ProxyWorkersView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "lavalink" && canManageLavalink && <section id="staff-lavalink-panel" role="tabpanel" aria-labelledby="staff-lavalink-tab" className="staff-guild-operations"><LavalinkView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "maintenance" && canManageMaintenance && <section id="staff-maintenance-panel" role="tabpanel" aria-labelledby="staff-maintenance-tab" className="staff-guild-operations"><MaintenanceView csrfToken={auth.csrf_token} /></section>}
+    {activeTab === "honeypot" && canManageHoneypot && <section id="staff-honeypot-panel" role="tabpanel" aria-labelledby="staff-honeypot-tab" className="staff-guild-operations"><HoneypotView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "locales" && canManageLocales && <section id="staff-locales-panel" role="tabpanel" aria-labelledby="staff-locales-tab" className="staff-guild-operations"><LocaleSyncView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "updates" && canManageUpdates && <section id="staff-updates-panel" role="tabpanel" aria-labelledby="staff-updates-tab" className="staff-guild-operations"><UpdatesView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "logs" && canViewLogs && <section id="staff-logs-panel" role="tabpanel" aria-labelledby="staff-logs-tab" className="staff-guild-operations"><LogsView /></section>}

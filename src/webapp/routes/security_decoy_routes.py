@@ -42,10 +42,12 @@ from flask import Response, g, request
 from utils.verification.ip_intel import client_ip
 
 from .. import honeypot
+from .. import security
 from .. import server as _server
 from ..config import public_domain
 from ..honeypot import easter_eggs
 from ..runtime import request_host
+from ..security_guard import banned_response
 
 _GITHUB_REPO = "https://github.com/developer51709/Niko"
 _SUPPORT_SERVER = "https://niko.sryze.cc/discord"
@@ -67,30 +69,44 @@ Canonical: https://niko.sryze.cc/.well-known/security.txt
 
 _PROBE_LOG = logging.getLogger("Honeypot")
 
-#: At most one summary line per address in this many seconds.
+#: At most one summary line per address in this many seconds. The throttle is
+#: only for the log; the hit itself is written to the database by
+#: ``webapp.security`` on every request.
 _HIT_WINDOW_SECONDS = 60.0
 
-#: Addresses remembered for the throttle. The map is insertion-ordered, so the
-#: oldest entry is dropped when a scanner fakes its way through a range.
+#: Addresses remembered for the log throttle. The map is insertion-ordered, so
+#: the oldest entry is dropped when a scanner fakes its way through a range.
 _MAX_TRACKED_ADDRESSES = 512
 
-_hits: dict[str, tuple[float, int]] = {}
+_log_throttle: dict[str, tuple[float, int]] = {}
 
 
 def _remember_probe(path: str) -> None:
-    """Note a decoy hit, collapsing a burst into one line per address."""
+    """Persist a decoy hit and collapse its log line to one per address/minute."""
     address = client_ip(
         request.remote_addr, request.headers.get("X-Forwarded-For")
     ) or "unknown"
+    try:
+        result = security.record_hit(
+            ip=address,
+            path=path,
+            host=request_host(),
+            method=request.method,
+            user_agent=request.headers.get("User-Agent") or "",
+        )
+    except Exception as exc:
+        _PROBE_LOG.warning("Could not save a honeypot hit: %s", exc)
+        result = None
+
     now = time.monotonic()
-    entry = _hits.get(address)
+    entry = _log_throttle.get(address)
     if entry is None:
         _PROBE_LOG.info(
             "Decoy files: %s is probing the deployment (%s) — serving fake credentials",
             address,
             path,
         )
-        _hits[address] = (now, 0)
+        _log_throttle[address] = (now, 0)
     elif now - entry[0] >= _HIT_WINDOW_SECONDS:
         _PROBE_LOG.info(
             "Decoy files: %s probed %d more decoy paths in %ds — still fake",
@@ -98,12 +114,19 @@ def _remember_probe(path: str) -> None:
             entry[1] + 1,
             int(now - entry[0]),
         )
-        _hits[address] = (now, 0)
+        _log_throttle[address] = (now, 0)
     else:
-        _hits[address] = (entry[0], entry[1] + 1)
+        _log_throttle[address] = (entry[0], entry[1] + 1)
 
-    while len(_hits) > _MAX_TRACKED_ADDRESSES:
-        _hits.pop(next(iter(_hits)))
+    while len(_log_throttle) > _MAX_TRACKED_ADDRESSES:
+        _log_throttle.pop(next(iter(_log_throttle)))
+
+    if result and result.get("ban"):
+        _PROBE_LOG.warning(
+            "Autoban: %s crossed the honeypot threshold and is now blocked — %s",
+            address,
+            result["ban"].get("reason") or "autoban",
+        )
 
 
 def _decoy_response() -> Response:
@@ -222,6 +245,9 @@ def _easter_egg_response(kind: str, host: str, decoy: bool) -> Response:
 
 def _play_easter_egg():
     """Answer the fake service hosts with an animation, before anything else."""
+    denied = banned_response()
+    if denied is not None:
+        return denied
     if request.method not in ("GET", "HEAD"):
         return None
     host = request_host()

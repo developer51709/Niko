@@ -15,6 +15,7 @@
 @import "./styles/docs-theme.css";
 @import "./styles/status.css";
 @import "./styles/maintenance.css";
+@import "./styles/honeypot.css";
 @import "./styles/owner.css";
 @import "./styles/updates.css";
 @import "./styles/logs.css";

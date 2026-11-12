@@ -8,13 +8,26 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from webapp import app, honeypot
+from webapp import app, honeypot, security
+from webapp import config as webapp_config
 from webapp.honeypot import easter_eggs, nyancat
 from webapp.routes import security_decoy_routes as decoys
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def _isolated_security_store(tmp_path, monkeypatch):
+    """Keep the decoy tests off the deployment's MongoDB and shared data dir."""
+    monkeypatch.setattr(webapp_config, "DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("MONGODB_URL", raising=False)
+    security.reset()
+    yield
+    security.reset()
 
 
 def _env_body(client=None) -> str:
@@ -270,7 +283,7 @@ def test_real_routes_keep_their_normal_responses():
 
 
 def test_a_probe_burst_is_collapsed_into_one_log_line(caplog):
-    decoys._hits.clear()
+    decoys._log_throttle.clear()
     client = app.test_client()
     with caplog.at_level(logging.INFO, logger="Honeypot"):
         for path in ("/." + "env", "/.aws/credentials", "/.npmrc"):
@@ -278,7 +291,7 @@ def test_a_probe_burst_is_collapsed_into_one_log_line(caplog):
     lines = [record for record in caplog.records if record.name == "Honeypot"]
     assert len(lines) == 1
     assert "203.0.113.77" in lines[0].getMessage()
-    decoys._hits.clear()
+    decoys._log_throttle.clear()
 
 
 def test_the_generator_never_reads_real_configuration():

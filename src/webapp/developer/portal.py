@@ -23,7 +23,6 @@ import threading
 import time
 from collections import deque
 from functools import wraps
-from math import ceil
 from urllib.parse import urlsplit
 
 from flask import g, request, session
@@ -32,6 +31,7 @@ from config.ids import is_owner_id
 from utils import logging
 
 from ..api_errors import error_response
+from .. import security as security_store
 from . import store
 
 #: Bump this when the developer guidelines change. A developer who accepted an
@@ -127,7 +127,6 @@ ABUSE_BLOCK_LIMIT = 20
 ABUSE_BLOCK_WINDOW = 300.0
 _TRACKER_TTL = 600.0
 
-_IP_HITS: dict[str, deque] = {}
 _KEY_HITS: dict[str, dict] = {}
 _TRACK_LOCK = threading.RLock()
 
@@ -947,43 +946,15 @@ def _client_ip() -> str:
     return str(request.remote_addr or "unknown").strip() or "unknown"
 
 
-def _prune_ip_hits(now: float) -> None:
-    cutoff = now - max(IP_RATE_WINDOW, _TRACKER_TTL)
-    stale = [ip for ip, hits in _IP_HITS.items() if not hits or hits[-1] < cutoff]
-    for ip in stale:
-        _IP_HITS.pop(ip, None)
-
-
 def check_ip_rate_limit() -> dict:
-    """Consume one slot in the caller's IP bucket and report its headers."""
-    now = time.monotonic()
-    ip = _client_ip()
-    with _TRACK_LOCK:
-        if len(_IP_HITS) > 4096:
-            _prune_ip_hits(now)
-        hits = _IP_HITS.setdefault(ip, deque())
-        cutoff = now - IP_RATE_WINDOW
-        while hits and hits[0] <= cutoff:
-            hits.popleft()
-        if len(hits) >= IP_RATE_LIMIT:
-            retry_after = max(1, int(ceil((hits[0] + IP_RATE_WINDOW) - now)))
-            return {
-                "limit": IP_RATE_LIMIT,
-                "remaining": 0,
-                "reset": int(time.time()) + retry_after,
-                "retry_after": retry_after,
-                "blocked": True,
-            }
-        hits.append(now)
-        remaining = max(0, IP_RATE_LIMIT - len(hits))
-        resets_in = max(1, int(ceil((hits[0] + IP_RATE_WINDOW) - now)))
-        return {
-            "limit": IP_RATE_LIMIT,
-            "remaining": remaining,
-            "reset": int(time.time()) + resets_in,
-            "retry_after": None,
-            "blocked": False,
-        }
+    """Consume one slot in the caller's IP window and report its headers.
+
+    The window lives in the shared security store, not in a per-process map of
+    request timestamps, so a crawl cannot grow this process's memory.
+    """
+    return security_store.api_rate_limit(
+        _client_ip(), limit=IP_RATE_LIMIT, window=IP_RATE_WINDOW
+    )
 
 
 def _rate_headers(info: dict) -> dict:

@@ -1326,6 +1326,47 @@ export type StaffMaintenanceResponse = {
   updated_at: number;
 };
 
+/** One source address that has probed a honeypot path, aggregated in the database. */
+export type HoneypotHit = {
+  ip: string;
+  hits: number;
+  first_seen: number;
+  last_seen: number;
+  last_path: string;
+  last_host: string;
+  last_method: string;
+  last_user_agent: string;
+  /** Loopback and private addresses are internal, so they cannot be banned. */
+  bannable: boolean;
+  banned: boolean;
+  ban: HoneypotBan | null;
+};
+
+export type HoneypotBan = {
+  ip: string;
+  reason: string;
+  created_at: number;
+  created_by: string;
+  expires_at: number | null;
+  source: "manual" | "autoban" | string;
+};
+
+export type HoneypotSettings = {
+  enabled: boolean;
+  threshold: number;
+  window_seconds: number;
+  cooldown_seconds: number;
+};
+
+export type HoneypotResponse = {
+  hits: HoneypotHit[];
+  bans: HoneypotBan[];
+  settings: HoneypotSettings;
+  totals: { hits: number; addresses: number; bans: number };
+  storage: string;
+  error: string | null;
+};
+
 /** One console line in the owner's live log, already ANSI-coloured. */
 export type OwnerLogEntry = {
   /** ``<process>/<LEVEL>:<byte offset>`` in the archive, or ``memory:<id>``. */
