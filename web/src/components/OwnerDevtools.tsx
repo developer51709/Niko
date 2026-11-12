@@ -21,7 +21,6 @@
  */
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { gooeyToast } from "goey-toast";
 import { getAuth } from "../api";
 import { devtools, useDevtoolsFlag, useDevtoolsValue, type DevtoolsSide } from "../devtools";
 import { TEST_FONTS, resetTestFont, setTestFont, testFontLabel, useTestFont } from "../fontTester";
@@ -29,8 +28,7 @@ import { useLanguage, useStrings, type LanguageCode } from "../i18n";
 import { pageFromPath } from "../router";
 import type { AuthStatus } from "../types";
 import { registerContextMenuExtras } from "../utils/contextMenu";
-import { clearToasts, notifyError, notifySuccess, toastV2Defaults } from "../utils/toast";
-import { AnimatedDetails } from "./AnimatedDetails";
+import { notifyError, notifySuccess } from "../utils/toast";
 import { Select } from "./dashboard/Select";
 import { Switch } from "./dashboard/Switch";
 import { Icon } from "./Icon";
@@ -43,7 +41,6 @@ const PANEL_ID = "owner-devtools-panel";
 const TABS = [
   { id: "page", label: "Page" },
   { id: "browser", label: "Browser" },
-  { id: "experiments", label: "Experiments" },
   { id: "tools", label: "Tools" },
 ] as const;
 
@@ -104,7 +101,6 @@ export function OwnerDevtools() {
   const [outlined, setOutlined] = useState(false);
   const bypassSupportServer = useDevtoolsFlag(devtools.supportServerBypass);
   const presencePreview = useDevtoolsValue(devtools.presencePreview);
-  const toastV2 = useDevtoolsFlag(devtools.toastV2);
   // Which edge the button lives on. The dashboard sidebar sits bottom-left on a
   // phone, so the panel opened over it had to be movable.
   const side: DevtoolsSide = useDevtoolsValue(devtools.side);
@@ -117,7 +113,7 @@ export function OwnerDevtools() {
   const { language, languages, browser, overridden, setLanguage, resetLanguage } = useLanguage();
 
   const toggleRef = useRef<HTMLButtonElement | null>(null);
-  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ page: null, browser: null, experiments: null, tools: null });
+  const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({ page: null, browser: null, tools: null });
 
   useEffect(() => {
     let active = true;
@@ -199,64 +195,6 @@ export function OwnerDevtools() {
     const next = !document.documentElement.classList.contains(OUTLINE_CLASS);
     document.documentElement.classList.toggle(OUTLINE_CLASS, next);
     setOutlined(next);
-  };
-
-  /**
-   * Fill the experiments card with the sort of toast the new stack can draw: a
-   * description, live progress and an action inside the toast, all carried by
-   * the same spring as the rest of the experiment.
-   */
-  const previewToast = (kind: "success" | "failure" | "promise") => {
-    if (kind === "success") {
-      gooeyToast.success("Server settings saved", {
-        ...toastV2Defaults,
-        description: "12 changes written to Niko and synced to 4 shards in 1.2s.",
-        showProgress: true,
-        timing: { displayDuration: 6000 },
-        action: {
-          label: "View changes",
-          successLabel: "Opened",
-          onClick: () => gooeyToast.info("Change set #4821", {
-            ...toastV2Defaults,
-            description: "3 guild settings · 9 feature flags · 1 cache purge",
-            timing: { displayDuration: 4000 },
-          }),
-        },
-      });
-      return;
-    }
-    if (kind === "failure") {
-      gooeyToast.error("Backup upload failed", {
-        ...toastV2Defaults,
-        description: "niko-backup.zip is 24.8 MB — the limit is 10 MB.",
-        showProgress: true,
-        timing: { displayDuration: 7000 },
-        action: {
-          label: "Split & retry",
-          successLabel: "Queued",
-          onClick: () => gooeyToast.success("Retry queued", {
-            ...toastV2Defaults,
-            description: "The archive will be uploaded as three 8 MB parts.",
-            duration: 4000,
-            showProgress: true,
-          }),
-        },
-      });
-      return;
-    }
-    const rebuild = new Promise<void>((resolve) => { window.setTimeout(resolve, 2200); });
-    gooeyToast.promise(rebuild, {
-      ...toastV2Defaults,
-      loading: "Rebuilding search index",
-      success: "Search index rebuilt",
-      error: "Search index rebuild failed",
-      description: {
-        loading: "Indexing 18,402 records across 6 shards…",
-        success: "18,402 records are searchable again — queries are live.",
-        error: "The index is still serving the previous snapshot.",
-      },
-      timing: { displayDuration: 4200 },
-    });
   };
 
   /** Arrow keys walk the tab strip, Home/End jump to its ends. */
@@ -416,75 +354,6 @@ export function OwnerDevtools() {
             <button type="button" onClick={() => copy(JSON.stringify(diagnostics, null, 2), "Diagnostics copied.")}>Copy diagnostics</button>
             <button type="button" onClick={() => copy(navigator.userAgent, "User agent copied.")}>Copy UA</button>
           </div>
-        </div>}
-
-        {tab === "experiments" && <div
-          role="tabpanel"
-          id={tabPanelId("experiments")}
-          aria-labelledby={tabId("experiments")}
-          tabIndex={0}
-          className="owner-devtools-view"
-        >
-          <h3>Experiments</h3>
-          <p className="owner-devtools-note">
-            Opt-in changes for this browser tab only. Flip one on to try it everywhere immediately;
-            closing the tab restores the site.
-          </p>
-          <article className={`owner-devtools-experiment${toastV2 ? " is-on" : ""}`}>
-            <div className="owner-devtools-experiment-head">
-              <span className="owner-devtools-experiment-badge">Experiment 01</span>
-              <span className="owner-devtools-experiment-state">{toastV2 ? "Live" : "Off"}</span>
-            </div>
-            <div className="owner-devtools-experiment-title">
-              <div>
-                <strong id="owner-devtools-toast-v2">Toast v2</strong>
-                <small>
-                  Replaces every dashboard toast with goey-toast: morphing blobs, spring transitions,
-                  descriptions, progress bars and buttons inside the toast.
-                </small>
-              </div>
-              <Switch
-                size="sm"
-                checked={toastV2}
-                aria-labelledby="owner-devtools-toast-v2"
-                onCheckedChange={(next) => {
-                  // Neither package forgets its toasts when its host unmounts,
-                  // so clear both stores before switching stacks.
-                  clearToasts();
-                  devtools.setToastV2(next);
-                  if (!next) return;
-                  // The host mounts from the flag change; the toast lands on
-                  // the next task, once goey-toast is listening for it.
-                  window.setTimeout(() => gooeyToast.success("Toast v2 is live", {
-                    ...toastV2Defaults,
-                    description: "Every toast in this tab now uses the goey-toast stack.",
-                    duration: 4000,
-                    showProgress: true,
-                  }), 0);
-                }}
-              />
-            </div>
-            <AnimatedDetails className="owner-devtools-experiment-tests">
-              <summary className="owner-devtools-experiment-tests-summary">
-                <span>Tests</span>
-                <span className="owner-devtools-experiment-tests-count">3</span>
-                <Icon name="chevron" className="owner-devtools-experiment-tests-caret" />
-              </summary>
-              <div className="owner-devtools-experiment-tests-body">
-                <span className="owner-devtools-experiment-label">Try the richer toasts</span>
-                <div className="owner-devtools-actions">
-                  <button type="button" disabled={!toastV2} onClick={() => previewToast("success")}>Description + action</button>
-                  <button type="button" disabled={!toastV2} onClick={() => previewToast("failure")}>Failure</button>
-                  <button type="button" disabled={!toastV2} onClick={() => previewToast("promise")}>Progress promise</button>
-                </div>
-                <small className="owner-devtools-experiment-hint">
-                  {toastV2
-                    ? "Each preview keeps its action clickable until it fades, and the promise updates in place."
-                    : "Turn the experiment on to send previews through the new stack."}
-                </small>
-              </div>
-            </AnimatedDetails>
-          </article>
         </div>}
 
         {tab === "tools" && <div
