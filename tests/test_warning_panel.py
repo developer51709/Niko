@@ -246,4 +246,4 @@ def test_a_long_reason_is_shortened_on_the_panel_but_keeps_its_footer():
     assert "x" * (REASON_CHARS + 1) not in text
     assert "…" in text
     # Clipping the reason by itself keeps the markup after it intact.
-    assert text.endswith(f"({WARN_SOURCE})")
+    assert f"]({WARN_SOURCE})" in text

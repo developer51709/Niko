@@ -226,7 +226,7 @@
     "panel_heading": "### {warn} Warnings for {member}\n**{count}** on record",
     "empty_state": "No warnings on record.",
     "warning_card": "**Case #{index}** — {moderator}\n**Reason:** {reason}\n**Issued:** {time}",
-    "added_via": "-# {notepad} Added via {bot}. [Learn more]({link})",
+    "added_via": "-# {notepad} Added via {bot}. [Learn more]({link}).",
     "footer_page": "-# Page {page} / {total}",
     "timed_out": "-# {question} This panel **timed out** due to inactivity.",
     "button_edit": "Edit",
