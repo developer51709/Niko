@@ -93,15 +93,16 @@ def test_update_announcement_carries_the_changelog_and_site_links():
     assert view_labels(view) == ["What's new", "All commands", "Support server"]
 
     text = view_text(view)
-    assert "`.fm`" in text
-    assert "`/fm overview`" in text
-    assert "`/fm link`" in text
-    assert "`/fm whoknows`" in text
-    assert "`/fm recent`" in text
-    assert "`/fm taste`" in text
-    # Linking stores a session key, never a password.
-    assert "session key" in text
-    assert "approval page" in text
+    assert "`.dj role" in text
+    assert "`.playlist create" in text
+    assert "`.playlist share" in text
+    assert "`.scrobble on" in text
+    assert "Open Player" in text
+    assert "`activities` subdomain" in text
+    # Only scrobbling is opt-in; the DJ role and playlists are not.
+    assert "Last.fm scrobbling is opt-in" in text
+    assert "Everything here is opt-in" not in text
+    assert "paused" in text
     # The feature stays free, and the announcement says so up front.
     assert "the bot stays free" in text
 
@@ -109,20 +110,25 @@ def test_update_announcement_carries_the_changelog_and_site_links():
 def test_changelog_entry_covers_the_current_update():
     """The announced entry must describe the features the announcement names."""
     changelog = (ROOT / "web/src/data/changelog.ts").read_text(encoding="utf-8")
-    entry = changelog.split('slug: "lastfm-listening-stats"', 1)[1].split("\n  },", 1)[0]
+    entry = changelog.split('slug: "music-room-update"', 1)[1].split("\n  },", 1)[0]
     lowered = entry.lower()
 
-    assert "`.fm`" in entry
-    assert "last.fm" in lowered
-    assert "whoknows" in lowered
-    assert "crowns" in lowered
-    assert "taste" in lowered
-    assert "album art" in lowered
+    assert "`.dj role" in entry
+    assert "`.dj clear" in entry
+    assert "`.playlist create" in entry
+    assert "`.playlist share" in entry
+    assert "`.playlist play" in entry
+    assert "`.scrobble on" in entry
+    assert "discord activity" in lowered
+    # The Activity is served from its own subdomain, which Discord's URL
+    # mapping points at, so the entry has to name it.
+    assert "activities" in lowered and "subdomain" in lowered
+    # Scrobbling is opt-in, requester-only, and measured from real playback.
+    assert "opt-in" in lowered
     assert "session key" in lowered
-    # The approval flow is the reason the website gained a callback.
-    assert "/api/lastfm/callback" in entry
-    # The loading cards are part of the release, not an internal detail.
-    assert "loading card" in lowered
+    assert "playback progress" in lowered
+    assert "paused" in lowered
+    assert "last.fm" in lowered
 
 
 def test_changelog_entry_is_the_newest_release():

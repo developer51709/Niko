@@ -218,6 +218,13 @@ PRIMARY_KEYS: dict = {
     "music_playlists": ("user_id", "name"),
     "music_playlist_tracks": ("user_id", "name", "track_key"),
     "music_lavalink_nodes": "identifier",
+    "music_scrobble_optins": "user_id",
+    "music_dj_roles": "guild_id",
+    # Collaborative playlists before these keys were absent, so MongoDB
+    # rejected their inserts as having no primary key.
+    "music_shared_playlists": "playlist_id",
+    "music_shared_playlist_tracks": ("playlist_id", "track_key"),
+    "music_shared_playlist_editors": ("playlist_id", "user_id"),
     # Dedicated error-report database (same cluster, isolated from the main DB).
     "error_reports": "code",
     # Bot-wide usage counters, one row per (day or "lifetime", bucket, name).

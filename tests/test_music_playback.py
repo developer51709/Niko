@@ -63,6 +63,48 @@ class NowPlayingPanelEmojiTests(unittest.TestCase):
         self.assertNotEqual(str(emoji), "♥")
 
 
+def _panel_with_activity(enabled: bool):
+    track = SimpleNamespace(
+        source="youtube", author="artist", title="song", length=200_000,
+        uri="https://example.test/watch?v=abc123", artwork=None,
+    )
+    player = SimpleNamespace(
+        current=track, paused=False, volume=50, position=1_000, playing=True, queue=[],
+    )
+    cog = SimpleNamespace(
+        _state=lambda _gid: {
+            "current_track": track,
+            "history": deque(),
+            "loop": False,
+            "autoplay": False,
+            "ghost_queue": deque(),
+        },
+        _lastfm_key=None,
+        activity_enabled=enabled,
+    )
+    return views._build_np_view(player, SimpleNamespace(id=1), cog)
+
+
+class NowPlayingActivityButtonTests(unittest.IsolatedAsyncioTestCase):
+    def _button(self, enabled: bool):
+        for child in _panel_with_activity(enabled).walk_children():
+            if isinstance(child, discord.ui.Button) and child.label == "Open Player":
+                return child
+        return None
+
+    def test_the_activity_button_is_opt_in(self):
+        self.assertIsNone(self._button(False))
+        self.assertIsNotNone(self._button(True))
+
+    async def test_the_activity_button_launches_the_activity(self):
+        button = self._button(True)
+        interaction = SimpleNamespace(
+            response=SimpleNamespace(launch_activity=AsyncMock()),
+        )
+        await button.callback(interaction)
+        interaction.response.launch_activity.assert_awaited_once()
+
+
 class MusicPlaybackTests(unittest.IsolatedAsyncioTestCase):
     async def test_stale_track_end_does_not_idle_a_newer_track(self):
         old_track = SimpleNamespace(title="old", encoded="old", author="artist")
@@ -85,8 +127,10 @@ class MusicPlaybackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cog._guild_states[123]["history"], [])
         cog._update_np_message.assert_not_awaited()
 
-    async def test_stuck_track_is_skipped_and_marked(self):
-        track = SimpleNamespace(title="stalled", encoded="enc", author="artist")
+    async def test_a_stall_report_never_skips_clean_playback(self):
+        # Free nodes emit TrackStuck during normal playback; advancing on it cut
+        # working songs short. The report must stay informational.
+        track = SimpleNamespace(title="Through Thick", encoded="enc", author="artist")
         player = SimpleNamespace(
             guild=SimpleNamespace(id=789),
             skip=AsyncMock(),
@@ -100,8 +144,9 @@ class MusicPlaybackTests(unittest.IsolatedAsyncioTestCase):
             SimpleNamespace(player=player, track=track, threshold=10_000)
         )
 
-        player.skip.assert_awaited_once_with(force=True)
-        self.assertEqual(cog._guild_states[789]["stuck_track"], "enc")
+        player.skip.assert_not_awaited()
+        self.assertIs(cog._guild_states[789]["current_track"], track)
+        self.assertIsNone(cog._guild_states[789]["stuck_track"])
 
     async def test_load_failure_retries_track_on_an_alternate_node(self):
         track = SimpleNamespace(title="song", encoded="encoded", author="artist")

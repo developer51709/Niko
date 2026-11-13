@@ -1419,6 +1419,8 @@ export type StaffActivity = {
   application_id?: string | null;
   platform?: string | null;
   image_url?: string | null;
+  /** Discord's badge drawn over the large activity asset, when one is sent. */
+  small_image_url?: string | null;
   /** ISO timestamps for a Spotify track, used by the track progress bar. */
   start?: string | null;
   end?: string | null;

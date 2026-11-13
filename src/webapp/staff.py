@@ -105,6 +105,42 @@ def _avatar_decoration(user) -> str | None:
         return None
 
 
+def _activity_asset_url(activity, key: str) -> str | None:
+    """Resolve one Discord activity asset (large or small) to a URL."""
+    assets = getattr(activity, "assets", None)
+    if not isinstance(assets, dict):
+        try:
+            assets = dict(assets or {})
+        except Exception:
+            assets = {}
+    asset = str(assets.get(key) or "").strip()
+    if not asset:
+        return None
+    if asset.startswith(("https://", "http://")):
+        return asset
+    if asset.startswith("mp:"):
+        return f"https://media.discordapp.net/{asset[3:].lstrip('/')}"
+    application_id = str(getattr(activity, "application_id", "") or "").strip()
+    if application_id.isdigit():
+        return f"https://cdn.discordapp.com/app-assets/{application_id}/{asset}.png"
+    return None
+
+
+def _activity_assets(activity) -> tuple[str | None, str | None]:
+    """The large artwork and the small badge Discord draws over it.
+
+    Games and other apps put asset hashes in ``assets.large_image`` and
+    ``assets.small_image``; external Rich Presence images use the ``mp:``
+    prefix. A presence with only a small asset uses it as the artwork, since
+    there is nothing to overlay it on.
+    """
+    large = _activity_asset_url(activity, "large_image")
+    small = _activity_asset_url(activity, "small_image")
+    if large:
+        return large, small if small != large else None
+    return small, None
+
+
 def _staff_identity(user_id: str) -> dict:
     """Resolve a staff member's global identity and the richest live presence."""
     ordered_members = _presence_members(user_id)
@@ -192,6 +228,7 @@ def _staff_identity(user_id: str) -> dict:
                 })
                 continue
             if class_name == "streaming":
+                image_url, small_image_url = _activity_assets(activity)
                 activities.append({
                     "kind": "streaming",
                     "type": "streaming",
@@ -200,12 +237,14 @@ def _staff_identity(user_id: str) -> dict:
                     "state": None,
                     "url": getattr(activity, "url", None),
                     "platform": getattr(activity, "platform", None),
-                    "image_url": None,
+                    "image_url": image_url,
+                    "small_image_url": small_image_url,
                 })
                 continue
 
             name = getattr(activity, "name", None)
             if name:
+                image_url, small_image_url = _activity_assets(activity)
                 activities.append({
                     "kind": "activity",
                     "type": activity_type,
@@ -214,7 +253,8 @@ def _staff_identity(user_id: str) -> dict:
                     "state": getattr(activity, "state", None),
                     "url": getattr(activity, "url", None),
                     "platform": None,
-                    "image_url": None,
+                    "image_url": image_url,
+                    "small_image_url": small_image_url,
                 })
     raw_status = getattr(member, "status", "offline") if member is not None else "offline"
     # discord.py may expose this as a Status enum (``Status.online``) or a

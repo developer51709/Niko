@@ -31,6 +31,7 @@ from .routes import (  # noqa: E402,F401
     economy_routes,
     referral_routes,
     site_routes,
+    music_activity_routes,
     lastfm_routes,
     security_decoy_routes,
     appeal_routes,

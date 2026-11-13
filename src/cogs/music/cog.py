@@ -1,10 +1,14 @@
 import asyncio
+import ipaddress
 import os
 import random
 import re
 import time as _time
 from collections import deque
+from itertools import islice
+from urllib.parse import urlparse
 
+import aiohttp
 import discord
 import wavelink
 from discord import app_commands
@@ -36,9 +40,10 @@ from utils.music import (
     clean_seed,
     msg,
 )
+from utils.lastfm.client import LastFmClient, LastFmError
 from utils.music.database import MusicDatabase
 from utils.music.nodes import close_pool, wait_for_bot_startup
-from cogs.music.views import _build_np_view, _fill
+from cogs.music.views import _build_np_view, _fill, _track_artwork
 from utils.prefix_manager import resolve_prefix
 
 from utils.command_locales import command_texts
@@ -65,6 +70,85 @@ _TRACK_START_RETRY   = 8.0  # wait after switching to another node
 # "ytmsearch:ytsearch:Song": Lavalink searched YouTube Music for the literal text
 # "ytsearch:Song", whose matches are empty or unrelated — which is why every
 # autoplay candidate search came back with nothing to play.
+#: Artwork is proxied through the site for the Activity, so the fetch is bounded
+#: and cannot be pointed at the host's own network.
+_ARTWORK_MAX_BYTES = 4 * 1024 * 1024
+_ARTWORK_TIMEOUT = 8.0
+
+
+def _safe_artwork_url(url: str) -> bool:
+    """Only fetch public HTTPS artwork, never a local or private address."""
+    try:
+        parsed = urlparse(str(url or ""))
+    except Exception:
+        return False
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower()
+    if host in {"localhost", "localhost.localdomain"}:
+        return False
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return not (
+        address.is_private or address.is_loopback or address.is_link_local
+        or address.is_reserved or address.is_multicast
+    )
+
+
+async def _fetch_artwork(url: str) -> tuple[bytes | None, str | None]:
+    """Download one track's artwork, rejecting anything that is not an image."""
+    if not _safe_artwork_url(url):
+        return None, None
+    timeout = aiohttp.ClientTimeout(total=_ARTWORK_TIMEOUT)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(url, headers={"User-Agent": "Niko music activity"}) as response:
+            if response.status != 200:
+                return None, None
+            try:
+                declared = int(response.headers.get("Content-Length") or 0)
+            except (TypeError, ValueError):
+                declared = 0
+            if declared > _ARTWORK_MAX_BYTES:
+                return None, None
+            data = await response.read()
+            if not data or len(data) > _ARTWORK_MAX_BYTES:
+                return None, None
+            content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if not content_type.startswith("image/"):
+                if data[:3] == b"\xff\xd8\xff":
+                    content_type = "image/jpeg"
+                elif data[:8] == b"\x89PNG\r\n\x1a\n":
+                    content_type = "image/png"
+                elif data[:6] in (b"GIF87a", b"GIF89a"):
+                    content_type = "image/gif"
+                elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+                    content_type = "image/webp"
+                else:
+                    return None, None
+            return data, content_type
+
+
+def _scrobble_threshold_ms(length_ms: int) -> int:
+    """How long Last.fm requires of a track before it counts as a play.
+
+    Tracks shorter than 30 seconds never scrobble; longer ones need half their
+    length, capped at four minutes.
+    """
+    if int(length_ms or 0) < 30_000:
+        return 0
+    return min(int(length_ms) // 2, 240_000)
+
+
+#: Activity controls that are DJ-gated, matching the now-playing panel and the
+#: commands. Pause/resume is deliberately not in the set.
+_ACTIVITY_DJ_ACTIONS = frozenset({
+    "skip", "previous", "stop", "toggle_loop", "toggle_autoplay", "volume",
+    "queue_remove", "queue_move", "queue_jump", "queue_clear", "queue_shuffle",
+    "playlist_play",
+})
+
 _SEARCH_PREFIXES = (
     "ytsearch:", "ytmsearch:", "scsearch:", "spsearch:", "amsearch:", "dzsearch:", "ymsearch:",
 )
@@ -556,6 +640,10 @@ class MusicSystem(commands.Cog):
         # { guild_id: { loop, autoplay, history, np_message, last_track } }
         self._guild_states: dict[int, dict] = {}
 
+        # DJ role per guild, read once and cached until this process changes
+        # it. ``None`` means the guild has no DJ role, so everyone may control.
+        self._dj_roles: dict[int, int | None] = {}
+
         # YouTube autocomplete cache: { lower_query: (monotonic_ts, [Choice, ...]) }
         self._autocomplete_cache: dict[str, tuple[float, list]] = {}
 
@@ -579,6 +667,23 @@ class MusicSystem(commands.Cog):
         if self._lastfm_key:
             log.debug("Music", "Last.fm autoplay enabled.")
 
+        # Scrobbling writes to the member's linked account, so it needs both the
+        # API key and the shared secret (to sign the write). Opt-in is stored in
+        # the music database and only ever covers tracks that member requested.
+        self._lastfm_writer: LastFmClient | None = None
+        lastfm_secret = os.environ.get("LASTFM_API_SECRET", "")
+        if self._lastfm_key and lastfm_secret:
+            self._lastfm_writer = LastFmClient(self._lastfm_key, api_secret=lastfm_secret)
+        self._scrobble_tasks: set[asyncio.Task] = set()
+
+        # Experimental: show the panel's "Open Player" button. Discord only
+        # accepts LAUNCH_ACTIVITY for an app with Activities enabled and a URL
+        # mapping in the Developer Portal, so this stays off until the owner
+        # turns it on.
+        self.activity_enabled = os.environ.get(
+            "MUSIC_ACTIVITY_ENABLED", ""
+        ).strip().lower() in {"1", "true", "yes", "on"}
+
         # Wire the slash autocomplete callback to the /play search parameter
         try:
             self.play.autocomplete("search")(self._play_autocomplete)
@@ -592,6 +697,13 @@ class MusicSystem(commands.Cog):
 
     async def cog_unload(self):
         self._closing = True
+        if self._lastfm_writer is not None:
+            try:
+                await self._lastfm_writer.close()
+            except Exception:
+                pass
+        for task in list(self._scrobble_tasks):
+            task.cancel()
         if self._rescan_task and not self._rescan_task.done():
             self._rescan_task.cancel()
             try:
@@ -924,6 +1036,556 @@ class MusicSystem(commands.Cog):
             await interaction.response.defer()
         except Exception as exc:
             log.debug("Music", f"Could not defer the interaction: {exc}")
+
+    # ─── DJ ROLE ──────────────────────────────────
+
+    async def _dj_role(self, guild_id: int) -> int | None:
+        """The guild's DJ role, cached until this process changes it.
+
+        A music-database outage must not lock every control for everyone, so a
+        failed read behaves like a guild with no DJ role.
+        """
+        if guild_id in self._dj_roles:
+            return self._dj_roles[guild_id]
+        try:
+            db = MusicDatabase()
+            await db.ensure(self.bot)
+            role_id = await db.get_dj_role(guild_id)
+        except Exception as exc:
+            log.warning("Music", f"Could not read the DJ role for {guild_id}: {exc}")
+            return None
+        self._dj_roles[guild_id] = role_id
+        return role_id
+
+    async def is_dj(self, member) -> bool:
+        """Whether a member may use the playback controls.
+
+        Managers keep access on purpose: a guild whose DJ role was deleted or
+        left unassigned would otherwise have no way back into its own controls.
+        """
+        guild = getattr(member, "guild", None)
+        if guild is None:
+            return True
+        role_id = await self._dj_role(guild.id)
+        if role_id is None:
+            return True
+        permissions = getattr(member, "guild_permissions", None)
+        if permissions is not None and (permissions.manage_guild or permissions.administrator):
+            return True
+        return any(getattr(role, "id", None) == role_id for role in getattr(member, "roles", ()))
+
+    async def _require_dj(self, ctx: commands.Context) -> bool:
+        """Gate a command; sends the refusal when the member is not a DJ."""
+        if await self.is_dj(ctx.author):
+            return True
+        await ctx.send(msg(ctx, "dj_only"))
+        return False
+
+    async def panel_allowed(self, interaction: discord.Interaction) -> bool:
+        """Gate a panel button press, answering with an ephemeral refusal."""
+        if await self.is_dj(interaction.user):
+            return True
+        try:
+            await interaction.response.send_message(msg(interaction, "dj_only"), ephemeral=True)
+        except Exception:
+            pass
+        return False
+
+    async def _can_configure_dj(self, ctx: commands.Context) -> bool:
+        permissions = getattr(ctx.author, "guild_permissions", None)
+        if permissions is not None and (permissions.manage_guild or permissions.administrator):
+            return True
+        await ctx.send(msg(ctx, "dj_manage_only"))
+        return False
+
+    # ─── WEB ACTIVITY PANEL ───────────────────────
+
+    def _activity_member(self, guild_id, user_id, channel_id):
+        """Resolve the guild and member the Activity claims to act for.
+
+        The client only supplies ids; membership, the voice channel and the DJ
+        decision are all read from the bot's own cache on every call.
+        """
+        guild = self.bot.get_guild(int(guild_id)) if getattr(self, "bot", None) else None
+        if guild is None:
+            return None, None, {"ok": False, "error": "guild_unavailable"}
+        member = guild.get_member(int(user_id))
+        if member is None:
+            return None, None, {"ok": False, "error": "not_a_member"}
+        voice_state = getattr(member, "voice", None)
+        member_channel = getattr(voice_state, "channel", None) if voice_state else None
+        if channel_id and member_channel is not None and member_channel.id != int(channel_id):
+            return None, None, {"ok": False, "error": "not_in_channel"}
+        return guild, member, None
+
+    async def activity_artwork(self, guild_id, user_id, channel_id=None) -> dict:
+        """The current track's artwork bytes, for the Activity's image proxy."""
+        guild, member, problem = self._activity_member(guild_id, user_id, channel_id)
+        if problem:
+            return problem
+        player = self._player_for_guild(guild)
+        track = getattr(player, "current", None) or self._state(guild.id).get("current_track")
+        url = _track_artwork(track) if track is not None else None
+        if not url:
+            return {"ok": False, "error": "no_artwork"}
+        try:
+            data, content_type = await _fetch_artwork(url)
+        except Exception as exc:
+            log.debug("Music", f"Activity artwork fetch failed: {exc}")
+            return {"ok": False, "error": "artwork_unavailable"}
+        if not data:
+            return {"ok": False, "error": "artwork_unavailable"}
+        return {"ok": True, "data": data, "content_type": content_type}
+
+    # ────────────────────────────────────────────── Last.fm scrobbling ──
+    def _mark_requester(self, track, user_id: int | None) -> None:
+        """Remember who asked for this track without disturbing other extras."""
+        if user_id is None:
+            return
+        try:
+            extras = dict(getattr(track, "extras", None) or {})
+            extras["requester_id"] = int(user_id)
+            track.extras = extras
+        except Exception:
+            pass
+
+    def _schedule_scrobble(self, coroutine) -> None:
+        task = asyncio.create_task(coroutine)
+        self._scrobble_tasks.add(task)
+        task.add_done_callback(self._scrobble_tasks.discard)
+
+    async def _lastfm_session_key(self, user_id: int) -> str | None:
+        """The member's linked Last.fm session key, if the site stored one."""
+        pool = getattr(self.bot, "cxn", None)
+        if pool is None:
+            return None
+        try:
+            from cogs.lastfm import _store
+
+            row = await _store.get_account_row(pool, int(user_id))
+        except Exception:
+            return None
+        key = str((row or {}).get("session_key") or "").strip()
+        return key or None
+
+    async def _scrobble_session(self, user_id: int) -> str | None:
+        """The session key to scrobble with, or ``None`` when not permitted."""
+        if self._lastfm_writer is None:
+            return None
+        try:
+            if not await MusicDatabase().scrobble_enabled(int(user_id)):
+                return None
+        except Exception:
+            return None
+        return await self._lastfm_session_key(user_id)
+
+    async def _notify_now_playing(self, track, user_id: int) -> None:
+        try:
+            session_key = await self._scrobble_session(user_id)
+            if not session_key:
+                return
+            await self._lastfm_writer.update_now_playing(
+                session_key,
+                artist=track.author or "Unknown",
+                title=track.title or "Unknown",
+                duration=(int(track.length // 1000) if track.length else None),
+            )
+        except Exception as exc:
+            log.debug("Music", f"Last.fm now-playing update skipped: {exc}")
+
+    async def _scrobble_track(self, track, user_id: int, played_at: int) -> None:
+        try:
+            session_key = await self._scrobble_session(user_id)
+            if not session_key:
+                return
+            await self._lastfm_writer.scrobble(
+                session_key,
+                artist=track.author or "Unknown",
+                title=track.title or "Unknown",
+                timestamp=played_at,
+                duration=(int(track.length // 1000) if track.length else None),
+            )
+        except Exception as exc:
+            log.debug("Music", f"Last.fm scrobble skipped: {exc}")
+
+    def _scrobble_started(self, guild, track) -> None:
+        # Wavelink stores extras as an attribute namespace, not a dict, so a
+        # plain ``.get`` raised AttributeError on every track start.
+        extras = getattr(track, "extras", None)
+        requester = getattr(extras, "requester_id", None)
+        if requester is None and isinstance(extras, dict):
+            requester = extras.get("requester_id")
+        self._state(guild.id)["scrobble"] = (
+            {
+                "track": track,
+                "user_id": int(requester),
+                "started_at": _time.time(),
+                # Playback progress, not wall-clock time: a paused track must
+                # not earn a scrobble by sitting paused for minutes.
+                "progress_ms": 0,
+            }
+            if requester
+            else None
+        )
+        if requester and self._lastfm_writer is not None:
+            self._schedule_scrobble(self._notify_now_playing(track, int(requester)))
+
+    def _scrobble_progress(self, player, position: int) -> None:
+        """Record the furthest position Lavalink reported for the active track."""
+        guild = getattr(player, "guild", None)
+        if guild is None:
+            return
+        candidate = self._state(guild.id).get("scrobble")
+        if not candidate or candidate.get("track") != getattr(player, "current", None):
+            return
+        length = int(getattr(candidate["track"], "length", 0) or 0)
+        listened = int(position or 0)
+        if length:
+            listened = min(listened, length)
+        if listened > candidate.get("progress_ms", 0):
+            candidate["progress_ms"] = listened
+
+    def _scrobble_finished(self, guild, track, reason: str) -> None:
+        """Scrobble a naturally finished track once it passed Last.fm's threshold."""
+        candidate = self._state(guild.id).get("scrobble")
+        self._state(guild.id)["scrobble"] = None
+        if not candidate or candidate.get("track") != track or reason != "finished":
+            return
+        listened_ms = int(candidate.get("progress_ms", 0) or 0)
+        threshold = _scrobble_threshold_ms(int(getattr(track, "length", 0) or 0))
+        if threshold <= 0 or listened_ms < threshold:
+            return
+        self._schedule_scrobble(
+            self._scrobble_track(track, candidate["user_id"], int(candidate["started_at"]))
+        )
+
+    async def activity_snapshot(self, guild_id, user_id, channel_id=None) -> dict:
+        """Everything the Activity panel draws, read fresh from the player."""
+        guild, member, problem = self._activity_member(guild_id, user_id, channel_id)
+        if problem:
+            return problem
+
+        player = self._player_for_guild(guild)
+        state = self._state(guild.id)
+        track = (player.current if player else None) or state.get("current_track")
+        voice_channel = getattr(player, "channel", None) if player else None
+        dj_role = await self._dj_role(guild.id)
+        is_dj = await self.is_dj(member)
+
+        queue = []
+        if player is not None:
+            queue = [
+                {
+                    "index": index,
+                    "title": getattr(item, "title", "") or "Unknown",
+                    "author": getattr(item, "author", "") or "",
+                    "uri": getattr(item, "uri", "") or "",
+                    "length": int(getattr(item, "length", 0) or 0),
+                }
+                for index, item in enumerate(islice(player.queue, 30))
+            ]
+
+        autoplay_queue = []
+        if state.get("autoplay"):
+            autoplay_queue = [
+                {
+                    "title": getattr(item, "title", "") or "Unknown",
+                    "author": getattr(item, "author", "") or "",
+                    "length": int(getattr(item, "length", 0) or 0),
+                }
+                for item in islice(state.get("ghost_queue") or (), 8)
+            ]
+
+        playlists = []
+        try:
+            db = MusicDatabase()
+            if await db.ensure(self.bot):
+                for row in (await db.shared_playlists(guild.id))[:20]:
+                    playlists.append({
+                        "id": row["playlist_id"],
+                        "name": row["name"],
+                        "count": int(row.get("track_count") or 0),
+                        "owner_id": str(row["owner_id"]),
+                        "can_edit": (
+                            row["owner_id"] == member.id
+                            or bool(await db.is_playlist_editor(
+                                row["playlist_id"], member.id,
+                            ))
+                        ),
+                    })
+        except Exception as exc:
+            log.debug("Music", f"Activity playlist list skipped: {exc}")
+
+        listeners = 0
+        if voice_channel is not None:
+            listeners = len([
+                seen for seen in getattr(voice_channel, "members", [])
+                if not getattr(seen, "bot", False)
+            ])
+
+        return {
+            "ok": True,
+            "guild": {"id": str(guild.id), "name": guild.name},
+            "channel": (
+                {"id": str(voice_channel.id), "name": voice_channel.name}
+                if voice_channel is not None else None
+            ),
+            "track": {
+                "title": getattr(track, "title", "") or "Unknown",
+                "author": getattr(track, "author", "") or "",
+                "uri": getattr(track, "uri", "") or "",
+                "artwork": _track_artwork(track) or "",
+                "length": int(getattr(track, "length", 0) or 0),
+                "source": getattr(track, "source", "") or "",
+            } if track else None,
+            "position": int(getattr(player, "position", 0) or 0) if player else 0,
+            "playing": bool(getattr(player, "playing", False)) if player else False,
+            "paused": bool(getattr(player, "paused", False)) if player else False,
+            "volume": int(getattr(player, "volume", 100) or 0) if player else 100,
+            "loop": bool(state.get("loop")),
+            "autoplay": bool(state.get("autoplay")),
+            "queue": queue,
+            "queue_count": len(player.queue) if player is not None else 0,
+            "autoplay_queue": autoplay_queue,
+            "playlists": playlists,
+            "listeners": listeners,
+            "dj_required": dj_role is not None,
+            "user": {"id": str(member.id), "is_dj": is_dj},
+            # The Activity's own presence uses the bot's picture as its small
+            # badge, so every listening status carries Niko's identity.
+            "bot_avatar_url": str(
+                getattr(getattr(getattr(self.bot, "user", None), "display_avatar", None), "url", "") or ""
+            ),
+            "updated_at": int(_time.time() * 1000),
+        }
+
+    async def activity_playlist(self, guild_id, user_id, channel_id, name) -> dict:
+        """One shared playlist and its tracks, for the Activity's expandable cards.
+
+        The playlist is looked up by name inside the member's guild, so a name
+        from another server can never expose its rows. Each track carries the
+        member id that added it for the Activity to render as a mention.
+        """
+        guild, member, problem = self._activity_member(guild_id, user_id, channel_id)
+        if problem:
+            return problem
+        name = str(name or "").strip()
+        if not name:
+            return {"ok": False, "error": "playlist_not_found"}
+        db = MusicDatabase()
+        if not await db.ensure(self.bot):
+            return {"ok": False, "error": "db_unavailable"}
+        try:
+            playlist = await db.shared_playlist(guild.id, name)
+            if playlist is None:
+                return {"ok": False, "error": "playlist_not_found"}
+            rows = await db.shared_tracks(playlist["playlist_id"])
+        except Exception as exc:
+            log.debug("Music", f"Activity playlist lookup failed for {name!r}: {exc}")
+            return {"ok": False, "error": "db_unavailable"}
+        tracks = []
+        for row in rows:
+            added_by = int(row["added_by"] or 0)
+            added_member = guild.get_member(added_by) if added_by else None
+            added_by_name = (
+                getattr(added_member, "display_name", None)
+                or getattr(added_member, "global_name", None)
+                or getattr(added_member, "name", None)
+            )
+            tracks.append({
+                "title": row["title"] or "Unknown",
+                "author": row["author"] or "",
+                "uri": row["uri"] or "",
+                "length": int(row["length_ms"] or 0),
+                "added_by": str(added_by) if added_by else None,
+                # The mention renders with this name even when the Activity's
+                # separate name-resolver endpoint is unavailable in the iframe.
+                "added_by_name": str(added_by_name) if added_by_name else None,
+            })
+        return {
+            "ok": True,
+            "playlist": {
+                "id": playlist["playlist_id"],
+                "name": playlist["name"],
+                "owner_id": str(playlist["owner_id"]),
+                "count": len(tracks),
+            },
+            "tracks": tracks,
+        }
+
+    async def _queue_playlist_rows(self, player, guild, rows, requester_id: int) -> int:
+        """Resolve a shared playlist's rows and queue them, Activity-style."""
+        state = self._state(guild.id)
+        added = 0
+        deadline = _time.monotonic() + _PLAY_RESOLVE_BUDGET
+        for row in rows[:_MAX_TRACKS_PER_PLAY]:
+            if _time.monotonic() >= deadline:
+                break
+            query = (row.get("uri") or "").strip() or (
+                f"{row['title']} {row.get('author') or ''}"
+            ).strip()
+            try:
+                results = await _search_tracks(query, node=player.node)
+            except Exception as exc:
+                log.debug("Music", f"Activity playlist search failed for {query!r}: {exc}")
+                continue
+            if not results:
+                continue
+            try:
+                track = next(iter(results))
+            except StopIteration:
+                continue
+            self._mark_requester(track, requester_id)
+            if not player.playing and added == 0:
+                await _player_op(
+                    lambda t=track: player.play(t),
+                    failover=self._make_failover(player, track),
+                )
+                state["current_track"] = track
+            else:
+                player.queue.put(track)
+            added += 1
+        return added
+
+    async def activity_control(self, guild_id, user_id, action, value=None, channel_id=None) -> dict:
+        """Apply one Activity control, then return the fresh snapshot.
+
+        Pause/resume stays open to everyone, matching the now-playing panel.
+        Everything that changes what is playing or how loud is DJ-gated.
+        """
+        guild, member, problem = self._activity_member(guild_id, user_id, channel_id)
+        if problem:
+            return problem
+        player = self._player_for_guild(guild)
+        if player is None:
+            return {"ok": False, "error": "no_player"}
+        if action in _ACTIVITY_DJ_ACTIONS and not await self.is_dj(member):
+            return {"ok": False, "error": "dj_only"}
+
+        state = self._state(guild.id)
+        try:
+            if action == "toggle_pause":
+                await _player_op(lambda: player.pause(not player.paused))
+            elif action == "skip":
+                if not getattr(player, "playing", False):
+                    return {"ok": False, "error": "nothing_playing"}
+                await _player_op(lambda: player.skip(force=True))
+            elif action == "previous":
+                history = state.get("history") or deque()
+                if not history:
+                    return {"ok": False, "error": "no_history"}
+                previous = history.pop()
+                if player.current is not None:
+                    player.queue.put_at(0, player.current)
+                try:
+                    await _player_op(lambda t=previous: player.play(t))
+                except Exception:
+                    # Give the entry back so a failed replay does not eat history.
+                    history.append(previous)
+                    raise
+                state["current_track"] = previous
+                self._schedule_ghost_refill(guild.id)
+            elif action == "stop":
+                state["loop"] = False
+                state["current_track"] = None
+                self._clear_ghost(guild.id)
+                player.queue.clear()
+                await _player_op(lambda: player.stop())
+            elif action == "toggle_loop":
+                state["loop"] = not state["loop"]
+            elif action == "toggle_autoplay":
+                if not self._lastfm_key:
+                    return {"ok": False, "error": "autoplay_unavailable"}
+                state["autoplay"] = not state["autoplay"]
+                if state["autoplay"]:
+                    self._schedule_ghost_refill(guild.id)
+                else:
+                    self._clear_ghost(guild.id)
+            elif action == "volume":
+                try:
+                    volume = int(value)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "bad_volume"}
+                volume = max(0, min(100, volume))
+                await _player_op(lambda v=volume: player.set_volume(v))
+            elif action in {"queue_remove", "queue_jump"}:
+                try:
+                    index = int(value)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "bad_index"}
+                if index < 0 or index >= len(player.queue):
+                    return {"ok": False, "error": "bad_index"}
+                if action == "queue_remove":
+                    player.queue.delete(index)
+                else:
+                    target = player.queue.peek(index)
+                    player.queue.delete(index)
+                    requeued_current = player.current is not None
+                    if requeued_current:
+                        player.queue.put_at(0, player.current)
+                    try:
+                        await _player_op(lambda t=target: player.play(t))
+                    except Exception:
+                        if requeued_current:
+                            player.queue.delete(0)
+                        player.queue.put_at(min(index, len(player.queue)), target)
+                        raise
+                    state["current_track"] = target
+                    self._schedule_ghost_refill(guild.id)
+            elif action == "queue_move":
+                if not isinstance(value, dict):
+                    return {"ok": False, "error": "bad_index"}
+                try:
+                    source = int(value.get("from"))
+                    target_index = int(value.get("to"))
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "bad_index"}
+                count = len(player.queue)
+                if not (0 <= source < count and 0 <= target_index < count):
+                    return {"ok": False, "error": "bad_index"}
+                if source != target_index:
+                    track = player.queue.peek(source)
+                    player.queue.delete(source)
+                    player.queue.put_at(target_index, track)
+            elif action == "queue_shuffle":
+                player.queue.shuffle()
+            elif action == "queue_clear":
+                player.queue.clear()
+            elif action == "playlist_play":
+                db = MusicDatabase()
+                if not await db.ensure(self.bot):
+                    return {"ok": False, "error": "db_unavailable"}
+                playlist = await db.shared_playlist(guild.id, str(value or ""))
+                if playlist is None:
+                    return {"ok": False, "error": "playlist_not_found"}
+                rows = await db.shared_tracks(playlist["playlist_id"])
+                if not rows:
+                    return {"ok": False, "error": "playlist_empty"}
+                added = await self._queue_playlist_rows(player, guild, rows, member.id)
+                if not added:
+                    return {"ok": False, "error": "playlist_empty"}
+            elif action == "playlist_add":
+                db = MusicDatabase()
+                if not await db.ensure(self.bot):
+                    return {"ok": False, "error": "db_unavailable"}
+                playlist = await db.shared_playlist(guild.id, str(value or ""))
+                if playlist is None:
+                    return {"ok": False, "error": "playlist_not_found"}
+                if not await db.is_playlist_editor(playlist["playlist_id"], member.id):
+                    return {"ok": False, "error": "playlist_editor_only"}
+                track = getattr(player, "current", None) or state.get("current_track")
+                if track is None:
+                    return {"ok": False, "error": "nothing_playing"}
+                if not await db.add_shared_track(playlist["playlist_id"], track, member.id):
+                    return {"ok": False, "error": "playlist_duplicate"}
+            else:
+                return {"ok": False, "error": "unknown_action"}
+        except Exception as exc:
+            log.warning("Music", f"Activity control {action} failed for {guild.id}: {exc}")
+            return {"ok": False, "error": "node_unavailable"}
+
+        await self._update_np_message(guild)
+        return await self.activity_snapshot(guild_id, user_id, channel_id)
 
     # ─── NP MESSAGE UPDATE ────────────────────────
 
@@ -1343,6 +2005,7 @@ class MusicSystem(commands.Cog):
             state["current_track"] = payload.track
             # A fresh start clears the stuck marker for the previous track.
             state["stuck_track"] = None
+            self._scrobble_started(guild, payload.track)
 
         # Wake any /play start-verification waiter — the node is streaming.
         started = self._track_start_events.get(guild.id) if guild else None
@@ -1360,38 +2023,34 @@ class MusicSystem(commands.Cog):
         asyncio.create_task(set_voice_status(self.bot, player.channel.id, status))
 
     @commands.Cog.listener()
+    async def on_wavelink_player_update(
+        self, payload: wavelink.PlayerUpdateEventPayload
+    ) -> None:
+        """Track real playback progress for scrobbling, ignoring paused time."""
+        player = payload.player
+        if player is not None:
+            self._scrobble_progress(player, int(getattr(payload, "position", 0) or 0))
+
+    @commands.Cog.listener()
     async def on_wavelink_track_stuck(
         self, payload: wavelink.TrackStuckEventPayload
     ) -> None:
-        """Recover from a track that stalls mid-stream.
+        """Record a stall without treating it as failed playback.
 
-        Lavalink reports ``TrackStuck`` and then never sends ``TrackEnd`` for
-        that track, so without this the queue sat on a silent track forever.
-        Skipping produces the usual ``TrackEnd``/advance path. The same track
-        stalling twice is skipped without a second attempt.
+        Free Lavalink nodes routinely emit ``TrackStuck`` while the stream is
+        still playing normally, so skipping on this event cut songs short for
+        no reason. The audio pipeline advances the track on its own when it
+        really ends; until then, a stall report is only a debug note.
         """
         player = payload.player
-        guild  = getattr(player, "guild", None)
+        guild = getattr(player, "guild", None)
         if player is None or guild is None:
             return
-
-        track = payload.track
-        state = self._state(guild.id)
-        key = getattr(track, "encoded", None) or (
-            getattr(track, "author", ""),
-            getattr(track, "title", ""),
-        )
-        repeated = state.get("stuck_track") == key
-        state["stuck_track"] = key
-        log.warning(
+        log.debug(
             "Music",
-            f"Track {getattr(track, 'title', 'unknown')!r} stalled in guild "
-            f"{guild.id}{' again' if repeated else ''} — skipping.",
+            f"Track {getattr(payload.track, 'title', 'unknown')!r} reported a "
+            f"stall in guild {guild.id} — ignored.",
         )
-        try:
-            await player.skip(force=True)
-        except Exception as exc:
-            log.error("Music", f"Skipping a stuck track failed: {exc}")
 
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload):
@@ -1415,6 +2074,8 @@ class MusicSystem(commands.Cog):
             return
 
         reason = str(getattr(payload, "reason", "") or "")
+        if payload.track:
+            self._scrobble_finished(player.guild, payload.track, reason)
         if reason == "loadFailed" and payload.track:
             track_key = getattr(payload.track, "encoded", None) or (
                 getattr(payload.track, "author", ""),
@@ -1998,6 +2659,7 @@ class MusicSystem(commands.Cog):
                 if added >= _MAX_TRACKS_PER_PLAY:
                     cap_reached = True
                     break
+                self._mark_requester(track, getattr(ctx.author, "id", None))
                 if not player.playing and first_track is None:
                     # Arm the start waiter *before* play so a fast TrackStart
                     # can never race past it.
@@ -2081,6 +2743,55 @@ class MusicSystem(commands.Cog):
         if first_track and not queued_count:
             await self._send_np(ctx, player)
 
+    # ─── DJ ROLE COMMANDS ─────────────────────────
+
+    @commands.group(name="dj", invoke_without_command=True, help=CMDS.help("dj"))
+    async def dj(self, ctx: commands.Context):
+        """Show whether this server's playback controls are DJ-only."""
+        if ctx.guild is None:
+            return
+        role_id = await self._dj_role(ctx.guild.id)
+        if role_id is None:
+            prefix = await resolve_prefix(self.bot, ctx)
+            return await ctx.send(msg(ctx, "dj_status_off", prefix=prefix))
+        role = ctx.guild.get_role(role_id)
+        await ctx.send(msg(
+            ctx, "dj_status_on",
+            role=role.mention if role else f"<@&{role_id}>",
+        ))
+
+    @dj.command(name="role", help=CMDS.help("djrole"))
+    async def dj_role(self, ctx: commands.Context, role: discord.Role):
+        """Restrict skip, stop, loop, volume and autoplay to `role`."""
+        if not await self._can_configure_dj(ctx):
+            return
+        if role.is_default():
+            return await ctx.send(msg(ctx, "dj_role_everyone"))
+        try:
+            db = MusicDatabase()
+            await db.ensure(self.bot)
+            await db.set_dj_role(ctx.guild.id, role.id)
+        except Exception as exc:
+            log.error("Music", f"Could not save the DJ role for {ctx.guild.id}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        self._dj_roles[ctx.guild.id] = role.id
+        await ctx.send(msg(ctx, "dj_role_set", role=role.mention))
+
+    @dj.command(name="clear", aliases=["off"], help=CMDS.help("djclear"))
+    async def dj_clear(self, ctx: commands.Context):
+        """Let everyone control playback again."""
+        if not await self._can_configure_dj(ctx):
+            return
+        try:
+            db = MusicDatabase()
+            await db.ensure(self.bot)
+            await db.clear_dj_role(ctx.guild.id)
+        except Exception as exc:
+            log.error("Music", f"Could not clear the DJ role for {ctx.guild.id}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        self._dj_roles[ctx.guild.id] = None
+        await ctx.send(msg(ctx, "dj_role_cleared"))
+
     @commands.command(
         name="pause",
         help=CMDS.help("pause"),
@@ -2112,6 +2823,8 @@ class MusicSystem(commands.Cog):
         help=CMDS.help("skip"),
     )
     async def skip(self, ctx: commands.Context):
+        if not await self._require_dj(ctx):
+            return
         player = _wavelink_player(ctx.voice_client)
         if not player or not player.playing:
             return await ctx.send(msg(ctx, "skip_nothing"))
@@ -2123,6 +2836,8 @@ class MusicSystem(commands.Cog):
         help=CMDS.help("stop"),
     )
     async def stop(self, ctx: commands.Context):
+        if not await self._require_dj(ctx):
+            return
         player = _wavelink_player(ctx.voice_client)
         if not player:
             return await ctx.send(msg(ctx, "stop_nothing"))
@@ -2140,6 +2855,8 @@ class MusicSystem(commands.Cog):
         help=CMDS.help("loop"),
     )
     async def loop(self, ctx: commands.Context):
+        if not await self._require_dj(ctx):
+            return
         state = self._state(ctx.guild.id)
         state["loop"] = not state["loop"]
         key = "loop_on" if state["loop"] else "loop_off"
@@ -2151,6 +2868,8 @@ class MusicSystem(commands.Cog):
         help=CMDS.help("autoplay"),
     )
     async def autoplay(self, ctx: commands.Context):
+        if not await self._require_dj(ctx):
+            return
         if not self._lastfm_key:
             return await ctx.send(msg(ctx, "autoplay_unavailable"))
         state = self._state(ctx.guild.id)
@@ -2316,6 +3035,291 @@ class MusicSystem(commands.Cog):
             log.error("Music", f"Unlike failed for {ctx.author.id}: {exc}")
             await ctx.send(msg(ctx, "music_db_error"))
 
+    # ─── COLLABORATIVE PLAYLISTS (music database) ───
+
+    async def _playlist_db(self) -> MusicDatabase:
+        db = MusicDatabase()
+        await db.ensure(self.bot)
+        return db
+
+    async def _playlist_or_none(self, ctx: commands.Context, name: str):
+        """The named playlist plus a DB handle, or ``None`` after answering."""
+        try:
+            db = await self._playlist_db()
+            playlist = await db.shared_playlist(ctx.guild.id, name)
+        except Exception as exc:
+            log.error("Music", f"Playlist lookup failed for {ctx.guild.id}: {exc}")
+            await ctx.send(msg(ctx, "music_db_error"))
+            return None
+        if playlist is None:
+            await ctx.send(msg(ctx, "playlist_not_found", name=name))
+            return None
+        return db, playlist
+
+    @commands.group(name="playlist", aliases=["pl"], invoke_without_command=True, help=CMDS.help("playlist"))
+    async def playlist(self, ctx: commands.Context):
+        """List this server's collaborative playlists."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        try:
+            db = await self._playlist_db()
+            rows = await db.shared_playlists(ctx.guild.id)
+        except Exception as exc:
+            log.error("Music", f"Playlist list failed for {ctx.guild.id}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        if not rows:
+            prefix = await resolve_prefix(self.bot, ctx)
+            return await ctx.send(msg(ctx, "playlist_empty", prefix=prefix))
+        lines = [msg(ctx, "playlist_header")]
+        for row in rows:
+            lines.append(msg(
+                ctx, "playlist_line",
+                name=row["name"], count=row.get("track_count") or 0,
+                owner=f"<@{row['owner_id']}>",
+            ))
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            accent_colour=discord.Colour(0x8F6D5B),
+        ))
+        await ctx.send(view=view)
+
+    @playlist.command(name="create", help=CMDS.help("playlistcreate"))
+    async def playlist_create(self, ctx: commands.Context, *, name: str):
+        """Create a playlist the creator owns and can share with others."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        name = name.strip()
+        if not name or len(name) > 60:
+            return await ctx.send(msg(ctx, "playlist_name_invalid"))
+        try:
+            db = await self._playlist_db()
+            playlist = await db.create_shared_playlist(ctx.guild.id, name, ctx.author.id)
+        except Exception as exc:
+            log.error("Music", f"Playlist create failed for {ctx.guild.id}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        if playlist is None:
+            return await ctx.send(msg(ctx, "playlist_exists", name=name))
+        await ctx.send(msg(ctx, "playlist_created", name=playlist["name"]))
+
+    @playlist.command(name="add", help=CMDS.help("playlistadd"))
+    async def playlist_add(self, ctx: commands.Context, *, name: str):
+        """Add the current track to a shared playlist."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        found = await self._playlist_or_none(ctx, name)
+        if not found:
+            return
+        db, playlist = found
+        try:
+            if not await db.is_playlist_editor(playlist["playlist_id"], ctx.author.id):
+                return await ctx.send(msg(ctx, "playlist_editor_only"))
+        except Exception as exc:
+            log.error("Music", f"Playlist editor check failed: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        player = self._player_for_guild(ctx.guild)
+        track = player.current if player else None
+        if track is None:
+            return await ctx.send(msg(ctx, "playlist_add_nothing"))
+        try:
+            added = await db.add_shared_track(playlist["playlist_id"], track, ctx.author.id)
+        except Exception as exc:
+            log.error("Music", f"Playlist add failed for {playlist['playlist_id']}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        key = "playlist_added" if added else "playlist_duplicate"
+        await ctx.send(msg(ctx, key, title=track.title, name=playlist["name"]))
+
+    @playlist.command(name="remove", help=CMDS.help("playlistremove"))
+    async def playlist_remove(self, ctx: commands.Context, index: int, *, name: str):
+        """Remove a track by the number shown in ``playlist show``."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        found = await self._playlist_or_none(ctx, name)
+        if not found:
+            return
+        db, playlist = found
+        try:
+            if not await db.is_playlist_editor(playlist["playlist_id"], ctx.author.id):
+                return await ctx.send(msg(ctx, "playlist_editor_only"))
+            rows = await db.shared_tracks(playlist["playlist_id"])
+        except Exception as exc:
+            log.error("Music", f"Playlist remove failed for {playlist['playlist_id']}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        if index < 1 or index > len(rows):
+            prefix = await resolve_prefix(self.bot, ctx)
+            return await ctx.send(msg(ctx, "playlist_remove_invalid", prefix=prefix))
+        target = rows[index - 1]
+        try:
+            await db.remove_shared_track(playlist["playlist_id"], target["track_key"])
+        except Exception as exc:
+            log.error("Music", f"Playlist remove failed for {playlist['playlist_id']}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        await ctx.send(msg(ctx, "playlist_removed", title=target["title"], name=playlist["name"]))
+
+    @playlist.command(name="show", help=CMDS.help("playlistshow"))
+    async def playlist_show(self, ctx: commands.Context, *, name: str):
+        """List a shared playlist's tracks."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        found = await self._playlist_or_none(ctx, name)
+        if not found:
+            return
+        db, playlist = found
+        rows = await db.shared_tracks(playlist["playlist_id"])
+        if not rows:
+            prefix = await resolve_prefix(self.bot, ctx)
+            return await ctx.send(msg(ctx, "playlist_show_empty", name=playlist["name"], prefix=prefix))
+        lines = [msg(ctx, "playlist_show_header", name=playlist["name"], count=len(rows))]
+        for position, row in enumerate(rows, start=1):
+            lines.append(msg(
+                ctx, "playlist_show_line",
+                i=position, title=row["title"],
+                author=row.get("author") or msg(ctx, "queue_unknown"),
+                dur=_fmt_dur(row.get("length_ms")) if row.get("length_ms") else "?",
+            ))
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content="\n".join(lines)),
+            accent_colour=discord.Colour(0x8F6D5B),
+        ))
+        await ctx.send(view=view)
+
+    @playlist.command(name="share", help=CMDS.help("playlistshare"))
+    async def playlist_share(self, ctx: commands.Context, member: discord.Member, *, name: str):
+        """Let another member add and remove tracks in a playlist."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        found = await self._playlist_or_none(ctx, name)
+        if not found:
+            return
+        db, playlist = found
+        try:
+            if not await db.is_playlist_editor(playlist["playlist_id"], ctx.author.id):
+                return await ctx.send(msg(ctx, "playlist_editor_only"))
+            await db.add_playlist_editor(playlist["playlist_id"], member.id)
+        except Exception as exc:
+            log.error("Music", f"Playlist share failed for {playlist['playlist_id']}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        await ctx.send(msg(ctx, "playlist_shared", member=member.mention, name=playlist["name"]))
+
+    @playlist.command(name="delete", help=CMDS.help("playlistdelete"))
+    async def playlist_delete(self, ctx: commands.Context, *, name: str):
+        """Delete a playlist; only its owner may do this."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        found = await self._playlist_or_none(ctx, name)
+        if not found:
+            return
+        db, playlist = found
+        if playlist["owner_id"] != ctx.author.id:
+            return await ctx.send(msg(ctx, "playlist_owner_only"))
+        try:
+            await db.delete_shared_playlist(playlist["playlist_id"])
+        except Exception as exc:
+            log.error("Music", f"Playlist delete failed for {playlist['playlist_id']}: {exc}")
+            return await ctx.send(msg(ctx, "music_db_error"))
+        await ctx.send(msg(ctx, "playlist_deleted", name=playlist["name"]))
+
+    @playlist.command(name="play", help=CMDS.help("playlistplay"))
+    async def playlist_play(self, ctx: commands.Context, *, name: str):
+        """Queue the tracks in a shared playlist."""
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "playlist_dm"))
+        found = await self._playlist_or_none(ctx, name)
+        if not found:
+            return
+        db, playlist = found
+        rows = await db.shared_tracks(playlist["playlist_id"])
+        if not rows:
+            return await ctx.send(msg(ctx, "playlist_play_empty", name=playlist["name"]))
+
+        player = await self.get_player(ctx)
+        if not player:
+            return
+        player = await self._recover_stale_player(ctx, player)
+        if not player:
+            return
+
+        state = self._state(ctx.guild.id)
+        added = 0
+        queued = 0
+        first = None
+        deadline = _time.monotonic() + _PLAY_RESOLVE_BUDGET
+        for row in rows[:_MAX_TRACKS_PER_PLAY]:
+            if _time.monotonic() >= deadline:
+                break
+            query = (row.get("uri") or "").strip() or f"{row['title']} {row.get('author') or ''}".strip()
+            try:
+                results = await _search_tracks(query, node=player.node)
+            except Exception as exc:
+                log.debug("Music", f"Playlist search failed for {query!r}: {exc}")
+                continue
+            if not results:
+                continue
+            try:
+                track = next(iter(results))
+            except StopIteration:
+                continue
+            self._mark_requester(track, getattr(ctx.author, "id", None))
+            if not player.playing and first is None:
+                try:
+                    await _player_op(lambda t=track: player.play(t))
+                except Exception as exc:
+                    log.warning("Music", f"Playlist could not start a track: {exc}")
+                    continue
+                first = track
+                added += 1
+                state["current_track"] = track
+            else:
+                player.queue.put(track)
+                queued += 1
+                added += 1
+
+        if not added:
+            return await ctx.send(msg(ctx, "playlist_play_empty", name=playlist["name"]))
+        if first is not None and not queued:
+            await self._send_np(ctx, player)
+            return
+        await ctx.send(msg(ctx, "playlist_play_added", count=added, name=playlist["name"]))
+        await self._update_np_message(ctx.guild)
+
+    @commands.command(
+        name="scrobble", aliases=["scrobbling"],
+        help=CMDS.help("scrobble"),
+    )
+    async def scrobble(self, ctx: commands.Context, state: str | None = None):
+        """Opt in or out of scrobbling the tracks you request.
+
+        Linking Last.fm only proves the account exists; scrobbling changes a
+        public profile, so it stays off until this command is used.
+        """
+        prefix = await resolve_prefix(self.bot, ctx)
+        if state is None:
+            enabled = False
+            try:
+                enabled = await MusicDatabase().scrobble_enabled(ctx.author.id)
+            except Exception:
+                pass
+            key = "scrobble_status_on" if enabled else "scrobble_status_off"
+            return await ctx.send(msg(ctx, key, prefix=prefix))
+
+        value = state.strip().lower()
+        if value not in {"on", "off", "true", "false", "yes", "no"}:
+            return await ctx.send(msg(ctx, "scrobble_bad_arg", prefix=prefix))
+        enabled = value in {"on", "true", "yes"}
+        if enabled:
+            if self._lastfm_writer is None:
+                return await ctx.send(msg(ctx, "scrobble_unavailable"))
+            if not await self._lastfm_session_key(ctx.author.id):
+                return await ctx.send(msg(ctx, "scrobble_link_first"))
+        try:
+            await MusicDatabase().set_scrobble_enabled(ctx.author.id, enabled)
+        except Exception as exc:
+            log.error("Music", f"Could not save the scrobble setting: {exc}")
+            return await ctx.send(msg(ctx, "scrobble_save_failed"))
+        key = "scrobble_enabled" if enabled else "scrobble_disabled"
+        await ctx.send(msg(ctx, key))
+
     @commands.command(
         name="nowplaying", aliases=["np"],
         help=CMDS.help("nowplaying"),
@@ -2331,6 +3335,8 @@ class MusicSystem(commands.Cog):
         help=CMDS.help("volume"),
     )
     async def volume(self, ctx: commands.Context, vol: int):
+        if not await self._require_dj(ctx):
+            return
         player = _wavelink_player(ctx.voice_client)
         if not player:
             return await ctx.send(msg(ctx, "volume_nothing"))
@@ -2344,6 +3350,8 @@ class MusicSystem(commands.Cog):
         help=CMDS.help("disconnect"),
     )
     async def disconnect(self, ctx: commands.Context):
+        if not await self._require_dj(ctx):
+            return
         player = ctx.voice_client
         if not player:
             return await ctx.send(msg(ctx, "disconnect_nothing"))

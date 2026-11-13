@@ -268,6 +268,111 @@ class LastFmClient:
             await self._session.close()
         self._session = None
 
+    # ── scrobbling (signed writes) ────────────────────────────────────
+    def _signed(self, method: str, params: dict) -> dict:
+        """Add the signature Last.fm requires to an authenticated method.
+
+        ``format`` is deliberately not part of the signed set: Last.fm signs
+        only the method, the API key and the method's own parameters.
+        """
+        signed = {"method": method, "api_key": self.api_key, **params}
+        return {**params, "api_sig": api_signature(self.api_secret, signed)}
+
+    async def _post(self, method: str, params: dict) -> dict:
+        """POST a write method; Last.fm rejects signed writes over GET."""
+        payload = {
+            "method": method,
+            "api_key": self.api_key,
+            "format": "json",
+            **params,
+        }
+        last_error: Exception | None = None
+        for attempt in (1, 2):
+            await self._reserve_slot()
+            try:
+                session = await self._session_or_create()
+                async with session.post(API_URL, data=payload) as response:
+                    body = await response.text()
+                    if response.status == 429:
+                        raise LastFmError("Last.fm is rate limiting the bot.", code=29)
+                    if response.status >= 500:
+                        raise LastFmError(
+                            f"Last.fm is having trouble (HTTP {response.status})."
+                        )
+                    try:
+                        import json
+
+                        result = json.loads(body or "{}")
+                    except ValueError:
+                        raise LastFmError("Last.fm sent a response the bot could not read.")
+                return self._check(result)
+            except LastFmError as exc:
+                last_error = exc
+                if exc.code is not None:
+                    raise
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                last_error = exc
+                logging.warning("Last.fm", f"{method} failed: {exc}")
+            if attempt == 1:
+                await asyncio.sleep(0.8)
+        raise LastFmError(
+            f"Last.fm did not answer ({last_error})." if last_error else "Last.fm did not answer."
+        )
+
+    async def update_now_playing(
+        self,
+        session_key: str,
+        *,
+        artist: str,
+        title: str,
+        album: str | None = None,
+        duration: int | None = None,
+    ) -> dict:
+        """Tell Last.fm what the member's requested track is.
+
+        This is the "now playing" half of scrobbling and is not counted as a
+        play; :meth:`scrobble` is what adds the listen to their profile.
+        """
+        if not self.has_secret:
+            raise LastFmError("Scrobbling needs LASTFM_API_SECRET on this bot.")
+        if not str(session_key or "").strip():
+            raise LastFmError("This member has not linked a Last.fm account.")
+        params = {"sk": str(session_key).strip(), "artist": artist, "track": title}
+        if album:
+            params["album"] = album
+        if duration:
+            params["duration"] = str(int(duration))
+        return await self._post("track.updateNowPlaying", self._signed("track.updateNowPlaying", params))
+
+    async def scrobble(
+        self,
+        session_key: str,
+        *,
+        artist: str,
+        title: str,
+        timestamp: int,
+        album: str | None = None,
+        duration: int | None = None,
+    ) -> dict:
+        """Add one completed listen to the member's Last.fm profile."""
+        if not self.has_secret:
+            raise LastFmError("Scrobbling needs LASTFM_API_SECRET on this bot.")
+        if not str(session_key or "").strip():
+            raise LastFmError("This member has not linked a Last.fm account.")
+        params = {
+            "sk": str(session_key).strip(),
+            "artist": artist,
+            "track": title,
+            "timestamp": str(int(timestamp)),
+        }
+        if album:
+            params["album"] = album
+        if duration:
+            params["duration"] = str(int(duration))
+        return await self._post("track.scrobble", self._signed("track.scrobble", params))
+
     async def _session_or_create(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(

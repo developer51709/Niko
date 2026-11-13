@@ -80,8 +80,8 @@ class AdministrationCommands:
     #: The release ``.staff announce`` announces. The changelog entry and the
     #: pages the buttons open are named in one place, so a button can never
     #: point at a page that was renamed or retired alongside the update.
-    UPDATE_TITLE = "Last.fm is here 🎧"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/lastfm-listening-stats"
+    UPDATE_TITLE = "The music room got bigger 🎛️"
+    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/music-room-update"
     UPDATE_COMMANDS_URL = f"{links.WEBSITE}/commands"
     UPDATE_SUPPORT_URL = links.SUPPORT_SERVER
 
@@ -115,24 +115,22 @@ class AdministrationCommands:
             ),
             discord.ui.TextDisplay(
                 content=(
-                    "You can link a Last.fm account to Niko now, which brings the whole `.fm` suite "
-                    "with it.\n\n"
-                    "`.fm` on its own is now playing: album art, the track, the artist, the album, and a "
-                    "red dot while the scrobble is live. If nothing's playing you get your last scrobble "
-                    "instead of an empty card.\n\n"
-                    "There's a lot more under it. `/fm overview` has your totals and top artists, albums and "
-                    "tracks for whatever period you ask for. `/fm chart` is a ranked top ten, "
-                    "`/fm recent` is your last scrobbles with their artwork, and `/fm artist` or "
-                    "`/fm album` gives you one page with your own playcount next to Last.fm's.\n\n"
-                    "Your server gets a music board too. `/fm whoknows` takes an artist and shows who "
-                    "here actually listens to them, `/fm crowns` shows who listens to each artist the "
-                    "most, and `/fm taste` compares two libraries to see how much they overlap. All of "
-                    "it comes from the artists Niko sees while drawing cards, so it fills in once people "
-                    "start using the commands.\n\n"
-                    "Before anyone asks, no passwords. `/fm link` opens Last.fm's own approval page and "
-                    "sends you back to niko.sryze.cc. We only keep a session key, and `/fm unlink` "
-                    "deletes it.\n\n"
-                    "-# Last.fm is opt-in and the bot stays free as always."
+                    "Music in Niko is now a shared room instead of one person's queue.\n\n"
+                    "**A DJ role** — `.dj role @role` names the role that can skip, go back, stop, loop, "
+                    "change autoplay or move the volume. Pause and resume stay open to the channel, "
+                    "`.dj` shows the current role, and `.dj clear` hands playback back to everyone.\n\n"
+                    "**Shared playlists** — `.playlist create <name>` starts one, `.playlist add <name>` "
+                    "drops in the current track, and `.playlist play <name>` queues it. Use "
+                    "`.playlist share @member <name>` so other people can add and remove tracks, "
+                    "`.playlist show` to see it, and `.playlist remove <index> <name>` to take one out.\n\n"
+                    "**A real player** — the now-playing panel's **Open Player** button launches a Discord "
+                    "Activity with the artwork, progress, queue and controls in one window. It runs on the "
+                    "`activities` subdomain, and every tap is re-checked against the voice channel and the "
+                    "DJ role.\n\n"
+                    "**Last.fm scrobbling** — if you've linked Last.fm, `.scrobble on` sends the tracks you "
+                    "request to your profile. Only your requests, and only after real playback — a track "
+                    "paused for ten minutes won't count — and `.scrobble off` stops it.\n\n"
+                    "-# Last.fm scrobbling is opt-in per member, and the bot stays free as always."
                 )
             ),
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),

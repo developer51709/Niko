@@ -589,6 +589,13 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/welcome.png"
     },
+    "/changelog/music-room-update": {
+      "title": "The Music Room: DJs, Shared Playlists and a Real Player — Niko changelog",
+      "description": "Music is now a shared room instead of one person's queue. A DJ role decides who may skip, stop and change the volume; collaborative playlists let a server build a queue together; the now-playing panel's **Open Player** button launches a Discord Activity with the controls in it; and members who link Last.fm can opt in to scrobbling the tracks they request.",
+      "section": "Changelog · v2.30.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/music-room-update.png"
+    },
     "/changelog/lastfm-listening-stats": {
       "title": "Niko Listens: Last.fm Cards and Server Boards — Niko changelog",
       "description": "`.fm` now answers with what you are playing. A new Last.fm cog draws every answer as a card — now playing, your library at a glance, charts for any period, one artist or album beside your own playcount, and a scrobble history with album art — and turns the server into a music board: who listens to an artist, who holds the crown for each one, and how closely two members' taste overlaps. Linking goes through Last.fm's own approval page with a callback on the website, so Niko never asks for a password.",

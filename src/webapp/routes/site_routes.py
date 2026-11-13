@@ -4,7 +4,8 @@ from flask import Response
 
 from utils import logging
 
-from .. import seo
+from .. import config, runtime, seo
+from ..music_activity import page_response
 from .. import server as _server
 
 globals().update({
@@ -15,6 +16,10 @@ globals().update({
 
 @app.route("/")
 def root():
+    # The Activity subdomain's root is the Activity itself: Discord's URL
+    # mapping only supports the root prefix, so there is no path to put it on.
+    if config.is_activity_host(runtime.request_host()):
+        return page_response()
     # The home page's own Open Graph card and Discord component embed, rendered
     # from the build manifest at request time.
     return render_site_shell("/")

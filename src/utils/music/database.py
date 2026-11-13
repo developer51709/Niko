@@ -57,6 +57,52 @@ _TABLE_SQL = [
         added_at   TEXT    NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (user_id, name, track_key)
     )""",
+    # Last.fm scrobbling is opt-in per member, and only covers the tracks that
+    # member asks the bot to play. A linked session key proves ownership; this
+    # row records consent.
+    """CREATE TABLE IF NOT EXISTS music_scrobble_optins (
+        user_id    INTEGER PRIMARY KEY,
+        enabled    INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    )""",
+    # Collaborative playlists: owned by a member but editable by everyone the
+    # owner (or another editor) adds, and readable by the whole guild. They live
+    # beside the personal tables above, in the same music pool.
+    """CREATE TABLE IF NOT EXISTS music_shared_playlists (
+        playlist_id TEXT PRIMARY KEY,
+        guild_id    INTEGER NOT NULL,
+        name        TEXT    NOT NULL,
+        owner_id    INTEGER NOT NULL,
+        created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    )""",
+    """CREATE TABLE IF NOT EXISTS music_shared_playlist_tracks (
+        playlist_id TEXT    NOT NULL,
+        track_key   TEXT    NOT NULL,
+        position    INTEGER DEFAULT 0,
+        title       TEXT    DEFAULT '',
+        author      TEXT    DEFAULT '',
+        uri         TEXT    DEFAULT '',
+        artwork     TEXT    DEFAULT '',
+        length_ms   INTEGER DEFAULT 0,
+        source      TEXT    DEFAULT '',
+        added_by    INTEGER DEFAULT 0,
+        added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (playlist_id, track_key)
+    )""",
+    """CREATE TABLE IF NOT EXISTS music_shared_playlist_editors (
+        playlist_id TEXT    NOT NULL,
+        user_id     INTEGER NOT NULL,
+        added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (playlist_id, user_id)
+    )""",
+    # One row per guild that has turned on DJ-only playback controls. The role
+    # is playback policy, not a server-wide setting the main dashboard owns, so
+    # it lives with the rest of the music data.
+    """CREATE TABLE IF NOT EXISTS music_dj_roles (
+        guild_id   INTEGER PRIMARY KEY,
+        role_id    INTEGER NOT NULL,
+        updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    )""",
     # Owner-added Lavalink nodes. They live here — never in the repository and
     # never in the hardcoded catalogue — because their passwords are private.
     """CREATE TABLE IF NOT EXISTS music_lavalink_nodes (
@@ -298,6 +344,231 @@ class MusicDatabase:
             user_id,
             name,
             key,
+        )
+
+    # ────────────────────────────────────────────── Last.fm scrobbling ──
+    async def scrobble_enabled(self, user_id: int) -> bool:
+        if not await self.ensure():
+            return False
+        value = await self.pool.fetchval(
+            "SELECT enabled FROM music_scrobble_optins WHERE user_id = $1",
+            int(user_id),
+        )
+        return bool(value)
+
+    async def set_scrobble_enabled(self, user_id: int, enabled: bool) -> None:
+        if not await self.ensure():
+            raise RuntimeError("The music database is not available.")
+        await self.pool.execute(
+            "INSERT OR REPLACE INTO music_scrobble_optins (user_id, enabled) "
+            "VALUES ($1, $2)",
+            int(user_id),
+            1 if enabled else 0,
+        )
+
+    # ────────────────────────────────────────────── collaborative playlists ──
+    @staticmethod
+    def playlist_id(guild_id: int, name: str) -> str:
+        """Stable key for a guild's playlist name (case-insensitive)."""
+        return f"{int(guild_id)}:{str(name or '').strip().casefold()[:60]}"
+
+    async def shared_playlists(self, guild_id: int) -> list:
+        if not await self.ensure():
+            return []
+        # The Mongo backend only translates simple statement shapes: a
+        # correlated subquery in the SELECT list cannot be parsed. Count each
+        # playlist separately instead, which both backends understand.
+        rows = await self.pool.fetch(
+            "SELECT playlist_id, guild_id, name, owner_id, created_at "
+            "FROM music_shared_playlists WHERE guild_id = $1 "
+            "ORDER BY created_at DESC",
+            int(guild_id),
+        )
+        playlists = []
+        for row in rows:
+            item = dict(row)
+            item["track_count"] = int(await self.pool.fetchval(
+                "SELECT COUNT(*) FROM music_shared_playlist_tracks "
+                "WHERE playlist_id = $1",
+                item["playlist_id"],
+            ) or 0)
+            playlists.append(item)
+        return playlists
+
+    async def shared_playlist(self, guild_id: int, name: str) -> dict | None:
+        if not await self.ensure():
+            return None
+        row = await self.pool.fetchrow(
+            "SELECT playlist_id, guild_id, name, owner_id, created_at "
+            "FROM music_shared_playlists WHERE playlist_id = $1",
+            self.playlist_id(guild_id, name),
+        )
+        return dict(row) if row else None
+
+    async def create_shared_playlist(self, guild_id: int, name: str, owner_id: int) -> dict | None:
+        """Create a playlist and make its owner an editor.
+
+        Returns ``None`` when the name is already used in this guild, so the
+        caller can say so instead of silently taking the existing playlist.
+        """
+        if not await self.ensure():
+            return None
+        playlist_id = self.playlist_id(guild_id, name)
+        existing = await self.pool.fetchrow(
+            "SELECT playlist_id FROM music_shared_playlists WHERE playlist_id = $1",
+            playlist_id,
+        )
+        if existing:
+            return None
+        await self.pool.execute(
+            "INSERT INTO music_shared_playlists (playlist_id, guild_id, name, owner_id) "
+            "VALUES ($1, $2, $3, $4)",
+            playlist_id,
+            int(guild_id),
+            str(name).strip()[:60],
+            int(owner_id),
+        )
+        await self.add_playlist_editor(playlist_id, owner_id)
+        return await self.shared_playlist(guild_id, name)
+
+    async def delete_shared_playlist(self, playlist_id: str) -> None:
+        if not await self.ensure():
+            return
+        await self.pool.execute(
+            "DELETE FROM music_shared_playlist_tracks WHERE playlist_id = $1",
+            playlist_id,
+        )
+        await self.pool.execute(
+            "DELETE FROM music_shared_playlist_editors WHERE playlist_id = $1",
+            playlist_id,
+        )
+        await self.pool.execute(
+            "DELETE FROM music_shared_playlists WHERE playlist_id = $1",
+            playlist_id,
+        )
+
+    async def add_playlist_editor(self, playlist_id: str, user_id: int) -> None:
+        if not await self.ensure():
+            return
+        await self.pool.execute(
+            "INSERT OR IGNORE INTO music_shared_playlist_editors (playlist_id, user_id) "
+            "VALUES ($1, $2)",
+            playlist_id,
+            int(user_id),
+        )
+
+    async def is_playlist_editor(self, playlist_id: str, user_id: int) -> bool:
+        if not await self.ensure():
+            return False
+        row = await self.pool.fetchrow(
+            "SELECT user_id FROM music_shared_playlist_editors "
+            "WHERE playlist_id = $1 AND user_id = $2",
+            playlist_id,
+            int(user_id),
+        )
+        return row is not None
+
+    async def playlist_editors(self, playlist_id: str) -> list[dict]:
+        if not await self.ensure():
+            return []
+        return await self.pool.fetch(
+            "SELECT user_id, added_at FROM music_shared_playlist_editors "
+            "WHERE playlist_id = $1 ORDER BY added_at ASC",
+            playlist_id,
+        )
+
+    async def add_shared_track(self, playlist_id: str, track, added_by: int = 0) -> bool:
+        """Append a track; False when it is already in the playlist."""
+        if not await self.ensure():
+            return False
+        key = _track_key(track)
+        existing = await self.pool.fetchrow(
+            "SELECT track_key FROM music_shared_playlist_tracks "
+            "WHERE playlist_id = $1 AND track_key = $2",
+            playlist_id,
+            key,
+        )
+        if existing:
+            return False
+        position = int(await self.pool.fetchval(
+            "SELECT COUNT(*) FROM music_shared_playlist_tracks WHERE playlist_id = $1",
+            playlist_id,
+        ) or 0)
+        await self.pool.execute(
+            "INSERT INTO music_shared_playlist_tracks "
+            "(playlist_id, track_key, position, title, author, uri, artwork, length_ms, source, added_by) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            playlist_id,
+            key,
+            position,
+            getattr(track, "title", "") or "Unknown",
+            getattr(track, "author", "") or "",
+            getattr(track, "uri", "") or "",
+            getattr(track, "artwork", "") or "",
+            int(getattr(track, "length", 0) or 0),
+            getattr(track, "source", "") or "",
+            int(added_by),
+        )
+        return True
+
+    async def remove_shared_track(self, playlist_id: str, track_key: str) -> bool:
+        if not await self.ensure():
+            return False
+        existing = await self.pool.fetchrow(
+            "SELECT track_key FROM music_shared_playlist_tracks "
+            "WHERE playlist_id = $1 AND track_key = $2",
+            playlist_id,
+            track_key,
+        )
+        if not existing:
+            return False
+        await self.pool.execute(
+            "DELETE FROM music_shared_playlist_tracks "
+            "WHERE playlist_id = $1 AND track_key = $2",
+            playlist_id,
+            track_key,
+        )
+        return True
+
+    async def shared_tracks(self, playlist_id: str) -> list:
+        if not await self.ensure():
+            return []
+        return await self.pool.fetch(
+            "SELECT playlist_id, track_key, position, title, author, uri, artwork, "
+            "length_ms, source, added_by FROM music_shared_playlist_tracks "
+            "WHERE playlist_id = $1 ORDER BY position ASC, added_at ASC",
+            playlist_id,
+        )
+
+    # ────────────────────────────────────────────── DJ role ──
+    async def get_dj_role(self, guild_id: int) -> int | None:
+        """The role that guards this guild's playback controls, if one is set."""
+        if not await self.ensure():
+            return None
+        value = await self.pool.fetchval(
+            "SELECT role_id FROM music_dj_roles WHERE guild_id = $1",
+            int(guild_id),
+        )
+        return int(value) if value else None
+
+    async def set_dj_role(self, guild_id: int, role_id: int) -> None:
+        """Make playback controls DJ-only for this guild."""
+        if not await self.ensure():
+            raise RuntimeError("The music database is not available.")
+        await self.pool.execute(
+            "INSERT OR REPLACE INTO music_dj_roles (guild_id, role_id) "
+            "VALUES ($1, $2)",
+            int(guild_id),
+            int(role_id),
+        )
+
+    async def clear_dj_role(self, guild_id: int) -> None:
+        """Open the playback controls to everyone again."""
+        if not await self.ensure():
+            raise RuntimeError("The music database is not available.")
+        await self.pool.execute(
+            "DELETE FROM music_dj_roles WHERE guild_id = $1",
+            int(guild_id),
         )
 
     # ────────────────────────────────────────────── private Lavalink nodes ──

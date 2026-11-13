@@ -25,6 +25,10 @@ wheels/
 !src/website/dist/
 !src/website/dist/**
 
+# The music Activity is a second Vite build, checked in for the same reason.
+!src/webapp/activity/dist/
+!src/webapp/activity/dist/**
+
 # Virtual environments
 .env
 .venv

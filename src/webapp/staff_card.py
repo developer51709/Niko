@@ -278,6 +278,7 @@ def _activity_card(activity: dict, palette: dict) -> str:
     label, title, subtitle = _activity_copy(activity)
     top = CARD_HEIGHT - 40
     art = activity_art_data_url(activity.get("image_url"))
+    small_art = activity_art_data_url(activity.get("small_image_url")) if art and activity.get("small_image_url") else None
     text_x = 104 if art or kind == "spotify" else 40
 
     parts = [
@@ -292,6 +293,16 @@ def _activity_card(activity: dict, palette: dict) -> str:
             f'<image href="{escape(art)}" x="40" y="{top + 20}" width="52" height="52" '
             'preserveAspectRatio="xMidYMid slice" clip-path="url(#staff-activity-art)"/>'
         )
+        if small_art:
+            # Discord overlaps a small badge on the artwork's bottom-right.
+            parts.append(
+                '<defs><clipPath id="staff-activity-small">'
+                f'<circle cx="81" cy="{top + 61}" r="11"/>'
+                '</clipPath></defs>'
+                f'<circle cx="81" cy="{top + 61}" r="12" fill="{palette["chip"]}"/>'
+                f'<image href="{escape(small_art)}" x="70" y="{top + 50}" width="22" height="22" '
+                'preserveAspectRatio="xMidYMid slice" clip-path="url(#staff-activity-small)"/>'
+            )
     elif kind == "spotify":
         # No cover art in the presence: a green tile with the Spotify glyph.
         parts.append(

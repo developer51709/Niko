@@ -247,6 +247,104 @@ class SpotifyPresenceTests(unittest.TestCase):
         self.assertIsNone(activity["end"])
 
 
+class ActivityIconTests(unittest.TestCase):
+    """Games and streams keep the icon their presence sends, not just Spotify."""
+
+    def setUp(self):
+        self.previous = runtime._discord_bot
+
+    def tearDown(self):
+        runtime._discord_bot = self.previous
+
+    def _identity(self, *activities):
+        member = SimpleNamespace(
+            status="online",
+            activities=list(activities),
+            global_name="Staffer",
+            name="staffer",
+            display_avatar=SimpleNamespace(url="https://example.test/avatar.png"),
+            _user=None,
+        )
+        runtime._discord_bot = SimpleNamespace(
+            guilds=[SimpleNamespace(get_member=lambda user_id: member)],
+        )
+        return staff._staff_identity("45")
+
+    def test_a_game_icon_is_resolved_from_its_application_asset(self):
+        game = SimpleNamespace(
+            type=SimpleNamespace(name="playing"),
+            name="Minecraft",
+            details=None,
+            state=None,
+            url=None,
+            application_id=123456789,
+            assets={"large_image": "game_icon"},
+        )
+
+        activity = self._identity(game)["activities"][0]
+
+        self.assertEqual(
+            activity["image_url"],
+            "https://cdn.discordapp.com/app-assets/123456789/game_icon.png",
+        )
+
+    def test_a_small_asset_stays_a_separate_badge(self):
+        game = SimpleNamespace(
+            type=SimpleNamespace(name="playing"),
+            name="Minecraft",
+            details=None,
+            state=None,
+            url=None,
+            application_id=123456789,
+            assets={"large_image": "game_icon", "small_image": "badge_icon"},
+        )
+
+        activity = self._identity(game)["activities"][0]
+
+        self.assertEqual(
+            activity["image_url"],
+            "https://cdn.discordapp.com/app-assets/123456789/game_icon.png",
+        )
+        self.assertEqual(
+            activity["small_image_url"],
+            "https://cdn.discordapp.com/app-assets/123456789/badge_icon.png",
+        )
+
+    def test_an_external_rich_presence_image_uses_the_media_proxy(self):
+        game = SimpleNamespace(
+            type=SimpleNamespace(name="playing"),
+            name="Custom",
+            details=None,
+            state=None,
+            url=None,
+            application_id=123456789,
+            assets={"large_image": "mp:external/abc/https/cdn.example/icon.png"},
+        )
+
+        activity = self._identity(game)["activities"][0]
+
+        self.assertEqual(
+            activity["image_url"],
+            "https://media.discordapp.net/external/abc/https/cdn.example/icon.png",
+        )
+
+    def test_a_stream_keeps_its_platform_when_no_asset_is_sent(self):
+        class Streaming:
+            type = SimpleNamespace(name="streaming")
+            name = "Twitch"
+            details = "Twitch"
+            game = "VALORANT"
+            platform = "Twitch"
+            url = "https://twitch.tv/example"
+            assets = {}
+
+        activity = self._identity(Streaming())["activities"][0]
+
+        self.assertEqual(activity["kind"], "streaming")
+        self.assertEqual(activity["platform"], "Twitch")
+        self.assertIsNone(activity["image_url"])
+
+
 class AvatarDecorationTests(unittest.TestCase):
     """Discord's avatar decoration reaches the Team pages with the identity."""
 
@@ -388,7 +486,8 @@ class ProfilePopupPresenceTests(unittest.TestCase):
         # The times are set in the monospaced face the devtools header uses.
         self.assertIn('color: #b5bac1; font-family: "Space Mono", monospace; font-size: 12px;', styles)
         # The mark follows the wording, the way Discord reads it.
-        self.assertIn('<span>Listening to Spotify</span><img src="/spotify.svg" alt="" />', self.source)
+        self.assertIn('className="discord-profile-spotify-head"', self.source)
+        self.assertIn('<span>{label}</span><img src="/spotify.svg" alt="" />', self.source)
 
 
 def test_the_team_profile_page_shows_the_popup_status_bubble():
@@ -399,7 +498,8 @@ def test_the_team_profile_page_shows_the_popup_status_bubble():
     # redrawn for the team page.
     assert "export function ProfileCustomStatus" in markdown
     assert "export type DiscordCustomStatus" in markdown
-    assert 'import { ProfileCustomStatus, type DiscordCustomStatus } from "../components/DiscordMarkdown";' in source
+    assert 'ProfileCustomStatus' in source
+    assert 'type DiscordCustomStatus' in source
     # It sits in the avatar's row, bottom-aligned with it, exactly where the
     # popups put it: avatar, then the bubble, then the name below.
     header = source[source.index('<div className="team-profile-header">'):source.index('<div className="team-profile-identity">')]

@@ -78,6 +78,35 @@ async def _report_failure(interaction: discord.Interaction, exc: BaseException) 
 #  CONTROL PANEL BUTTONS
 # ──────────────────────────────────────────────────
 
+class _ActivityBtn(discord.ui.Button):
+    """Open the experimental interactive player as a voice-channel Activity.
+
+    Discord requires the application to have Activities enabled and a URL
+    mapping configured; the cog only adds this button when the owner opts in,
+    because an app without them answers the launch callback with an error.
+    """
+
+    def __init__(self, cog: "MusicSystem", guild: discord.Guild):
+        super().__init__(
+            label=msg(guild, "btn_open_player"),
+            style=discord.ButtonStyle.primary,
+            emoji=get_emoji("play"),
+        )
+        self.cog = cog
+        self.guild_id = guild.id
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.launch_activity()
+        except Exception as exc:
+            log.warning("Music", f"Could not launch the activity: {exc}")
+            try:
+                await interaction.response.send_message(
+                    msg(interaction, "activity_unavailable"), ephemeral=True,
+                )
+            except Exception:
+                pass
+
 class _PauseResumeBtn(discord.ui.Button):
     def __init__(self, cog: "MusicSystem", guild: discord.Guild, paused: bool):
         super().__init__(
@@ -108,6 +137,8 @@ class _SkipBtn(discord.ui.Button):
         self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
+        if not await self.cog.panel_allowed(interaction):
+            return
         await interaction.response.defer()
         player = self.cog._player_for_guild(interaction.guild)
         if player and player.playing:
@@ -127,6 +158,8 @@ class _StopBtn(discord.ui.Button):
         self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
+        if not await self.cog.panel_allowed(interaction):
+            return
         await interaction.response.defer()
         player = self.cog._player_for_guild(interaction.guild)
         if player:
@@ -154,6 +187,8 @@ class _PrevBtn(discord.ui.Button):
         self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
+        if not await self.cog.panel_allowed(interaction):
+            return
         await interaction.response.defer()
         player = self.cog._player_for_guild(interaction.guild)
         state = self.cog._state(self.guild_id)
@@ -187,6 +222,8 @@ class _LoopBtn(discord.ui.Button):
         self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
+        if not await self.cog.panel_allowed(interaction):
+            return
         await interaction.response.defer()
         state = self.cog._state(self.guild_id)
         state["loop"] = not state["loop"]
@@ -214,6 +251,8 @@ class _AutoplayBtn(discord.ui.Button):
         self.available = available
 
     async def callback(self, interaction: discord.Interaction):
+        if not await self.cog.panel_allowed(interaction):
+            return
         await interaction.response.defer()
         if not self.available:
             return
@@ -300,6 +339,8 @@ class _VolDownBtn(discord.ui.Button):
         self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
+        if not await self.cog.panel_allowed(interaction):
+            return
         await interaction.response.defer()
         player = self.cog._player_for_guild(interaction.guild)
         if player:
@@ -322,6 +363,8 @@ class _VolUpBtn(discord.ui.Button):
         self.guild_id = guild.id
 
     async def callback(self, interaction: discord.Interaction):
+        if not await self.cog.panel_allowed(interaction):
+            return
         await interaction.response.defer()
         player = self.cog._player_for_guild(interaction.guild)
         if player:
@@ -473,13 +516,19 @@ def _build_np_view(
         ),
     ]
 
-    # Link button (separate ActionRow below the container — not inside)
+    # Link and player buttons (separate ActionRow below the container — not
+    # inside it, so a five-button control row is never pushed over Discord's
+    # five-component limit).
     view = discord.ui.LayoutView()
     view.add_item(discord.ui.Container(*items, accent_colour=accent_color))
+    extras: list[discord.ui.Item] = []
+    if getattr(cog, "activity_enabled", False):
+        extras.append(_ActivityBtn(cog, guild))
     if uri:
-        view.add_item(discord.ui.ActionRow(
-            discord.ui.Button(
-                label=msg(guild, "btn_open_track"),
-                style=discord.ButtonStyle.link, url=uri)
+        extras.append(discord.ui.Button(
+            label=msg(guild, "btn_open_track"),
+            style=discord.ButtonStyle.link, url=uri,
         ))
+    if extras:
+        view.add_item(discord.ui.ActionRow(*extras))
     return view

@@ -178,6 +178,26 @@ class ActivityCardTests(unittest.TestCase):
         self.assertIn(staff_card.SPOTIFY_GREEN, svg)
         self.assertIn("Midnight City", svg)
 
+    def test_a_small_activity_asset_is_drawn_over_the_artwork(self):
+        activity = {
+            "kind": "activity",
+            "type": "playing",
+            "name": "Minecraft",
+            "image_url": "https://cdn.discordapp.com/app-assets/1/large.png",
+            "small_image_url": "https://cdn.discordapp.com/app-assets/1/small.png",
+        }
+
+        def inline(url):
+            return "data:image/png;base64,LARGE" if "large" in url else "data:image/png;base64,SMALL"
+
+        with patch.object(staff_card, "activity_art_data_url", side_effect=inline) as art:
+            svg = staff_card.render_staff_card(member(activities=[activity]))
+
+        art.assert_any_call("https://cdn.discordapp.com/app-assets/1/large.png")
+        art.assert_any_call("https://cdn.discordapp.com/app-assets/1/small.png")
+        self.assertIn('clip-path="url(#staff-activity-small)"', svg)
+        self.assertIn('href="data:image/png;base64,SMALL"', svg)
+
     def test_game_activity_renders_its_name_and_details(self):
         svg = staff_card.render_staff_card(member(activities=[GAME_ACTIVITY]))
         self.assertEqual(card_height(svg), staff_card.CARD_HEIGHT_WITH_ACTIVITY)

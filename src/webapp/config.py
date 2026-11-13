@@ -67,6 +67,46 @@ SUBDOMAIN_SECTIONS = {
     "dash": "/dashboard",
 }
 
+#: OPTIONAL. Subdomain that serves the music Activity at its root. Discord's
+#: URL mapping for an Activity is always the root prefix, so the app has to sit
+#: on a host of its own rather than under a path of the site. Blank uses
+#: ``activities``.
+ACTIVITY_SUBDOMAIN = (
+    (os.environ.get("MUSIC_ACTIVITY_SUBDOMAIN") or "activities").strip().lower().split(".")[0]
+    or "activities"
+)
+
+
+def activity_origin() -> str:
+    """The public origin the Activity is served from, or "" when unknown.
+
+    ``MUSIC_ACTIVITY_ORIGIN`` wins when set (a dedicated host, or a tunnel while
+    developing). Otherwise it is ``<ACTIVITY_SUBDOMAIN>.<PUBLIC_URL host>``,
+    which is the wildcard subdomain deployment's form.
+    """
+    explicit = (os.environ.get("MUSIC_ACTIVITY_ORIGIN") or "").strip().rstrip("/")
+    if explicit.startswith(("http://", "https://")):
+        return explicit
+    canonical = canonical_origin()
+    if not canonical:
+        return ""
+    parts = urlparse(canonical)
+    if not parts.hostname:
+        return ""
+    port = f":{parts.port}" if parts.port else ""
+    return f"{parts.scheme}://{ACTIVITY_SUBDOMAIN}.{parts.hostname}{port}"
+
+
+def is_activity_host(host: str | None) -> bool:
+    """Whether this request IP belongs to the Activity, not the normal site."""
+    if not host:
+        return False
+    name = host.split(":", 1)[0].strip().lower()
+    if name.split(".", 1)[0] == ACTIVITY_SUBDOMAIN:
+        return True
+    explicit = urlparse((os.environ.get("MUSIC_ACTIVITY_ORIGIN") or "").strip())
+    return bool(explicit.hostname) and name == explicit.hostname.lower()
+
 def subdomain_prefix(host: str | None) -> str:
     """The apex path a request host stands in for, or "" for the normal site.
 
@@ -188,6 +228,6 @@ def unknown_subdomain(host: str | None) -> bool:
     if not domain or name == domain:
         return False
     label, _, rest = name.partition(".")
-    if not rest or label == "www" or label in SUBDOMAIN_SECTIONS:
+    if not rest or label in {"www", ACTIVITY_SUBDOMAIN} or label in SUBDOMAIN_SECTIONS:
         return False
     return rest == domain or rest.endswith("." + domain)
