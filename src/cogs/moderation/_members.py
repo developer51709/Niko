@@ -2,12 +2,12 @@
 Moderation — member-action commands (kick, ban, unban, warn, mute …).
 """
 import asyncio as _asyncio
-from datetime import datetime
 
 import discord
 from discord.ext import commands
 from config.emojis import get_emoji
-from ._messages import msg, _cv2
+from ._messages import ALLOWED_MENTIONS, msg, _cv2
+from ._warnings import WarningsView, can_view_warnings
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
 from utils.ratelimit import mass_role_limiter
@@ -25,30 +25,6 @@ _BAN_DELETE_DAYS = 7
 MASSROLE = load_locales(__package__, "massrole")
 _massmsg = make_flat_msg(MASSROLE, {"loading": get_emoji("loading"), "tick": get_emoji("tick"),
                                      "cross": get_emoji("cross"), "warning": get_emoji("warning")})
-
-
-def _can_view_warnings(ctx) -> bool:
-    """Reading a member's warning history needs Moderate Members or Manage
-    Messages — a helper who can already clear this channel's messages should not
-    have to be given Timeout Members just to read the list.
-
-    Reads ``permissions``, which both a Context and an Interaction expose as the
-    member's resolved channel permissions, so one check covers prefix and slash.
-    """
-    permissions = getattr(ctx, "permissions", None) or getattr(ctx, "guild_permissions", None)
-    return bool(permissions and (permissions.moderate_members or permissions.manage_messages))
-
-
-def _relative_time(value) -> str:
-    """A Discord timestamp for a stored ISO time, in the bot's usual style.
-
-    Warnings are stored as ISO strings; printing those raw (as this used to)
-    showed the reader a UTC wall clock instead of their own time zone.
-    """
-    try:
-        return f"<t:{int(datetime.fromisoformat(str(value)).timestamp())}:R>"
-    except (TypeError, ValueError, OverflowError, OSError):
-        return str(value) if value else "unknown"
 
 
 class _ModConfirmView(discord.ui.LayoutView):
@@ -112,7 +88,7 @@ class _ModConfirmView(discord.ui.LayoutView):
             return
         self.confirmed = True
         self._disable()
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(view=self, allowed_mentions=ALLOWED_MENTIONS)
         self._event.set()
 
     async def _on_cancel(self, interaction: discord.Interaction):
@@ -120,7 +96,7 @@ class _ModConfirmView(discord.ui.LayoutView):
             return
         self.confirmed = False
         self._disable()
-        await interaction.response.edit_message(view=self._notice(self._cancelled_text))
+        await interaction.response.edit_message(view=self._notice(self._cancelled_text), allowed_mentions=ALLOWED_MENTIONS)
         self._event.set()
 
     async def on_timeout(self):
@@ -133,7 +109,7 @@ class _ModConfirmView(discord.ui.LayoutView):
         self._text.content = self._timeout_text
         try:
             if self.message is not None:
-                await self.message.edit(view=self)
+                await self.message.edit(view=self, allowed_mentions=ALLOWED_MENTIONS)
         except (discord.HTTPException, discord.Forbidden):
             # The prompt is gone; the disabled buttons went with it.
             pass
@@ -362,7 +338,8 @@ class MassRolePanel(discord.ui.LayoutView):
         operations, skipped, error = self._plan()
         if error:
             return await interaction.response.edit_message(
-                view=_massrole_status_view(f"{get_emoji('cross')} {error}", discord.Colour.red())
+                view=_massrole_status_view(f"{get_emoji('cross')} {error}", discord.Colour.red()),
+                allowed_mentions=ALLOWED_MENTIONS,
             )
 
         self._running = True
@@ -431,7 +408,7 @@ class MembersMixin:
         reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("kick", "reason")),
     ):
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="kick"))
+            return await ctx.send(msg(ctx, "no_member", action="kick"), allowed_mentions=ALLOWED_MENTIONS)
 
         confirm_view = _ModConfirmView(
             msg(ctx, "confirm_kick", member=member, id=member.id, reason=reason),
@@ -442,7 +419,7 @@ class MembersMixin:
             confirm_label=msg(ctx, "btn_confirm"),
             cancel_label=msg(ctx, "btn_cancel"),
         )
-        confirm_msg = await ctx.send(view=confirm_view)
+        confirm_msg = await ctx.send(view=confirm_view, allowed_mentions=ALLOWED_MENTIONS)
 
         if not await confirm_view.wait_for_response():
             return
@@ -450,15 +427,15 @@ class MembersMixin:
         try:
             await member.kick(reason=reason)
         except discord.Forbidden:
-            return await ctx.send(view=_cv2(msg(ctx, "cannot_kick")))
+            return await ctx.send(view=_cv2(msg(ctx, "cannot_kick")), allowed_mentions=ALLOWED_MENTIONS)
         except discord.HTTPException as e:
-            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)))
+            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)), allowed_mentions=ALLOWED_MENTIONS)
 
         result_view = _cv2(msg(ctx, "kicked", member=member, reason=reason))
         try:
-            await confirm_msg.edit(view=result_view)
+            await confirm_msg.edit(view=result_view, allowed_mentions=ALLOWED_MENTIONS)
         except Exception:
-            await ctx.send(view=result_view)
+            await ctx.send(view=result_view, allowed_mentions=ALLOWED_MENTIONS)
 
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
@@ -479,7 +456,7 @@ class MembersMixin:
         reason: str = commands.parameter(default="No reason provided", description=CMDS.arg("ban", "reason")),
     ):
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="ban"))
+            return await ctx.send(msg(ctx, "no_member", action="ban"), allowed_mentions=ALLOWED_MENTIONS)
         # Always the default. Asking for the day count turned "ban @user spam"
         # into a failed command — the reason was read as the number — which is
         # the last thing a moderator needs mid-raid. Discord caps this at 7 and
@@ -495,7 +472,7 @@ class MembersMixin:
             confirm_label=msg(ctx, "btn_confirm"),
             cancel_label=msg(ctx, "btn_cancel"),
         )
-        confirm_msg = await ctx.send(view=confirm_view)
+        confirm_msg = await ctx.send(view=confirm_view, allowed_mentions=ALLOWED_MENTIONS)
 
         if not await confirm_view.wait_for_response():
             return
@@ -503,15 +480,15 @@ class MembersMixin:
         try:
             await ctx.guild.ban(member, reason=reason, delete_message_days=delete_days)
         except discord.Forbidden:
-            return await ctx.send(view=_cv2(msg(ctx, "cannot_ban")))
+            return await ctx.send(view=_cv2(msg(ctx, "cannot_ban")), allowed_mentions=ALLOWED_MENTIONS)
         except discord.HTTPException as e:
-            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)))
+            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)), allowed_mentions=ALLOWED_MENTIONS)
 
         result_view = _cv2(msg(ctx, "banned", member=member, reason=reason))
         try:
-            await confirm_msg.edit(view=result_view)
+            await confirm_msg.edit(view=result_view, allowed_mentions=ALLOWED_MENTIONS)
         except Exception:
-            await ctx.send(view=result_view)
+            await ctx.send(view=result_view, allowed_mentions=ALLOWED_MENTIONS)
 
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
@@ -533,32 +510,32 @@ class MembersMixin:
     ):
         """Unban by id — the user is not in the guild, so no Member converter."""
         if not user_id:
-            return await ctx.send(msg(ctx, "no_user_id"))
+            return await ctx.send(msg(ctx, "no_user_id"), allowed_mentions=ALLOWED_MENTIONS)
         raw = str(user_id).strip()
         if raw.startswith("<@") and raw.endswith(">"):
             raw = raw.strip("<@!>")
         if not raw.isdigit():
-            return await ctx.send(msg(ctx, "bad_user_id", value=user_id))
+            return await ctx.send(msg(ctx, "bad_user_id", value=user_id), allowed_mentions=ALLOWED_MENTIONS)
 
         try:
             user = await self.bot.fetch_user(int(raw))
         except discord.NotFound:
-            return await ctx.send(view=_cv2(msg(ctx, "no_user_found")))
+            return await ctx.send(view=_cv2(msg(ctx, "no_user_found")), allowed_mentions=ALLOWED_MENTIONS)
         except discord.HTTPException as e:
-            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)))
+            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)), allowed_mentions=ALLOWED_MENTIONS)
 
         try:
             # The reason goes to Discord as well as to Niko's log: kick and ban
             # both pass it, and without it the audit-log entry says nothing.
             await ctx.guild.unban(user, reason=reason)
         except discord.NotFound:
-            return await ctx.send(view=_cv2(msg(ctx, "not_banned", user=user)))
+            return await ctx.send(view=_cv2(msg(ctx, "not_banned", user=user)), allowed_mentions=ALLOWED_MENTIONS)
         except discord.Forbidden:
-            return await ctx.send(view=_cv2(msg(ctx, "cannot_unban")))
+            return await ctx.send(view=_cv2(msg(ctx, "cannot_unban")), allowed_mentions=ALLOWED_MENTIONS)
         except discord.HTTPException as e:
-            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)))
+            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)), allowed_mentions=ALLOWED_MENTIONS)
 
-        await ctx.send(view=_cv2(msg(ctx, "unbanned", user=user)))
+        await ctx.send(view=_cv2(msg(ctx, "unbanned", user=user)), allowed_mentions=ALLOWED_MENTIONS)
         body = (
             f"**User:** {user.mention} (`{user}` — ID: `{user.id}`)\n"
             f"**Action:** Unban\n**Reason:** {reason}\n"
@@ -580,9 +557,9 @@ class MembersMixin:
     ):
         utils = self.utils()
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="warn"))
+            return await ctx.send(msg(ctx, "no_member", action="warn"), allowed_mentions=ALLOWED_MENTIONS)
         await utils.add_warn(ctx.guild.id, member.id, ctx.author.id, reason)
-        await ctx.send(view=_cv2(msg(ctx, "warned", member=member, reason=reason)))
+        await ctx.send(view=_cv2(msg(ctx, "warned", member=member, reason=reason)), allowed_mentions=ALLOWED_MENTIONS)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Action:** Warn\n**Reason:** {reason}\n**Moderator:** {ctx.author.mention}"
@@ -594,24 +571,23 @@ class MembersMixin:
                              help=CMDS.help("warnings"))
     @commands.guild_only()
     async def warnings(self, ctx, member: discord.Member = commands.parameter(default=None, description=CMDS.arg("warnings", "member"))):
-        if not _can_view_warnings(ctx):
-            return await ctx.send(view=_cv2(msg(ctx, "warnings_perms")))
+        if not can_view_warnings(ctx):
+            return await ctx.send(view=_cv2(msg(ctx, "warnings_perms")), allowed_mentions=ALLOWED_MENTIONS)
         utils = self.utils()
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="view warnings for"))
+            return await ctx.send(msg(ctx, "no_member", action="view warnings for"), allowed_mentions=ALLOWED_MENTIONS)
         warns = await utils.get_warnings(ctx.guild.id, member.id)
         if not warns:
-            return await ctx.send(msg(ctx, "no_warnings", member=member))
-        lines = msg(ctx, "warnings_title", member=member)
-        for index, warn in enumerate(warns, start=1):
-            moderator = ctx.guild.get_member(warn["mod"])
-            by = moderator.mention if moderator else f"ID `{warn['mod']}`"
-            lines += (
-                f"**#{index}** by {by}\n"
-                f"Reason: {warn['reason']}\n"
-                f"Time: {_relative_time(warn['time'])}\n\n"
-            )
-        await ctx.send(view=_cv2(lines))
+            return await ctx.send(msg(ctx, "no_warnings", member=member), allowed_mentions=ALLOWED_MENTIONS)
+        # Four cases per page, each editable and removable in place. The panel
+        # re-reads the database on every change, so two moderators looking at
+        # the same member do not act on stale case ids. It keeps the message so
+        # its timeout can disable the cards it left behind.
+        panel = WarningsView(
+            utils=utils, guild=ctx.guild, member=member,
+            ctx=ctx, warnings=warns, cog=self,
+        )
+        panel.message = await ctx.send(view=panel, allowed_mentions=ALLOWED_MENTIONS)
 
     @commands.hybrid_command(name="clearwarnings", aliases=["clearwarns"],
                              description=CMDS.text("clearwarnings.description"),
@@ -621,9 +597,9 @@ class MembersMixin:
     async def clearwarnings(self, ctx, member: discord.Member = commands.parameter(default=None, description=CMDS.arg("clearwarnings", "member"))):
         utils = self.utils()
         if not member:
-            return await ctx.send(msg(ctx, "no_member_warns"))
+            return await ctx.send(msg(ctx, "no_member_warns"), allowed_mentions=ALLOWED_MENTIONS)
         await utils.clear_warnings(ctx.guild.id, member.id)
-        await ctx.send(msg(ctx, "warnings_cleared", member=member))
+        await ctx.send(msg(ctx, "warnings_cleared", member=member), allowed_mentions=ALLOWED_MENTIONS)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**Action:** Clear Warnings\n**Moderator:** {ctx.author.mention}"
@@ -645,17 +621,17 @@ class MembersMixin:
     ):
         utils = self.utils()
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="mute"))
+            return await ctx.send(msg(ctx, "no_member", action="mute"), allowed_mentions=ALLOWED_MENTIONS)
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
         if not await utils.mute_member(ctx.guild, member, duration=None, reason=reason,
                                        method="Command", actor=ctx.author):
-            return await ctx.send(msg(ctx, "cannot_mute", member=member))
+            return await ctx.send(msg(ctx, "cannot_mute", member=member), allowed_mentions=ALLOWED_MENTIONS)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=msg(ctx, "muted", member=member, reason=reason))
         ))
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=ALLOWED_MENTIONS)
 
     @commands.hybrid_command(description=CMDS.text("tempmute.description"),
                              help=CMDS.help("tempmute"))
@@ -671,19 +647,19 @@ class MembersMixin:
     ):
         utils = self.utils()
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="tempmute"))
+            return await ctx.send(msg(ctx, "no_member", action="tempmute"), allowed_mentions=ALLOWED_MENTIONS)
         if not duration:
-            return await ctx.send(msg(ctx, "no_duration"))
+            return await ctx.send(msg(ctx, "no_duration"), allowed_mentions=ALLOWED_MENTIONS)
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
         if not await utils.mute_member(ctx.guild, member, duration=int(duration), reason=reason,
                                        method="Command", actor=ctx.author):
-            return await ctx.send(msg(ctx, "cannot_mute", member=member))
+            return await ctx.send(msg(ctx, "cannot_mute", member=member), allowed_mentions=ALLOWED_MENTIONS)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=msg(ctx, "tempmuted", member=member, duration=duration, reason=reason))
         ))
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=ALLOWED_MENTIONS)
 
     @commands.hybrid_command(name="unmute", aliases=["untimeout"],
                              description=CMDS.text("unmute.description"),
@@ -693,7 +669,7 @@ class MembersMixin:
     async def unmute(self, ctx,        member: discord.Member = commands.parameter(default=None, description=CMDS.arg("unmute", "member"))):
         utils = self.utils()
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="unmute"))
+            return await ctx.send(msg(ctx, "no_member", action="unmute"), allowed_mentions=ALLOWED_MENTIONS)
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
         await utils.unmute_member(member, method="Command", actor=ctx.author)
@@ -701,7 +677,7 @@ class MembersMixin:
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(content=msg(ctx, "unmuted", member=member))
         ))
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=ALLOWED_MENTIONS)
 
     # ── NICK ─────────────────────────────────────────────────────────────────
     @commands.hybrid_command(description=CMDS.text("nick.description"),
@@ -716,16 +692,16 @@ class MembersMixin:
         nickname=commands.parameter(default=None, description=CMDS.arg("nick", "nickname")),
     ):
         if not member:
-            return await ctx.send(msg(ctx, "no_member", action="rename"))
+            return await ctx.send(msg(ctx, "no_member", action="rename"), allowed_mentions=ALLOWED_MENTIONS)
         if not nickname:
-            return await ctx.send(msg(ctx, "no_nickname"))
+            return await ctx.send(msg(ctx, "no_nickname"), allowed_mentions=ALLOWED_MENTIONS)
         try:
             await member.edit(nick=nickname)
         except discord.Forbidden:
-            return await ctx.send(msg(ctx, "nick_failed"))
+            return await ctx.send(msg(ctx, "nick_failed"), allowed_mentions=ALLOWED_MENTIONS)
         except discord.HTTPException as e:
-            return await ctx.send(msg(ctx, "action_failed", error=e))
-        await ctx.send(msg(ctx, "nick_changed", member=member, nickname=nickname))
+            return await ctx.send(msg(ctx, "action_failed", error=e), allowed_mentions=ALLOWED_MENTIONS)
+        await ctx.send(msg(ctx, "nick_changed", member=member, nickname=nickname), allowed_mentions=ALLOWED_MENTIONS)
         body = (
             f"**User:** {member.mention} (`{member}` — ID: `{member.id}`)\n"
             f"**New Nickname:** `{nickname}`\n**Changed By:** {ctx.author.mention}"
@@ -744,7 +720,7 @@ class MembersMixin:
         """Open the no-argument mass role management panel."""
         bot_member = ctx.guild.me or ctx.guild.get_member(self.bot.user.id)
         if bot_member is None or not bot_member.guild_permissions.manage_roles:
-            return await ctx.send(_massmsg(ctx, "need_bot_permission"))
+            return await ctx.send(_massmsg(ctx, "need_bot_permission"), allowed_mentions=ALLOWED_MENTIONS)
         await ctx.send(
             view=MassRolePanel(ctx.guild, ctx.author.id, bot_member, ctx),
             allowed_mentions=discord.AllowedMentions.none(),

@@ -29,10 +29,21 @@ It's helpful to include specific details:
 .warnings <user>
 ```
 
-This shows:
-- Total warning count
-- Each warning with moderator and reason
-- When each warning was issued
+Warnings open in a panel, up to four cases per page:
+- each case shows its number, the moderator who issued it, the reason, and when
+- **Edit** rewrites a case's reason without changing its number, the member, or the original time
+- **Remove** deletes that one case immediately; every case has its own pair of buttons
+- the arrows page through the rest of the member's history
+
+Anyone with **Moderate Members** or **Manage Messages** can open the panel and page through the history. **Edit** and **Remove** are narrower: they need **Moderate Members**, the same permission `/clearwarnings` requires, because removing a case is just as destructive. Every button re-checks the permission on click, and each change is written to the moderation log. After five minutes without a button press the panel disables its buttons and adds a note at the bottom saying it timed out, so nobody presses a button that no longer works — run `/warnings` again for a fresh one.
+
+### Warnings added by another bot
+
+A server may also run a partner bot that syncs its warnings with Niko. When a warning was written through Niko's developer API, the case carries a line at the bottom:
+
+> Added via @TheirBot. Learn more
+
+That line names the reviewed application that added the case and links to [Verified Applications and Shared Server Data](https://niko.sryze.cc/docs/verified-applications), which explains what a partner can read or write and how that access is limited. A warning you issued with `/warn` never shows the line.
 
 ### Check Your Own Warnings
 Members can check their own warnings:
@@ -50,8 +61,8 @@ Remove all warnings from a member:
 .clearwarnings <user>
 ```
 
-### Clear Specific Warnings
-Some configurations allow clearing specific warnings by ID.
+### Remove Specific Warnings
+Open `/warnings <user>` and use **Remove** on the case you want gone. The case number, the member, and the time it was issued stay with the remaining cases.
 
 ## Warning Actions
 

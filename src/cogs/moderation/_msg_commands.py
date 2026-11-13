@@ -3,7 +3,7 @@ Moderation — message-management commands (clear, purge).
 """
 import discord
 from discord.ext import commands
-from ._messages import msg, _cv2, _chunked_purge
+from ._messages import ALLOWED_MENTIONS, msg, _cv2, _chunked_purge
 from config.emojis import get_emoji
 
 from utils.command_locales import command_texts
@@ -28,9 +28,11 @@ class MessagesMixin:
         try:
             deleted = await _chunked_purge(ctx.channel, amount, check=check)
         except discord.Forbidden:
-            return await ctx.send(view=_cv2(msg(ctx, "cannot_purge")), ephemeral=True)
+            return await ctx.send(view=_cv2(msg(ctx, "cannot_purge")), ephemeral=True,
+                                  allowed_mentions=ALLOWED_MENTIONS)
         except discord.HTTPException as e:
-            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)), ephemeral=True)
+            return await ctx.send(view=_cv2(msg(ctx, "action_failed", error=e)), ephemeral=True,
+                                  allowed_mentions=ALLOWED_MENTIONS)
         if member:
             message = msg(ctx, "purged", count=len(deleted), member=member)
             category, action = "messages", "Purge"
@@ -53,7 +55,8 @@ class MessagesMixin:
 
         # ephemeral matters: the purge itself was deferred privately, so the
         # confirmation must not land in the channel for everyone to read.
-        await ctx.send(f"{get_emoji('broom')} {message}", delete_after=5, ephemeral=True)
+        await ctx.send(f"{get_emoji('broom')} {message}", delete_after=5, ephemeral=True,
+                       allowed_mentions=ALLOWED_MENTIONS)
         await self.logger().log_event(ctx.guild, category, action, body, target_id=target_id, action_key=action)
 
     @commands.hybrid_command(name="clear", aliases=["purge"], description=CMDS.text("clear.description"),

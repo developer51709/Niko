@@ -99,7 +99,7 @@ requires accepting the current text again.
 | PUT | `/api/v1/guilds/<guild_id>/members/<user_id>/level` | `levels:write` | Replace XP and level for one member |
 | GET | `/api/v1/guilds/<guild_id>/warns` | `warns:read` | Guild warning cases; `?user_id=`, `?page=`, `?page_size=` |
 | GET | `/api/v1/guilds/<guild_id>/members/<user_id>/warns` | `warns:read` | All warning cases for one member |
-| POST | `/api/v1/guilds/<guild_id>/members/<user_id>/warns` | `warns:write` | Create a warning case (`reason`, optional `moderator_id`) |
+| POST | `/api/v1/guilds/<guild_id>/members/<user_id>/warns` | `warns:write` | Create a warning case (`reason`, optional `moderator_id`); the application's own bot is recorded as its source |
 | DELETE | `/api/v1/guilds/<guild_id>/warns/<warn_id>` | `warns:write` | Delete one warning case |
 | DELETE | `/api/v1/guilds/<guild_id>/members/<user_id>/warns` | `warns:write` | Clear all warning cases for one member |
 | GET | `/api/v1/blacklist` | `blacklist:read` | Blacklist records; `?type=users\|guilds\|all` |
@@ -113,7 +113,14 @@ path version with a migration window rather than silently changing `v1`.
 Warn and blacklist endpoints require an app-bound key. For warnings, the bot
 must share the requested guild with Niko, and Niko must also be in the guild.
 The owner can grant `guilds:cross_server` to a trusted application to bypass
-only the shared-guild check. `blacklist:read`, `blacklist:write`, and
+only the shared-guild check.
+
+Every warning payload carries `source_bot_id`. A case created through this API
+stores the application's bot user ID there, and `/warnings` renders it as an
+"Added via @bot" footer linking to `/docs/verified-applications`; a case a
+moderator issued with `/warn` has `null`, because its author is the recorded
+`moderator_id`. The field is present on list, create, and delete responses, so
+a partner can recognise cases it synced. `blacklist:read`, `blacklist:write`, and
 `guilds:cross_server` are restricted scopes and cannot be created on a generic
 key.
 

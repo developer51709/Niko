@@ -130,38 +130,61 @@ def test_unlock_restores_inheritance_instead_of_denying():
 
 def test_the_lock_commands_never_edit_the_channel():
     source = (ROOT / "src" / "cogs" / "moderation" / "_channels.py").read_text(encoding="utf-8")
+    # Both commands share one target-aware path, so the guarantee holds once.
+    path = source.split("async def _set_locked(", 1)[1].split("async def lock(", 1)[0]
     lock_body = source.split("async def lock(", 1)[1].split("async def unlock(", 1)[0]
     unlock_body = source.split("async def unlock(", 1)[1]
 
-    assert ".edit(" not in lock_body
-    assert ".edit(" not in unlock_body
-    assert "set_everyone_send_messages(" in lock_body
-    assert "set_everyone_send_messages(" in unlock_body
+    assert ".edit(" not in path
+    assert "set_everyone_send_messages(" in path
+    assert "set_thread_locked(" in path
+    assert "_set_locked(ctx, True)" in lock_body
+    assert "_set_locked(ctx, False)" in unlock_body
 
 
 def _declared_permissions(command):
-    """Permission names a command declares, read the way the command registry is."""
+    """Permission names a command declares, read the way the command registry is.
+
+    Mirrors the startup writer's walk: checks can nest other checks (check_any),
+    so tuples and callable closures are followed as well as the dicts they end in.
+    """
     declared = set()
-    for check in getattr(command, "checks", ()) or ():
-        for cell in getattr(check, "__closure__", ()) or ():
-            try:
-                value = cell.cell_contents
-            except ValueError:
-                continue
-            if isinstance(value, dict):
-                declared.update(name for name, enabled in value.items() if enabled)
+    pending = list(getattr(command, "checks", ()) or ())
+    visited = set()
+    while pending:
+        value = pending.pop()
+        if id(value) in visited:
+            continue
+        visited.add(id(value))
+        if isinstance(value, dict):
+            declared.update(name for name, enabled in value.items() if enabled)
+            pending.extend(value.values())
+        elif isinstance(value, (tuple, list, set)):
+            pending.extend(value)
+        elif callable(value):
+            for cell in getattr(value, "__closure__", ()) or ():
+                try:
+                    pending.append(cell.cell_contents)
+                except ValueError:
+                    continue
     return declared
 
 
-def test_lock_and_unlock_declare_manage_roles_not_manage_channels():
-    """A rejected review, in code: the requirement has to match the endpoint."""
+def test_lock_and_unlock_declare_the_permissions_they_use_not_manage_channels():
+    """A rejected review, in code: the requirement has to match the endpoints.
+
+    A channel lock writes the @everyone overwrite (Manage Roles); a thread or
+    forum post lock sets the thread's locked flag (Manage Threads). Neither path
+    needs Manage Channels, and the published command registry reports exactly
+    this union to reviewers.
+    """
     from cogs.moderation._channels import ChannelsMixin
 
     for name in ("lock", "unlock"):
         declared = _declared_permissions(getattr(ChannelsMixin, name))
-        assert declared == {"manage_roles"}, (
-            f"{name} declares {sorted(declared) or 'no permissions'}; writing the "
-            "@everyone overwrite only needs Manage Roles, and the published "
+        assert declared == {"manage_roles", "manage_threads"}, (
+            f"{name} declares {sorted(declared) or 'no permissions'}; channels need "
+            "Manage Roles and threads need Manage Threads, and the published "
             "command registry reports this requirement to reviewers"
         )
 

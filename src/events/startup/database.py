@@ -1174,9 +1174,19 @@ async def _create_tables(bot):
             user_id     INTEGER NOT NULL,
             moderator_id INTEGER NOT NULL,
             reason      TEXT NOT NULL DEFAULT '',
-            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            source_bot_id INTEGER
         )
     """)
+    # The bot whose reviewed application wrote a case through the developer API.
+    # NULL means a moderator used /warn. The panel shows the source so a server
+    # running several bots can tell which one recorded an infraction. SQLite
+    # needs the column added to an existing table; MongoDB is schema-less, so
+    # the failed ALTER is expected there and absent fields read as NULL.
+    try:
+        await bot.cxn.execute("ALTER TABLE warns ADD COLUMN source_bot_id INTEGER")
+    except Exception:
+        pass
     await _migrate_warns_data(bot)
 
     # ── Mutes table ────────────────────────────────────────────────────

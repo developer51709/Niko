@@ -64,5 +64,6 @@ export const DOC_SECTIONS: DocSection[] = [
   { id: "voice", label: "Voice", description: "Voice and music features.", icon: "icon_bot", count: DOCS.filter((d) => d.category === "voice").length },
   { id: "ai", label: "AI", description: "AI-powered features.", icon: "icon_ai", count: DOCS.filter((d) => d.category === "ai").length },
   { id: "dashboard", label: "Dashboard", description: "Web dashboard guides.", icon: "icon_settings", count: DOCS.filter((d) => d.category === "dashboard").length },
+  { id: "developers", label: "Developers", description: "Partner bots and the developer API.", icon: "icon_bot", count: DOCS.filter((d) => d.category === "developers").length },
   { id: "tips", label: "Tips", description: "Tips and best practices.", icon: "icon_lightbulb", count: DOCS.filter((d) => d.category === "tips").length },
 ];

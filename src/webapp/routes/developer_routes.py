@@ -355,11 +355,18 @@ def api_v1_create_warn(guild_id, user_id):
     moderator_raw = str(payload.get("moderator_id") or default_moderator).strip()
     if not moderator_raw.isdigit():
         return error_response("INVALID_MODERATOR_ID", "moderator_id must be a numeric Discord ID.", 400, docs="/developers/endpoints/warnings")
+    # The reviewed application behind this key is recorded on the case, so
+    # /warnings can say "Added via @bot" and link to how partner access works.
+    source_bot = str(application.get("bot_user_id") or "").strip()
+    source_bot_id = int(source_bot) if source_bot.isdigit() else None
     utils = _moderation_warn_utils()
     if utils is None:
         return error_response("STORAGE_UNAVAILABLE", "Warning storage is unavailable.", 503, report=True, docs="/developers/endpoints/warnings")
     try:
-        warn = run_on_bot_loop(utils.add_warn(int(guild_id), int(user_id), int(moderator_raw), reason))
+        warn = run_on_bot_loop(utils.add_warn(
+            int(guild_id), int(user_id), int(moderator_raw), reason,
+            source_bot_id=source_bot_id,
+        ))
     except Exception as error_value:
         return error_response(
             "WRITE_FAILED",

@@ -487,12 +487,16 @@ def test_warn_api_uses_shared_guild_rule_and_emits_write_results(application_sto
         "created_at": "2026-11-05T00:00:00+00:00",
     }
 
+    written: dict = {}
+
     class FakeWarns:
         def list_warnings(self, guild_id, *, user_id=None, offset=0, limit=100):
             return [warn], 1
 
-        def add_warn(self, guild_id, user_id, moderator_id, reason):
-            return {**warn, "reason": reason, "moderator_id": str(moderator_id)}
+        def add_warn(self, guild_id, user_id, moderator_id, reason, source_bot_id=None):
+            written["source_bot_id"] = source_bot_id
+            return {**warn, "reason": reason, "moderator_id": str(moderator_id),
+                    "source_bot_id": source_bot_id}
 
         def delete_warning(self, guild_id, warn_id):
             return warn if warn_id == 77 else None
@@ -525,6 +529,9 @@ def test_warn_api_uses_shared_guild_rule_and_emits_write_results(application_sto
     )
     assert created.status_code == 201
     assert created.get_json()["warn"]["reason"] == "Repeated spam"
+    # The case records which reviewed application wrote it, for the footer
+    # /warnings shows on API-added warnings.
+    assert written["source_bot_id"] == 1545846783253545081
 
     deleted = app.test_client().delete("/api/v1/guilds/123456789012345678/warns/77", headers=headers)
     assert deleted.status_code == 200

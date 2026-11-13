@@ -658,16 +658,23 @@ class UnlockButton(discord.ui.Button):
         self.channel_id = channel_id
 
     async def callback(self, interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.manage_channels:
-            return await interaction.response.send_message(_act(interaction, "act_no_perm_unlock"), ephemeral=True)
         guild = interaction.client.get_guild(self.guild_id)
         if not guild:
             return await interaction.response.send_message(_act(interaction, "act_no_guild"), ephemeral=True)
-        channel = guild.get_channel(self.channel_id)
+        channel = guild.get_channel(self.channel_id) or guild.get_thread(self.channel_id)
         if not channel:
             return await interaction.response.send_message(_act(interaction, "act_channel_missing"), ephemeral=True)
+        # A locked thread carries a flag rather than an overwrite, so undoing it
+        # is a different call and a different permission.
+        thread = isinstance(channel, discord.Thread)
+        if not getattr(interaction.user.guild_permissions,
+                       "manage_threads" if thread else "manage_channels", False):
+            return await interaction.response.send_message(_act(interaction, "act_no_perm_unlock"), ephemeral=True)
         try:
-            await channel.set_permissions(guild.default_role, send_messages=None, reason=f"Quick action by {interaction.user}")
+            if thread:
+                await channel.edit(locked=False, reason=f"Quick action by {interaction.user}")
+            else:
+                await channel.set_permissions(guild.default_role, send_messages=None, reason=f"Quick action by {interaction.user}")
             await interaction.response.send_message(
                 _act(interaction, "act_unlocked", channel=channel.mention), ephemeral=True)
         except discord.Forbidden:

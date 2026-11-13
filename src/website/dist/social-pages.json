@@ -568,6 +568,13 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/docs/utility-tags.png"
     },
+    "/docs/verified-applications": {
+      "title": "Verified Applications and Shared Server Data — Niko docs",
+      "description": "How Niko works with other bots: what a verified application may read or write, how access is granted, and how that access is reviewed and policed.",
+      "section": "Documentation",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/docs/verified-applications.png"
+    },
     "/docs/voice-overview": {
       "title": "Voice Features Overview — Niko docs",
       "description": "Learn about Niko's voice and music features.",

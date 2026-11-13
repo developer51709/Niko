@@ -51,6 +51,7 @@
 - [Utility Features Overview](https://niko.sryze.cc/docs/utility-overview.md)
 - [Reminders Guide](https://niko.sryze.cc/docs/utility-reminders.md)
 - [Tags System Guide](https://niko.sryze.cc/docs/utility-tags.md)
+- [Verified Applications and Shared Server Data](https://niko.sryze.cc/docs/verified-applications.md)
 - [Voice Features Overview](https://niko.sryze.cc/docs/voice-overview.md)
 - [Welcome to Niko](https://niko.sryze.cc/docs/welcome.md)
 

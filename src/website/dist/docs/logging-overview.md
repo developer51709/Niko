@@ -105,7 +105,7 @@ Log entries carry buttons for the obvious next step, each gated on the permissio
 |--------|-----------|--------------|
 | **Kick / Ban / Unban** | Moderation, AutoMod, join and captcha entries | Applies the action to the member the entry is about |
 | **Unmute** | Mute and tempmute entries | Removes the member's mute through the moderation system |
-| **Unlock Channel** | Locked-channel entries | Removes the `Send Messages` deny from `@everyone` |
+| **Unlock Channel** | Locked-channel entries | Removes the `Send Messages` deny from `@everyone`, or clears a locked thread's flag |
 | **Disconnect** | Voice join, move and state entries | Moves the member out of the voice channel the entry named |
 | **Server Mute / Server Unmute** | Voice entries | Server-mutes the member; on a **Server Mute** state entry the same button unmutes them instead, so it always names the action it will take |
 | **Restore Role** | **Role Deleted** | Recreates the role with its name, colour, permissions, hoist, mentionable and position. Members who held it are not re-added |

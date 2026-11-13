@@ -5,7 +5,7 @@ import re
 
 import discord
 from discord.ext import commands
-from ._messages import msg, _cv2
+from ._messages import ALLOWED_MENTIONS, msg, _cv2
 
 from utils.command_locales import command_texts
 
@@ -60,9 +60,9 @@ class SettingsMixin:
     async def badwords_add(self, ctx, *, word: str = commands.parameter(default=None, description=CMDS.arg("badwords.add", "word"))):
         utils = self.utils()
         if not word:
-            return await ctx.send(msg(ctx, "no_word"))
+            return await ctx.send(msg(ctx, "no_word"), allowed_mentions=ALLOWED_MENTIONS)
         utils.add_blocked_word(ctx.guild.id, word)
-        await ctx.send(msg(ctx, "badwords_added", word=word))
+        await ctx.send(msg(ctx, "badwords_added", word=word), allowed_mentions=ALLOWED_MENTIONS)
         await utils.log_action(
             ctx.guild, "Blocked Words",
             f"**Action:** Word added\n**Word:** `{word}`", moderator=ctx.author)
@@ -72,9 +72,9 @@ class SettingsMixin:
     async def badwords_remove(self, ctx, *, word: str = commands.parameter(default=None, description=CMDS.arg("badwords.remove", "word"))):
         utils = self.utils()
         if not word:
-            return await ctx.send(msg(ctx, "no_word"))
+            return await ctx.send(msg(ctx, "no_word"), allowed_mentions=ALLOWED_MENTIONS)
         utils.remove_blocked_word(ctx.guild.id, word)
-        await ctx.send(msg(ctx, "badwords_removed", word=word))
+        await ctx.send(msg(ctx, "badwords_removed", word=word), allowed_mentions=ALLOWED_MENTIONS)
         await utils.log_action(
             ctx.guild, "Blocked Words",
             f"**Action:** Word removed\n**Word:** `{word}`", moderator=ctx.author)
@@ -84,7 +84,7 @@ class SettingsMixin:
     async def badwords_clear(self, ctx):
         utils = self.utils()
         utils.clear_blocked_words(ctx.guild.id)
-        await ctx.send(msg(ctx, "badwords_cleared"))
+        await ctx.send(msg(ctx, "badwords_cleared"), allowed_mentions=ALLOWED_MENTIONS)
         await utils.log_action(
             ctx.guild, "Blocked Words",
             "**Action:** Every blocked word cleared", moderator=ctx.author)
@@ -102,7 +102,7 @@ class SettingsMixin:
         role_ids = wl.get("roles", [])
 
         if not user_ids and not role_ids:
-            return await ctx.send(msg(ctx, "wl_empty"))
+            return await ctx.send(msg(ctx, "wl_empty"), allowed_mentions=ALLOWED_MENTIONS)
 
         users_text = "\n".join(
             ctx.guild.get_member(uid).mention if ctx.guild.get_member(uid) else f"<@{uid}>"
@@ -132,10 +132,10 @@ class SettingsMixin:
         utils = self.utils()
         kind = str(target_type or "").strip().lower()
         if kind not in ("user", "role"):
-            return await ctx.send(msg(ctx, "wl_invalid_type"))
+            return await ctx.send(msg(ctx, "wl_invalid_type"), allowed_mentions=ALLOWED_MENTIONS)
         target_id = _target_id(target)
         if target_id is None:
-            return await ctx.send(msg(ctx, "wl_bad_target", kind=kind))
+            return await ctx.send(msg(ctx, "wl_bad_target", kind=kind), allowed_mentions=ALLOWED_MENTIONS)
 
         if kind == "user":
             mention = _mention_text(kind, target_id)
@@ -146,13 +146,13 @@ class SettingsMixin:
                 try:
                     user = await self.bot.fetch_user(target_id)
                 except (discord.NotFound, discord.HTTPException):
-                    return await ctx.send(msg(ctx, "no_user_found"))
+                    return await ctx.send(msg(ctx, "no_user_found"), allowed_mentions=ALLOWED_MENTIONS)
             mention = user.mention
             utils.add_whitelist_user(ctx.guild.id, target_id)
         else:
             role = ctx.guild.get_role(target_id)
             if role is None:
-                return await ctx.send(msg(ctx, "wl_role_missing"))
+                return await ctx.send(msg(ctx, "wl_role_missing"), allowed_mentions=ALLOWED_MENTIONS)
             mention = role.mention
             utils.add_whitelist_role(ctx.guild.id, target_id)
 
@@ -174,10 +174,10 @@ class SettingsMixin:
         utils = self.utils()
         kind = str(target_type or "").strip().lower()
         if kind not in ("user", "role"):
-            return await ctx.send(msg(ctx, "wl_invalid_type"))
+            return await ctx.send(msg(ctx, "wl_invalid_type"), allowed_mentions=ALLOWED_MENTIONS)
         target_id = _target_id(target)
         if target_id is None:
-            return await ctx.send(msg(ctx, "wl_bad_target", kind=kind))
+            return await ctx.send(msg(ctx, "wl_bad_target", kind=kind), allowed_mentions=ALLOWED_MENTIONS)
 
         if kind == "user":
             member = ctx.guild.get_member(target_id)
@@ -186,7 +186,7 @@ class SettingsMixin:
         else:
             role = ctx.guild.get_role(target_id)
             if role is None:
-                return await ctx.send(msg(ctx, "wl_role_missing"))
+                return await ctx.send(msg(ctx, "wl_role_missing"), allowed_mentions=ALLOWED_MENTIONS)
             mention = role.mention
             utils.remove_whitelist_role(ctx.guild.id, target_id)
 

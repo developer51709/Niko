@@ -65,6 +65,12 @@ def _pool():
 
 
 def _warn_row(row) -> dict:
+    # Older documents and rows predate ``source_bot_id``; a missing key means a
+    # moderator issued the warning, not a partner application.
+    try:
+        source_bot_id = row["source_bot_id"]
+    except (KeyError, IndexError, TypeError):
+        source_bot_id = None
     return {
         "id": int(row["id"]),
         "guild_id": str(row["guild_id"]),
@@ -72,6 +78,7 @@ def _warn_row(row) -> dict:
         "moderator_id": str(row["moderator_id"]),
         "reason": str(row["reason"] or ""),
         "created_at": str(row["created_at"] or ""),
+        "source_bot_id": int(source_bot_id) if source_bot_id not in (None, "") else None,
     }
 
 
@@ -500,19 +507,25 @@ class ModerationUtils(commands.Cog):
 
     # ---------- WARN SYSTEM (DATABASE) ----------
 
-    async def add_warn(self, guild_id: int, user_id: int, moderator_id: int, reason: str):
+    async def add_warn(self, guild_id: int, user_id: int, moderator_id: int, reason: str,
+                       source_bot_id: int | None = None):
         """Insert a warning and return its API representation.
 
         The explicit id matters on both backends: SQLite normally allocates it,
         while the MongoDB adapter needs the primary key before it can store a
         document. It also lets the created event carry a stable id that a bot
         can use to reconcile the warning later.
+
+        ``source_bot_id`` is the bot of the reviewed application that wrote the
+        case through the developer API. It is stored, not inferred, so the
+        panel can say where a warning came from long after the request.
         """
         pool = _pool()
         if pool is None:
             return None
         warn_id = secrets.randbits(48) or 1
         created_at = datetime.now(timezone.utc).isoformat()
+        source_bot_id = int(source_bot_id) if source_bot_id else None
         record = {
             "id": warn_id,
             "guild_id": int(guild_id),
@@ -520,19 +533,51 @@ class ModerationUtils(commands.Cog):
             "moderator_id": int(moderator_id),
             "reason": str(reason or ""),
             "created_at": created_at,
+            "source_bot_id": source_bot_id,
         }
         try:
             await pool.execute(
-                "INSERT INTO warns (id, guild_id, user_id, moderator_id, reason, created_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO warns (id, guild_id, user_id, moderator_id, reason, created_at, "
+                "source_bot_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
                 warn_id, int(guild_id), int(user_id), int(moderator_id),
-                str(reason or ""), created_at,
+                str(reason or ""), created_at, source_bot_id,
             )
         except Exception as e:
             from utils import logging
             logging.error("Moderation", f"Failed to add warn for {user_id} in {guild_id}: {e}")
             return None
         _publish_warn_event("warn.created", guild_id, {"warn": record})
+        return record
+
+    async def update_warning(self, guild_id: int, warn_id: int, reason: str):
+        """Replace one case's reason, scoped to its guild.
+
+        Everything else — the case id, the member, the moderator who issued it
+        and when — stays as it was, so an edited warning is still the same case
+        as far as the API and the webhook events are concerned.
+        """
+        pool = _pool()
+        if pool is None:
+            return None
+        reason = str(reason or "").strip()[:1000]
+        try:
+            row = await pool.fetchrow(
+                "SELECT id, guild_id, user_id, moderator_id, reason, created_at, source_bot_id "
+                "FROM warns WHERE id = $1 AND guild_id = $2",
+                int(warn_id), int(guild_id),
+            )
+            if row is None:
+                return None
+            await pool.execute(
+                "UPDATE warns SET reason = $1 WHERE id = $2 AND guild_id = $3",
+                reason, int(warn_id), int(guild_id),
+            )
+        except Exception as e:
+            from utils import logging
+            logging.error("Moderation", f"Failed to update warn {warn_id} in {guild_id}: {e}")
+            return None
+        record = _warn_row(row)
+        record["reason"] = reason
         return record
 
     async def list_warnings(
@@ -557,7 +602,7 @@ class ModerationUtils(commands.Cog):
         try:
             total = int(await pool.fetchval(f"SELECT COUNT(*) FROM warns WHERE {where}", *args) or 0)
             rows = await pool.fetch(
-                "SELECT id, guild_id, user_id, moderator_id, reason, created_at "
+                "SELECT id, guild_id, user_id, moderator_id, reason, created_at, source_bot_id "
                 f"FROM warns WHERE {where} ORDER BY id ASC LIMIT ? OFFSET ?",
                 *args, limit, offset,
             )
@@ -604,20 +649,28 @@ class ModerationUtils(commands.Cog):
                     {"guild_id": guild_id, "user_id": user_id}
                 ):
                     results.append({
+                        "id": doc.get("id"),
                         "mod": doc.get("moderator_id", 0),
                         "reason": doc.get("reason", ""),
                         "time": doc.get("created_at", ""),
+                        "source_bot_id": doc.get("source_bot_id"),
                     })
                 return results
             else:
                 rows = await pool.fetch(
-                    "SELECT moderator_id, reason, created_at FROM warns "
+                    "SELECT id, moderator_id, reason, created_at, source_bot_id FROM warns "
                     "WHERE guild_id = $1 AND user_id = $2 "
                     "ORDER BY id ASC",
                     guild_id, user_id,
                 )
                 return [
-                    {"mod": row["moderator_id"], "reason": row["reason"], "time": row["created_at"]}
+                    {
+                        "id": row["id"],
+                        "mod": row["moderator_id"],
+                        "reason": row["reason"],
+                        "time": row["created_at"],
+                        "source_bot_id": row["source_bot_id"],
+                    }
                     for row in rows
                 ]
         except Exception as e:

@@ -31,6 +31,12 @@ EMOJI = {
     "cross":    get_emoji("cross"),
 }
 
+#: Every moderation reply is sent with this. A warning, kick or ban card quotes
+#: the member or role it is about, and a reply that pings them turns a moderation
+#: action into a notification — or, for @everyone in a whitelist role, a second
+#: incident.
+ALLOWED_MENTIONS = discord.AllowedMentions.none()
+
 MESSAGES = load_locales("cogs.moderation", "messages")
 
 _flat_msg = make_flat_msg(MESSAGES)

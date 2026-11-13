@@ -1570,6 +1570,7 @@ export type DocCategory =
   | "voice"
   | "ai"
   | "dashboard"
+  | "developers"
   | "tips";
 
 // ── Staff broadcast studio ───────────────────────────────────────────────────
