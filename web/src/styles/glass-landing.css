@@ -200,8 +200,7 @@
 .site-content .command-toolbar .search-field input { color: #f4f5f7; }
 
 /* Team cards and member profile; higher specificity intentionally overrides the page-local style block. */
-.site-content .team-card,
-.site-content .team-activity-content .activity-card {
+.site-content .team-card {
   color: #f4f5f7;
   background: rgba(9, 10, 12, .78);
   border: 1px solid rgba(226, 234, 246, .2);
@@ -213,13 +212,11 @@
 .site-content .team-card { overflow: hidden; }
 .site-content .team-card:hover { background: rgba(18, 20, 23, .9); border-color: rgba(213, 220, 229, .26); }
 .site-content .team-card h2,
-.site-content .team-profile-card h1,
-.site-content .team-activity-content .activity-copy span { color: #f4f5f7; }
+.site-content .team-profile-card h1 { color: #f4f5f7; }
 .site-content .team-card p,
 .site-content .team-profile-bio,
 .site-content .team-profile-handle,
-.site-content .team-status,
-.site-content .team-activity-content .presence-line { color: #b4bac3; }
+.site-content .team-status { color: #b4bac3; }
 .site-content .team-role { color: #d5d9df; }
 .site-content .team-profile-links a { color: #d5d9df; background: rgba(255, 255, 255, .07); border-color: rgba(226, 234, 246, .16); }
 /* Staff member profile: the outer shell is the only frame. The banner and the

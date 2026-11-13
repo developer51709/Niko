@@ -408,7 +408,7 @@ export type DiscordCustomStatus = {
   emoji_animated: boolean;
 };
 
-type DiscordProfileActivity = {
+export type DiscordProfileActivity = {
   type: string;
   title: string | null;
   artists: string[];
@@ -529,7 +529,7 @@ function trackClock(seconds: number) {
 }
 
 /** The Spotify card Discord shows at the bottom of a profile popout. */
-function ProfileSpotifyCard({ activity }: { activity: DiscordProfileActivity }) {
+export function ProfileSpotifyCard({ activity, label = "Listening to Spotify" }: { activity: DiscordProfileActivity; label?: string }) {
   const start = activity.start;
   const end = activity.end;
   const hasWindow = typeof start === "number" && typeof end === "number" && end > start;
@@ -543,7 +543,7 @@ function ProfileSpotifyCard({ activity }: { activity: DiscordProfileActivity }) 
   const total = activity.duration_seconds || (hasWindow ? (end as number) - (start as number) : 0);
   const elapsed = hasWindow ? Math.min(Math.max(now - (start as number), 0), total) : 0;
   const card = <div className="discord-profile-spotify">
-    <div className="discord-profile-spotify-head"><span>Listening to Spotify</span><img src="/spotify.svg" alt="" /></div>
+    <div className="discord-profile-spotify-head"><span>{label}</span><img src="/spotify.svg" alt="" /></div>
     <div className="discord-profile-spotify-body">
       <img className="discord-profile-spotify-art" src={activity.album_cover_url} alt="" />
       <div className="discord-profile-spotify-copy">
