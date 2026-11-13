@@ -226,7 +226,7 @@
     "panel_heading": "### {warn} Advertencias de {member}\n**{count}** en total",
     "empty_state": "No hay advertencias registradas.",
     "warning_card": "**Caso #{index}** — {moderator}\n**Razón:** {reason}\n**Emitida:** {time}",
-    "added_via": "{notepad} Añadida mediante {bot}. [Más información]({link})",
+    "added_via": "-# {notepad} Añadida mediante {bot}. [Más información]({link})",
     "footer_page": "-# Página {page} / {total}",
     "timed_out": "-# {question} Este panel **caducó** por inactividad.",
     "button_edit": "Editar",

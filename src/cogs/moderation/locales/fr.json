@@ -226,7 +226,7 @@
     "panel_heading": "### {warn} Avertissements de {member}\n**{count}** au total",
     "empty_state": "Aucun avertissement enregistré.",
     "warning_card": "**Cas #{index}** — {moderator}\n**Raison :** {reason}\n**Émis :** {time}",
-    "added_via": "{notepad} Ajouté via {bot}. [En savoir plus]({link})",
+    "added_via": "-# {notepad} Ajouté via {bot}. [En savoir plus]({link})",
     "footer_page": "-# Page {page} / {total}",
     "timed_out": "-# {question} Ce panneau a **expiré** après une période d'inactivité.",
     "button_edit": "Modifier",

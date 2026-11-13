@@ -455,6 +455,9 @@ def api_guild_resources(guild_id):
         if _discord_bot.loop.is_running():
             try:
                 fetched_channels = run_on_bot_loop(guild.fetch_channels())
+                # Forums and media channels are left out of every picker: a
+                # post there creates a thread, which is wrong for the welcome,
+                # ticket and logging targets these selects feed.
                 channels = [
                     channel for channel in fetched_channels
                     if getattr(getattr(channel, "type", None), "name", "") in {"text", "news"}
@@ -465,13 +468,17 @@ def api_guild_resources(guild_id):
                 ]
             except Exception:
                 pass
+        rules_channel_id = getattr(guild, "rules_channel_id", None)
         def channel_payload(channel):
             # The dashboard draws Discord's own channel icon, so it needs the
-            # channel kind as well as the name.
+            # channel kind as well as the name. Rules and age-restricted
+            # channels have icons of their own rather than a flag in the name.
             return {
                 "id": str(channel.id),
                 "name": str(channel.name),
                 "type": str(getattr(getattr(channel, "type", None), "name", "text")),
+                "nsfw": bool(getattr(channel, "nsfw", False)),
+                "rules": rules_channel_id is not None and channel.id == rules_channel_id,
             }
 
         channels = [channel_payload(channel) for channel in channels]
@@ -517,29 +524,24 @@ def api_guild_resources(guild_id):
                     0: "text",
                     2: "voice",
                     5: "news",
-                    10: "announcement_thread",
-                    11: "public_thread",
-                    12: "private_thread",
                     13: "stage_voice",
-                    15: "forum",
-                    16: "media",
                 }
+                def rest_payload(channel, default_type):
+                    return {
+                        "id": str(channel["id"]),
+                        "name": str(channel.get("name") or ""),
+                        "type": channel_types.get(channel.get("type"), default_type),
+                        "nsfw": bool(channel.get("nsfw")),
+                        "rules": False,
+                    }
                 return jsonify({
                     "channels": [
-                        {
-                            "id": str(channel["id"]),
-                            "name": str(channel.get("name") or ""),
-                            "type": channel_types.get(channel.get("type"), "text"),
-                        }
+                        rest_payload(channel, "text")
                         for channel in channels
-                        if channel.get("id") and channel.get("type") in {0, 5, 10, 11, 12}
+                        if channel.get("id") and channel.get("type") in {0, 5}
                     ],
                     "voice_channels": [
-                        {
-                            "id": str(channel["id"]),
-                            "name": str(channel.get("name") or ""),
-                            "type": channel_types.get(channel.get("type"), "voice"),
-                        }
+                        rest_payload(channel, "voice")
                         for channel in channels
                         if channel.get("id") and channel.get("type") in {2, 13}
                     ],

@@ -226,7 +226,7 @@
     "panel_heading": "### {warn} Verwarnungen für {member}\n**{count}** insgesamt",
     "empty_state": "Keine Verwarnungen vorhanden.",
     "warning_card": "**Fall #{index}** — {moderator}\n**Grund:** {reason}\n**Ausgestellt:** {time}",
-    "added_via": "{notepad} Hinzugefügt über {bot}. [Mehr erfahren]({link})",
+    "added_via": "-# {notepad} Hinzugefügt über {bot}. [Mehr erfahren]({link})",
     "footer_page": "-# Seite {page} / {total}",
     "timed_out": "-# {question} Diese Übersicht ist wegen Inaktivität **abgelaufen**.",
     "button_edit": "Bearbeiten",

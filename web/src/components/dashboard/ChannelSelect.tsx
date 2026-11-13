@@ -2,6 +2,7 @@ import { type CSSProperties } from "react";
 import { Select, type SelectOption } from "./Select";
 import type { GuildResources } from "../../types";
 import { useStrings } from "../../i18n";
+import { channelIconName } from "./channelIcons";
 
 type Channel = GuildResources["channels"][number];
 
@@ -16,26 +17,8 @@ type Props = {
   id?: string;
 };
 
-// Channel types as the bot reports them, mapped onto Discord's own icon set.
-const CHANNEL_ICONS: Record<string, string> = {
-  text: "text-channel",
-  news: "announcement-channel",
-  forum: "forum-channel",
-  media: "media-channel",
-  voice: "voice-channel",
-  stage_voice: "stage-channel",
-  public_thread: "thread",
-  private_thread: "thread",
-  announcement_thread: "thread",
-};
-
-function iconName(channel: Channel | undefined) {
-  if (!channel) return "cross";
-  return CHANNEL_ICONS[channel.type || ""] || "text-channel";
-}
-
 function ChannelGlyph({ channel, empty }: { channel?: Channel; empty?: boolean }) {
-  const style = { "--mask-icon": `url(/assets/discord-icons/from-discord/${iconName(channel)}.svg)` } as CSSProperties;
+  const style = { "--mask-icon": `url(/assets/discord-icons/from-discord/${channelIconName(channel)}.svg)` } as CSSProperties;
   return <span className={`mask-icon channel-select-glyph${empty ? " is-empty" : ""}`} style={style} aria-hidden="true" />;
 }
 

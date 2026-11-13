@@ -1209,8 +1209,8 @@ export type GuildConfig = {
 };
 
 export type GuildResources = {
-  channels: { id: string; name: string; type?: string }[];
-  voice_channels?: { id: string; name: string; type?: string }[];
+  channels: { id: string; name: string; type?: string; nsfw?: boolean; rules?: boolean }[];
+  voice_channels?: { id: string; name: string; type?: string; nsfw?: boolean; rules?: boolean }[];
   roles: { id: string; name: string; color?: string | null; colors?: string[] }[];
 };
 
