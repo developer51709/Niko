@@ -289,23 +289,25 @@ def test_the_mcp_tool_list_includes_commit_deployment():
     assert "commit SHA" in tools["niko_deploy_commit"]["description"]
 
 
+def _commit_diff(path, body, status="modified", sha=None):
+    sha = sha or _github_blob_sha(body)
+    header = f"diff --git a/{path} b/{path}\n"
+    if status == "added":
+        header += "new file mode 100644\n"
+    header += f"index {'0' * 7}..{sha[:12]} 100644\n"
+    return (header + f"--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@\n-old\n+new\n").encode()
+
+
 def test_commit_deploy_fetches_files_instead_of_carrying_them_in_json(monkeypatch, tmp_path):
     body = b"<h1>from a commit</h1>\n"
     commit_sha = "a" * 40
-    commit_payload = {
-        "commit": {"message": "Update the landing page\n\nBody text"},
-        "files": [{
-            "filename": "src/website/dist/index.html",
-            "status": "modified",
-            "sha": _github_blob_sha(body),
-        }],
-    }
+    diff = _commit_diff("src/website/dist/index.html", body)
     calls = []
 
     def fake_github_get(url, *, headers=None):
         calls.append(url)
-        if "/commits/" in url:
-            return _GitHubResponse(payload=commit_payload)
+        if url.endswith(".diff"):
+            return _GitHubResponse(content=diff)
         return _GitHubResponse(content=body)
 
     (tmp_path / "src" / "website" / "dist").mkdir(parents=True)
@@ -317,27 +319,19 @@ def test_commit_deploy_fetches_files_instead_of_carrying_them_in_json(monkeypatc
 
     assert result["ok"] is True
     assert result["commit"] == commit_sha
-    assert result["commit_message"] == "Update the landing page"
     assert result["areas"]["website"]["written"] == 1
     assert (tmp_path / "src" / "website" / "dist" / "index.html").read_bytes() == body
-    assert any("/commits/" in url for url in calls)
+    assert any(url.endswith(".diff") for url in calls)
     assert any("raw.githubusercontent.com" in url for url in calls)
 
 
 def test_commit_deploy_checks_the_blob_hash(monkeypatch, tmp_path):
     body = b"print('tampered')\n"
-    commit_payload = {
-        "commit": {"message": "Update a file"},
-        "files": [{
-            "filename": "src/website/dist/index.html",
-            "status": "modified",
-            "sha": "0" * 40,
-        }],
-    }
+    diff = _commit_diff("src/website/dist/index.html", body, sha="0" * 40)
 
     def fake_github_get(url, *, headers=None):
-        if "/commits/" in url:
-            return _GitHubResponse(payload=commit_payload)
+        if url.endswith(".diff"):
+            return _GitHubResponse(content=diff)
         return _GitHubResponse(content=body)
 
     (tmp_path / "src" / "website" / "dist").mkdir(parents=True)

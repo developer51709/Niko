@@ -393,7 +393,7 @@ def apply_payloads(files, bot=None, actor: str = "MCP") -> dict:
 # each Git blob hash, and feeds the same updater the same file entries. No file
 # content crosses the MCP transport.
 
-GITHUB_API = "https://api.github.com"
+GITHUB_WEB = "https://github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
 DEFAULT_REPOSITORY = "developer51709/Niko"
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -409,10 +409,9 @@ def _github_repository() -> str:
     return value
 
 
-def _github_headers() -> dict:
+def _github_headers(accept: str = "text/plain") -> dict:
     headers = {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
+        "Accept": accept,
         "User-Agent": "Niko-MCP",
     }
     token = (os.environ.get("GITHUB_TOKEN") or "").strip()
@@ -426,14 +425,89 @@ def _github_get(url: str, *, headers: dict | None = None):
     return requests.get(url, headers=headers, timeout=20)
 
 
-def _github_commit(ref: str) -> tuple[str, dict, list[dict]]:
-    """Resolve a full commit SHA and the files it changed."""
+def _diff_path(value: str) -> str:
+    """A path from a diff header, without Git's a/ or b/ prefix."""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        value = value[1:-1]
+    if value.startswith(("a/", "b/")):
+        value = value[2:]
+    return value.replace("\\", "/")
+
+
+def _parse_commit_diff(text: str) -> list[dict]:
+    """Turn GitHub's unified diff into the file list the updater consumes."""
+    files: list[dict] = []
+    current: dict | None = None
+
+    def finish() -> None:
+        nonlocal current
+        if current is None:
+            return
+        status = current["status"]
+        path = current["new"] if status != "removed" else current["old"]
+        if path:
+            item = {"filename": path, "status": status}
+            if status == "renamed" and current["old"]:
+                item["previous_filename"] = current["old"]
+            if current["sha"]:
+                item["sha"] = current["sha"]
+            files.append(item)
+        current = None
+
+    for line in text.splitlines():
+        if line.startswith("diff --git "):
+            finish()
+            rest = line[len("diff --git "):]
+            old = new = ""
+            if " b/" in rest:
+                old_part, new_part = rest.rsplit(" b/", 1)
+                old = _diff_path(old_part)
+                new = _diff_path("b/" + new_part)
+            current = {"old": old, "new": new, "status": "modified", "sha": None}
+            continue
+        if current is None:
+            continue
+        if line.startswith("new file mode"):
+            current["status"] = "added"
+        elif line.startswith("deleted file mode"):
+            current["status"] = "removed"
+        elif line.startswith("rename from "):
+            current["old"] = _diff_path(line[len("rename from "):])
+            current["status"] = "renamed"
+        elif line.startswith("rename to "):
+            current["new"] = _diff_path(line[len("rename to "):])
+            current["status"] = "renamed"
+        elif line.startswith("index "):
+            parts = line.split()
+            if len(parts) > 1 and ".." in parts[1]:
+                current["sha"] = parts[1].rsplit("..", 1)[1].strip() or None
+        elif line.startswith("--- "):
+            value = line[4:].strip()
+            if value and value != "/dev/null":
+                current["old"] = _diff_path(value)
+        elif line.startswith("+++ "):
+            value = line[4:].strip()
+            if value and value != "/dev/null":
+                current["new"] = _diff_path(value)
+    finish()
+    return files
+
+
+def _github_commit(ref: str) -> tuple[str, list[dict]]:
+    """Resolve a full commit SHA and the files it changed from GitHub's diff.
+
+    The public `.diff` endpoint is used instead of the REST API: unauthenticated
+    API lookups are limited to 60 per hour per IP, which a shared production
+    host exhausts quickly. The diff names every changed file; the bytes are then
+    fetched from raw.githubusercontent.com at the same immutable commit.
+    """
     ref = str(ref or "").strip().lower()
     if not _COMMIT_RE.fullmatch(ref):
         raise ValueError("ref must be a full 40-character lowercase commit SHA.")
     repo = _github_repository()
     response = _github_get(
-        f"{GITHUB_API}/repos/{repo}/commits/{ref}",
+        f"{GITHUB_WEB}/{repo}/commit/{ref}.diff",
         headers=_github_headers(),
     )
     if response.status_code == 404:
@@ -445,15 +519,14 @@ def _github_commit(ref: str) -> tuple[str, dict, list[dict]]:
         )
     if response.status_code != 200:
         raise RuntimeError(f"GitHub returned HTTP {response.status_code} for the commit lookup.")
-    payload = response.json()
-    files = payload.get("files") if isinstance(payload, dict) else None
-    if not isinstance(files, list) or not files:
+    files = _parse_commit_diff(response.content.decode("utf-8", errors="replace"))
+    if not files:
         raise ValueError("That commit has no changed files to deploy.")
     if len(files) >= _MAX_COMMIT_FILES:
         raise ValueError(
             "That commit changes too many files for one update; split it into smaller commits."
         )
-    return repo, payload, files
+    return repo, files
 
 
 def _git_blob_sha(body: bytes) -> str:
@@ -463,17 +536,17 @@ def _git_blob_sha(body: bytes) -> str:
 
 
 def _github_file_body(repo: str, ref: str, path: str, expected_sha: str | None) -> bytes:
-    """Fetch one file at the commit and check it against GitHub's blob SHA."""
+    """Fetch one file at the commit and check it against the diff's blob id."""
     response = _github_get(
         f"{GITHUB_RAW}/{repo}/{ref}/{quote(path, safe='/')}",
-        headers=_github_headers(),
+        headers=_github_headers("*/*"),
     )
     if response.status_code != 200:
         raise RuntimeError(f"GitHub returned HTTP {response.status_code} for {path}.")
     body = response.content
     if len(body) > MAX_FILE_BYTES:
         raise ValueError(f"{path} is larger than the 8 MiB file limit.")
-    if expected_sha and _git_blob_sha(body) != str(expected_sha).lower():
+    if expected_sha and not _git_blob_sha(body).startswith(str(expected_sha).lower()):
         raise RuntimeError(f"The fetched contents of {path} do not match its commit blob SHA.")
     return body
 
@@ -492,7 +565,7 @@ def apply_commit(
     ``paths`` limits the commit to a subset when an update should not apply
     every file in it.
     """
-    repo, payload, files = _github_commit(ref)
+    repo, files = _github_commit(ref)
     ref = str(ref).strip().lower()
 
     selected = None
@@ -567,13 +640,10 @@ def apply_commit(
         raise ValueError(f"At most {MAX_FILES} files may be pushed at once.")
 
     result = apply_payloads(list(entries.values()), bot=bot, actor=actor)
-    commit_info = payload.get("commit") if isinstance(payload.get("commit"), dict) else {}
-    message_lines = str(commit_info.get("message") or "").splitlines()
     return {
         **result,
         "repository": repo,
         "commit": ref,
-        "commit_message": message_lines[0] if message_lines else "",
         "skipped": skipped[:100],
         "skipped_count": len(skipped),
     }
