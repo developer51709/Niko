@@ -9,7 +9,7 @@ import time
 from cogs.staff.records import STAFF_ROLES
 from config.ids import OWNER_IDS, is_owner_id
 from flask import session
-from utils.member_badges import discord_badge_keys
+from utils.member_badges import STAFF_BADGE_ROLES, discord_badge_keys
 from utils.presence import is_mobile_presence
 from . import database, runtime
 
@@ -19,6 +19,13 @@ _staff_user_identity_cache: dict[str, tuple[float, dict[str, str | None]]] = {}
 _STAFF_USER_IDENTITY_CACHE_TTL = 600
 
 STAFF_PRIORITY = {"owner": 100, "head_admin": 90, "graphic_designer": 80, "head_support": 70, "moderator": 60, "support": 50}
+
+_STAFF_ROLE_BADGES = dict(STAFF_BADGE_ROLES)
+
+
+def _staff_role_badge(role: str) -> str:
+    """The Niko badge for a roster role, or the umbrella badge as a fallback."""
+    return _STAFF_ROLE_BADGES.get(str(role or ""), "niko_staff")
 
 
 def _presence_members(user_id: str, bot=None) -> list:
@@ -275,9 +282,9 @@ def _staff_identity(user_id: str) -> dict:
         # Drawn around the avatar by the Team pages, the same way Discord shows
         # a Nitro avatar decoration on a profile.
         "avatar_decoration_url": decoration_url or (cached_identity or {}).get("avatar_decoration_url"),
-        # Discord's badges first, then the umbrella Niko Staff badge every
-        # public team profile carries.
-        "badges": [*badges, "niko_staff"],
+        # Discord's badges only. The Niko role badge comes from the roster row,
+        # because a user object does not carry their staff role.
+        "badges": badges,
         "status": status,
         "status_label": {"online": "Online", "idle": "Idle", "dnd": "Do Not Disturb", "offline": "Offline"}.get(status, status.title()),
         # True when the phone is the client holding the presence, so every
@@ -376,6 +383,9 @@ def _staff_row(row) -> dict:
         "handle": _staff_handle(str(row.get("user_id")), identity.get("username"), identity.get("name")),
         "role": role,
         "role_label": "Owner" if role == "owner" else _staff_role_label(role),
+        # Each profile owns its role badge; the generic Niko Staff badge is only
+        # a fallback for a role the badge catalogue does not know yet.
+        "badges": [*(identity.get("badges") or []), _staff_role_badge(role)],
         "bio": row.get("public_bio"),
         # Names and avatars always come from Discord; profile presentation is
         # staff-customizable on the website.
