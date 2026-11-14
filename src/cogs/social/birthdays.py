@@ -184,6 +184,7 @@ class Birthdays(commands.Cog):
         description=CMDS.text("birthday.today.description"),
         help=CMDS.help("birthday.today"),
     )
+    @commands.guild_only()
     async def birthday_today(self, ctx: commands.Context):
         today = datetime.now(timezone.utc).strftime("%m-%d")
         all_birthdays = await self._db_get_all_birthdays()
@@ -203,6 +204,7 @@ class Birthdays(commands.Cog):
         description=CMDS.text("birthday.upcoming.description"),
         help=CMDS.help("birthday.upcoming"),
     )
+    @commands.guild_only()
     async def birthday_upcoming(self, ctx: commands.Context):
         today = datetime.now(timezone.utc).date()
         all_birthdays = await self._db_get_all_birthdays()
@@ -241,6 +243,7 @@ class Birthdays(commands.Cog):
         description=CMDS.text("birthday.channel.description"),
         help=CMDS.help("birthday.channel"),
     )
+    @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def birthday_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         await self._db_set_guild_config(ctx.guild.id, channel_id=channel.id)
@@ -251,6 +254,7 @@ class Birthdays(commands.Cog):
         description=CMDS.text("birthday.role.description"),
         help=CMDS.help("birthday.role"),
     )
+    @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     async def birthday_role(self, ctx: commands.Context, role: discord.Role):
         await self._db_set_guild_config(ctx.guild.id, role_id=role.id)
@@ -261,6 +265,7 @@ class Birthdays(commands.Cog):
         description=CMDS.text("birthday.config.description"),
         help=CMDS.help("birthday.config"),
     )
+    @commands.guild_only()
     async def birthday_config(self, ctx: commands.Context):
         gcfg = await self._db_get_guild_config(ctx.guild.id)
         ch = ctx.guild.get_channel(gcfg.get("channel_id", 0)) if gcfg.get("channel_id") else None
