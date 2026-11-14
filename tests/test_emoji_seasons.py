@@ -33,13 +33,17 @@ def test_season_windows_are_inclusive_and_short():
     assert active_season(date(2027, 7, 4)) is None
 
 
-def test_only_the_celebration_emojis_get_a_variant():
+def test_general_purpose_emojis_get_a_variant_but_state_icons_do_not():
     assert seasonal_variant("heart", date(2026, 12, 24)) == "heart_christmas"
     assert seasonal_variant("gift", date(2026, 10, 31)) == "gift_halloween"
     assert seasonal_variant("trophy", date(2027, 2, 14)) == "trophy_valentine"
+    assert seasonal_variant("arrow_left", date(2026, 12, 24)) == "arrow_left_christmas"
+    assert seasonal_variant("bot", date(2027, 2, 14)) == "bot_valentine"
     for name in SEASONAL_BASES:
         assert seasonal_variant(name, date(2026, 7, 4)) is None
+    # State colours and per-event log marks keep one meaning all year.
     assert seasonal_variant("tick", date(2026, 12, 24)) is None
+    assert seasonal_variant("log_kick", date(2026, 12, 24)) is None
 
 
 def test_get_emoji_switches_to_the_active_variant(monkeypatch):
@@ -54,3 +58,5 @@ def test_get_emoji_switches_to_the_active_variant(monkeypatch):
     assert get_emoji("tick") == "<:tick:1564762582282280990>"
     # Callers can still ask for a specific variant explicitly.
     assert get_emoji("heart_halloween") == "<:heart_halloween:9100011>"
+    assert get_emoji("arrow_left_christmas") == "<:arrow_left_christmas:9100047>"
+    assert get_emoji("bot_valentine") == "<:bot_valentine:9100184>"

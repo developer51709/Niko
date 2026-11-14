@@ -14,10 +14,14 @@ from __future__ import annotations
 
 from datetime import date
 
-#: Base emoji name -> the icon used for its seasonal variants. Keep this in
-#: step with SEASONAL_EMOJIS in scripts/build-emoji-icons.mjs.
+#: General-purpose emojis with seasonal variants. State indicators (ticks,
+#: crosses, warnings, locks, plus/minus, thumbs and verification), machine
+#: stats and per-event log marks are kept static so their colour still means
+#: the same thing all year. Keep this in step with SEASONAL_EMOJIS in
+#: scripts/build-emoji-icons.mjs.
 SEASONAL_BASES = frozenset(
     {
+        # Celebration and rewards.
         "heart",
         "gift",
         "star",
@@ -28,6 +32,63 @@ SEASONAL_BASES = frozenset(
         "trophy",
         "economy",
         "games",
+        # Navigation and structure.
+        "home",
+        "general",
+        "categories",
+        "settings",
+        "docs",
+        "website",
+        "notepad",
+        "scroll",
+        "stats",
+        "support",
+        "arrow_left",
+        "arrow_right",
+        # People and identity.
+        "user",
+        "join",
+        "leave",
+        "invite",
+        "participants",
+        "ai",
+        "bot",
+        "bug",
+        "sad",
+        # Content and utility.
+        "message",
+        "image",
+        "link",
+        "megaphone",
+        "lightbulb",
+        "edit",
+        "trash",
+        "broom",
+        "moderation",
+        "automod",
+        "utility",
+        # Media controls.
+        "play",
+        "pause",
+        "stop",
+        "skip",
+        "rewind",
+        "shuffle",
+        "loop",
+        "queue",
+        "volume_down",
+        "volume_up",
+        "autoplay",
+        "refresh",
+        "music",
+        "voicemaster",
+        "disconnect",
+        # Progression and activities.
+        "leveling",
+        "gambling",
+        "paint",
+        "reminder",
+        "duration",
     }
 )
 

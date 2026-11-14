@@ -3,7 +3,7 @@
  *
  *   - withicons (outline) for the generic set
  *   - withicons-christmas / withicons-halloween / withicons-valentine for the
- *     seasonal variants of the celebration emojis
+ *     seasonal variants of the general-purpose emojis
  *
  * Artwork is written to the seasonal asset tree:
  *
@@ -238,6 +238,7 @@ const LOG_EMOJIS = [
  * that season is active. The unsuffixed file in default/ is the fallback.
  */
 const SEASONAL_EMOJIS = [
+  // Celebration and rewards.
   ["heart", "heart"],
   ["gift", "gift"],
   ["star", "star"],
@@ -248,6 +249,68 @@ const SEASONAL_EMOJIS = [
   ["trophy", "trophy"],
   ["economy", "coins"],
   ["games", "gamepad"],
+
+  // Navigation and structure.
+  ["home", "home"],
+  ["general", "layout-grid"],
+  ["categories", "folder-tree"],
+  ["settings", "settings"],
+  ["docs", "book-open"],
+  ["website", "globe"],
+  ["notepad", "notebook-pen"],
+  ["scroll", "scroll-text"],
+  ["stats", "chart-bar"],
+  ["support", "life-buoy"],
+  ["arrow_left", "arrow-left"],
+  ["arrow_right", "arrow-right"],
+
+  // People and identity.
+  ["user", "user"],
+  ["join", "user-plus"],
+  ["leave", "user-minus"],
+  ["invite", "mail"],
+  ["participants", "users"],
+  ["ai", "sparkles"],
+  ["bot", "bot"],
+  ["bug", "bug"],
+  ["sad", "frown"],
+
+  // Content and utility.
+  ["message", "message-square"],
+  ["image", "image"],
+  ["link", "link"],
+  ["megaphone", "megaphone"],
+  ["lightbulb", "lightbulb"],
+  ["edit", "pencil"],
+  ["trash", "trash-2"],
+  ["broom", "broom"],
+  ["moderation", "shield"],
+  ["automod", "radar"],
+  ["utility", "wrench"],
+
+  // Media controls.
+  ["play", "play"],
+  ["pause", "pause"],
+  ["stop", "square"],
+  ["skip", "skip-forward"],
+  ["rewind", "rewind"],
+  ["shuffle", "shuffle"],
+  ["loop", "repeat"],
+  ["queue", "list-music"],
+  ["volume_down", "volume-1"],
+  ["volume_up", "volume"],
+  ["autoplay", "radio"],
+  ["refresh", "refresh"],
+  ["music", "music-2"],
+  ["voicemaster", "mic-vocal"],
+  ["disconnect", "plug-zap"],
+
+  // Progression and activities.
+  ["leveling", "trending-up"],
+  ["gambling", "dices"],
+  ["paint", "palette"],
+  ["reminder", "alarm-clock"],
+  ["duration", "timer"],
 ];
 
 const SEASONAL_SETS = {
@@ -392,7 +455,15 @@ function renderPng(svg) {
 /** Every name the config knows, so the emoji list can never drift from the bot. */
 async function configuredNames() {
   const source = await readFile(EMOJI_CONFIG, "utf-8");
-  return new Set([...source.matchAll(/emoji_name == "([A-Za-z0-9_]+)"/g)].map((match) => match[1]));
+  const names = new Set(
+    [...source.matchAll(/emoji_name == "([A-Za-z0-9_]+)"/g)].map((match) => match[1]),
+  );
+  // Seasonal variants live in one literal table rather than an if-chain, so
+  // read those keys too.
+  for (const match of source.matchAll(/^    "([A-Za-z0-9_]+)": "<:[A-Za-z0-9_]+:\d+>",$/gm)) {
+    names.add(match[1]);
+  }
+  return names;
 }
 
 const names = new Set();
