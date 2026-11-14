@@ -29,7 +29,7 @@ from discord.ext import commands, tasks
 from discord.ui import Modal, TextInput
 
 from config.emojis import get_emoji
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 from utils.command_locales import command_texts
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales

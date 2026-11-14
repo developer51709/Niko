@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 
 import requests
 
-from utils.discord_proxy import DiscordProxyManager, SERVICE, proxy_worker_token, verification_proof
-from utils.proxy_worker_registry import (
+from utils.proxies.discord import DiscordProxyManager, SERVICE, proxy_worker_token, verification_proof
+from utils.proxies.workers import (
     add_proxy_worker,
     init_proxy_worker_registry,
     list_proxy_workers,

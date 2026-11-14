@@ -6,9 +6,9 @@ from discord.ext import commands
 from config import links
 from config.emojis import get_emoji
 from cogs.staff.base import CMDS, StaffCommands, _resolve_prefix
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 from utils.paginator import PaginatedView, paginate
-from utils.premium_manager import PremiumManager
+from utils.premium import PremiumManager
 
 
 class ModerationCommands:

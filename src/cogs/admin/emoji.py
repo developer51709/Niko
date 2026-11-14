@@ -14,7 +14,7 @@ import asyncio
 from typing import Optional
 from config.emojis import get_emoji
 from utils import logging as log
-from utils.archive_safety import scan_zip
+from utils.safety.archive_safety import scan_zip
 from utils.i18n import make_flat_msg
 from utils.prefix_manager import resolve_prefix
 from utils.locales import load_locales

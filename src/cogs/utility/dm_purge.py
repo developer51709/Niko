@@ -19,7 +19,7 @@ import discord
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.ratelimit import dm_purge_limiter
+from utils.moderation.ratelimit import dm_purge_limiter
 
 from utils.command_locales import command_texts
 from utils.i18n import make_flat_msg

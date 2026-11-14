@@ -8,7 +8,7 @@ import asyncio
 
 from config.emojis import get_emoji
 from utils.paginator import PaginatedView, paginate
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 from utils.guild_lockdown import paused_message
 from utils.i18n import get_lang
 from utils.locales import load_locales

@@ -16,7 +16,7 @@ from cogs.moderation._members import (
 )
 from cogs.moderation.commands import Moderation
 from utils.locales import missing_translations
-from utils.ratelimit import mass_role_limiter
+from utils.moderation.ratelimit import mass_role_limiter
 
 
 # The labels themselves live in locales/massrole so they follow the guild's

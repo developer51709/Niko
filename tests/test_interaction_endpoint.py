@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import discord
 from discord.webhook.async_ import AsyncWebhookAdapter, interaction_message_response_params
 
-from utils import interaction_endpoint
+from utils.runtime import interaction_endpoint
 from webapp.routes import interaction_routes
 
 ENDPOINT = "/api/discord/interactions"

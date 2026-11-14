@@ -2,7 +2,7 @@
 Premium server subscriptions.
 
 A subscription belongs to a guild, renews monthly, and currently unlocks one
-perk: AI powered image moderation (see ``utils.nsfw_api``). Payments are stored
+perk: AI powered image moderation (see ``utils.safety.nsfw_api``). Payments are stored
 separately from the subscription so the owner billing tab keeps a full history
 even after a subscription expires or is gifted.
 
@@ -431,3 +431,48 @@ async def billing_totals(pool) -> dict:
     rows = await pool.fetch("SELECT amount_cents FROM premium_payments WHERE paid_at IS NOT NULL")
     total = sum(int(row.get("amount_cents", 0) or 0) for row in rows)
     return {"paid_count": len(rows), "paid_cents": total}
+
+
+# ── Bot-wide premium grants ─────────────────────────────────────────────────
+
+class PremiumManager:
+    """Read and update legacy bot-wide premium grants in the primary database."""
+
+    @classmethod
+    async def is_premium(cls, pool, user_id: int) -> bool:
+        """Return whether *user_id* has been granted premium."""
+        pool = _require_pool(pool)
+        return await pool.fetchval(
+            "SELECT user_id FROM premium_users WHERE user_id = $1", int(user_id)
+        ) is not None
+
+    @classmethod
+    async def add(cls, pool, user_id: int) -> bool:
+        """Grant premium; return False when the user already has it."""
+        pool = _require_pool(pool)
+        user_id = int(user_id)
+        if await cls.is_premium(pool, user_id):
+            return False
+        await pool.execute(
+            "INSERT OR IGNORE INTO premium_users (user_id) VALUES ($1)", user_id
+        )
+        return True
+
+    @classmethod
+    async def remove(cls, pool, user_id: int) -> bool:
+        """Revoke premium; return False when the user had no grant."""
+        pool = _require_pool(pool)
+        user_id = int(user_id)
+        if not await cls.is_premium(pool, user_id):
+            return False
+        await pool.execute(
+            "DELETE FROM premium_users WHERE user_id = $1", user_id
+        )
+        return True
+
+    @classmethod
+    async def list_users(cls, pool) -> list[int]:
+        """Return all premium user IDs."""
+        pool = _require_pool(pool)
+        rows = await pool.fetch("SELECT user_id FROM premium_users ORDER BY user_id")
+        return [int(row["user_id"]) for row in rows]

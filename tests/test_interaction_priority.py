@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from discord.http import Route
 
-from utils.interaction_priority import (
+from utils.runtime.interaction_priority import (
     install_interaction_priority,
     is_interaction_route,
 )

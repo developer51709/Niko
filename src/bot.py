@@ -12,21 +12,21 @@ import discord
 from discord.ext import commands
 
 from utils.prefix_manager import dynamic_prefix
-from utils.blacklist import check_interaction_blacklist
-from utils.abuse_detection import record_request, strike_notice
-from utils.gateway import patch_identify
-from utils.interaction_endpoint import install_interaction_endpoint
-from utils.interaction_priority import install_interaction_priority
-from utils.proxy_manager import (
+from utils.moderation.notices import check_interaction_blacklist
+from utils.moderation.abuse import record_request, strike_notice
+from utils.runtime.gateway import patch_identify
+from utils.runtime.interaction_endpoint import install_interaction_endpoint
+from utils.runtime.interaction_priority import install_interaction_priority
+from utils.proxies.manager import (
     WebshareProxyManager,
     login_block_reason,
     login_with_failover,
 )
-from utils.discord_proxy import DiscordProxyManager
+from utils.proxies.discord import DiscordProxyManager
 from utils import analytics, logging
 from utils.i18n import get_lang
 from utils.maintenance import check_interaction as check_maintenance_interaction
-from utils import handoff
+from utils.runtime import handoff
 from events.on_ready import handle_ready
 from events.on_message import handle_message
 import database

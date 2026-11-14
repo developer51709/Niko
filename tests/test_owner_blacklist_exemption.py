@@ -22,8 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import database
 from config.ids import OWNER_IDS, is_owner_id
-from utils import abuse_detection
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation import abuse as abuse_detection
+from utils.moderation.manager import BlacklistManager
 
 OWNER = next(iter(OWNER_IDS))
 OTHER = 424242424242424242

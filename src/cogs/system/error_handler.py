@@ -15,7 +15,7 @@ from config.ids import OWNER_IDS
 from config.links import WEBSITE
 from utils import logging
 from utils.ai.debugging import send_debug_report
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
 
@@ -94,7 +94,7 @@ def under_development(feature = None):
 def is_premium():
     """Check whether the invoking user has been granted premium by an owner."""
     async def predicate(ctx):
-        from utils.premium_manager import PremiumManager
+        from utils.premium import PremiumManager
         if await PremiumManager.is_premium(ctx.bot.cxn, ctx.author.id):
             return True
         view = discord.ui.LayoutView()
@@ -259,7 +259,7 @@ class ErrorHandler(commands.Cog):
         error = getattr(error, "original", error)
 
         # ── Automated anti-abuse strike ────────────────────────────────────
-        from utils.abuse_detection import AbuseRateLimit, strike_notice
+        from utils.moderation.abuse import AbuseRateLimit, strike_notice
         if isinstance(error, AbuseRateLimit):
             await ctx.send(strike_notice(error.result))
             return

@@ -2,7 +2,7 @@
 
 > **Status:** Implemented behind `NIKO_SUPERVISED=1`. The default direct
 > `python src/bot.py` path is unchanged, including the existing in-place
-> `utils.handoff` fallback.
+> `utils.runtime.handoff` fallback.
 >
 > A managed preview with a real Discord token is now running the supervisor as
 > its entry point. It has been exercised for real gateway boot, MongoDB

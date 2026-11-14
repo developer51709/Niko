@@ -14,7 +14,7 @@ from utils.image.economy_card import fetch_avatar_bytes
 from utils.loading_cards import loading_card_url
 
 from utils.command_locales import command_texts
-from utils.ratelimit import mass_role_limiter
+from utils.moderation.ratelimit import mass_role_limiter
 
 CMDS = command_texts(__package__)
 

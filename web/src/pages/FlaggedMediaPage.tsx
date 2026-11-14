@@ -4,7 +4,7 @@ import { PublicHeader } from "../components/PublicHeader";
 import { useStrings } from "../i18n";
 
 // The one place the flag slugs are named on this side of the project. They match
-// `utils/flagged_media.py`, the placeholder files under /assets/placeholders/
+// `utils/safety/flagged_media.py`, the placeholder files under /assets/placeholders/
 // and the `?type=` on the links the bot posts in a deleted-message log.
 const FLAG_TYPES = ["explicit", "gore", "self-harm"] as const;
 type FlagType = (typeof FLAG_TYPES)[number];

@@ -14,9 +14,10 @@ import discord
 from discord.ext import commands
 from discord.ui.media_gallery import MediaGalleryItem
 
-from utils import flagged_media, logging
+from utils import logging
+from utils.safety import flagged_media
 from config import links
-from utils.ratelimit import log_channel_limiter
+from utils.moderation.ratelimit import log_channel_limiter
 from config.emojis import get_emoji
 from .revert import RestoreChannelButton, RestoreRoleButton, RevertChannelButton
 from utils.i18n import get_lang

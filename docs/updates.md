@@ -167,7 +167,7 @@ restarts — the old process keeps serving with its own code. The run is also
 refused when this process owns no listening socket, since there would be nothing
 for the site to come back on.
 
-The restart code itself lives in `src/utils/handoff.py`, which ships with the
+The restart code itself lives in `src/utils/runtime/handoff.py`, which ships with the
 Utilities area, so it is re-imported from disk before the bot core is applied:
 a process that has been up since before the in-place restart still holds the
 previous successor handoff in memory, and restarting with that would hand the
@@ -221,7 +221,7 @@ What the recovery path guarantees — and what it does not:
 
 - A **new page** still needs a deploy: the feed can add strings and languages,
   not routes or components.
-- Python modules the bot core imported at startup (`utils.gateway`, `utils.analytics`,
+- Python modules the bot core imported at startup (`utils.runtime.gateway`, `utils.analytics`,
   …) keep their loaded copy until a bot-core restart, even if a utilities update
   rewrote the file. The page reports what it reloaded. Gateway event modules are
   the exception: their handlers are rebound, so a change to `src/events/on_message.py`

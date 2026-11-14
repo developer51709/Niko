@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import utils.premium as premium  # noqa: E402
-from utils import nsfw_api  # noqa: E402
+from utils.safety import nsfw_api  # noqa: E402
 
 
 # ── A synchronous SQLite pool that speaks the bot's `$1` placeholders ────────

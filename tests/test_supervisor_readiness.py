@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import supervisor_readiness
-from utils import interaction_endpoint
+from utils.runtime import interaction_endpoint
 
 
 class Pool:

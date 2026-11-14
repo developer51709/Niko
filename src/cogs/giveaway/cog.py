@@ -1,6 +1,6 @@
 from .views import *
 from utils import logging
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 from utils.prefix_manager import get_prefixes
 from utils.command_locales import command_texts
 

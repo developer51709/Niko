@@ -167,7 +167,7 @@ def _handle_blacklist_appeal(guild_id=None):
 
         result = run_on_bot_loop(create_appeal())
         if result not in {"blocked", "no_active_blacklist"}:
-            from utils.blacklist_manager import BlacklistManager
+            from utils.moderation.manager import BlacklistManager
             run_on_bot_loop(BlacklistManager().reload())
         if result == "blocked":
             return jsonify({"error": "A pending appeal is already under review, or a previous appeal was denied. No further appeal can be submitted."}), 409
@@ -257,7 +257,7 @@ def api_review_blacklist_appeal(appeal_id):
         if not run_on_bot_loop(review()):
             return jsonify({"error": "This appeal is no longer pending."}), 409
         if status == "approved":
-            from utils.blacklist_manager import BlacklistManager
+            from utils.moderation.manager import BlacklistManager
             manager = BlacklistManager()
             run_on_bot_loop(manager.reload())
             guild_id = decided_guild.get("id")

@@ -12,7 +12,7 @@ import time
 
 from config.emojis import get_emoji
 from utils.cooldown import cooldown_ready_at, cooldown_view
-from utils.economy_amount import resolve_amount
+from utils.economy.amount import resolve_amount
 from utils.paginator import PaginatedView, paginate
 from utils.prefix_manager import resolve_prefix
 from utils.image.blackjack import render_table

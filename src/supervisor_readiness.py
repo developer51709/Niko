@@ -189,7 +189,7 @@ async def evaluate(bot) -> dict[str, Any]:
     # deployment can still answer them, so a missing key degrades the process
     # instead of taking it out of rotation.
     try:
-        from utils.interaction_endpoint import public_key_configured
+        from utils.runtime.interaction_endpoint import public_key_configured
 
         interactions_ok = bool(public_key_configured())
     except Exception:

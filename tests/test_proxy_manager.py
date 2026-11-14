@@ -22,7 +22,7 @@ import pytest
 
 from discord.utils import MISSING
 
-from utils.proxy_manager import (
+from utils.proxies.manager import (
     PROXY_BAN_TTL_SECONDS,
     PROXY_THROTTLE_TTL_SECONDS,
     WebshareProxyManager,
@@ -77,7 +77,7 @@ async def _egress_is_the_proxy(session, proxy_url):
 @pytest.fixture(autouse=True)
 def _isolated_proxy_bans(tmp_path, monkeypatch):
     """Keep every test off the real ban file and off the network."""
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     monkeypatch.setattr(
         proxy_manager_module, "PROXY_BANS_PATH", tmp_path / "proxy_bans.json"
@@ -391,7 +391,7 @@ def test_a_cloudflare_blocked_proxy_is_never_selected_again():
 
 def _capture_logs(monkeypatch):
     """Record the module's ``logging.<level>(tag, message)`` lines."""
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     events = []
 
@@ -534,7 +534,7 @@ def test_a_block_that_names_another_address_does_not_ban_the_proxy():
 
 
 def test_the_egress_check_keeps_a_proxy_that_is_not_the_refused_address(monkeypatch):
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     probed = []
 
@@ -564,7 +564,7 @@ def test_the_egress_check_keeps_a_proxy_that_is_not_the_refused_address(monkeypa
 
 
 def test_the_egress_check_confirms_the_proxy_before_banning_it(monkeypatch):
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     async def scenario():
         session = FakeSession(FakeResponse(200))
@@ -588,7 +588,7 @@ def test_the_egress_check_confirms_the_proxy_before_banning_it(monkeypatch):
 
 
 def test_an_unanswered_egress_check_does_not_ban_the_proxy(monkeypatch):
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     async def scenario():
         monkeypatch.setattr(proxy_manager_module, "_probe_egress", _no_egress_probe)
@@ -611,7 +611,7 @@ def test_an_unanswered_egress_check_does_not_ban_the_proxy(monkeypatch):
 
 
 def test_a_refused_connection_is_not_put_through_the_egress_check(monkeypatch):
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     probed = []
 
@@ -1151,7 +1151,7 @@ class AlwaysBlockedLoginClient:
 
 
 def test_a_blocked_proxy_stays_blocked_after_a_restart():
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     async def scenario():
         session = FakeSession(FakeResponse(200))
@@ -1174,7 +1174,7 @@ def test_a_blocked_proxy_stays_blocked_after_a_restart():
 
 
 def test_a_ban_outside_the_window_is_not_restored():
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     proxy_manager_module.PROXY_BANS_PATH.write_text(
         json.dumps(
@@ -1189,7 +1189,7 @@ def test_a_ban_outside_the_window_is_not_restored():
 
 
 def test_an_unreadable_ban_record_does_not_stop_a_start():
-    import utils.proxy_manager as proxy_manager_module
+    import utils.proxies.manager as proxy_manager_module
 
     proxy_manager_module.PROXY_BANS_PATH.write_text("{not json", encoding="utf-8")
 

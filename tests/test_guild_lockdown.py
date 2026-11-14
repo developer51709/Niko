@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import database
 from database import _convert_query, _make_row, _serialize_args
 from utils import guild_lockdown
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 
 GUILD = 4242
 OTHER_GUILD = 4343

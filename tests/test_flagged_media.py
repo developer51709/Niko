@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from cogs.logging import cog as logging_cog  # noqa: E402
 from cogs.logging import formatters  # noqa: E402
-from utils import flagged_media  # noqa: E402
+from utils.safety import flagged_media  # noqa: E402
 
 PLACEHOLDER_DIRS = (
     ROOT / "web" / "public" / "assets" / "placeholders",

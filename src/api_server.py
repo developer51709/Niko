@@ -7,7 +7,7 @@ The server object is kept rather than hidden inside ``app.run`` because the
 owner's update page needs two things a blocking ``app.run`` cannot offer: the
 Flask app must be replaceable while the socket keeps accepting (an API update),
 and the listening socket must survive a restart of the process (a bot update) by
-being inherited instead of rebound — see :mod:`utils.handoff`.
+being inherited instead of rebound — see :mod:`utils.runtime.handoff`.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def start_api_server(
     """Serve Flask on a daemon thread.
 
     ``fd`` is the listening socket this process inherited from the image it
-    replaced (an in-place restart, see :mod:`utils.handoff`). Using it means the
+    replaced (an in-place restart, see :mod:`utils.runtime.handoff`). Using it means the
     new image accepts connections on the same socket with no gap and no
     rebinding: the port is never unbound, so nothing can race to rebind it.
 

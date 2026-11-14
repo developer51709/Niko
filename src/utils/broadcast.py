@@ -29,7 +29,7 @@ import time
 import discord
 from discord import MediaGalleryItem, UnfurledMediaItem
 
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 
 DEFAULT_ACCENT = "C8A882"
 DEFAULT_FOOTER = "Official Niko staff announcement"

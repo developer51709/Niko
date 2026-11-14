@@ -3,7 +3,7 @@
 Deletion is never executed by the public form. A signed-in member submits a
 scoped request, ownership is checked against the live guild (or the recorded
 owner at the time Niko was removed), and the bot owner reviews it before the
-conservative deletion engine runs. See utils/data_removal.py for the exact
+conservative deletion engine runs. See utils/safety/data_removal.py for the exact
 allow-list and the records that are always preserved.
 """
 
@@ -24,7 +24,7 @@ from utils import logging
 
 from flask import jsonify, request, session
 
-from utils.data_removal import (
+from utils.safety.data_removal import (
     execute_account_deletion,
     execute_guild_deletion,
     record_ownership,

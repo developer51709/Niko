@@ -11,7 +11,7 @@ from typing import Deque
 from discord.ext import commands
 
 from config.ids import is_owner_id
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 
 
 class AbuseRateLimit(commands.CheckFailure):

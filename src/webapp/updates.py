@@ -41,7 +41,7 @@ This module stages files from beta and then applies them area by area:
 ``bot``      ``src/bot.py`` and the remaining startup chain: the only area Python cannot
              reload into the same process, so the process replaces its own image
              with ``execve``, keeping its PID and its listening socket (see
-             :mod:`utils.handoff`). The port is never closed and a supervisor
+             :mod:`utils.runtime.handoff`). The port is never closed and a supervisor
              never sees an exit, which is what keeps a hosted deployment from
              recreating the instance and discarding the files just written. It
              also carries ``src/database/`` and ``src/db_child.py``; the restart
@@ -81,7 +81,7 @@ from pathlib import Path
 
 import requests
 
-from utils import supervisor_control
+from utils.runtime import supervisor_control
 
 from . import locale_feed
 
@@ -680,7 +680,7 @@ PROCESS_ENV_MARKERS = (
 #: Set in the probe child so ``src/bot.py`` stops right after its imports.
 PROBE_ENV = "NIKO_IMPORT_PROBE"
 #: Module the restart runs from. Reloaded from disk before it is used.
-HANDOFF_MODULE = "utils.handoff"
+HANDOFF_MODULE = "utils.runtime.handoff"
 
 
 def _split_web() -> bool:
@@ -717,7 +717,7 @@ def _inplace_handoff():
     """The handoff module the restart will run, loaded from the file on disk.
 
     A process that has been up since before the in-place restart still holds the
-    predecessor's ``utils.handoff`` in memory: its ``schedule`` takes a bot and
+    predecessor's ``utils.runtime.handoff`` in memory: its ``schedule`` takes a bot and
     hands the port to a successor, which is the arrangement that closes the
     dashboard. The file on disk is imported before anything is probed, so the
     restart runs the code the update is actually shipping, and a copy that still
@@ -731,7 +731,7 @@ def _inplace_handoff():
     _purge([HANDOFF_MODULE])
     importlib.invalidate_caches()
     try:
-        # ``import_module``, not ``from utils import handoff``: the package
+        # ``import_module``, not ``from utils.runtime import handoff``: the package
         # attribute can still point at the copy that was in memory before the
         # purge, and reading it would silently keep the stale module.
         handoff = importlib.import_module(HANDOFF_MODULE)
@@ -746,7 +746,7 @@ def _inplace_handoff():
             _set_package_attribute(HANDOFF_MODULE, previous)
         raise RuntimeError(
             "This process is still running the previous successor handoff, and "
-            "utils/handoff.py on disk is that copy too. The bot core restarts in place "
+            "utils/runtime/handoff.py on disk is that copy too. The bot core restarts in place "
             "only with the current handoff: apply the Utilities area first (ticking it "
             "together with the bot core in one run is fine), then retry."
         )
@@ -782,7 +782,7 @@ def _probe_bot() -> None:
 
     The child never inherits this process's restart markers — ``NIKO_RESTART_FD``
     above all, or it would adopt the socket this process is answering on. They are
-    matched by prefix rather than read from ``utils.handoff``: a process that has
+    matched by prefix rather than read from ``utils.runtime.handoff``: a process that has
     not reloaded that module yet still holds the predecessor's copy, which names
     its variables differently (``NIKO_HANDOFF_*``) and has no
     ``INHERITED_FD_ENV`` at all, and that staleness must not fail the update.
@@ -1590,7 +1590,7 @@ def _apply_locked(areas, bot=None) -> dict:
     _record(run)
 
     if handoff_needed:
-        from utils import handoff
+        from utils.runtime import handoff
 
         handoff.schedule()
     elif supervised_restart_needed:

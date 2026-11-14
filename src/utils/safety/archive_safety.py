@@ -12,7 +12,7 @@ the write side as well (see ``_extract_zip_images`` in ``cogs/admin/emoji.py``).
 
 Usage::
 
-    from utils.archive_safety import scan_zip
+    from utils.safety.archive_safety import scan_zip
 
     report = scan_zip(payload)
     if not report.ok:

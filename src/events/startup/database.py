@@ -694,7 +694,7 @@ async def _create_tables(bot):
 
     # ── Data removal requests ───────────────────────────────────────────────
     # Submissions are reviewed before any deletion runs. Moderation and safety
-    # records are never deleted by this queue; see utils/data_removal.py.
+    # records are never deleted by this queue; see utils/safety/data_removal.py.
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS data_removal_requests (
             request_id       TEXT PRIMARY KEY,
@@ -2405,7 +2405,7 @@ async def init_database(bot):
         # Eagerly load the blacklist cache from the database so hot-path
         # sync reads (message/interaction checks) work immediately.
         try:
-            from utils.blacklist_manager import BlacklistManager
+            from utils.moderation.manager import BlacklistManager
 
             await BlacklistManager().load()
         except Exception as e:

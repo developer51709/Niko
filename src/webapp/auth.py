@@ -13,7 +13,7 @@ from . import config, discord_api, leaderboard_cache, runtime
 
 def _load_blacklist_manager():
     """Load the shared blacklist cache on the bot loop when needed."""
-    from utils.blacklist_manager import BlacklistManager
+    from utils.moderation.manager import BlacklistManager
 
     manager = BlacklistManager()
     if not manager._loaded and runtime._discord_bot is not None:

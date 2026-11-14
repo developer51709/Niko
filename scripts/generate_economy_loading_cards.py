@@ -16,7 +16,7 @@ That keeps the loading → finished transition from visually shifting.
 The shop card grows with the number of items, so it gets one GIF per row count
 the command can produce (``shop.gif`` for the whole catalogue, ``shop-<rows>.gif``
 per category). Both this script and the bot's loading view read
-``utils.economy_jobs.shop_loading_row_counts()``, so adding an item keeps the
+``utils.economy.jobs.shop_loading_row_counts()``, so adding an item keeps the
 placeholder and the finished card the same height.
 
 The files are written into the Vite ``public`` directory and copied into the
@@ -38,7 +38,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from utils.economy_jobs import shop_loading_row_counts  # noqa: E402
+from utils.economy.jobs import shop_loading_row_counts  # noqa: E402
 from utils.image._font_resolver import (  # noqa: E402
     draw_text_with_fallback,
     font_getlength,

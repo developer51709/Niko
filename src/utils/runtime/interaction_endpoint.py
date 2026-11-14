@@ -68,7 +68,7 @@ _BUDGET_ENV = "DISCORD_INTERACTION_BUDGET_SECONDS"
 _public_key: str | None = None
 #: Resolved key kept between restarts: fetching it needs egress to Discord, and
 #: the endpoint has to keep verifying exactly when egress is what broke.
-_KEY_CACHE = Path(__file__).resolve().parents[2] / "data" / "interaction_public_key"
+_KEY_CACHE = Path(__file__).resolve().parents[3] / "data" / "interaction_public_key"
 
 #: The interaction whose handler is running in this context, if any.
 _ACTIVE_INTERACTION: contextvars.ContextVar["_InteractionSink | None"] = contextvars.ContextVar(

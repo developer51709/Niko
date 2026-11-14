@@ -360,7 +360,7 @@ def api_staff_guilds():
     if error:
         return error
     try:
-        from utils.blacklist_manager import BlacklistManager
+        from utils.moderation.manager import BlacklistManager
         manager = BlacklistManager()
         if not manager._loaded:
             run_on_bot_loop(manager.load())
@@ -418,7 +418,7 @@ def api_staff_guild_blacklist(guild_id):
     if len(reason) > 1000:
         return jsonify({"error": "Blacklist reason must be 1,000 characters or fewer."}), 400
     try:
-        from utils.blacklist_manager import BlacklistManager
+        from utils.moderation.manager import BlacklistManager
         manager = BlacklistManager()
         # Adding only writes the entry: the dashboard then pauses each feature one
         # request at a time through the lockdown route below, so the person doing
@@ -459,7 +459,7 @@ def api_staff_guild_lockdown(guild_id):
     body = request.get_json(silent=True) or {}
     step = str(body.get("step", "")).strip()
     try:
-        from utils.blacklist_manager import BlacklistManager
+        from utils.moderation.manager import BlacklistManager
         from utils.guild_lockdown import FEATURE_STEPS
         if step not in FEATURE_STEPS:
             return jsonify({"error": "Choose a valid blacklist lockdown step."}), 400
@@ -608,7 +608,7 @@ def api_staff_blacklist():
     role, error = _require_guild_management_role()
     if error:
         return error
-    from utils.blacklist_manager import BlacklistManager
+    from utils.moderation.manager import BlacklistManager
     manager = BlacklistManager()
     if not manager._loaded:
         run_on_bot_loop(manager.load())

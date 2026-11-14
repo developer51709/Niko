@@ -5,7 +5,7 @@ import logging
 import os
 import requests as req
 from . import config, runtime
-from utils.cloudflare import interstitial_signature
+from utils.proxies.cloudflare import interstitial_signature
 
 
 logger = logging.getLogger("webapp")

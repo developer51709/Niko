@@ -15,7 +15,7 @@ Discord user, so it carries no server ranking and needs no server selected.
 
 from cogs.economy.data import ACHIEVEMENTS, achievement_progress, _get_lottery_from_db
 from cogs.economy.seasons import season_status
-from utils.economy_jobs import (
+from utils.economy.jobs import (
     LOTTERY_BASE_POT,
     LOTTERY_DRAW_INTERVAL,
     LOTTERY_TICKET_PRICE,

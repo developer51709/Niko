@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from utils.economy_amount import resolve_amount  # noqa: E402
+from utils.economy.amount import resolve_amount  # noqa: E402
 
 
 def test_all_resolves_to_the_whole_balance():

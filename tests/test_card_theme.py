@@ -31,7 +31,7 @@ from cogs.economy.data import (  # noqa: E402
     _loading_card_view,
     _shop_loading_file,
 )
-from utils.economy_jobs import shop_loading_row_counts  # noqa: E402
+from utils.economy.jobs import shop_loading_row_counts  # noqa: E402
 from utils.loading_cards import loading_card_url, short_asset_hash  # noqa: E402
 from cogs.leveling.cog import (  # noqa: E402
     LEVELING_LOADING_CARD_TYPES,

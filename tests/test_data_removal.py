@@ -1,7 +1,7 @@
 """Account and server deletion must never erase moderation records.
 
 The public request form is a privacy tool, not a ban reset. These tests run the
-real SQL in utils.data_removal against SQLite: account data disappears, server
+real SQL in utils.safety.data_removal against SQLite: account data disappears, server
 configuration disappears, and warns, blacklists, giveaway bans, and abuse
 records survive. They also pin the ownership record used after Niko is removed.
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import utils.data_removal as removal  # noqa: E402
+import utils.safety.data_removal as removal  # noqa: E402
 from webapp import app  # noqa: E402
 from webapp.routes import privacy_routes as routes  # noqa: E402
 

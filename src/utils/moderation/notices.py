@@ -5,7 +5,7 @@ Both return True / False (blocked or not).
 import discord
 from config.emojis import get_emoji
 from config.links import WEBSITE
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
 

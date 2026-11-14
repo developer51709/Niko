@@ -25,7 +25,7 @@ from utils.analytics import (
     record_scale,
     snapshot,
 )
-from utils.economy_jobs import JOBS
+from utils.economy.jobs import JOBS
 
 globals().update({
     name: value

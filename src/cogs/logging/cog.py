@@ -4,7 +4,7 @@ import re
 import time
 
 import database
-from utils import flagged_media
+from utils.safety import flagged_media
 from utils.command_locales import command_texts
 from utils.i18n import get_lang
 

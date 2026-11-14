@@ -76,7 +76,7 @@ The non-supervised path is still supported:
 1. Set the start command back to `python3 src/bot.py`.
 2. Leave `NIKO_SUPERVISED` unset — the supervisor sets it for its child; it is
    not an operator setting.
-3. Restart the service. No code revert is required; `utils.handoff` and the
+3. Restart the service. No code revert is required; `utils.runtime.handoff` and the
    existing update path still handle bot-core restarts in direct mode.
 
 If the last bot update is suspect, restore `data/updates/backups/<run>/` over

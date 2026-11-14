@@ -16,7 +16,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from cogs.leveling import cog as leveling_cog
-from utils.ratelimit import mass_role_limiter
+from utils.moderation.ratelimit import mass_role_limiter
 
 
 # The reward sync shares /massrole's per-guild bucket rather than opening a

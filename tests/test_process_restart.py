@@ -19,27 +19,27 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import api_server  # noqa: E402
-from utils import handoff  # noqa: E402
+from utils.runtime import handoff  # noqa: E402
 from webapp import updates  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _restore_handoff():
-    """Re-importing ``utils.handoff`` replaces both the module and the package
+    """Re-importing ``utils.runtime.handoff`` replaces both the module and the package
     attribute; put the pair back so each test sees the same module."""
     import utils
 
-    module = utils.handoff
+    module = utils.runtime.handoff
     try:
         yield
     finally:
-        sys.modules["utils.handoff"] = module
-        utils.handoff = module
+        sys.modules["utils.runtime.handoff"] = module
+        utils.runtime.handoff = module
 
 
 # ── The restart itself ────────────────────────────────────────────────────────
 def test_a_bot_update_replaces_the_image_instead_of_exiting():
-    source = (ROOT / "src/utils/handoff.py").read_text(encoding="utf-8")
+    source = (ROOT / "src/utils/runtime/handoff.py").read_text(encoding="utf-8")
 
     # Exiting, or leaving a child behind in this process's place, is exactly what
     # makes a hosted deployment restart and drop the update.
@@ -116,9 +116,9 @@ def test_the_probe_never_inherits_the_restart_socket(monkeypatch):
 
 def test_the_probe_does_not_read_the_loaded_handoff_module(monkeypatch):
     # A process that booted before the in-place restart still holds the
-    # predecessor's utils.handoff: it has no INHERITED_FD_ENV, and naming the
+    # predecessor's utils.runtime.handoff: it has no INHERITED_FD_ENV, and naming the
     # variable through it failed the whole bot-core update with AttributeError.
-    monkeypatch.setitem(sys.modules, "utils.handoff", SimpleNamespace(schedule=lambda bot: None))
+    monkeypatch.setitem(sys.modules, "utils.runtime.handoff", SimpleNamespace(schedule=lambda bot: None))
     monkeypatch.setenv("NIKO_RESTART_FD", "9")
     monkeypatch.setenv("NIKO_HANDOFF_ROLE", "successor")
     monkeypatch.setenv("NIKO_SUPERVISED", "1")
@@ -146,12 +146,12 @@ def test_the_probe_does_not_read_the_loaded_handoff_module(monkeypatch):
 
 
 def test_the_restart_runs_the_handoff_from_disk_not_the_stale_one(monkeypatch):
-    monkeypatch.setitem(sys.modules, "utils.handoff", SimpleNamespace(schedule=lambda bot: None))
+    monkeypatch.setitem(sys.modules, "utils.runtime.handoff", SimpleNamespace(schedule=lambda bot: None))
 
     module = updates._inplace_handoff()
 
     assert module.INHERITED_FD_ENV == "NIKO_RESTART_FD"
-    assert sys.modules["utils.handoff"] is module
+    assert sys.modules["utils.runtime.handoff"] is module
 
 
 def test_a_process_with_only_the_successor_handoff_is_told_what_to_do(monkeypatch, tmp_path):

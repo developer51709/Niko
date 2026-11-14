@@ -11,7 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from utils import supervisor_control  # noqa: E402
+from utils.runtime import supervisor_control  # noqa: E402
 
 
 def test_request_restart_round_trips_over_a_unix_socket(monkeypatch, tmp_path):

@@ -16,7 +16,7 @@ from ..voting import vote_earnings_multiplier
 import random
 import datetime
 
-from utils.economy_amount import resolve_amount
+from utils.economy.amount import resolve_amount
 from utils.i18n import get_lang
 from utils.locales import load_locales
 from utils.command_locales import command_texts

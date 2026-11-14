@@ -7,11 +7,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from cogs.admin import customization
-from utils import discord_proxy
-from utils.discord_proxy import DiscordProxyManager, _RelayedAiohttpResponse, is_discord_api_url
-from utils.proxy_manager import WebshareProxyManager
+from utils.proxies import discord as discord_proxy
+from utils.proxies.discord import DiscordProxyManager, _RelayedAiohttpResponse, is_discord_api_url
+from utils.proxies.manager import WebshareProxyManager
 from webapp import discord_api, runtime  # noqa: E402
-from utils.proxy_worker_registry import (
+from utils.proxies.workers import (
     add_proxy_worker,
     init_proxy_worker_registry,
     list_proxy_workers,

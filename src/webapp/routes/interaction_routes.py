@@ -4,7 +4,7 @@ This is the *Interactions Endpoint URL* from the Developer Portal.  Discord POST
 a slash command, button, select, modal or autocomplete here and expects the
 callback in the response body, which means the answer is produced inside this
 process instead of by an outbound request to Discord's API (see
-``utils.interaction_endpoint``).  Discord makes the two delivery methods mutually
+``utils.runtime.interaction_endpoint``).  Discord makes the two delivery methods mutually
 exclusive, so the endpoint has to answer *every* interaction once it is
 configured — ``docs/maintenance.md`` describes the switch and what to do when it
 has to be turned back off.
@@ -19,7 +19,7 @@ import json
 
 from flask import Response, jsonify, request
 
-from utils import interaction_endpoint as _interactions
+from utils.runtime import interaction_endpoint as _interactions
 from utils import logging
 
 from .. import server as _server

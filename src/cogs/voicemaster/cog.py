@@ -5,11 +5,8 @@ import discord
 from discord import ui
 from discord.ext import commands
 
-from utils import checks
-from utils import converters
-from utils import decorators
 from utils import logging
-import utils.emojis as E
+from . import emojis as E
 from config.emojis import get_emoji
 from config import links
 from utils.i18n import get_lang
@@ -747,12 +744,12 @@ class VoiceMaster(commands.Cog):
         except Exception as e:
             logging.error("VoiceMaster", f"Voice state update error: {e}")
 
-    @decorators.group(
+    @commands.group(
         name="voicemaster",
         aliases=["j2c", "vm", "join2create"],
         help=CMDS.help("voicemaster"),
     )
-    @checks.cooldown()
+    @commands.cooldown(1, 3.0, commands.BucketType.user)
     async def _voicemaster(self, ctx):
         if not ctx.invoked_subcommand:
             view = ui.LayoutView(timeout=None)
@@ -772,7 +769,7 @@ class VoiceMaster(commands.Cog):
             await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     @_voicemaster.command(help=CMDS.help("voicemaster.setup"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def setup(self, ctx):
         current_hub = None
         settings = await self.get_guild_settings(ctx.guild.id)
@@ -784,12 +781,12 @@ class VoiceMaster(commands.Cog):
         )
 
     @_voicemaster.command(help=CMDS.help("voicemaster.sendinterface"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def sendinterface(self, ctx):
         await ctx.send(view=VoiceMasterInterface(get_lang(ctx)))
 
     @_voicemaster.command(help=CMDS.help("voicemaster.reset"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def reset(self, ctx):
         try:
             settings   = await self.get_guild_settings(ctx.guild.id)
@@ -824,7 +821,7 @@ class VoiceMaster(commands.Cog):
             await fail(ctx, msg(ctx, "reset_failed"))
 
     @_voicemaster.command(help=CMDS.help("voicemaster.category"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def category(
         self,
         ctx,
@@ -851,7 +848,7 @@ class VoiceMaster(commands.Cog):
             await fail(ctx, msg(ctx, "category_failed"))
 
     @_voicemaster.group(help=CMDS.help("voicemaster.default"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def default(self, ctx):
         if not ctx.invoked_subcommand:
             settings = await self.get_guild_settings(ctx.guild.id)
@@ -879,7 +876,7 @@ class VoiceMaster(commands.Cog):
             await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     @default.command(name="name", help=CMDS.help("voicemaster.default.name"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def default_name(
         self,
         ctx,
@@ -905,7 +902,7 @@ class VoiceMaster(commands.Cog):
             await fail(ctx, msg(ctx, "default_name_failed"))
 
     @default.command(name="limit", help=CMDS.help("voicemaster.default.limit"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def default_limit(
         self,
         ctx,
@@ -931,7 +928,7 @@ class VoiceMaster(commands.Cog):
             await fail(ctx, msg(ctx, "default_limit_failed"))
 
     @default.command(name="bitrate", help=CMDS.help("voicemaster.default.bitrate"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def default_bitrate(
         self,
         ctx,
@@ -957,7 +954,7 @@ class VoiceMaster(commands.Cog):
             await fail(ctx, msg(ctx, "default_bitrate_failed"))
 
     @default.command(name="region", help=CMDS.help("voicemaster.default.region"))
-    @checks.has_perms(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
     async def default_region(
         self,
         ctx,
@@ -1205,7 +1202,7 @@ class VoiceMaster(commands.Cog):
     async def permit(
         self,
         ctx,
-        target: Union[converters.DiscordMember, discord.Role] = commands.parameter(
+        target: Union[discord.Member, discord.Role] = commands.parameter(
             description=CMDS.arg("voicemaster.permit", "target"),
         ),
     ):
@@ -1234,7 +1231,7 @@ class VoiceMaster(commands.Cog):
     async def reject(
         self,
         ctx,
-        target: Union[converters.DiscordMember, discord.Role] = commands.parameter(
+        target: Union[discord.Member, discord.Role] = commands.parameter(
             description=CMDS.arg("voicemaster.reject", "target"),
         ),
     ):
@@ -1293,7 +1290,7 @@ class VoiceMaster(commands.Cog):
     async def disconnect(
         self,
         ctx,
-        member: converters.DiscordMember = commands.parameter(
+        member: discord.Member = commands.parameter(
             description=CMDS.arg("voicemaster.disconnect", "member"),
         ),
     ):

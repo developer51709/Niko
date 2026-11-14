@@ -190,7 +190,7 @@ def test_a_restarted_bot_route_is_not_pinned_to_the_startup_port(monkeypatch):
         asked.append(command)
         return {"bot_api_port": 6001}
 
-    monkeypatch.setattr("utils.supervisor_control.request", route)
+    monkeypatch.setattr("utils.runtime.supervisor_control.request", route)
     bot_route = BotRoute(env_port=6000)
 
     assert bot_route.port() == 6000

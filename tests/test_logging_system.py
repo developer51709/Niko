@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from cogs.logging import cog as logging_cog  # noqa: E402
 from cogs.logging import formatters  # noqa: E402
-from utils import ratelimit  # noqa: E402
+from utils.moderation import ratelimit  # noqa: E402
 from webapp.routes import dashboard_routes  # noqa: E402
 
 GUILD_ID = 111

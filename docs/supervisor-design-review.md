@@ -64,7 +64,7 @@ The recommended target is:
 
 - `webapp/updates.py` stages files from beta into the live deployment and applies area by area.
 - Cog, utility, webapp, database, events, and startup-writer changes are applied in-process.
-- `utils/handoff.py` handles the bot-core area by duplicating the listening socket and `execve`-ing a new image. The PID stays the same, so Render sees no exit and the port stays bound.
+- `utils/runtime/handoff.py` handles the bot-core area by duplicating the listening socket and `execve`-ing a new image. The PID stays the same, so Render sees no exit and the port stays bound.
 - A bot-core update therefore still rebuilds the entire interpreter and reloads every cog.
 - `webapp/updates.py` probes `src/bot.py` in a throwaway interpreter with `NIKO_IMPORT_PROBE` before restarting.
 - `tests/test_process_restart.py` explicitly asserts that the handoff does not use subprocesses and has no candidate/parent architecture. Those tests will need to be updated deliberately, not silently bypassed.
@@ -75,7 +75,7 @@ The recommended target is:
 - The bot can fall back from MongoDB to SQLite in `database.create_pool()` if MongoDB is configured but unreachable. This is safe for one process and dangerous for two concurrent children.
 - SQLite uses `data/database.db` with WAL mode. Two children must not be allowed to write it concurrently.
 - Several cogs start background loops as soon as they load. Examples include music/Lavalink rescanning, status panels, economy ticks, notifier polling, donations polling, reminders, giveaways, birthdays, automod, premium lifecycle, server stats, and leveling voice XP.
-- `utils/interaction_endpoint.py` can serve Discord interactions over HTTP. The public endpoint must have exactly one active owner.
+- `utils/runtime/interaction_endpoint.py` can serve Discord interactions over HTTP. The public endpoint must have exactly one active owner.
 - The owner live-log page reads an in-memory buffer in the child process. A candidate child's logs are not visible through the active child unless the supervisor forwards or stores them.
 - The frontend does not currently use WebSockets or server-sent events, so an HTTP reverse proxy can be HTTP-only for the first part.
 
@@ -373,7 +373,7 @@ Set a stable `SESSION_SECRET` in production. If it is unset, Flask generates a r
 | --- | --- | --- | --- | --- |
 | U-01 | Updater and supervisor both restart | Double restart, lost response | Single owner: in supervised mode the updater requests; supervisor performs; disable `handoff.schedule` | Apply bot area |
 | U-02 | Update progress lives in child memory | Progress disappears during restart | Persist run state; supervisor exposes status; UI tolerates 503 during handoff | Apply while polling |
-| U-03 | Bot area still points at old entrypoint | New runtime never receives code | Update `AREAS["bot"]` paths, `_probe_bot`, `utils.handoff` target, docs/tests together | Manifest path test |
+| U-03 | Bot area still points at old entrypoint | New runtime never receives code | Update `AREAS["bot"]` paths, `_probe_bot`, `utils.runtime.handoff` target, docs/tests together | Manifest path test |
 | U-04 | Supervisor is included in beta manifest | Updating it requires the platform restart it was meant to avoid | Explicit exclusion from all areas; keep it stable | `area_files` inspection |
 | U-05 | Candidate starts on partially applied files | Import/runtime failure | Stage and validate the complete area before supervisor restart; probe in a clean interpreter; never start candidate mid-stage | Fault injection during staging |
 | U-06 | Rollback after old child exits needs old code | No old process to fall back to | Keep changed-file backups and a last-good release marker; supervisor can restore files and start a fresh child | Force candidate failure after old exit |
@@ -914,7 +914,7 @@ Flags must be readable in `/status` and logs without exposing secrets. An invali
 **Part 2**
 
 - Switch the start command back to `python3 src/bot.py`.
-- Keep `utils.handoff` and the existing update path intact.
+- Keep `utils.runtime.handoff` and the existing update path intact.
 - Disable `NIKO_SUPERVISED`; no code revert required.
 
 **Part 3**

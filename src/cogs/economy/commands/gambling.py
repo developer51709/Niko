@@ -12,7 +12,7 @@ from ..data import (
     ACCENT_GOLD, ACCENT_RED,
 )
 from utils.cooldown import cooldown_ready_at, cooldown_view
-from utils.economy_amount import resolve_amount
+from utils.economy.amount import resolve_amount
 from utils.i18n import get_lang
 from utils.locales import load_locales
 

@@ -38,7 +38,7 @@ from cogs.economy.data import (  # noqa: E402
     seasonal_progress,
 )
 from cogs.economy.voting import apply_vote  # noqa: E402
-from utils.economy_jobs import (  # noqa: E402
+from utils.economy.jobs import (  # noqa: E402
     LOTTERY_BASE_POT,
     LOTTERY_DRAW_INTERVAL,
     LOTTERY_TICKET_PRICE,
@@ -439,7 +439,7 @@ class CatalogueCoverageTests(unittest.TestCase):
                 self.assertGreater(int(ACHIEVEMENTS[achievement_id]["reward"]), 0)
 
     def test_the_top_vault_badge_follows_the_bank_table(self):
-        from utils.economy_jobs import max_bank_tier
+        from utils.economy.jobs import max_bank_tier
 
         self.assertEqual(threshold("bank_tier_top"), max_bank_tier())
         self.assertLess(threshold("bank_tier_2"), threshold("bank_tier_top"))

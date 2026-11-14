@@ -2,7 +2,7 @@
 
 import binascii
 import copy
-from utils.economy_jobs import get_job
+from utils.economy.jobs import get_job
 from utils.premium import get_subscription, subscription_view
 from utils.verification.modes import MODES as VERIFICATION_MODES
 

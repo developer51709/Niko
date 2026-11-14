@@ -27,7 +27,7 @@ from utils.verification import links as verification_links
 from utils.verification import modes as verification_modes
 from utils.verification import service as verification_service
 from utils.verification import store as verification_store
-from utils.ratelimit import role_assign_limiter, welcome_limiter
+from utils.moderation.ratelimit import role_assign_limiter, welcome_limiter
 from utils.prefix_manager import resolve_prefix
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales

@@ -9,7 +9,7 @@ rather than Discord's colourful built-ins.
 import discord
 from config.emojis import get_emoji
 from utils.i18n import make_flat_msg
-from utils.ratelimit import purge_limiter
+from utils.moderation.ratelimit import purge_limiter
 from utils.locales import load_locales
 
 #: Filled into every message below by :func:`msg`. Module level on purpose:

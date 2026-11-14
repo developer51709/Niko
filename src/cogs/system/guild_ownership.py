@@ -10,7 +10,7 @@ import discord
 from discord.ext import commands
 
 from utils import logging
-from utils.data_removal import record_ownership
+from utils.safety.data_removal import record_ownership
 
 
 class GuildOwnership(commands.Cog):

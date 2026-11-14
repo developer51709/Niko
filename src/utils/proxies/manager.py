@@ -45,7 +45,7 @@ same process instead of dying into a restart loop that repeats the block.
 
 Interaction callbacks are deliberately *not* this manager's problem: Discord
 never counts them against the global limit, and
-``utils.interaction_priority`` keeps them from queueing behind it.
+``utils.runtime.interaction_priority`` keeps them from queueing behind it.
 
 discord.py reads ``http.proxy`` for its own REST calls, but not for webhook
 executions: its webhook adapter takes the raw aiohttp session and passes
@@ -75,7 +75,7 @@ import aiohttp
 import requests
 
 from utils import logging
-from utils.cloudflare import blocked_egress_ip, interstitial_signature
+from utils.proxies.cloudflare import blocked_egress_ip, interstitial_signature
 
 # ── Config ───────────────────────────────────────────────────────────────────
 WEBSHARE_API_KEY_ENV = "WEBSHARE_API_KEY"
@@ -114,7 +114,7 @@ PROXY_BAN_TTL_SECONDS = 3600
 #: Where the blocked-proxy record survives a restart.  The supervisor restarts
 #: the bot child when a blocked login ends it, and a process that starts with an
 #: empty memory tries the same refused IPs again.
-PROXY_BANS_PATH = Path(__file__).resolve().parents[2] / "data" / "proxy_bans.json"
+PROXY_BANS_PATH = Path(__file__).resolve().parents[3] / "data" / "proxy_bans.json"
 _FETCH_TIMEOUT_SECONDS = 10
 _PAGE_SIZE = 100
 

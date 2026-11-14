@@ -34,7 +34,7 @@ from utils.prefix_manager import resolve_prefix
 from config.emojis import get_emoji
 from config.links import WEBSITE
 from .seasons import season_open, season_open_key
-from utils.economy_jobs import (
+from utils.economy.jobs import (
     JOBS, DEFAULT_JOB, get_job,
     SHOP_ITEMS, get_item, shop_loading_row_counts,
     BANK_TIERS, bank_info, bank_cap, bank_name, bank_rate, max_bank_tier,

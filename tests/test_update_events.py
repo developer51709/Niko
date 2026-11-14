@@ -19,7 +19,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from utils import handoff  # noqa: E402
+from utils.runtime import handoff  # noqa: E402
 from webapp import updates  # noqa: E402
 
 

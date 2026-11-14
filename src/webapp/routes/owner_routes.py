@@ -19,7 +19,7 @@ import time
 
 from flask import jsonify, request, send_from_directory, session
 
-from utils import handoff
+from utils.runtime import handoff
 
 from .. import locale_feed, updates
 from .. import server as _server

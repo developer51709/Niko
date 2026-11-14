@@ -41,7 +41,7 @@ from pathlib import Path
 
 from utils import logging
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 #: Passed to the restarted image: the descriptor it must serve HTTP on.
 INHERITED_FD_ENV = "NIKO_RESTART_FD"

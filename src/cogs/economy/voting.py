@@ -25,7 +25,7 @@ from discord.ext import commands
 
 from config.links import TOPGG_VOTE_URL
 from utils import logging as log
-from utils.economy_jobs import (
+from utils.economy.jobs import (
     VOTE_BASE_REWARD,
     VOTE_COOLDOWN,
     VOTE_STREAK_WINDOW,

@@ -10,7 +10,7 @@ sys.path.insert(0, str(SRC_DIR))
 
 import database
 from database import MongoPool
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 
 
 class FakeCollection:

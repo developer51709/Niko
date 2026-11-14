@@ -10,7 +10,7 @@ from ._messages import ALLOWED_MENTIONS, msg, _cv2
 from ._warnings import WarningsView, can_view_warnings
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
-from utils.ratelimit import mass_role_limiter
+from utils.moderation.ratelimit import mass_role_limiter
 
 from utils.command_locales import command_texts
 

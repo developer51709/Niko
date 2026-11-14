@@ -15,7 +15,7 @@ from webapp import app  # noqa: E402
 from webapp.routes import economy_routes as routes  # noqa: E402
 from cogs.economy.data import ACHIEVEMENTS  # noqa: E402
 from cogs.economy.voting import apply_vote, vote_standing, vote_dm_view  # noqa: E402
-from utils.economy_jobs import (  # noqa: E402
+from utils.economy.jobs import (  # noqa: E402
     VOTE_BASE_REWARD,
     VOTE_COOLDOWN,
     VOTE_STREAK_WINDOW,

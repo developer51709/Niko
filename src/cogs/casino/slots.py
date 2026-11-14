@@ -7,7 +7,7 @@ import os
 
 from cogs.casino.replay import InteractionContext
 from utils.cooldown import cooldown_ready_at, cooldown_view
-from utils.economy_amount import resolve_amount
+from utils.economy.amount import resolve_amount
 from utils.prefix_manager import resolve_prefix
 
 from utils.command_locales import command_texts

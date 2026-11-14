@@ -9,15 +9,15 @@ import asyncio
 import discord
 
 from utils.prefix_manager import dynamic_prefix
-from utils.blacklist import check_message_blacklist
+from utils.moderation.notices import check_message_blacklist
 from utils.maintenance import (
     check_feature as check_maintenance_feature,
     check_message as check_maintenance_message,
 )
-from utils.abuse_detection import record_request, strike_notice
+from utils.moderation.abuse import record_request, strike_notice
 from utils.ai.config import load_config, MIN_AI_NAME_LENGTH
 from utils.ai.reply import generate_reply, split_reply
-from utils.ratelimit import reply_limiter
+from utils.moderation.ratelimit import reply_limiter
 from utils import logging
 
 

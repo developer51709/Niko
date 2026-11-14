@@ -11,7 +11,7 @@ URLs, one per flag type:
     https://niko.sryze.cc/assets/placeholders/gore.png
     https://niko.sryze.cc/assets/placeholders/self-harm.png
 
-``utils/flagged_media.py`` owns those slugs, so the artwork, the log note and the
+``utils/safety/flagged_media.py`` owns those slugs, so the artwork, the log note and the
 explainer page cannot drift apart.
 
 The card is deliberately plain: the near-black site canvas with one faint glow,
@@ -40,7 +40,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from utils import flagged_media  # noqa: E402
+from utils.safety import flagged_media  # noqa: E402
 from utils.image._font_resolver import font_getlength  # noqa: E402
 
 OUT_DIR = ROOT / "web" / "public" / "assets" / "placeholders"

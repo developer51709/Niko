@@ -94,7 +94,7 @@ class DatabaseRoute:
             self._at = now
             return self._port
         try:
-            from utils import supervisor_control
+            from utils.runtime import supervisor_control
 
             response = supervisor_control.request("route", timeout=2.0)
         except Exception:

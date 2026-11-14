@@ -10,7 +10,7 @@ printed a logging traceback instead.
 
 from pathlib import Path
 
-from utils import handoff
+from utils.runtime import handoff
 from utils import logging as project_logging
 
 
@@ -31,7 +31,7 @@ def test_the_dashboard_adoption_line_passes_one_log_argument():
 
 
 def test_the_handoff_does_not_import_the_stdlib_logger():
-    source = (ROOT / "src/utils/handoff.py").read_text(encoding="utf-8")
+    source = (ROOT / "src/utils/runtime/handoff.py").read_text(encoding="utf-8")
 
     assert "from utils import logging" in source
     assert "\nimport logging\n" not in source

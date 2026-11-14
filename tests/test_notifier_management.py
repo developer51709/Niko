@@ -32,7 +32,7 @@ from cogs.notifier import cog as notifier
 import database
 from database import _convert_query, _make_row, _serialize_args
 from events.startup.database import _migrate_follows
-from utils.blacklist_manager import BlacklistManager
+from utils.moderation.manager import BlacklistManager
 from utils.social import follows
 
 GUILD = 555

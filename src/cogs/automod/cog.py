@@ -1,4 +1,4 @@
-from utils.nsfw_api import check_message_images
+from utils.safety.nsfw_api import check_message_images
 from utils.premium import is_premium
 from discord.ext import tasks
 

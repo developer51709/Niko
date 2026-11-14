@@ -18,7 +18,7 @@ to clear, so the bot as a whole still respects it.
 The bypass lasts for the request only: a handler's other REST calls (posting a
 persistent panel into a channel, for example) are untouched and keep queueing.
 
-With the HTTP interactions endpoint armed (``utils.interaction_endpoint``) the
+With the HTTP interactions endpoint armed (``utils.runtime.interaction_endpoint``) the
 first callback never reaches the client at all — it is answered in the body of
 Discord's own request.  This bypass still covers the followup, original-response
 edit and delete routes behind it, and every deployment that still receives its

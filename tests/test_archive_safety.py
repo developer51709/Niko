@@ -1,6 +1,6 @@
 """Archives from users are screened for zip bombs before a member is opened.
 
-``utils.archive_safety.scan_zip`` reads only the central directory, so the
+``utils.safety.archive_safety.scan_zip`` reads only the central directory, so the
 emoji stealer can refuse a bomb while it is still harmless metadata.
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from utils.archive_safety import DEFAULT_LIMITS, ZipLimits, scan_zip  # noqa: E402
+from utils.safety.archive_safety import DEFAULT_LIMITS, ZipLimits, scan_zip  # noqa: E402
 
 
 def _zip(entries: dict[str, bytes]) -> bytes:
