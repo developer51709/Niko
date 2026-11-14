@@ -76,6 +76,26 @@ ACTIVITY_SUBDOMAIN = (
     or "activities"
 )
 
+#: OPTIONAL. Host that serves the owner MCP server. The endpoint lives at
+#: ``/<label>/mcp`` on the apex and at ``/mcp`` on this host. Blank uses
+#: ``mcp``; set it to an explicit origin with ``MCP_ORIGIN`` when the hostname
+#: is managed outside the wildcard domain.
+MCP_SUBDOMAIN = (
+    (os.environ.get("MCP_SUBDOMAIN") or "mcp").strip().lower().split(".")[0]
+    or "mcp"
+)
+
+
+def is_mcp_host(host: str | None) -> bool:
+    """Whether this request is for the MCP server host."""
+    if not host:
+        return False
+    name = host.split(":", 1)[0].strip().lower()
+    if name.split(".", 1)[0] == MCP_SUBDOMAIN:
+        return True
+    explicit = urlparse((os.environ.get("MCP_ORIGIN") or "").strip())
+    return bool(explicit.hostname) and name == explicit.hostname.lower()
+
 
 def activity_origin() -> str:
     """The public origin the Activity is served from, or "" when unknown.
@@ -228,6 +248,6 @@ def unknown_subdomain(host: str | None) -> bool:
     if not domain or name == domain:
         return False
     label, _, rest = name.partition(".")
-    if not rest or label in {"www", ACTIVITY_SUBDOMAIN} or label in SUBDOMAIN_SECTIONS:
+    if not rest or label in {"www", ACTIVITY_SUBDOMAIN, MCP_SUBDOMAIN} or label in SUBDOMAIN_SECTIONS:
         return False
     return rest == domain or rest.endswith("." + domain)

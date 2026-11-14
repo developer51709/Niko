@@ -8,7 +8,7 @@ from .. import server as _server
 from ..developer import portal
 from flask import jsonify, request
 
-from utils.member_badges import account_age_badge_key, boosting_badge_key, niko_badge_keys
+from utils.member_badges import account_age_badge_key, boosting_badge_key, discord_badge_keys, niko_badge_keys
 from utils.presence import is_mobile_presence
 
 globals().update({
@@ -28,22 +28,6 @@ _MAX_PARALLEL_FETCHES = 5
 # tag is left out: it is drawn as a pill next to the name, not as one of these
 # square badges.
 _VERIFIED_BOT_FLAG = 1 << 16
-_PROFILE_BADGES = (
-    ("staff", 1 << 0),
-    ("partner", 1 << 1),
-    ("hypesquad_events", 1 << 2),
-    ("bug_hunter_level_1", 1 << 3),
-    ("hypesquad_bravery", 1 << 6),
-    ("hypesquad_brilliance", 1 << 7),
-    ("hypesquad_balance", 1 << 8),
-    ("early_supporter", 1 << 9),
-    ("bug_hunter_level_2", 1 << 14),
-    ("early_verified_developer", 1 << 17),
-    ("certified_moderator", 1 << 18),
-    ("supports_commands", 1 << 19),
-    ("active_developer", 1 << 22),
-)
-
 def _unix_seconds(value):
     """Convert a timestamp-like value to unix seconds, or ``None``."""
     if value is None or not hasattr(value, "timestamp"):
@@ -122,18 +106,7 @@ def _public_flag_value(user, member) -> int:
 
 def _profile_badges(user, member) -> list:
     """The profile badges an account carries, in the order Discord lists them."""
-    value = _public_flag_value(user, member)
-    badges = [name for name, bit in _PROFILE_BADGES if value & bit]
-    # Account age has no public flag; it comes from the account's creation date
-    # and only the highest reached tier is appended.
-    age = _account_age_badge(user, member)
-    if age:
-        badges.append(age)
-    # The boosting badge follows the flag badges, the way Discord appends it.
-    boosting = _boosting_badge(member)
-    if boosting:
-        badges.append(boosting)
-    return badges
+    return discord_badge_keys(user, member)
 
 
 def _custom_status(member):

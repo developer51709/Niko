@@ -16,6 +16,12 @@ globals().update({
 
 @app.route("/")
 def root():
+    # The MCP host is its own small documentation surface; its machine endpoint
+    # lives at /mcp on the same host.
+    if config.is_mcp_host(runtime.request_host()):
+        from ..mcp_server import landing_response
+
+        return landing_response()
     # The Activity subdomain's root is the Activity itself: Discord's URL
     # mapping only supports the root prefix, so there is no path to put it on.
     if config.is_activity_host(runtime.request_host()):

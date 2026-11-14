@@ -176,6 +176,7 @@ PRIMARY_KEYS: dict = {
     "sync_state": "key",
     "panel_settings": "key",
     "maintenance_targets": "target",
+    "mcp_api_key": "id",
     "afk_users": "user_id",
     "warns": "id",
     "mutes": "id",

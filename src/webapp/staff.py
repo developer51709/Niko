@@ -9,6 +9,7 @@ import time
 from cogs.staff.records import STAFF_ROLES
 from config.ids import OWNER_IDS, is_owner_id
 from flask import session
+from utils.member_badges import discord_badge_keys
 from utils.presence import is_mobile_presence
 from . import database, runtime
 
@@ -263,6 +264,7 @@ def _staff_identity(user_id: str) -> dict:
     status = getattr(raw_status, "name", None) or str(raw_status)
     status = status.rsplit(".", 1)[-1].lower()
     decoration_url = _avatar_decoration(user) if user is not None else None
+    badges = discord_badge_keys(user, member)
     return {
         "id": str(user_id),
         # Use the global Discord display name, never a guild nickname from
@@ -273,6 +275,9 @@ def _staff_identity(user_id: str) -> dict:
         # Drawn around the avatar by the Team pages, the same way Discord shows
         # a Nitro avatar decoration on a profile.
         "avatar_decoration_url": decoration_url or (cached_identity or {}).get("avatar_decoration_url"),
+        # Discord's badges first, then the umbrella Niko Staff badge every
+        # public team profile carries.
+        "badges": [*badges, "niko_staff"],
         "status": status,
         "status_label": {"online": "Online", "idle": "Idle", "dnd": "Do Not Disturb", "offline": "Offline"}.get(status, status.title()),
         # True when the phone is the client holding the presence, so every

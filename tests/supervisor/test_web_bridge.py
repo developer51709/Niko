@@ -100,6 +100,7 @@ def _serve_upstream():
 def test_only_live_bot_api_paths_are_forwarded():
     assert should_forward("/api/status") is True
     assert should_forward("/api/discord/interactions") is True
+    assert should_forward("/mcp") is True
     assert should_forward("/api/owner/logs") is False
     assert should_forward("/api/updates/force") is False
     assert should_forward("/api/updates/push") is False

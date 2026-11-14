@@ -47,6 +47,23 @@ ACCOUNT_AGE_BADGES = (
     (10, "account_age_primordial", "Primordial"),
 )
 
+#: Discord's public profile flag badges, in the order Discord lists them.
+DISCORD_BADGE_FLAGS = (
+    ("staff", 1 << 0),
+    ("partner", 1 << 1),
+    ("hypesquad_events", 1 << 2),
+    ("bug_hunter_level_1", 1 << 3),
+    ("hypesquad_bravery", 1 << 6),
+    ("hypesquad_brilliance", 1 << 7),
+    ("hypesquad_balance", 1 << 8),
+    ("early_supporter", 1 << 9),
+    ("bug_hunter_level_2", 1 << 14),
+    ("early_verified_developer", 1 << 17),
+    ("certified_moderator", 1 << 18),
+    ("supports_commands", 1 << 19),
+    ("active_developer", 1 << 22),
+)
+
 #: The server-boosting tiers Discord draws its own badge for, ascending.
 BOOSTING_TIERS = (1, 2, 3, 6, 9, 12, 15, 18, 24)
 
@@ -105,6 +122,35 @@ def boosting_badge_key(premium_since) -> str | None:
     if months < BOOSTING_TIERS[0]:
         return None
     return f"boosting_{max(tier for tier in BOOSTING_TIERS if tier <= months)}_months"
+
+
+def public_flag_value(user, member) -> int:
+    """Every public flag either a user or member object carries."""
+    value = 0
+    for source in (user, member):
+        flags = getattr(source, "public_flags", None)
+        if flags is None:
+            continue
+        try:
+            value |= int(getattr(flags, "value", flags) or 0)
+        except (TypeError, ValueError):
+            continue
+    return value
+
+
+def discord_badge_keys(user, member) -> list[str]:
+    """Discord's profile badges in display order, including account age and boosting."""
+    value = public_flag_value(user, member)
+    keys = [name for name, bit in DISCORD_BADGE_FLAGS if value & bit]
+    age = account_age_badge_key(
+        getattr(user, "created_at", None) or getattr(member, "created_at", None)
+    )
+    if age:
+        keys.append(age)
+    boosting = boosting_badge_key(getattr(member, "premium_since", None))
+    if boosting:
+        keys.append(boosting)
+    return keys
 
 
 def _role_ids(ids: dict, key: str) -> set[int]:

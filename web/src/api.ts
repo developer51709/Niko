@@ -45,6 +45,8 @@ import type {
   NotifierFollow,
   NotifierResponse,
   StaffMaintenanceResponse,
+  StaffMcpServer,
+  StaffMcpGeneratedKey,
   HoneypotResponse,
   HoneypotSettings,
   OwnerLocales,
@@ -194,6 +196,8 @@ export const getTeamMember = (id: string) => api<StaffMember>(`/api/team/${id}`)
 export const getTeamProfileCard = (type: string, url: string, signal?: AbortSignal) =>
   api<{ card: SocialProfileCardData }>(`/api/team/profile-card?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`, { signal });
 export const getStaffMe = () => api<{ role: string; role_label: string; profile: StaffMember }>("/api/staff/me");
+export const getStaffMcpServer = () => api<StaffMcpServer>("/api/staff/mcp");
+export const rotateStaffMcpKey = (csrfToken?: string) => api<StaffMcpGeneratedKey & { ok: boolean }>("/api/staff/mcp/key", { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined });
 export const getStaffMembers = () => api<StaffManagementResponse>("/api/staff/members");
 export const getStaffAnalytics = (days = 30) => api<StaffAnalytics>(`/api/staff/analytics?days=${days}`);
 export const manageStaffMember = (userId: string, body: { action: "assign" | "demote" | "suspend" | "lift"; role?: string; reason?: string }, csrfToken?: string) => api<{ ok: boolean; status: string }>(`/api/staff/members/${encodeURIComponent(userId)}/manage`, { method: "POST", headers: csrfToken ? { "X-CSRF-Token": csrfToken } : undefined, body: JSON.stringify(body) });

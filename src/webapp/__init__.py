@@ -40,6 +40,7 @@ from .routes import (  # noqa: E402,F401
     interaction_routes,
     verification_routes,
     internal_routes,
+    mcp_routes,
 )
 
 __all__ = ["app", "configure_bot", "public_base_url", "redirect_uri"]

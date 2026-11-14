@@ -1261,6 +1261,23 @@ async def _create_tables(bot):
     except Exception:
         pass  # The column already exists, or MongoDB has no ALTER TABLE.
 
+    # ── Owner MCP key ──────────────────────────────────────────────────
+    # One owner row, replaced on rotation. Only a salted PBKDF2 digest is
+    # stored; the raw key is returned once to the staff page.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS mcp_api_key (
+            id              TEXT PRIMARY KEY,
+            key_prefix      TEXT NOT NULL,
+            key_hash        TEXT NOT NULL,
+            salt            TEXT NOT NULL,
+            iterations      INTEGER NOT NULL,
+            created_at      TEXT NOT NULL,
+            created_by      TEXT,
+            created_by_name TEXT,
+            last_used_at    TEXT
+        )
+    """)
+
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS blacklist_users (
             id         INTEGER PRIMARY KEY,

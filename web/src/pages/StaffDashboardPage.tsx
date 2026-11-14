@@ -13,8 +13,7 @@ import { LavalinkView } from "../components/dashboard/LavalinkView";
 import { BotAnalyticsView } from "../components/dashboard/BotAnalyticsView";
 import { BroadcastStudioView } from "../components/dashboard/BroadcastStudioView";
 import { MaintenanceView } from "../components/dashboard/MaintenanceView";
-import { LocaleSyncView } from "../components/staff/LocaleSyncView";
-import { UpdatesView } from "../components/staff/UpdatesView";
+import { McpServerView } from "../components/staff/McpServerView";
 import { LogsView } from "../components/staff/LogsView";
 import { HoneypotView } from "../components/staff/HoneypotView";
 import { ErrorReportDocument, ErrorReportIncidentControls, reportMatchesSearch } from "../components/staff/ErrorReportsPanel";
@@ -73,7 +72,7 @@ function reportStatus(status: string) {
 const CARD_THEMES = selectOptions([["dark", "Dark"], ["light", "Light"]]);
 const BLACKLIST_TYPES = selectOptions([["user", "User"], ["guild", "Guild"]]);
 
-type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "lavalink" | "maintenance" | "honeypot" | "locales" | "updates" | "logs" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
+type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "lavalink" | "maintenance" | "honeypot" | "mcp" | "logs" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
 
 const OWNER_ROLES = ["owner"];
 
@@ -106,8 +105,7 @@ const TAB_ROLES: Record<StaffTab, string[]> = {
   lavalink: OWNER_ROLES,
   maintenance: OWNER_ROLES,
   honeypot: OWNER_ROLES,
-  locales: OWNER_ROLES,
-  updates: OWNER_ROLES,
+  mcp: OWNER_ROLES,
   logs: OWNER_ROLES,
   "team-recruitment": OWNER_ROLES,
   "staff-management": OWNER_ROLES,
@@ -125,7 +123,10 @@ function tabAllowedForRole(role: string, tab: StaffTab): boolean {
 
 /** Read a deep-linked tab from the URL hash, ignoring unknown or inaccessible ones. */
 function tabFromHash(hash: string, role: string | null): StaffTab | null {
-  const name = hash.replace(/^#/, "").trim().toLocaleLowerCase() as StaffTab;
+  const raw = hash.replace(/^#/, "").trim().toLocaleLowerCase();
+  // The old Locale sync and Updates tabs now live on the MCP page; keep their
+  // shared links working instead of dropping the visitor on the profile tab.
+  const name = (raw === "locales" || raw === "updates" ? "mcp" : raw) as StaffTab;
   if (!(name in TAB_ROLES)) return null;
   if (role && !tabAllowedForRole(role, name)) return null;
   return name;
@@ -356,8 +357,7 @@ export function StaffDashboardPage() {
   const canManageLavalink = tabAllowedForRole(staff.role, "lavalink");
   const canManageMaintenance = tabAllowedForRole(staff.role, "maintenance");
   const canManageHoneypot = tabAllowedForRole(staff.role, "honeypot");
-  const canManageLocales = tabAllowedForRole(staff.role, "locales");
-  const canManageUpdates = tabAllowedForRole(staff.role, "updates");
+  const canManageMcp = tabAllowedForRole(staff.role, "mcp");
   const canViewLogs = tabAllowedForRole(staff.role, "logs");
   const canManageNikoApplications = tabAllowedForRole(staff.role, "team-recruitment");
   const canManageStaffRoster = tabAllowedForRole(staff.role, "staff-management");
@@ -782,8 +782,7 @@ export function StaffDashboardPage() {
     ...(canManageNikoApplications ? [{ id: "team-recruitment", label: t("tabs.applications"), icon: "users", badge: nikoApplications.reduce((count, application) => count + application.submission_count, 0) }] : []),
     ...(canManageMaintenance ? [{ id: "maintenance", label: t("tabs.maintenance"), icon: "settings" }] : []),
     ...(canManageHoneypot ? [{ id: "honeypot", label: t("tabs.honeypot"), icon: "shield" }] : []),
-    ...(canManageLocales ? [{ id: "locales", label: t("tabs.locales"), icon: "doc" }] : []),
-    ...(canManageUpdates ? [{ id: "updates", label: t("tabs.updates"), icon: "spark" }] : []),
+    ...(canManageMcp ? [{ id: "mcp", label: t("tabs.mcp"), icon: "spark" }] : []),
     ...(canViewLogs ? [{ id: "logs", label: t("tabs.logs"), icon: "terminal" }] : []),
     ...(canManageStaffRoster ? [{ id: "staff-management", label: t("tabs.roster"), icon: "users", badge: staffRoster.filter((member) => member.staff_status !== "former").length }] : []),
     ...(canManageStaffRoster ? [{ id: "broadcasts", label: t("tabs.broadcasts"), icon: "message" }] : []),
@@ -920,8 +919,7 @@ export function StaffDashboardPage() {
     {activeTab === "lavalink" && canManageLavalink && <section id="staff-lavalink-panel" role="tabpanel" aria-labelledby="staff-lavalink-tab" className="staff-guild-operations"><LavalinkView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "maintenance" && canManageMaintenance && <section id="staff-maintenance-panel" role="tabpanel" aria-labelledby="staff-maintenance-tab" className="staff-guild-operations"><MaintenanceView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "honeypot" && canManageHoneypot && <section id="staff-honeypot-panel" role="tabpanel" aria-labelledby="staff-honeypot-tab" className="staff-guild-operations"><HoneypotView csrfToken={auth.csrf_token} /></section>}
-    {activeTab === "locales" && canManageLocales && <section id="staff-locales-panel" role="tabpanel" aria-labelledby="staff-locales-tab" className="staff-guild-operations"><LocaleSyncView csrfToken={auth.csrf_token} /></section>}
-    {activeTab === "updates" && canManageUpdates && <section id="staff-updates-panel" role="tabpanel" aria-labelledby="staff-updates-tab" className="staff-guild-operations"><UpdatesView csrfToken={auth.csrf_token} /></section>}
+    {activeTab === "mcp" && canManageMcp && <section id="staff-mcp-panel" role="tabpanel" aria-labelledby="staff-mcp-tab" className="staff-guild-operations"><McpServerView csrfToken={auth.csrf_token} /></section>}
     {activeTab === "logs" && canViewLogs && <section id="staff-logs-panel" role="tabpanel" aria-labelledby="staff-logs-tab" className="staff-guild-operations"><LogsView /></section>}
     {activeTab === "staff-management" && canManageStaffRoster && <section id="staff-staff-management-panel" role="tabpanel" aria-labelledby="staff-staff-management-tab" className="staff-guild-operations">
       <header className="staff-guilds-heading"><div><span className="panel-kicker">Owner-only · access control</span><h2>Staff management</h2><p>View the full staff roster, assign or change roles, and suspend access during investigations. Suspension preserves the stored role and the member's public profile but removes every official Discord staff role and blocks staff commands and website pages until you lift it.</p></div><div className="staff-guild-count"><strong>{staffRoster.filter((member) => member.staff_status !== "former").length}</strong><span>{staffRoster.filter((member) => member.staff_status === "suspended").length} suspended · {staffRoster.filter((member) => member.staff_status === "former").length} former</span></div></header>

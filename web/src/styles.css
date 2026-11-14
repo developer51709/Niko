@@ -181,7 +181,7 @@ h1, h2, h3, p { margin-top: 0; }
 /* Holds the avatar in place inside the larger mask box. */
 .discord-status-avatar-art-inner { position: absolute; inset: 8.3333%; display: block; }
 .discord-status-icon { position: absolute; z-index: 2; right: calc((var(--status-notch-width) - var(--status-icon-size)) / 2); bottom: calc((var(--status-notch-size) - var(--status-icon-size)) / 2); width: var(--status-icon-size); height: var(--status-icon-size); object-fit: contain; }
-.team-card .team-avatar-status-wrap { width: 56px; height: 56px; margin-top: -39px; --status-avatar-size: 56px; --status-icon-size: 16px; }
+.team-card .team-avatar-status-wrap { width: 56px; height: 56px; margin-top: -46px; --status-avatar-size: 56px; --status-icon-size: 16px; }
 .team-card .team-avatar-status-wrap .team-avatar { margin: 0; }
 .team-profile-card .team-profile-avatar-status-wrap { width: 100px; height: 100px; margin: -50px auto 6px; transform: translateY(-20px); --status-avatar-size: 100px; --status-icon-size: 21px; }
 .team-profile-card .team-profile-avatar-status-wrap .team-profile-avatar { margin: 0; transform: none; }

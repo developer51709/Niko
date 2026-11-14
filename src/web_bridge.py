@@ -72,6 +72,10 @@ HOP_BY_HOP = {
 
 
 def should_forward(path: str) -> bool:
+    # The MCP endpoint reads the live bot for reports, incidents and deployment,
+    # so the dashboard child must hand it to the bot child like a live API.
+    if path.rstrip("/") == "/mcp":
+        return True
     if path.startswith(FORWARDED_PUBLIC_PREFIX):
         # A challenge token is always in the path, so the prefix matches every
         # form, image and submission and never the entry page, at ``/verify``

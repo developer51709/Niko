@@ -194,6 +194,41 @@ export type OwnerUpdateApply = {
   handoff?: OwnerUpdates["handoff"];
 };
 
+/** One remote MCP tool exposed by the owner server. */
+export type StaffMcpTool = {
+  name: string;
+  description: string;
+};
+
+/** Display metadata for the owner key; never contains the key itself. */
+export type StaffMcpKey = {
+  configured: boolean;
+  key_prefix: string | null;
+  created_at: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  last_used_at: string | null;
+  algorithm: string;
+  iterations: number;
+  error?: string;
+};
+
+/** The one-time response when the owner generates or rotates the key. */
+export type StaffMcpGeneratedKey = StaffMcpKey & { key: string };
+
+/** What the owner MCP Server page reads from `/api/staff/mcp`. */
+export type StaffMcpServer = {
+  configured: boolean;
+  endpoint: string;
+  origin: string;
+  auth_header: string;
+  key: StaffMcpKey;
+  tools: StaffMcpTool[];
+  /** Still true on deployments that have not removed their beta source yet. */
+  beta_configured: boolean;
+  last: OwnerUpdateRun | null;
+};
+
 /** A live snapshot of the update currently being applied. */
 export type OwnerUpdateProgress = {
   active: boolean;
@@ -1236,6 +1271,8 @@ export type StaffMember = {
   handle?: string | null;
   role: string;
   role_label: string;
+  /** Discord profile badge keys followed by the Niko Staff badge. */
+  badges?: string[] | null;
   bio?: string | null;
   public_name?: string | null;
   public_avatar_url?: string | null;

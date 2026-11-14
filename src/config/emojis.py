@@ -364,27 +364,29 @@ def _configured_emoji(emoji_name: str):
 
     # Discord's account-age badges. The player and the profile popups only draw
     # the highest tier an account has reached; scripts/build-badge-art.mjs
-    # rasterises the popup SVGs into these application emojis.
+    # rasterises the popup SVGs into these application emojis. These are the
+    # production application-emoji ids, pinned so a production push recognizes
+    # the live emojis instead of trying to upload placeholders again.
     if emoji_name == "account_age_seed":
-        return "<:account_age_seed:1569000000000000001>"
+        return "<:account_age_seed:1570990039817527386>"
     if emoji_name == "account_age_sprout":
-        return "<:account_age_sprout:1569000000000000002>"
+        return "<:account_age_sprout:1570990043219370016>"
     if emoji_name == "account_age_bud":
-        return "<:account_age_bud:1569000000000000003>"
+        return "<:account_age_bud:1570990047006687366>"
     if emoji_name == "account_age_sapling":
-        return "<:account_age_sapling:1569000000000000004>"
+        return "<:account_age_sapling:1570990050467127457>"
     if emoji_name == "account_age_blossom":
-        return "<:account_age_blossom:1569000000000000005>"
+        return "<:account_age_blossom:1570990053734227968>"
     if emoji_name == "account_age_redwood":
-        return "<:account_age_redwood:1569000000000000006>"
+        return "<:account_age_redwood:1570990056792006656>"
     if emoji_name == "account_age_sequoia":
-        return "<:account_age_sequoia:1569000000000000007>"
+        return "<:account_age_sequoia:1570990059887525919>"
     if emoji_name == "account_age_bristlecone":
-        return "<:account_age_bristlecone:1569000000000000008>"
+        return "<:account_age_bristlecone:1570990062940848179>"
     if emoji_name == "account_age_stromatolite":
-        return "<:account_age_stromatolite:1569000000000000009>"
+        return "<:account_age_stromatolite:1570990066095100015>"
     if emoji_name == "account_age_primordial":
-        return "<:account_age_primordial:1569000000000000010>"
+        return "<:account_age_primordial:1570990069291024415>"
 
     # ==========================================================================
     # Niko role badges
