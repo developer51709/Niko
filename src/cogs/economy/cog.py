@@ -54,11 +54,6 @@ class EconomyCog(
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        if not os.path.exists("data/economy_data"):
-            log.info("Economy", "economy_data directory not found. Creating directory…")
-            os.makedirs("data/economy_data")
-            log.success("Economy", "economy_data directory created. Continuing…")
-
         # Use database instead of JSON files. The cache holds the accounts in
         # play, in LRU order (see ACCOUNT_CACHE_LIMIT), not the whole table.
         self.economy_data: dict[str, dict] = {}
