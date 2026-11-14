@@ -145,6 +145,7 @@ def test_guild_blacklist_round_trips_through_mongo_pool():
             "added_by": 7,
             "expires_at": None,
             "status": "active",
+            "appealable": True,
         }
 
         assert await manager.update_guild_reason(123456, "updated")

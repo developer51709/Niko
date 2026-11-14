@@ -1189,6 +1189,48 @@ async def _create_tables(bot):
         pass
     await _migrate_warns_data(bot)
 
+    # ── Echoed messages and their reports ──────────────────────────────
+    # Echo content is stored because the message itself is gone after a
+    # moderator acts on a report. ``echo_id`` is the opaque id in the button;
+    # the Discord message id is kept separately for deletion and jump links.
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS echo_messages (
+            echo_id     TEXT PRIMARY KEY,
+            message_id  INTEGER NOT NULL UNIQUE,
+            guild_id    INTEGER NOT NULL,
+            channel_id  INTEGER NOT NULL,
+            author_id   INTEGER NOT NULL,
+            content     TEXT NOT NULL,
+            truncated   INTEGER NOT NULL DEFAULT 0,
+            created_at  REAL NOT NULL,
+            removed_at  REAL
+        )
+    """)
+    await bot.cxn.execute("CREATE INDEX IF NOT EXISTS idx_echo_messages_author ON echo_messages (author_id, created_at)")
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS echo_reports (
+            report_id   TEXT PRIMARY KEY,
+            echo_id     TEXT NOT NULL,
+            reporter_id INTEGER NOT NULL,
+            reason      TEXT,
+            status      TEXT NOT NULL DEFAULT 'pending',
+            created_at  REAL NOT NULL,
+            reviewed_by INTEGER,
+            reviewed_at REAL
+        )
+    """)
+    await bot.cxn.execute("CREATE INDEX IF NOT EXISTS idx_echo_reports_echo ON echo_reports (echo_id, status)")
+    await bot.cxn.execute("""
+        CREATE TABLE IF NOT EXISTS echo_warnings (
+            warning_id TEXT PRIMARY KEY,
+            user_id    INTEGER NOT NULL,
+            report_id  TEXT NOT NULL UNIQUE,
+            reason     TEXT,
+            created_at REAL NOT NULL
+        )
+    """)
+    await bot.cxn.execute("CREATE INDEX IF NOT EXISTS idx_echo_warnings_user ON echo_warnings (user_id, created_at)")
+
     # ── Mutes table ────────────────────────────────────────────────────
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS mutes (
@@ -1293,11 +1335,13 @@ async def _create_tables(bot):
         "ALTER TABLE blacklist_users ADD COLUMN expires_at REAL",
         "ALTER TABLE blacklist_users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
         "ALTER TABLE blacklist_users ADD COLUMN appeal_id TEXT",
+        "ALTER TABLE blacklist_users ADD COLUMN appealable INTEGER NOT NULL DEFAULT 1",
     ):
         try:
             await bot.cxn.execute(statement)
         except Exception:
             pass  # Existing database already has the column.
+    await bot.cxn.execute("UPDATE blacklist_users SET appealable = 1 WHERE appealable IS NULL")
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS blacklist_appeals (
             appeal_id TEXT PRIMARY KEY,

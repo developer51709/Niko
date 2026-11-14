@@ -86,6 +86,7 @@ class BlacklistManager:
             "added_by":  row.get("added_by"),
             "expires_at": float(row["expires_at"]) if row.get("expires_at") is not None else None,
             "status": row.get("status"),
+            "appealable": True if row.get("appealable") is None else bool(row["appealable"]),
         }
 
     async def load(self) -> None:
@@ -100,6 +101,10 @@ class BlacklistManager:
             await pool.execute("ALTER TABLE blacklist_users ADD COLUMN expires_at REAL")
         except Exception:
             pass  # Column already exists on the current schema.
+        try:
+            await pool.execute("ALTER TABLE blacklist_users ADD COLUMN appealable INTEGER NOT NULL DEFAULT 1")
+        except Exception:
+            pass  # Column already exists on the current schema.
 
         try:
             now = time.time()
@@ -109,7 +114,7 @@ class BlacklistManager:
             )
             await pool.execute("CREATE TABLE IF NOT EXISTS abuse_strikes (user_id INTEGER PRIMARY KEY, strikes INTEGER NOT NULL DEFAULT 0, updated_at REAL NOT NULL)")
             user_rows = await pool.fetch(
-                "SELECT id, reason, timestamp, added_by, expires_at, status FROM blacklist_users WHERE status = 'active' OR status IS NULL"
+                "SELECT id, reason, timestamp, added_by, expires_at, status, appealable FROM blacklist_users WHERE status = 'active' OR status IS NULL"
             )
             guild_rows = await pool.fetch(
                 "SELECT id, reason, timestamp, added_by, status FROM blacklist_guilds WHERE status = 'active' OR status IS NULL"
@@ -189,11 +194,18 @@ class BlacklistManager:
         reason: Optional[str] = None,
         added_by: Optional[int] = None,
         expires_at: Optional[float] = None,
+        appealable: bool = True,
     ) -> bool:
         """Add a user to the blacklist. Returns True if added (False if already there)."""
         await self._ensure_loaded()
         async with self._write_lock:
-            return await self._add_user_locked(user_id, reason=reason, added_by=added_by, expires_at=expires_at)
+            return await self._add_user_locked(
+                user_id,
+                reason=reason,
+                added_by=added_by,
+                expires_at=expires_at,
+                appealable=appealable,
+            )
 
     async def _add_user_locked(
         self,
@@ -202,6 +214,7 @@ class BlacklistManager:
         reason: Optional[str],
         added_by: Optional[int],
         expires_at: Optional[float],
+        appealable: bool = True,
     ) -> bool:
         if is_owner_id(user_id):
             logging.warning(
@@ -228,12 +241,13 @@ class BlacklistManager:
                 int(user_id), time.time(),
             )
             await pool.execute(
-                "INSERT INTO blacklist_users (id, reason, timestamp, added_by, expires_at, status, appeal_id) VALUES ($1, $2, $3, $4, $5, 'active', NULL) ON CONFLICT(id) DO UPDATE SET reason = excluded.reason, timestamp = excluded.timestamp, added_by = excluded.added_by, expires_at = excluded.expires_at, status = 'active', appeal_id = NULL",
-                int(user_id), reason, entry["timestamp"], added_by, expires_at,
+                "INSERT INTO blacklist_users (id, reason, timestamp, added_by, expires_at, status, appeal_id, appealable) VALUES ($1, $2, $3, $4, $5, 'active', NULL, $6) ON CONFLICT(id) DO UPDATE SET reason = excluded.reason, timestamp = excluded.timestamp, added_by = excluded.added_by, expires_at = excluded.expires_at, status = 'active', appeal_id = NULL, appealable = excluded.appealable",
+                int(user_id), reason, entry["timestamp"], added_by, expires_at, 1 if appealable else 0,
             )
         except Exception as e:
             logging.error("blacklist_manager", f"Failed to save blacklisted user {user_id}: {e}")
             return False
+        entry["appealable"] = bool(appealable)
         self.blacklist["users"].append(entry)
         logging.info("blacklist_manager", f"User {user_id} added to blacklist (reason: {reason}).")
         return True
@@ -424,6 +438,97 @@ class BlacklistManager:
             except Exception as e:
                 logging.error("blacklist_manager", f"Failed to register abuse strike for user {user_id}: {e}")
                 return {"strikes": 0, "blacklisted": False, "permanent": False, "expires_at": None}
+
+    async def apply_warning_blacklist(
+        self,
+        user_id: int,
+        warning_count: int,
+        *,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Apply the three-strike echo warning blacklist ladder.
+
+        Three warnings earn a three-hour blacklist, four earn a day, and five
+        or more are permanent. A permanent entry becomes non-appealable once
+        the user has an approved appeal on record, which is how a successful
+        appeal followed by another violation is handled. A longer existing
+        entry is never shortened by a later, weaker strike.
+        """
+        empty = {
+            "warning_count": int(warning_count),
+            "blacklisted": False,
+            "permanent": False,
+            "appealable": True,
+            "expires_at": None,
+            "duration_seconds": None,
+        }
+        if is_owner_id(user_id) or int(warning_count) < 3:
+            return empty
+
+        await self._ensure_loaded()
+        pool = self._pool()
+        if pool is None:
+            logging.error("blacklist_manager", "Cannot apply warning blacklist without a database pool.")
+            return empty
+
+        count = int(warning_count)
+        now = time.time()
+        permanent = count >= 5
+        duration_seconds = None if permanent else (3 * 60 * 60 if count == 3 else 24 * 60 * 60)
+        reason_text = f"Echo warning {count}: {reason or 'message removed after report'}"
+        appealable = True
+        if permanent:
+            prior = await pool.fetchrow(
+                "SELECT 1 AS found FROM blacklist_appeals "
+                "WHERE user_id = $1 AND guild_id IS NULL AND status = 'approved' LIMIT 1",
+                int(user_id),
+            )
+            appealable = prior is None
+
+        async with self._write_lock:
+            existing = self.get_user_entry(user_id)
+            if existing is not None:
+                old_expires = existing.get("expires_at")
+                if old_expires is None:
+                    # Never downgrade a permanent entry to a temporary one.
+                    permanent = True
+                    duration_seconds = None
+                    expires_at = None
+                    appealable = bool(existing.get("appealable", True)) and appealable
+                else:
+                    expires_at = None if permanent else max(old_expires, now + duration_seconds)
+                await pool.execute(
+                    "UPDATE blacklist_users SET reason = $1, timestamp = $2, added_by = NULL, "
+                    "expires_at = $3, status = 'active', appeal_id = NULL, appealable = $4 "
+                    "WHERE id = $5",
+                    reason_text, now, expires_at, 1 if appealable else 0, int(user_id),
+                )
+                existing.update({
+                    "reason": reason_text,
+                    "timestamp": now,
+                    "added_by": None,
+                    "expires_at": expires_at,
+                    "status": "active",
+                    "appealable": bool(appealable),
+                })
+                blacklisted = True
+            else:
+                expires_at = None if permanent else now + duration_seconds
+                blacklisted = await self._add_user_locked(
+                    user_id,
+                    reason=reason_text,
+                    added_by=None,
+                    expires_at=expires_at,
+                    appealable=appealable,
+                )
+            return {
+                "warning_count": count,
+                "blacklisted": blacklisted,
+                "permanent": permanent,
+                "appealable": bool(appealable),
+                "expires_at": expires_at,
+                "duration_seconds": duration_seconds,
+            }
 
     async def remove_guild(self, guild_id: int, *, bot: Any = None, restore: bool = True) -> bool:
         """Remove a guild from the blacklist and give its saved features back."""

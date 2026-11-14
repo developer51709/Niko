@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from config.emojis import get_emoji
 
+from cogs.utility.echo import EchoReporter
 from utils.command_locales import command_texts
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
@@ -14,6 +15,7 @@ msg = make_flat_msg(MESSAGES, {"pingpong": get_emoji("pingpong")})
 class UtilityCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.echo_reporter = EchoReporter(bot)
 
     @commands.hybrid_command(name="ping", description=CMDS.text("ping.description"))
     async def ping(self, ctx):
@@ -37,19 +39,11 @@ class UtilityCog(commands.Cog):
     @commands.has_permissions(manage_messages=True)
     async def echo(self, ctx, *, message: str):
         """Echoes the user's message."""
-        MAX_LEN = 1950
+        await self.echo_reporter.send(ctx, message)
 
-        footer = msg(ctx, "echo_footer", author=ctx.author.mention)
-        if len(message) > MAX_LEN:
-            await ctx.send(
-                f"{message[:MAX_LEN]}...\n{footer}",
-                allowed_mentions=discord.AllowedMentions.none()
-            )
-        else:
-            await ctx.send(
-                f"{message}\n{footer}",
-                allowed_mentions=discord.AllowedMentions.none()
-            )
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        await self.echo_reporter.on_interaction(interaction)
 
 
 async def setup(bot):

@@ -143,7 +143,10 @@ CHANNEL_SPECS = {
     "message_logs": ("Logs", "message-logs", "text", True),
     "channel_logs": ("Logs", "server-change-logs", "text", True),
     "automod_logs": ("Logs", "automod-logs", "text", True),
-    "scam_review": ("Logs", "scam-reports", "text", True),
+    # Scam review and echoed-message reports are both bot-generated queues
+    # handled by staff, so they live together instead of among server logs.
+    "scam_review": ("Bot Reports", "scam-reports", "text", True),
+    "message_reports": ("Bot Reports", "message-reports", "text", True),
     "voice_join": ("Voice", "Join to Create", "voice", False),
     "voice_lounge": ("Voice", "Community Voice", "voice", False),
     "voice_panel": ("Voice", "voice-master", "text", False),
@@ -209,6 +212,7 @@ CHANNEL_TOPICS = {
     "channel_logs": "Internal channel and role change records.",
     "automod_logs": "Internal automod actions and alerts.",
     "scam_review": "Private queue for scam reports and the images attached to them.",
+    "message_reports": "Private queue for reports about messages sent through the echo command.",
     "voice_panel": "Create a temporary voice channel by joining the voice room below.",
 }
 

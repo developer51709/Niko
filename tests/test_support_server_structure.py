@@ -28,7 +28,7 @@ class SupportServerStructureTests(unittest.TestCase):
     def test_blueprint_contains_requested_channels_roles_and_descriptions(self):
         self.assertTrue({"owner", "staff", "supporter", "member", "announcements_ping", "events_ping", "community_ping", "polls_ping"} <= ROLE_SPECS.keys())
         self.assertEqual(ROLE_SPECS["owner"][0], "Niko Owner")
-        self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review", "bot_commands"} <= CHANNEL_SPECS.keys())
+        self.assertTrue({"events", "event_chat", "polls", "help", "tickets", "logs", "automod_logs", "scam_review", "message_reports", "bot_commands"} <= CHANNEL_SPECS.keys())
         self.assertEqual(CHANNEL_SPECS["bot_commands"][:3], ("Community", "bot-commands", "text"))
         self.assertIn("command messages out of the main community chat", CHANNEL_TOPICS["bot_commands"])
         self.assertEqual(CHANNEL_SPECS["help"][2], "forum")
@@ -44,7 +44,13 @@ class SupportServerStructureTests(unittest.TestCase):
         category_sizes = {}
         for category, _name, _kind, _staff_only in CHANNEL_SPECS.values():
             category_sizes[category] = category_sizes.get(category, 0) + 1
-        self.assertTrue(all(size >= 3 for size in category_sizes.values()), category_sizes)
+        self.assertEqual(category_sizes.get("Bot Reports"), 2)
+        self.assertTrue(
+            all(size >= 3 for category, size in category_sizes.items() if category != "Bot Reports"),
+            category_sizes,
+        )
+        self.assertEqual(CHANNEL_SPECS["scam_review"][0], "Bot Reports")
+        self.assertEqual(CHANNEL_SPECS["message_reports"], ("Bot Reports", "message-reports", "text", True))
         self.assertEqual({tag.name for tag in HELP_FORUM_TAGS}, {"Bug", "Setup", "Account", "Feature request", "Solved"})
         self.assertTrue(all(not any(char.isupper() for char in category if char.isalpha()) for category in ()))
         self.assertEqual(CHANNEL_SPECS["polls"][0], CHANNEL_SPECS["announcements"][0])
@@ -62,7 +68,7 @@ class SupportServerStructureTests(unittest.TestCase):
         self.assertEqual(CHANNEL_SPECS["channel_logs"][0], "Logs")
         self.assertEqual(set(CHANNEL_TOPICS), {key for key, spec in CHANNEL_SPECS.items() if spec[2] != "voice"})
         self.assertTrue(all(CHANNEL_TOPICS[key].strip() for key in CHANNEL_TOPICS))
-        self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_cmds", "staff_voice", "scam_review")))
+        self.assertTrue(all(CHANNEL_SPECS[key][3] for key in ("staff_announcements", "staff_rules", "staff_chat", "staff_cmds", "staff_voice", "scam_review", "message_reports")))
         self.assertEqual(CHANNEL_SPECS["staff_cmds"], ("Staff", "staff-cmds", "text", True))
         self.assertEqual(CHANNEL_TOPICS["staff_cmds"], "Private channel for staff command output and bot operations.")
         staff_order = [key for key, spec in CHANNEL_SPECS.items() if spec[0] == "Staff"]

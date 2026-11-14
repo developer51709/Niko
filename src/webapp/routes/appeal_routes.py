@@ -88,13 +88,18 @@ def _handle_blacklist_appeal(guild_id=None):
                     user_id,
                 )
             row = run_on_bot_loop(read_status())
+            entry = _current_user_blacklist_entry()
+            if entry and not entry.get("appealable", True):
+                return jsonify({
+                    "status": "not_eligible",
+                    "can_appeal": False,
+                    "reason": entry.get("reason") or "No reason recorded.",
+                })
             if not row:
-                entry = _current_user_blacklist_entry()
                 if not entry:
                     return jsonify({"status": "not_blacklisted", "can_appeal": False})
                 return jsonify({"status": "eligible", "can_appeal": True, "reason": entry.get("reason") or "No reason recorded."})
             result = dict(row)
-            entry = _current_user_blacklist_entry()
             if result["status"] == "approved" and entry:
                 active_appeal = None
                 if entry.get("appeal_id"):
@@ -134,6 +139,8 @@ def _handle_blacklist_appeal(guild_id=None):
             entry = _current_user_blacklist_entry()
             if not entry:
                 return jsonify({"error": "Only users with an active blacklist can appeal."}), 403
+            if not entry.get("appealable", True):
+                return jsonify({"error": "This blacklist is not appealable."}), 403
             lock_key = ("user", user_id)
 
         async def create_appeal():
