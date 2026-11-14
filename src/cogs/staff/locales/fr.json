@@ -1,7 +1,5 @@
 {
   "commands": {
-    "announce.args.topic": "Mise à jour à annoncer ; omets pour la dernière, ou `policy` pour l'avis de politique.",
-    "announce.help": "Annoncer la dernière mise à jour de Niko (ou `policy`) dans ce salon.",
     "appemojis.help": "Lister tous les emojis d'application enregistrés",
     "blacklist.add.args.id_or_mention": "ID d'utilisateur ou de serveur, mention, ou nom.",
     "blacklist.add.args.reason": "Raison de la mise en liste noire.",

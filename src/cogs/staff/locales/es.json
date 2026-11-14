@@ -1,7 +1,5 @@
 {
   "commands": {
-    "announce.args.topic": "Actualización que anunciar; omítelo para la última o usa `policy` para el aviso de políticas.",
-    "announce.help": "Anuncia la última actualización de Niko (o `policy`) en este canal.",
     "appemojis.help": "Lista todos los emojis de aplicación registrados",
     "blacklist.add.args.id_or_mention": "ID, mención o nombre del usuario o servidor.",
     "blacklist.add.args.reason": "Por qué el objetivo está en la lista negra.",

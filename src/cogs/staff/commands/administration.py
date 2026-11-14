@@ -1,11 +1,10 @@
-"""Owner administration: servers, invites, announcements, dev role and shards."""
+"""Owner administration: servers, invites, dev role and shards."""
 
 import asyncio
 
 import discord
 from discord.ext import commands
 
-from config import links
 from config.emojis import get_emoji
 from cogs.staff.base import CMDS, StaffCommands
 from utils.paginator import PaginatedView, paginate
@@ -76,123 +75,6 @@ class AdministrationCommands:
         )
         view.add_item(container)
         await ctx.send(view=view)
-
-    #: The release ``.staff announce`` announces. The changelog entry and the
-    #: pages the buttons open are named in one place, so a button can never
-    #: point at a page that was renamed or retired alongside the update.
-    UPDATE_TITLE = "The music room got bigger 🎛️"
-    UPDATE_CHANGELOG_URL = f"{links.WEBSITE}/changelog/music-room-update"
-    UPDATE_COMMANDS_URL = f"{links.WEBSITE}/commands"
-    UPDATE_SUPPORT_URL = links.SUPPORT_SERVER
-
-    @StaffCommands.staff.command(name="announce", help=CMDS.help("announce"), hidden=True)
-    async def announce(self, ctx, topic: str = ""):
-        """Announce a release, with links to its changelog entry and pages.
-
-        ``.staff announce`` posts the current update, ``.staff announce policy``
-        posts the community policy notice.
-        """
-        topic = (topic or "update").strip().lower()
-        if topic in ("update", "updates"):
-            view = self._update_announcement_view()
-        elif topic == "policy":
-            view = self._policy_view()
-        else:
-            return await ctx.send(
-                "Usage: `.staff announce` for the latest update, or "
-                "`.staff announce policy` for the community policy."
-            )
-        # delete original message
-        await ctx.message.delete()
-        await ctx.send(view=view)
-
-    def _update_announcement_view(self) -> discord.ui.LayoutView:
-        """The current release announcement, with its changelog and site links."""
-        view = discord.ui.LayoutView()
-        view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=f"## **@everyone — {self.UPDATE_TITLE}**"
-            ),
-            discord.ui.TextDisplay(
-                content=(
-                    "Music in Niko is now a shared room instead of one person's queue.\n\n"
-                    "**A DJ role** — `.dj role @role` names the role that can skip, go back, stop, loop, "
-                    "change autoplay or move the volume. Pause and resume stay open to the channel, "
-                    "`.dj` shows the current role, and `.dj clear` hands playback back to everyone.\n\n"
-                    "**Shared playlists** — `.playlist create <name>` starts one, `.playlist add <name>` "
-                    "drops in the current track, and `.playlist play <name>` queues it. Use "
-                    "`.playlist share @member <name>` so other people can add and remove tracks, "
-                    "`.playlist show` to see it, and `.playlist remove <index> <name>` to take one out.\n\n"
-                    "**A real player** — the now-playing panel's **Open Player** button launches a Discord "
-                    "Activity with the artwork, progress, queue and controls in one window. It runs on the "
-                    "`activities` subdomain, and every tap is re-checked against the voice channel and the "
-                    "DJ role.\n\n"
-                    "**Last.fm scrobbling** — if you've linked Last.fm, `.scrobble on` sends the tracks you "
-                    "request to your profile. Only your requests, and only after real playback — a track "
-                    "paused for ten minutes won't count — and `.scrobble off` stops it.\n\n"
-                    "-# Last.fm scrobbling is opt-in per member, and the bot stays free as always."
-                )
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="-# Full breakdown on the site. If something acts up, the support server is open."
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.ActionRow(
-                discord.ui.Button(
-                    label="What's new",
-                    style=discord.ButtonStyle.link,
-                    url=self.UPDATE_CHANGELOG_URL,
-                    emoji=get_emoji("megaphone")
-                ),
-                discord.ui.Button(
-                    label="All commands",
-                    style=discord.ButtonStyle.link,
-                    url=self.UPDATE_COMMANDS_URL,
-                    emoji=get_emoji("link")
-                ),
-                discord.ui.Button(
-                    label="Support server",
-                    style=discord.ButtonStyle.link,
-                    url=self.UPDATE_SUPPORT_URL,
-                    emoji=get_emoji("discord")
-                )
-            )
-        ))
-        return view
-
-    def _policy_view(self) -> discord.ui.LayoutView:
-        """The community policy notice, kept for servers that still need it."""
-        view = discord.ui.LayoutView()
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(
-                content="## **@everyone — New Community Policy 🛡️**"
-            ),
-            discord.ui.TextDisplay(
-                content="We've published a **Community Policy** that every server using Niko must follow.\n\nIt covers things like:\n\n- **No identity-based discrimination or harassment**\n- **No illegal or malicious content** — including CSAM, malware, gore/shock content, and pirated media or software\n- **Cooperation with staff investigations** — servers found not to be breaking the policies won't receive any further action\n\n**Important:** banning the staff member(s) sent to investigate and/or hiding potential evidence will result in the server and any involved users being **permanently blacklisted** from using Niko."
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                content="-# Please review the full policy at your earliest convenience."
-            ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.ActionRow(
-                discord.ui.Button(
-                    label="Read the Community Policy",
-                    style=discord.ButtonStyle.link,
-                    url="https://niko.sryze.cc/community",
-                    emoji=get_emoji("link")
-                ),
-                discord.ui.Button(
-                    label="Support Server",
-                    style=discord.ButtonStyle.link,
-                    url=links.SUPPORT_SERVER,
-                    emoji=get_emoji("discord")
-                )
-            )
-        )
-        view.add_item(container)
-        return view
 
     @StaffCommands.staff.command(name="dev01", help=CMDS.help("dev01"), hidden=True)
     async def dev01(self, ctx, target: discord.Member = None):

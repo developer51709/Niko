@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 import sys
 import time
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from utils import mcp_keys  # noqa: E402
+from utils import announcements, mcp_keys  # noqa: E402
 from webapp import app, config, mcp_deploy, mcp_server, updates  # noqa: E402
 from webapp.routes import mcp_routes  # noqa: E402
 
@@ -118,8 +120,41 @@ def test_mcp_lists_deployment_and_diagnostics_tools():
         "niko_set_error_report_status",
         "niko_incidents",
         "niko_update_incident",
+        "niko_announce",
         "niko_deploy",
     } <= tools
+
+
+def test_mcp_announce_tool_sends_the_callers_content(monkeypatch):
+    sender = AsyncMock(return_value={"message_id": 9001, "channel_id": 444})
+    monkeypatch.setattr(announcements, "send_support_announcement", sender)
+    monkeypatch.setattr(mcp_server, "_bot", lambda: object())
+    monkeypatch.setattr(mcp_server, "_authorised", lambda headers: True)
+    monkeypatch.setattr(mcp_server, "_run", lambda coro, timeout=20: asyncio.run(coro))
+    owner_key = mcp_keys.local_rotate()["key"]
+
+    response = app.test_client().post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "niko_announce",
+                "arguments": {"title": "A release", "body": "The details."},
+            },
+        },
+        headers={"Authorization": f"Bearer {owner_key}"},
+    )
+
+    result = response.get_json()["result"]
+    assert result["isError"] is False
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["message_id"] == 9001
+    sender.assert_awaited_once()
+    assert sender.await_args.kwargs["title"] == "A release"
+    assert sender.await_args.kwargs["body"] == "The details."
+    assert sender.await_args.kwargs["ping"] is True
 
 
 def test_mcp_subdomain_is_a_known_site_host(monkeypatch):

@@ -38,6 +38,7 @@ async def _check_staff_cog():
     assert root.hidden is True
     names = {command.name for command in root.commands}
     assert {"help", "manage", "ping", "latency", "dev01"} <= names
+    assert "announce" not in names
     assert "devhelp" not in names
     assert "ownerhelp" not in names
     assert len(names) == len(root.commands)
@@ -124,16 +125,21 @@ def _help_panel_text(locale: str) -> str:
     )
 
 
+def test_the_announce_command_is_gone():
+    assert "announce" not in _staff_command_names()
+    assert "announce" not in HEAD_ADMIN_COMMANDS
+
+
 def test_staff_help_reads_the_localised_description_maps():
     """``command.help`` holds a ``{language: text}`` map, not a plain string."""
     expected = {
-        "en-US": "Announce the latest Niko update",
-        "de": "Kündige das neueste Niko-Update",
-        "es-ES": "Anuncia la última actualización de Niko",
+        "en-US": "List servers the bot has joined.",
+        "de": "Liste die Server auf, auf denen der Bot ist.",
+        "es-ES": "Lista los servidores en los que está el bot.",
     }
     for locale, wording in expected.items():
         text = _help_panel_text(locale)
-        assert f"**`.staff announce`** — {wording}" in text, locale
+        assert f"**`.staff servers`** — {wording}" in text, locale
         # The serialised map itself must never reach the panel.
         assert '"de"' not in text and '"es"' not in text, locale
 

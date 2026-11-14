@@ -1,7 +1,5 @@
 {
   "commands": {
-    "announce.args.topic": "Update, das angekündigt wird; leer für das neueste oder `policy` für den Richtlinien-Hinweis.",
-    "announce.help": "Kündige das neueste Niko-Update (oder `policy`) in diesem Kanal an.",
     "appemojis.help": "Liste alle registrierten Application-Emojis auf",
     "blacklist.add.args.id_or_mention": "ID, Erwähnung oder Name der Person oder des Servers.",
     "blacklist.add.args.reason": "Warum das Ziel auf der Blacklist landet.",

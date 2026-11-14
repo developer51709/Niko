@@ -1,7 +1,5 @@
 {
   "commands": {
-    "announce.args.topic": "Update to announce; omit for the latest, or `policy` for the policy notice.",
-    "announce.help": "Announce the latest Niko update (or `policy`) in this channel.",
     "appemojis.help": "List all registered application emojis",
     "blacklist.add.args.id_or_mention": "User or guild ID, mention, or name.",
     "blacklist.add.args.reason": "Why the target is blacklisted.",

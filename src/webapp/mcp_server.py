@@ -196,6 +196,16 @@ TOOLS: list[dict] = [
         "inputSchema": _empty_schema(),
     },
     {
+        "name": "niko_announce",
+        "description": "Send an announcement to the support server's announcements channel and ping its announcements role. The title and message are supplied by the caller; no announcement text is built into the bot.",
+        "inputSchema": _schema({
+            "title": {"type": "string", "minLength": 1, "maxLength": 160},
+            "body": {"type": "string", "minLength": 1, "maxLength": 3800},
+            "footer": {"type": "string", "maxLength": 120},
+            "ping": {"type": "boolean", "default": True},
+        }, ["title", "body"]),
+    },
+    {
         "name": "niko_deploy_commit",
         "description": "Deploy the files changed by a pushed GitHub commit. Prefer this over niko_deploy for normal updates and large files: the server fetches the changed files at the immutable commit SHA, verifies each blob hash, and applies only deployable areas. The commit must already be pushed to the Niko repository.",
         "inputSchema": _schema({
@@ -492,6 +502,23 @@ def _update_status() -> dict:
     }
 
 
+def _announce(args: dict) -> dict:
+    from utils.announcements import send_support_announcement
+
+    title = str(args.get("title") or "").strip()
+    body = str(args.get("body") or "").strip()
+    footer = str(args.get("footer") or "").strip()
+    ping = args.get("ping", True)
+    if not isinstance(ping, bool):
+        raise ValueError("ping must be true or false.")
+    return _run(
+        send_support_announcement(
+            _bot(), title=title, body=body, footer=footer or None, ping=ping,
+        ),
+        timeout=30,
+    )
+
+
 def _deploy(args: dict) -> dict:
     from .mcp_deploy import apply_payloads
 
@@ -525,6 +552,8 @@ def _call_tool(name: str, arguments: dict | None) -> dict:
         return _update_incident(arguments)
     if name == "niko_update_status":
         return _update_status()
+    if name == "niko_announce":
+        return _announce(arguments)
     if name == "niko_deploy":
         return _deploy(arguments)
     if name == "niko_deploy_commit":
@@ -567,7 +596,8 @@ def _handle_one(message: dict) -> dict | None:
                 "instructions": (
                     "Niko owner tools. Inspect niko_status first. Push a commit, then "
                     "use niko_deploy_commit to apply its changed files; niko_deploy is "
-                    "only for small inline hotfixes."
+                    "only for small inline hotfixes. Use niko_announce to post a "
+                    "caller-authored announcement to the support server."
                 ),
             },
         }
@@ -672,7 +702,7 @@ ul{{list-style:none;padding:0;display:grid;gap:10px}}li{{display:grid;gap:3px;pa
 </style></head><body><main>
 <span class="eyebrow">Niko · owner automation</span>
 <h1>MCP Server.</h1>
-<p>A direct, authenticated control surface for the Niko bot. Connect it as a remote MCP server in Freebuff to deploy files, inspect logs, triage error reports and manage public incidents.</p>
+<p>A direct, authenticated control surface for the Niko bot. Connect it as a remote MCP server in Freebuff to deploy files, inspect logs, triage error reports, manage public incidents and send support announcements.</p>
 <span class="status {status_class}">{status}</span>
 <section><h2>Connection</h2><pre>URL: {html.escape(endpoint())}
 Header: {html.escape(AUTH_HEADER)}</pre><p>Generate or rotate the key on the owner's MCP Server staff page. Only a salted PBKDF2-SHA256 digest is stored, and rotation applies immediately without a restart.</p></section>
