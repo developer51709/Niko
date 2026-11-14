@@ -196,8 +196,25 @@ TOOLS: list[dict] = [
         "inputSchema": _empty_schema(),
     },
     {
+        "name": "niko_deploy_commit",
+        "description": "Deploy the files changed by a pushed GitHub commit. Prefer this over niko_deploy for normal updates and large files: the server fetches the changed files at the immutable commit SHA, verifies each blob hash, and applies only deployable areas. The commit must already be pushed to the Niko repository.",
+        "inputSchema": _schema({
+            "ref": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{40}$",
+                "description": "Full 40-character commit SHA, from `git rev-parse HEAD`.",
+            },
+            "paths": {
+                "type": "array",
+                "maxItems": 250,
+                "items": {"type": "string"},
+                "description": "Optional exact paths to deploy from the commit. Omit to deploy every changed file in an updatable area.",
+            },
+        }, ["ref"]),
+    },
+    {
         "name": "niko_deploy",
-        "description": "Deploy changed files directly to production. Paths must be inside an updatable area; the server backs up, syntax-checks, reloads and restarts only the affected areas. This replaces the beta pull and the staff update tab.",
+        "description": "Deploy small file contents directly. Prefer niko_deploy_commit for normal updates: inline content has to fit in one JSON-RPC request and is unreliable for large files. Paths must be inside an updatable area; the server backs up, syntax-checks, reloads and restarts only the affected areas.",
         "inputSchema": _schema({
             "files": {
                 "type": "array",
@@ -482,6 +499,14 @@ def _deploy(args: dict) -> dict:
     return apply_payloads(files, _bot(), actor="MCP")
 
 
+def _deploy_commit(args: dict) -> dict:
+    from .mcp_deploy import apply_commit
+
+    ref = str(args.get("ref") or "").strip().lower()
+    paths = args.get("paths")
+    return apply_commit(ref, paths=paths, bot=_bot(), actor="MCP commit")
+
+
 def _call_tool(name: str, arguments: dict | None) -> dict:
     arguments = arguments if isinstance(arguments, dict) else {}
     if name == "niko_status":
@@ -502,6 +527,8 @@ def _call_tool(name: str, arguments: dict | None) -> dict:
         return _update_status()
     if name == "niko_deploy":
         return _deploy(arguments)
+    if name == "niko_deploy_commit":
+        return _deploy_commit(arguments)
     raise LookupError(f"Unknown tool: {name}")
 
 
@@ -538,8 +565,9 @@ def _handle_one(message: dict) -> dict | None:
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
                 "instructions": (
-                    "Niko owner tools. Inspect niko_status first. niko_deploy writes "
-                    "production files directly; use it instead of a beta pull."
+                    "Niko owner tools. Inspect niko_status first. Push a commit, then "
+                    "use niko_deploy_commit to apply its changed files; niko_deploy is "
+                    "only for small inline hotfixes."
                 ),
             },
         }

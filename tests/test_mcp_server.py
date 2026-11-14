@@ -258,3 +258,94 @@ def test_direct_deploy_refuses_removing_an_additive_config_file(monkeypatch, tmp
         ])
 
     assert config_file.exists()
+
+
+def _github_blob_sha(body: bytes) -> str:
+    import hashlib
+
+    return hashlib.sha1(f"blob {len(body)}\0".encode("ascii") + body).hexdigest()
+
+
+class _GitHubResponse:
+    def __init__(self, status_code=200, payload=None, content=b""):
+        self.status_code = status_code
+        self._payload = payload
+        self.content = content
+
+    def json(self):
+        return self._payload
+
+
+def test_the_mcp_tool_list_includes_commit_deployment():
+    owner_key = mcp_keys.local_rotate()["key"]
+    response = app.test_client().post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 50, "method": "tools/list"},
+        headers={"Authorization": f"Bearer {owner_key}"},
+    )
+
+    tools = {tool["name"]: tool for tool in response.get_json()["result"]["tools"]}
+    assert "niko_deploy_commit" in tools
+    assert "commit SHA" in tools["niko_deploy_commit"]["description"]
+
+
+def test_commit_deploy_fetches_files_instead_of_carrying_them_in_json(monkeypatch, tmp_path):
+    body = b"<h1>from a commit</h1>\n"
+    commit_sha = "a" * 40
+    commit_payload = {
+        "commit": {"message": "Update the landing page\n\nBody text"},
+        "files": [{
+            "filename": "src/website/dist/index.html",
+            "status": "modified",
+            "sha": _github_blob_sha(body),
+        }],
+    }
+    calls = []
+
+    def fake_github_get(url, *, headers=None):
+        calls.append(url)
+        if "/commits/" in url:
+            return _GitHubResponse(payload=commit_payload)
+        return _GitHubResponse(content=body)
+
+    (tmp_path / "src" / "website" / "dist").mkdir(parents=True)
+    monkeypatch.setattr(updates, "ROOT", tmp_path)
+    monkeypatch.setattr(updates, "DATA_DIR", tmp_path / "data" / "updates")
+    monkeypatch.setattr(mcp_deploy, "_github_get", fake_github_get)
+
+    result = mcp_deploy.apply_commit(commit_sha)
+
+    assert result["ok"] is True
+    assert result["commit"] == commit_sha
+    assert result["commit_message"] == "Update the landing page"
+    assert result["areas"]["website"]["written"] == 1
+    assert (tmp_path / "src" / "website" / "dist" / "index.html").read_bytes() == body
+    assert any("/commits/" in url for url in calls)
+    assert any("raw.githubusercontent.com" in url for url in calls)
+
+
+def test_commit_deploy_checks_the_blob_hash(monkeypatch, tmp_path):
+    body = b"print('tampered')\n"
+    commit_payload = {
+        "commit": {"message": "Update a file"},
+        "files": [{
+            "filename": "src/website/dist/index.html",
+            "status": "modified",
+            "sha": "0" * 40,
+        }],
+    }
+
+    def fake_github_get(url, *, headers=None):
+        if "/commits/" in url:
+            return _GitHubResponse(payload=commit_payload)
+        return _GitHubResponse(content=body)
+
+    (tmp_path / "src" / "website" / "dist").mkdir(parents=True)
+    monkeypatch.setattr(updates, "ROOT", tmp_path)
+    monkeypatch.setattr(updates, "DATA_DIR", tmp_path / "data" / "updates")
+    monkeypatch.setattr(mcp_deploy, "_github_get", fake_github_get)
+
+    with pytest.raises(RuntimeError, match="blob SHA"):
+        mcp_deploy.apply_commit("b" * 40)
+
+    assert not (tmp_path / "src" / "website" / "dist" / "index.html").exists()

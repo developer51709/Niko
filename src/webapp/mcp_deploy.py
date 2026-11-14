@@ -18,9 +18,13 @@ import base64
 import binascii
 import hashlib
 import os
+import re
 import shutil
 import time
 from pathlib import Path
+from urllib.parse import quote
+
+import requests
 
 from utils.runtime import handoff, supervisor_control
 
@@ -377,3 +381,199 @@ def apply_payloads(files, bot=None, actor: str = "MCP") -> dict:
         }
     finally:
         gate.release()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GitHub commit source
+# ──────────────────────────────────────────────────────────────────────────────
+# Inline file content is fine for a one-line hotfix, but a commit-sized update
+# through JSON-RPC is fragile: every byte has to be escaped into the request and
+# the whole call has to fit in the client's context. This path fetches the
+# changed files from the repository at an immutable commit instead, verifies
+# each Git blob hash, and feeds the same updater the same file entries. No file
+# content crosses the MCP transport.
+
+GITHUB_API = "https://api.github.com"
+GITHUB_RAW = "https://raw.githubusercontent.com"
+DEFAULT_REPOSITORY = "developer51709/Niko"
+_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+_REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_MAX_COMMIT_FILES = 300
+
+
+def _github_repository() -> str:
+    """The fixed owner/repository whose commits this deployment may fetch."""
+    value = (os.environ.get("GITHUB_REPOSITORY") or DEFAULT_REPOSITORY).strip()
+    if not _REPOSITORY_RE.fullmatch(value):
+        raise ValueError("GITHUB_REPOSITORY must be an owner/repository pair.")
+    return value
+
+
+def _github_headers() -> dict:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "Niko-MCP",
+    }
+    token = (os.environ.get("GITHUB_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _github_get(url: str, *, headers: dict | None = None):
+    """One GitHub read, kept behind a seam the tests can replace."""
+    return requests.get(url, headers=headers, timeout=20)
+
+
+def _github_commit(ref: str) -> tuple[str, dict, list[dict]]:
+    """Resolve a full commit SHA and the files it changed."""
+    ref = str(ref or "").strip().lower()
+    if not _COMMIT_RE.fullmatch(ref):
+        raise ValueError("ref must be a full 40-character lowercase commit SHA.")
+    repo = _github_repository()
+    response = _github_get(
+        f"{GITHUB_API}/repos/{repo}/commits/{ref}",
+        headers=_github_headers(),
+    )
+    if response.status_code == 404:
+        raise LookupError(f"No commit {ref} was found in {repo}.")
+    if response.status_code in {401, 403, 429}:
+        raise RuntimeError(
+            f"GitHub refused the commit lookup (HTTP {response.status_code}). "
+            "Check GITHUB_TOKEN and its rate limit."
+        )
+    if response.status_code != 200:
+        raise RuntimeError(f"GitHub returned HTTP {response.status_code} for the commit lookup.")
+    payload = response.json()
+    files = payload.get("files") if isinstance(payload, dict) else None
+    if not isinstance(files, list) or not files:
+        raise ValueError("That commit has no changed files to deploy.")
+    if len(files) >= _MAX_COMMIT_FILES:
+        raise ValueError(
+            "That commit changes too many files for one update; split it into smaller commits."
+        )
+    return repo, payload, files
+
+
+def _git_blob_sha(body: bytes) -> str:
+    """Git's object id for a blob, used to prove the fetched bytes are exact."""
+    header = f"blob {len(body)}\0".encode("ascii")
+    return hashlib.sha1(header + body).hexdigest()
+
+
+def _github_file_body(repo: str, ref: str, path: str, expected_sha: str | None) -> bytes:
+    """Fetch one file at the commit and check it against GitHub's blob SHA."""
+    response = _github_get(
+        f"{GITHUB_RAW}/{repo}/{ref}/{quote(path, safe='/')}",
+        headers=_github_headers(),
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"GitHub returned HTTP {response.status_code} for {path}.")
+    body = response.content
+    if len(body) > MAX_FILE_BYTES:
+        raise ValueError(f"{path} is larger than the 8 MiB file limit.")
+    if expected_sha and _git_blob_sha(body) != str(expected_sha).lower():
+        raise RuntimeError(f"The fetched contents of {path} do not match its commit blob SHA.")
+    return body
+
+
+def apply_commit(
+    ref: str,
+    paths: list[str] | None = None,
+    bot=None,
+    actor: str = "MCP",
+) -> dict:
+    """Apply the deployable files changed by one pushed GitHub commit.
+
+    The commit SHA is immutable, so the files are reproducible even if ``main``
+    moves while the update runs. Only paths owned by an updatable area travel;
+    docs, tests, workflows and other repository files are reported as skipped.
+    ``paths`` limits the commit to a subset when an update should not apply
+    every file in it.
+    """
+    repo, payload, files = _github_commit(ref)
+    ref = str(ref).strip().lower()
+
+    selected = None
+    if paths is not None:
+        if not isinstance(paths, list) or not paths:
+            raise ValueError("paths must be a non-empty list when supplied.")
+        selected = set()
+        for value in paths:
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("Every path must be a non-empty string.")
+            selected.add(value.strip().replace("\\", "/"))
+        changed = {
+            str(item.get("filename") or "").replace("\\", "/")
+            for item in files
+            if isinstance(item, dict)
+        }
+        missing = selected - changed
+        if missing:
+            raise ValueError(
+                "These paths are not part of the commit: " + ", ".join(sorted(missing))
+            )
+
+    entries: dict[str, dict] = {}
+    skipped: list[str] = []
+    total_bytes = 0
+
+    def add(entry: dict) -> None:
+        entries.setdefault(entry["path"], entry)
+
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("filename") or "").replace("\\", "/")
+        if not path:
+            continue
+        status = str(item.get("status") or "modified").lower()
+        previous = str(item.get("previous_filename") or "").replace("\\", "/")
+        if selected and path not in selected and previous not in selected:
+            continue
+
+        if status == "removed":
+            if updates.area_for_path(path) is None:
+                skipped.append(path)
+            else:
+                add({"path": path, "status": "removed"})
+            continue
+
+        if status == "renamed" and previous:
+            if updates.area_for_path(previous) is None:
+                skipped.append(previous)
+            else:
+                add({"path": previous, "status": "removed"})
+
+        if updates.area_for_path(path) is None:
+            skipped.append(path)
+            continue
+
+        body = _github_file_body(repo, ref, path, item.get("sha"))
+        total_bytes += len(body)
+        if total_bytes > MAX_TOTAL_BYTES:
+            raise ValueError("The commit is larger than the 40 MiB total update limit.")
+        add({
+            "path": path,
+            "status": "modified",
+            "encoding": "base64",
+            "content": base64.b64encode(body).decode("ascii"),
+        })
+
+    if not entries:
+        raise ValueError("That commit has no files in the deployable areas.")
+    if len(entries) > MAX_FILES:
+        raise ValueError(f"At most {MAX_FILES} files may be pushed at once.")
+
+    result = apply_payloads(list(entries.values()), bot=bot, actor=actor)
+    commit_info = payload.get("commit") if isinstance(payload.get("commit"), dict) else {}
+    message_lines = str(commit_info.get("message") or "").splitlines()
+    return {
+        **result,
+        "repository": repo,
+        "commit": ref,
+        "commit_message": message_lines[0] if message_lines else "",
+        "skipped": skipped[:100],
+        "skipped_count": len(skipped),
+    }
