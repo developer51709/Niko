@@ -6,11 +6,22 @@ Ensures all emojis used by Niko are registered as Application Emojis
 
 Flow on startup:
   1. Parse src/config/emojis.py — collect every <:name:id> / <a:name:id>
-  2. Download each one to src/assets/emojis/ (skips if file already exists)
+  2. Download each one to src/assets/emojis/manual/ (skips if local art exists)
   3. Fetch the bot's existing application emojis from Discord
   4. Upload any that are missing (by name)
   5. Rewrite src/config/emojis.py with the live application-emoji IDs, and hand
      them to the running process so nothing has to be restarted
+
+Local art is resolved across the asset tree in this order:
+
+  seasonal/<active>/<name>.png  seasonal variants, only for their window
+  seasonal/default/<name>.png   generated generic art
+  badges/<name>.png             badge art from build-badge-art.mjs
+  manual/<name>.png             art with no generation script
+  review/<name>.png             generated art awaiting a manual decision
+
+A downloaded emoji whose art is missing locally is written to manual/, so a
+sync never invents generated art or overwrites a reviewed asset.
 
 Dev command .syncemojis triggers this manually and shows a report.
 ``.staff replaceemojis`` runs the same flow with ``replace=True``: it deletes
@@ -34,6 +45,7 @@ import discord
 
 from config.emojis import apply_live_emoji_ids, live_emoji_ids, swap_emoji_ids
 from utils import logging
+from utils.emoji_seasons import SEASON_WINDOWS, active_season
 import socket
 
 #: How long to wait between application-emoji API calls. Uploads and deletes
@@ -60,12 +72,76 @@ EMOJIS_CONFIG = Path("src/config/emojis.py")
 EMOJI_ASSETS  = Path("src/assets/emojis")
 CDN_BASE      = "https://cdn.discordapp.com/emojis/{id}.{ext}"
 
+#: The seasonal folder names, taken from the same table as the date windows.
+SEASON_NAMES = tuple(SEASON_WINDOWS)
+
 EMOJI_RE = re.compile(r"<(?P<animated>a?):(?P<name>[A-Za-z0-9_]+):(?P<id>\d+)>")
 
 #: Discord snowflakes are 17-19 digits. A shorter id is one of the stub ids the
 #: config uses until the sync uploads the art, so a consumer can mark those
 #: instead of asking the CDN for an emoji that does not exist yet.
 SNOWFLAKE_MIN_DIGITS = 15
+
+
+def asset_directories() -> Dict[str, Path]:
+    """The emoji asset subfolders, resolved against the current ``EMOJI_ASSETS``.
+
+    Resolving them per call (rather than freezing them at import) keeps the
+    sync testable with a temporary workspace and avoids a second source of
+    truth for the folder layout.
+    """
+    seasonal = EMOJI_ASSETS / "seasonal"
+    return {
+        "seasonal": seasonal,
+        "default": seasonal / "default",
+        "badges": EMOJI_ASSETS / "badges",
+        "manual": EMOJI_ASSETS / "manual",
+        "review": EMOJI_ASSETS / "review",
+    }
+
+
+def split_season_name(name: str) -> Tuple[Optional[str], Optional[str]]:
+    """Split ``heart_christmas`` into ``("heart", "christmas")``.
+
+    A non-seasonal name returns ``(None, None)``. The suffix is deliberately
+    matched only against the known seasons, so a manual name that happens to
+    contain an underscore cannot be mistaken for a variant.
+    """
+    for season in SEASON_NAMES:
+        suffix = f"_{season}"
+        if name.endswith(suffix):
+            return name[: -len(suffix)], season
+    return None, None
+
+
+def asset_path_for(name: str, ext: str = "png") -> Path:
+    """The local image for ``name``, or where a missing download should go.
+
+    Seasonal variants fall back to their unsuffixed default before moving on
+    to the hand-maintained folders. If nothing exists, the manual folder is
+    returned as the write target for ``download_emojis``; it is never a path
+    owned by a generation script.
+    """
+    directories = asset_directories()
+    base, season = split_season_name(name)
+    candidates: List[Path] = []
+    if base and season:
+        candidates.append(directories["seasonal"] / season / f"{name}.{ext}")
+        candidates.append(directories["default"] / f"{base}.{ext}")
+    else:
+        candidates.append(directories["default"] / f"{name}.{ext}")
+    candidates.extend(
+        [
+            directories["badges"] / f"{name}.{ext}",
+            directories["manual"] / f"{name}.{ext}",
+            directories["review"] / f"{name}.{ext}",
+        ]
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return directories["manual"] / f"{name}.{ext}"
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Data model
@@ -86,7 +162,7 @@ class ParsedEmoji:
 
     @property
     def asset_path(self) -> Path:
-        return EMOJI_ASSETS / f"{self.discord_name}.{self.ext}"
+        return asset_path_for(self.discord_name, self.ext)
 
     @property
     def discord_str(self) -> str:
@@ -148,8 +224,9 @@ def live_emoji_catalog() -> List[ParsedEmoji]:
 # Download
 # ──────────────────────────────────────────────────────────────────────────────
 async def download_emojis(emojis: List[ParsedEmoji], session: aiohttp.ClientSession) -> Dict[int, bool]:
-    """Download emoji images to src/assets/emojis/. Returns {id: success}."""
+    """Download missing emoji images into the asset tree. Returns {id: success}."""
     EMOJI_ASSETS.mkdir(parents=True, exist_ok=True)
+    asset_directories()["manual"].mkdir(parents=True, exist_ok=True)
     results: Dict[int, bool] = {}
 
     async def _fetch(pe: ParsedEmoji) -> Tuple[int, bool]:
@@ -158,7 +235,9 @@ async def download_emojis(emojis: List[ParsedEmoji], session: aiohttp.ClientSess
         try:
             async with session.get(pe.cdn_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status == 200:
-                    pe.asset_path.write_bytes(await resp.read())
+                    destination = pe.asset_path
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(await resp.read())
                     return pe.emoji_id, True
                 return pe.emoji_id, False
         except Exception as exc:
@@ -219,6 +298,7 @@ async def sync_application_emojis(
         "config_updated": bool,
         "live_ids":  int,   # ids the running process now uses instead of the
                             # ones written in the config when it started
+        "season":    str,   # active seasonal folder, or "default"
     }
 
     ``replace=True`` deletes every application emoji and rebuilds the set from
@@ -234,6 +314,7 @@ async def sync_application_emojis(
     stats = dict(
         parsed=0, downloaded=0, already=0, uploaded=0, failed=0,
         deleted=0, delete_failed=0, config_updated=False, live_ids=0,
+        season=active_season() or "default",
     )
 
     async def report(message: str) -> None:
@@ -246,7 +327,10 @@ async def sync_application_emojis(
     try:
         emojis = parse_config()
         stats["parsed"] = len(emojis)
-        logging.info("EmojiSync", f"Found {len(emojis)} unique emojis in config")
+        logging.info(
+            "EmojiSync",
+            f"Found {len(emojis)} unique emojis in config (art set: {stats['season']})",
+        )
 
         # ── 1. Download images ──────────────────────────────────────────────
         dl_results = await download_emojis(emojis, session)

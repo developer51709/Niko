@@ -9,6 +9,7 @@ markdown markers are covered here too, because a marker that is not a capture
 group renders as the wrong formatting without any error.
 """
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ import discord
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from config.emojis import get_emoji  # noqa: E402
+from utils.emoji_sync import asset_path_for  # noqa: E402
 from utils.tickets.transcripts import _md_to_html, export_html  # noqa: E402
 from webapp import app  # noqa: E402
 
@@ -127,8 +129,8 @@ def test_retired_owner_and_developer_emojis_are_removed():
     assert "bot_owner" not in config
     assert "badge_developer" not in web
     assert "bot_owner" not in web
-    assert not (ROOT / "src" / "assets" / "emojis" / "badge_developer.png").exists()
-    assert not (ROOT / "src" / "assets" / "emojis" / "bot_owner.png").exists()
+    assert not asset_path_for("badge_developer").exists()
+    assert not asset_path_for("bot_owner").exists()
 
     # The lab draws the catalog the API reports, so a retired emoji has to be
     # gone from the config itself rather than from a copy.
@@ -163,8 +165,8 @@ def test_the_bot_cards_partner_badge_uses_the_profile_badge_asset():
     # the bot config nor the rendering lab carries it anymore.
     assert 'emoji_name == "partner"' not in config
     assert "partner" not in web
-    assert not (assets / "partner.png").exists()
-    assert not (assets / "icon_partner.png").exists()
+    assert not asset_path_for("partner").exists()
+    assert not asset_path_for("icon_partner").exists()
 
     # Its replacement is generated from the same profile badge asset the
     # website popups draw, so the bot card and the site match.
@@ -172,7 +174,7 @@ def test_the_bot_cards_partner_badge_uses_the_profile_badge_asset():
     names = _catalog_names()
     assert "partner" not in names
     assert "partner_badge" in names
-    assert (assets / "partner_badge.png").exists()
+    assert asset_path_for("partner_badge").exists()
     assert 'partner_badge: "badges/partner.svg"' in build
     assert re.search(r'\(\("partner",\),\s*"partner_badge"\)', cog)
 
@@ -378,28 +380,30 @@ def test_the_emoji_icon_script_owns_only_its_own_tables():
         assert not PROTECTED_EMOJI.search(name), f"{name} belongs to a family the script must not write"
         # The sync uploads art by name, so an emoji with no art never reaches
         # Discord; one with no config entry can never be sent at all.
-        assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), name
+        assert asset_path_for(name).exists(), name
         assert get_emoji(name), name
 
 
-def test_the_numbers_are_phosphor_digits_listed_zero_to_nine():
-    """Lucide has no plain digit, so 0-9 come from Phosphor Icons.
+def test_the_numbers_are_isolated_for_review():
+    """With Icons has no plain 0-9 digits, so the digits are not regenerated.
 
-    The digits only work as a set: read in any other order a help list or a
-    paginator counts wrong, and art from anything but one icon font would put a
-    thick filled digit next to the thin outline icons around it.
+    The old Phosphor art is kept in review/ and still uploads; replacing it
+    with a different digit family would visibly break the ordered set in help
+    lists and paginators.
     """
     source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
     config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
     digits = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 
-    assert 'path.join(ROOT, "node_modules", "@phosphor-icons", "core", "assets")' in source
-    # The weight is part of Phosphor's file name, and bold is the one that
-    # carries a stroke heavy enough to read at Discord's emoji size.
-    assert '"bold", `${icon}-bold.svg`' in source
+    assert '["number_zero"' not in source
+    assert not re.search(r'\["number_[a-z]+", "number-', source)
+    manifest = json.loads((ROOT / "src" / "assets" / "emojis" / "review" / "manifest.json").read_text())
+    group = next(group for group in manifest["groups"] if group["family"] == "number")
+    assert group["source"] == "Phosphor Icons (bold)"
     for digit in digits:
-        assert f'["number_{digit}", "number-{digit}"]' in source, digit
-        assert _png_size(ROOT / "src" / "assets" / "emojis" / f"number_{digit}.png") == (128, 128)
+        assert f"number_{digit}" in group["names"]
+        assert asset_path_for(f"number_{digit}").parent.name == "review"
+        assert _png_size(asset_path_for(f"number_{digit}")) == (128, 128)
 
     listed = re.findall(r'emoji_name == "number_([a-z]+)"', config)
     assert listed == list(digits)
@@ -416,7 +420,7 @@ def test_the_emoji_config_is_grouped_by_category():
 
     for heading in ("Status and feedback", "Moderation and utility", "Navigation and structure",
                     "People and members", "Content and social", "Media controls",
-                    "Commands and rewards", "Machine stats", "Numbers",
+                    "Commands and rewards", "Seasonal variants", "Machine stats", "Numbers",
                     "Discord profile and badges", "Niko role badges", "Server boosting",
                     "Connect Four", "Server logs", "Platform logos",
                     "Payments and cryptocurrencies"):
@@ -428,70 +432,47 @@ def test_the_emoji_config_is_grouped_by_category():
     assert positions == sorted(positions)
 
 
-def test_the_platform_logos_are_drawn_from_simple_icons():
-    """One source for every brand mark, at the same tile as the rest of the set.
+def test_the_platform_logos_are_isolated_for_review():
+    """With Icons ships UI artwork, not brand marks, so the logos stay in review.
 
-    The logos used to be hand-exported PNGs — a 36px Last.fm mark beside a 128px
-    Instagram one, an animated gif for Discord and four different background
-    colours — so they read as a different family in the same message. They are
-    now Simple Icons paths, drawn by the same script, on the same 128px tile.
+    Keeping the existing Simple Icons art means one consistent brand family
+    while the replacement decision is pending; the sync still uploads it.
     """
     source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
 
-    assert 'const SIMPLE_ICONS = path.join(ROOT, "node_modules", "simple-icons", "icons");' in source
-    # Each emoji names the Simple Icons slug it is drawn from; a few brands
-    # spell the two differently.
-    for name, slug in (
-        ("discord", "discord"),
-        ("github", "github"),
-        ("python", "python"),
-        ("topgg", "topdotgg"),
-        ("lastfm", "lastdotfm"),
-        ("spotify", "spotify"),
-        ("instagram", "instagram"),
-        ("tiktok", "tiktok"),
-        ("twitterx", "x"),
-        ("youtube", "youtube"),
-        ("youtube_shorts", "youtubeshorts"),
-        ("reddit", "reddit"),
-        ("bluesky", "bluesky"),
-        ("soundcloud", "soundcloud"),
-        ("twitch", "twitch"),
+    assert "SIMPLE_ICONS" not in source
+    manifest = json.loads((ROOT / "src" / "assets" / "emojis" / "review" / "manifest.json").read_text())
+    group = next(group for group in manifest["groups"] if group["family"] == "brand")
+    for name in (
+        "discord", "github", "python", "topgg", "lastfm", "spotify",
+        "instagram", "tiktok", "twitterx", "youtube", "youtube_shorts",
+        "reddit", "bluesky", "soundcloud", "twitch",
     ):
-        assert f'["{name}", "{slug}", NEUTRAL]' in source, name
+        assert name in group["names"]
         assert get_emoji(name), name
-
-    for name in ("discord", "github", "python", "lastfm", "instagram", "tiktok"):
-        path = ROOT / "src" / "assets" / "emojis" / f"{name}.png"
-        assert _png_size(path) == (128, 128), name
+        assert asset_path_for(name).parent.name == "review", name
+        assert _png_size(asset_path_for(name)) == (128, 128), name
 
 
-def test_the_crypto_emojis_are_drawn_from_web3icons():
-    """The coin marks come from Web3 Icons' mono variant, on the same tile.
+def test_the_crypto_emojis_are_isolated_for_review():
+    """With Icons has no cryptocurrency family; the coin set stays together.
 
-    They used to be hand-exported coin logos — Bitcoin's mark shipped as 13KB of
-    full-colour art, Tether's as 2KB — so a payment row mixed sizes, colours and
-    outline weights. Web3 Icons publishes every token on one grid; its mono
-    variant is the single-ink mark this set is built from.
+    Replacing only one token would break the one-family rule of the payment row,
+    so every coin stays in review/ until the source decision is made.
     """
     source = (ROOT / "scripts" / "build-emoji-icons.mjs").read_text(encoding="utf-8")
 
-    assert 'import { svgs as WEB3_ICONS } from "@web3icons/core";' in source
-    assert "WEB3_ICONS.tokens.mono[symbol]" in source
-
-    for name, symbol in (
-        ("crypto_bitcoin", "btc"),
-        ("crypto_ethereum", "eth"),
-        ("crypto_bnb", "bnb"),
-        ("crypto_dogecoin", "doge"),
-        ("crypto_ltc", "ltc"),
-        ("crypto_monero", "xmr"),
-        ("crypto_tether_usdt", "usdt"),
-        ("crypto_tron", "trx"),
+    assert "WEB3_ICONS" not in source
+    manifest = json.loads((ROOT / "src" / "assets" / "emojis" / "review" / "manifest.json").read_text())
+    group = next(group for group in manifest["groups"] if group["family"] == "crypto")
+    for name in (
+        "crypto_bitcoin", "crypto_ethereum", "crypto_bnb", "crypto_dogecoin",
+        "crypto_ltc", "crypto_monero", "crypto_tether_usdt", "crypto_tron",
     ):
-        assert f'["{name}", "{symbol}", NEUTRAL]' in source, name
+        assert name in group["names"]
         assert get_emoji(name), name
-        assert _png_size(ROOT / "src" / "assets" / "emojis" / f"{name}.png") == (128, 128), name
+        assert asset_path_for(name).parent.name == "review", name
+        assert _png_size(asset_path_for(name)) == (128, 128), name
 
 
 def _png_size(path: Path):
@@ -515,8 +496,9 @@ def test_the_discord_logo_is_a_static_png_not_the_old_animation():
 
     assert "<:discord:" in config
     assert "<a:discord:" not in config
-    assert _png_size(assets / "discord.png") == (128, 128)
-    assert not (assets / "discord.gif").exists()
+    assert asset_path_for("discord").parent.name == "review"
+    assert _png_size(asset_path_for("discord")) == (128, 128)
+    assert not any(assets.rglob("discord.gif"))
 
 
 def test_the_broom_emoji_is_drawn_from_the_broom_icon():
@@ -540,7 +522,7 @@ def test_every_log_message_type_has_its_own_emoji():
     assert len(names) == len(set(names)), "two log message types share an emoji"
     for title, name in LOG_EMOJI_KEYS.items():
         assert not PROTECTED_EMOJI.search(name), title
-        assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), title
+        assert asset_path_for(name).exists(), title
         # A typo here is a heading that renders the literal text `:log_kick:`.
         # The Discord-side name may differ in case only (`automod` is uploaded
         # as `Automod`), which renders identically, so compare case-insensitively.

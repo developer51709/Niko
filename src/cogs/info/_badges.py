@@ -29,7 +29,7 @@ _NIKO_BADGE_EMOJIS = {
     "niko_partner": "badge_partner_role",
 }
 
-# One entry per Discord badge art in src/assets/emojis; the flag names are tried
+# One entry per Discord badge art in src/assets/emojis/badges; the flag names are tried
 # in order because discord.py renamed a few of them across versions.
 _DISCORD_BADGE_FLAGS = (
     (("staff",), "staff_badge"),

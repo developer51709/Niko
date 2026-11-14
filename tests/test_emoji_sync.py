@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import config.emojis as emoji_config  # noqa: E402
 import utils.emoji_sync as emoji_sync  # noqa: E402
 from config.emojis import apply_live_emoji_ids, get_emoji, live_emoji_ids  # noqa: E402
+from utils.emoji_seasons import SEASONAL_BASES  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -93,9 +94,10 @@ CONFIG_TEMPLATE = '''def get_emoji(emoji_name: str):
 def workspace(tmp_path, monkeypatch):
     """A throwaway config file and asset directory the sync writes to."""
     assets = tmp_path / "emojis"
-    assets.mkdir()
-    (assets / "tick.png").write_bytes(b"local-tick-art")
-    (assets / "cross.png").write_bytes(b"local-cross-art")
+    for subfolder in ("seasonal/default", "seasonal/christmas", "badges", "manual", "review"):
+        (assets / subfolder).mkdir(parents=True)
+    (assets / "seasonal" / "default" / "tick.png").write_bytes(b"local-tick-art")
+    (assets / "seasonal" / "default" / "cross.png").write_bytes(b"local-cross-art")
     config_file = tmp_path / "emojis.py"
     config_file.write_text(
         CONFIG_TEMPLATE.format(tick="111111111111111111", cross="222222222222222222"),
@@ -207,6 +209,44 @@ def test_snapshots_outside_the_project_and_plain_strings_are_left_alone():
         assert module.LABEL == "<:tick:111>"
     finally:
         del sys.modules[module.__name__]
+
+
+def test_every_configured_emoji_has_local_art():
+    """A config name with no asset is an emoji that can never be uploaded."""
+    missing = [
+        emoji.discord_name
+        for emoji in emoji_sync.parse_config()
+        if not emoji.asset_path.is_file()
+    ]
+    assert not missing, missing
+
+
+def test_every_seasonal_variant_has_its_own_art():
+    """The variants are uploaded by name, so each one needs a real PNG."""
+    for season in ("christmas", "halloween", "valentine"):
+        for name in SEASONAL_BASES:
+            path = emoji_sync.EMOJI_ASSETS / "seasonal" / season / f"{name}_{season}.png"
+            assert path.is_file(), path
+
+
+def test_assets_resolve_across_the_owned_folders(workspace, tmp_path):
+    """The sync must find every family without flattening the asset tree."""
+    assets = emoji_sync.EMOJI_ASSETS
+    (assets / "badges" / "badge_owner.png").write_bytes(b"badge")
+    (assets / "manual" / "C4Empty.png").write_bytes(b"manual")
+    (assets / "review" / "discord.png").write_bytes(b"review")
+    (assets / "seasonal" / "christmas" / "heart_christmas.png").write_bytes(b"season")
+
+    assert emoji_sync.asset_path_for("tick").parent.name == "default"
+    assert emoji_sync.asset_path_for("badge_owner").parent.name == "badges"
+    assert emoji_sync.asset_path_for("C4Empty").parent.name == "manual"
+    assert emoji_sync.asset_path_for("discord").parent.name == "review"
+    assert emoji_sync.asset_path_for("heart_christmas").parent.name == "christmas"
+    # A variant with no seasonal file falls back to its unsuffixed default.
+    (assets / "seasonal" / "default" / "heart.png").write_bytes(b"default-heart")
+    assert emoji_sync.asset_path_for("heart_halloween").name == "heart.png"
+    # A completely missing name is a manual download target, not generated art.
+    assert emoji_sync.asset_path_for("not_uploaded").parent.name == "manual"
 
 
 # ── the replace flow ─────────────────────────────────────────────────────────

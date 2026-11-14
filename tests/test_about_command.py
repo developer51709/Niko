@@ -212,7 +212,9 @@ def test_the_website_button_uses_the_generated_website_emoji():
     assert emojis.get_emoji("globe") is None
     assert "<:website:" in emojis.get_emoji("website")
     # The art is the generator's 128px single-ink tile, not the old 48px earth.
-    assert (ROOT / "src" / "assets" / "emojis" / "website.png").exists()
-    assert not (ROOT / "src" / "assets" / "emojis" / "globe.png").exists()
+    from utils.emoji_sync import asset_path_for
+
+    assert asset_path_for("website").exists()
+    assert not asset_path_for("globe").exists()
 
     assert _button_emoji(_about_body(_creator()), "Website") == ["website"]

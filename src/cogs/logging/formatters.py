@@ -184,8 +184,8 @@ _TITLE_CATEGORY: dict[str, str] = {
 # One emoji per log message type. Two entries in a log channel never share an
 # icon, so the icon alone tells a moderator what happened, and a new log type
 # adds one line here rather than another branch in the view builder. The
-# artwork is the generated Lucide set in src/assets/emojis (see
-# scripts/build-emoji-icons.mjs); a title that is missing here falls back to its
+# artwork is the generated With Icons set in src/assets/emojis/seasonal/default
+# (see scripts/build-emoji-icons.mjs); an unmatched review title falls back to its
 # category emoji, so an unmapped log type still renders.
 LOG_EMOJI_KEYS: dict[str, str] = {
     # Moderation

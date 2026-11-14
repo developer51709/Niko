@@ -144,7 +144,7 @@ class TopggLogoIconTests(unittest.TestCase):
 
     def test_the_logo_is_configured_with_the_asset_the_startup_sync_uploads(self):
         """Startup sync (``utils/emoji_sync.py``) parses the emoji config, then
-        uploads ``src/assets/emojis/<name>.png`` as the application emoji."""
+        uploads the local asset ``asset_path_for(name)`` as the application emoji."""
         config = (ROOT / "src" / "config" / "emojis.py").read_text(encoding="utf-8")
         entry = re.search(
             r'if emoji_name == "topgg":\s*\n\s*return "<(?P<animated>a?):(?P<name>[A-Za-z0-9_]+):(?P<id>\d+)>"',
@@ -154,7 +154,9 @@ class TopggLogoIconTests(unittest.TestCase):
         self.assertEqual(entry.group("name"), "topgg")
         self.assertEqual(entry.group("animated"), "", "a .gif asset would be needed to match an animated entry")
 
-        asset = ROOT / "src" / "assets" / "emojis" / "topgg.png"
+        from utils.emoji_sync import asset_path_for
+
+        asset = asset_path_for("topgg")
         self.assertTrue(asset.is_file(), f"{asset} is what the sync uploads for :topgg:")
         self.assertGreater(asset.stat().st_size, 0)
         # Discord rejects an application emoji above 256 KB.

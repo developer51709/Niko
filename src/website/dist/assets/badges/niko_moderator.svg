@@ -2,5 +2,5 @@
   <title>Moderator</title>
   <rect x="1.25" y="1.25" width="21.5" height="21.5" rx="6.75" fill="#e67e22"/>
   <rect x="2" y="2" width="20" height="20" rx="6" fill="none" stroke="#fff" stroke-opacity="0.22" stroke-width="1.5"/>
-  <g transform="translate(0.44 -0.07) translate(12 12) scale(1.15) translate(-12 -12)"><g fill="#fff" transform="rotate(-38 12 12)"><rect x="8.3" y="8.1" width="7.4" height="3.8" rx="1.2"/><rect x="11.1" y="11.9" width="1.8" height="6.4" rx="0.9"/></g></g>
+  <g transform="translate(4.900 4.900) scale(0.59167)"><path fill="#fff" d="M5 19h10q.425 0 .713.288T16 20t-.288.713T15 21H5q-.425 0-.712-.288T4 20t.288-.712T5 19m3.225-4.275L5.4 11.9q-.575-.575-.587-1.412t.562-1.413L6.1 8.35L11.8 14l-.725.725q-.575.575-1.425.575t-1.425-.575M16 9.8l-5.65-5.7l.725-.725q.575-.575 1.413-.562T13.9 3.4l2.825 2.825q.575.575.575 1.425t-.575 1.425zm3.9 9.5L7.55 6.95l1.4-1.4L21.3 17.9q.275.275.275.7t-.275.7t-.7.275t-.7-.275"/></g>
 </svg>

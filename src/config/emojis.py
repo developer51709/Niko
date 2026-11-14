@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import re
 
+from utils.emoji_seasons import seasonal_variant
+
 # An emoji as it appears in a message: <:name:id> or <a:name:id>.
 _EMOJI_REF = re.compile(r"<(a?):([A-Za-z0-9_]+):(\d+)>")
 
@@ -67,6 +69,13 @@ def live_emoji_ids() -> dict[int, str]:
 
 def _configured_emoji(emoji_name: str):
     """The emoji exactly as written in this file; see :func:`get_emoji`."""
+    # Seasonal variants are separate uploaded emojis. Picking one by date is a
+    # lookup change, not a Discord edit, so the switch happens with the season
+    # and the base emoji is used again as soon as the window closes.
+    variant = seasonal_variant(emoji_name)
+    if variant:
+        emoji_name = variant
+
     # ==========================================================================
     # Status and feedback
     # ==========================================================================
@@ -280,6 +289,74 @@ def _configured_emoji(emoji_name: str):
         return "<a:credit_card:1564762347082489889>"
 
     # ==========================================================================
+    # Seasonal variants
+    # ==========================================================================
+    # Generated from the withicons-christmas / halloween / valentine sets and
+    # uploaded once. Short ids are placeholders: the startup sync replaces them
+    # with the live application-emoji ids. seasonal_variant() chooses the right
+    # one above, then falls back to the unsuffixed emoji outside its window.
+    if emoji_name == "heart_christmas":
+        return "<:heart_christmas:9100001>"
+    if emoji_name == "gift_christmas":
+        return "<:gift_christmas:9100002>"
+    if emoji_name == "star_christmas":
+        return "<:star_christmas:9100003>"
+    if emoji_name == "welcome_christmas":
+        return "<:welcome_christmas:9100004>"
+    if emoji_name == "giveaway_christmas":
+        return "<:giveaway_christmas:9100005>"
+    if emoji_name == "premium_christmas":
+        return "<:premium_christmas:9100006>"
+    if emoji_name == "ticket_christmas":
+        return "<:ticket_christmas:9100007>"
+    if emoji_name == "trophy_christmas":
+        return "<:trophy_christmas:9100008>"
+    if emoji_name == "economy_christmas":
+        return "<:economy_christmas:9100009>"
+    if emoji_name == "games_christmas":
+        return "<:games_christmas:9100010>"
+    if emoji_name == "heart_halloween":
+        return "<:heart_halloween:9100011>"
+    if emoji_name == "gift_halloween":
+        return "<:gift_halloween:9100012>"
+    if emoji_name == "star_halloween":
+        return "<:star_halloween:9100013>"
+    if emoji_name == "welcome_halloween":
+        return "<:welcome_halloween:9100014>"
+    if emoji_name == "giveaway_halloween":
+        return "<:giveaway_halloween:9100015>"
+    if emoji_name == "premium_halloween":
+        return "<:premium_halloween:9100016>"
+    if emoji_name == "ticket_halloween":
+        return "<:ticket_halloween:9100017>"
+    if emoji_name == "trophy_halloween":
+        return "<:trophy_halloween:9100018>"
+    if emoji_name == "economy_halloween":
+        return "<:economy_halloween:9100019>"
+    if emoji_name == "games_halloween":
+        return "<:games_halloween:9100020>"
+    if emoji_name == "heart_valentine":
+        return "<:heart_valentine:9100021>"
+    if emoji_name == "gift_valentine":
+        return "<:gift_valentine:9100022>"
+    if emoji_name == "star_valentine":
+        return "<:star_valentine:9100023>"
+    if emoji_name == "welcome_valentine":
+        return "<:welcome_valentine:9100024>"
+    if emoji_name == "giveaway_valentine":
+        return "<:giveaway_valentine:9100025>"
+    if emoji_name == "premium_valentine":
+        return "<:premium_valentine:9100026>"
+    if emoji_name == "ticket_valentine":
+        return "<:ticket_valentine:9100027>"
+    if emoji_name == "trophy_valentine":
+        return "<:trophy_valentine:9100028>"
+    if emoji_name == "economy_valentine":
+        return "<:economy_valentine:9100029>"
+    if emoji_name == "games_valentine":
+        return "<:games_valentine:9100030>"
+
+    # ==========================================================================
     # Machine stats
     # ==========================================================================
     # The status commands read these four in one block, so they keep one ink.
@@ -295,9 +372,9 @@ def _configured_emoji(emoji_name: str):
     # ==========================================================================
     # Numbers
     # ==========================================================================
-    # 0-9 in order, drawn from Phosphor Icons by scripts/build-emoji-icons.mjs. Lucide
-    # has no plain digit, and the old hand-exported digits were smaller and a
-    # different design from the rest of the set.
+    # 0-9 in order. With Icons has no plain digits, so the old Phosphor art is
+    # kept in src/assets/emojis/review/ and still uploads through the sync until
+    # the digit family is reviewed.
     if emoji_name == "number_zero":
         return "<:number_zero:1567262936315994203>"
     if emoji_name == "number_one":
@@ -495,8 +572,9 @@ def _configured_emoji(emoji_name: str):
     # Server logs
     # ==========================================================================
     # One emoji per log message type so no two entries in a log channel share an icon,
-    # grouped the way the logging cog groups them. The artwork comes from Lucide, and
-    # the ids here are short on purpose: they are stubs the startup emoji sync replaces
+    # grouped the way the logging cog groups them. Generated artwork comes from the
+    # With Icons set; the log types with no clean match stay in review/. The ids here
+    # are short on purpose: they are stubs the startup emoji sync replaces
     # with the live application-emoji id, and the website marks a short id as
     # not-yet-uploaded instead of requesting it from Discord's CDN.
     if emoji_name == "log_kick":
@@ -619,8 +697,9 @@ def _configured_emoji(emoji_name: str):
     # ==========================================================================
     # Platform logos
     # ==========================================================================
-    # The bot itself, the platforms it is listed on and the services it talks to,
-    # drawn from Simple Icons by scripts/build-emoji-icons.mjs.
+    # The bot itself, the platforms it is listed on and the services it talks to.
+    # With Icons has no brand marks, so the existing Simple Icons art stays in
+    # src/assets/emojis/review/ and still uploads through the sync.
     if emoji_name == "discord":
         return "<:discord:1565388699204587681>"
     if emoji_name == "github":
@@ -657,8 +736,9 @@ def _configured_emoji(emoji_name: str):
     # ==========================================================================
     # Payments and cryptocurrencies
     # ==========================================================================
-    # The card mark and the coin marks, from Web3 Icons' mono variant, so a payment
-    # row reads as one set of icons instead of a row of differently-framed coins.
+    # The card mark and the coin marks. With Icons has no cryptocurrency family,
+    # so the existing Web3 Icons mono art stays in src/assets/emojis/review/ and
+    # still uploads until the payment source is reviewed.
     if emoji_name == "oxapay":
         return "<:oxapay:1564762654499668011>"
     if emoji_name == "crypto_bitcoin":

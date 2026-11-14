@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from config.emojis import get_emoji  # noqa: E402
 from utils import member_badges  # noqa: E402
+from utils.emoji_sync import asset_path_for  # noqa: E402
 from utils.member_badges import NIKO_BADGE_ORDER, niko_badge_keys  # noqa: E402
 
 SUPPORT_ROLES = {
@@ -162,7 +163,7 @@ def test_every_badge_key_has_emoji_art_and_a_web_asset():
         assert token and f":{emoji_name}:" in token, f"{badge} has no emoji entry"
         # Discord only accepts PNG/JPEG/GIF emoji images, so the sync uploads
         # the rasterised art next to the config entry.
-        assert (ROOT / "src" / "assets" / "emojis" / f"{emoji_name}.png").exists(), emoji_name
+        assert asset_path_for(emoji_name).exists(), emoji_name
 
     # The popups own the SVG artwork, one file per badge and no orphans.
     badge_art = {path.stem for path in (ROOT / "web" / "public" / "assets" / "badges").glob("niko_*.svg")}
@@ -222,7 +223,7 @@ def test_every_account_age_tier_has_emoji_art_and_a_web_asset():
     for _years, key, _label in ACCOUNT_AGE_BADGES:
         token = get_emoji(key)
         assert token and f":{key}:" in token, key
-        assert (ROOT / "src" / "assets" / "emojis" / f"{key}.png").exists(), key
+        assert asset_path_for(key).exists(), key
         assert (ROOT / "web" / "public" / "assets" / "badges" / f"{key}.svg").exists(), key
 
 
@@ -263,7 +264,7 @@ def test_every_boosting_tier_has_its_own_emoji_and_art():
         name = f"boosting_{months}_months"
         token = get_emoji(name)
         assert token and f":{name}:" in token, name
-        assert (ROOT / "src" / "assets" / "emojis" / f"{name}.png").exists(), name
+        assert asset_path_for(name).exists(), name
         assert (ROOT / "web" / "public" / "assets" / "badges" / f"{name}.svg").exists(), name
 
 

@@ -42,6 +42,7 @@ class EmojiCommands:
             discord.ui.TextDisplay(
                 content=(
                     f"**Emojis in config:** `{stats['parsed']}`\n"
+                    f"**Active art set:** `{stats['season']}`\n"
                     f"**Images downloaded/cached:** `{stats['downloaded']}`\n"
                     f"**Already registered:** `{stats['already']}`\n"
                     f"**Newly uploaded:** `{stats['uploaded']}`\n"
@@ -99,6 +100,7 @@ class EmojiCommands:
             discord.ui.TextDisplay(
                 content=(
                     f"**Deleted:** `{stats['deleted']}` (failed: `{stats['delete_failed']}`)\n"
+                    f"**Active art set:** `{stats['season']}`\n"
                     f"**Uploaded from local art:** `{stats['uploaded']}`\n"
                     f"**Still registered:** `{stats['already']}`\n"
                     f"**Failed to upload:** `{stats['failed']}`\n"
@@ -125,7 +127,7 @@ class EmojiCommands:
         text = discord.ui.TextDisplay(content=(
             "## Replace every application emoji?\n"
             "Every application emoji is deleted, then the whole set is uploaded again from "
-            "`src/assets/emojis/` — from the local PNGs, never from Discord's copies. Discord has "
+            "the emoji asset folders under `src/assets/emojis/` — from the local PNGs, never from Discord's copies. Discord has "
             "no way to replace an emoji's image, so this is the only way to push regenerated art.\n\n"
             "**Every emoji id changes** and `src/config/emojis.py` is rewritten to match. The bot "
             "starts using the new ids immediately; messages that already contain the old ones show "

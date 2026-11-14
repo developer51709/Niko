@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "note": "These emojis still upload through the sync. They are not regenerated until each family is reviewed and either mapped to a new source or kept permanently.",
+  "groups": [
+    {
+      "family": "general",
+      "source": "Lucide / custom glyphs",
+      "reason": "With Icons has no clean paddle, theatre or memory-stick mark.",
+      "names": [
+        "pingpong",
+        "roleplay",
+        "ram"
+      ]
+    },
+    {
+      "family": "log",
+      "source": "Lucide",
+      "reason": "With Icons has no plus/x/check ticket, tag-plus/x/tags or badge-help marks; forcing one would make unrelated log headings share or misread an icon.",
+      "names": [
+        "log_invite_created",
+        "log_invite_deleted",
+        "log_invite_used",
+        "log_unknown_join",
+        "log_role_created",
+        "log_role_deleted",
+        "log_role_updated",
+        "log_giveaway_ban"
+      ]
+    },
+    {
+      "family": "brand",
+      "source": "Simple Icons",
+      "reason": "With Icons ships UI artwork, not brand marks. The existing Simple Icons art is kept until a brand source is chosen.",
+      "names": [
+        "discord",
+        "github",
+        "python",
+        "topgg",
+        "lastfm",
+        "spotify",
+        "instagram",
+        "tiktok",
+        "twitterx",
+        "youtube",
+        "youtube_shorts",
+        "reddit",
+        "bluesky",
+        "soundcloud",
+        "twitch"
+      ]
+    },
+    {
+      "family": "crypto",
+      "source": "Web3 Icons (mono)",
+      "reason": "With Icons has no cryptocurrency family; one coin would break the one-family rule for the payment row.",
+      "names": [
+        "crypto_bitcoin",
+        "crypto_ethereum",
+        "crypto_bnb",
+        "crypto_dogecoin",
+        "crypto_ltc",
+        "crypto_monero",
+        "crypto_tether_usdt",
+        "crypto_tron"
+      ]
+    },
+    {
+      "family": "number",
+      "source": "Phosphor Icons (bold)",
+      "reason": "With Icons has no plain 0-9 digits, and a different digit family would be visibly inconsistent in paginators and help lists.",
+      "names": [
+        "number_zero",
+        "number_one",
+        "number_two",
+        "number_three",
+        "number_four",
+        "number_five",
+        "number_six",
+        "number_seven",
+        "number_eight",
+        "number_nine"
+      ]
+    }
+  ]
+}
