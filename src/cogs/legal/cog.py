@@ -16,7 +16,7 @@ from utils.command_locales import command_texts
 
 CMDS = command_texts(__package__)
 
-EFFECTIVE_DATE = "<t:1793491200:F>"  # 1 November 2026 00:00 UTC
+EFFECTIVE_DATE = "<t:1794614400:F>"  # 14 November 2026 00:00 UTC
 
 #: The owner's Discord account, credited on every legal page. Sends suppress
 #: mentions, so opening /legal never pings them.

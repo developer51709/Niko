@@ -63,7 +63,7 @@
   "policy.preserved.title": "What is always preserved",
   "policy.preserved.bodyBefore": "Moderation and safety records are",
   "policy.preserved.not": "not",
-  "policy.preserved.bodyAfter": "deleted by an account or server request. This includes bot-level blacklists, warnings, mutes, moderation cases, logs and ticket transcripts, giveaway bans, abuse strikes, and scam-image reports. Deleting everything else does not lift a restriction, restore access, or remove evidence of abuse.",
+  "policy.preserved.bodyAfter": "deleted by an account or server request. This includes bot-level blacklists, warnings, mutes, moderation cases, logs and ticket transcripts, giveaway bans, abuse strikes, scam-image reports, echo messages, echo reports, and echo warnings. Deleting everything else does not lift a restriction, restore access, or remove evidence of abuse.",
   "policy.legal.title": "Legal or court-ordered deletion",
   "policy.legal.bodyBefore": "If a law requires deletion of a preserved moderation or safety record, do not use this form. Send a formal legal request directly to the bot owner by email at",
   "policy.legal.bodyAfter": "It must include a court record or a signed legal document and the contact details of an official legal representative so authenticity can be verified. These requests are handled personally and confidentially. Ordinary requests never receive special treatment, and the strict review protects the community from people trying to erase the consequences of abuse.",

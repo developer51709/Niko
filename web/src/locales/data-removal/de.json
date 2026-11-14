@@ -63,7 +63,7 @@
   "policy.preserved.title": "Was immer erhalten bleibt",
   "policy.preserved.bodyBefore": "Moderations- und Sicherheitsdaten werden durch einen Konto- oder Serverantrag",
   "policy.preserved.not": "nicht",
-  "policy.preserved.bodyAfter": "gelöscht. Dazu gehören Blacklists auf Bot-Ebene, Verwarnungen, Mutes, Moderationsfälle, Logs und Ticket-Transkripte, Giveaway-Sperren, Abuse-Strikes und Scam-Bildmeldungen. Alles andere zu löschen hebt keine Sperre auf, stellt keinen Zugang wieder her und entfernt keine Beweise für Missbrauch.",
+  "policy.preserved.bodyAfter": "gelöscht. Dazu gehören Blacklists auf Bot-Ebene, Verwarnungen, Mutes, Moderationsfälle, Logs und Ticket-Transkripte, Giveaway-Sperren, Abuse-Strikes Scam-Bildmeldungen sowie Echo-Nachrichten und ihre Meldungen und Verwarnungen. Alles andere zu löschen hebt keine Sperre auf, stellt keinen Zugang wieder her und entfernt keine Beweise für Missbrauch.",
   "policy.legal.title": "Gesetzliche oder gerichtlich angeordnete Löschung",
   "policy.legal.bodyBefore": "Wenn ein Gesetz die Löschung eines aufbewahrten Moderations- oder Sicherheitsdatensatzes verlangt, nutze nicht dieses Formular. Sende ein förmliches rechtliches Ersuchen direkt per E-Mail an den Bot-Eigentümer:",
   "policy.legal.bodyAfter": "Es muss einen Gerichtsbeschluss oder ein unterschriebenes rechtliches Dokument und die Kontaktdaten eines offiziellen rechtlichen Vertreters enthalten, damit die Echtheit geprüft werden kann. Diese Anträge werden persönlich und vertraulich bearbeitet. Normale Anträge erhalten keine Sonderbehandlung, und die strenge Prüfung schützt die Community vor Leuten, die die Folgen von Missbrauch auslöschen wollen.",

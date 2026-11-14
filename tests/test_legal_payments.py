@@ -19,7 +19,8 @@ LEGAL_LOCALES = [f"src/cogs/legal/locales/{lang}.json" for lang in ("en", "de", 
 
 #: Every published copy of the policy, in each place it is maintained.
 ALL_COPIES = [
-    "web/src/pages/LegalPage.tsx",
+    "web/src/locales/privacy/en.json",
+    "web/src/locales/terms/en.json",
     "docs/privacy-policy.md",
     "docs/terms-of-service.md",
     *LEGAL_LOCALES,
@@ -38,7 +39,8 @@ def _legal_copy() -> str:
 @pytest.mark.parametrize(
     "path",
     [
-        "web/src/pages/LegalPage.tsx",
+        "web/src/locales/privacy/en.json",
+        "web/src/locales/terms/en.json",
         "docs/privacy-policy.md",
         "docs/terms-of-service.md",
         *LEGAL_LOCALES,
@@ -74,7 +76,7 @@ def test_the_privacy_policy_covers_payment_records_and_premium_images():
 #: The phrase that publishes the bot-wide analytics disclosure, per copy.
 #: The website and docs are English; `/legal` carries all three languages.
 ANALYTICS_DISCLOSURE = {
-    "web/src/pages/LegalPage.tsx": (
+    "web/src/locales/privacy/en.json": (
         "Global analytics",
         "anonymous aggregate counters only",
         "never seen, published, shared, or sold",
@@ -119,7 +121,7 @@ def test_the_legal_command_carries_the_same_payment_sections_in_all_languages():
 
 
 def test_the_data_removal_page_is_linked_from_the_legal_pages():
-    legal = _read("web/src/pages/LegalPage.tsx")
+    legal = _read("web/src/locales/privacy/en.json") + _read("web/src/locales/terms/en.json")
     footer = _read("web/src/components/Footer.tsx")
 
     assert "/data-removal" in legal
@@ -134,7 +136,8 @@ def test_the_data_removal_page_is_linked_from_the_legal_pages():
 @pytest.mark.parametrize(
     "path",
     [
-        "web/src/pages/LegalPage.tsx",
+        "web/src/locales/privacy/en.json",
+        "web/src/locales/terms/en.json",
         "docs/privacy-policy.md",
         "docs/terms-of-service.md",
     ],
@@ -172,7 +175,7 @@ def test_the_legal_pages_use_a_dynamic_timestamp_and_credit_the_owner():
     legal = _read("web/src/pages/LegalPage.tsx")
     cog = _read("src/cogs/legal/cog.py")
 
-    assert "<t:1793491200:F>" in legal
+    assert "<t:1794614400:F>" in legal
     assert OWNER_USER_ID in legal
     assert OWNER_USER_ID in cog
     # Every legal send is mention-free: overview, privacy, terms, community.
@@ -188,17 +191,17 @@ def test_the_repository_copies_use_the_same_timestamp_and_credit():
     for path in ("docs/privacy-policy.md", "docs/terms-of-service.md"):
         text = _read(path)
 
-        assert "<t:1793491200:F>" in text
+        assert "<t:1794614400:F>" in text
         assert f"<@{OWNER_USER_ID}>" in text
 
 
-def test_the_effective_date_moved_with_the_analytics_disclosure():
+def test_the_effective_date_moved_with_the_echo_reporting_disclosure():
     # The website renders the date through the Discord markdown timestamp.
-    assert "<t:1793491200:F>" in _read("web/src/pages/LegalPage.tsx")
-    assert "2026-11-01" in _read("docs/privacy-policy.md")
-    assert "2026-11-01" in _read("docs/terms-of-service.md")
-    # 1 November 2026 00:00 UTC, rendered as a Discord timestamp.
-    assert "1793491200" in _read("src/cogs/legal/cog.py")
+    assert "<t:1794614400:F>" in _read("web/src/pages/LegalPage.tsx")
+    assert "2026-11-14" in _read("docs/privacy-policy.md")
+    assert "2026-11-14" in _read("docs/terms-of-service.md")
+    # 14 November 2026 00:00 UTC, rendered as a Discord timestamp.
+    assert "1794614400" in _read("src/cogs/legal/cog.py")
 
 
 #: The AI provider has to be named in every copy, together with its policy URL.
@@ -218,7 +221,7 @@ def test_every_legal_copy_names_groq_as_the_ai_provider(path, tokens):
 #: Each copy states where official data lives, what deprecated deployments may
 #: use, and that self-hosted instances are out of our hands.
 INSTANCE_DISCLOSURE = {
-    "web/src/pages/LegalPage.tsx": (
+    "web/src/locales/privacy/en.json": (
         "private MongoDB database",
         "deprecated SQLite",
         "self-hosted",
@@ -268,7 +271,7 @@ def test_every_legal_copy_scopes_official_storage_and_self_hosted_instances(path
 #: The retention policy is the detailed one, so each privacy copy names it and
 #: spells out the records that survive a deletion request.
 RETENTION_DISCLOSURE = {
-    "web/src/pages/LegalPage.tsx": ("Data retention policy", "30 days", "no automatic expiry"),
+    "web/src/locales/privacy/en.json": ("Data retention policy", "30 days", "no automatic expiry"),
     "docs/privacy-policy.md": ("Data retention policy", "30 days", "No automatic expiry"),
     "src/cogs/legal/locales/en.json": ("**4. Data retention**", "30 days"),
     "src/cogs/legal/locales/de.json": ("**4. Aufbewahrung**", "30 Tagen"),

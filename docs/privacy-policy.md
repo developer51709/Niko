@@ -1,6 +1,6 @@
 ### Privacy Policy
 
-**Effective date:** <t:1793491200:F> (2026-11-01)
+**Effective date:** <t:1794614400:F> (2026-11-14)
 **Updated by:** <@1052690741874401360>
 
 This is the repository copy of the policy published at https://niko.sryze.cc/privacy.
@@ -22,12 +22,13 @@ This policy describes how the official public Niko instances handle data. It doe
 We keep the categories below. Nothing else is collected for advertising, profiling, or resale.
 
 • **Discord identifiers** — your user ID links your economy balance, XP and level, reminders, birthday, highlights, AI memory, roleplay blocks, AFK state, and warnings to you. Server and channel IDs keep each server's settings apart from every other server's.
-• **Message content** — read in real time to answer AI mentions, run automod and the scam filter, serve snipe and highlight commands, and award XP. Content is not stored as a chat log; it is stored only in the narrow cases listed in the retention schedule below (AI memory, the snipe cache, ticket transcripts, and reported scam images).
+• **Message content** — read in real time to answer AI mentions, run automod and the scam filter, serve snipe and highlight commands, and award XP. Content is not stored as a chat log; it is stored only in the narrow cases listed in the retention schedule below (AI memory, the snipe cache, ticket transcripts, reported scam images, and echoed messages).
 • **Names and avatars you already show in Discord** — where a feature has to display a person (public leaderboards, staff profiles, server ownership records, ticket transcripts, giveaways, suggestions, and polls), the username, display name, and avatar URL are stored next to the record.
 • **Server data** — server name, icon URL, owner ID, member count, and the per-server configuration for every feature an admin has touched.
 • **Content you submit** — ticket transcripts, staff and team applications, appeals, reports, suggestions, polls, giveaways, birthdays, reminders, music playlists, and liked songs.
 • **Presence, voice state, and activity** — presence and voice state are read while a feature needs them (member lists, music, VoiceMaster) and are not stored. Daily message, join, and leave totals are stored as aggregate counters for the dashboard, without message text and without member IDs.
 • **Scam-image filter (experimental)** — when a member reports a message through the right-click scam report, the reported images and message context are sent to Niko staff for review. On confirmation, a perceptual hash (a compact numeric fingerprint) and a copy of the image are stored so similar images can be detected and removed automatically. Nothing is stored for servers without the filter enabled.
+• **Echo messages and reports** — when a staff member uses the echo command, Niko stores the echoed text, the message, server, channel, and sender IDs, when it was sent, and whether it was shortened. Anyone who can see the message can open its info panel to read that stored text, and can report it. A report stores the reporter's user ID, the echoed message it refers to, when it was submitted, and its review status, reviewer, and review time. Reports appear only in a private staff channel in the Niko support server, where authorised staff review them. A valid report removes the echoed message, records a warning against the sender, and can apply a temporary or permanent blacklist under the warning policy in the Terms of Service.
 • **Premium image moderation** — on a server with an active premium subscription, the URL of each image attachment posted there is sent to fal.ai's NSFW model so it can be scored. Niko stores the verdict (confidence score, file name, and moderation action), never the image itself. Nothing is sent for servers without premium.
 • **Payments** — premium subscriptions and donations are processed by OxaPay. We store the order reference, the OxaPay payment reference, the Discord user and server the payment belongs to, the amount and currency, the chosen crypto asset, the deposit address shown at checkout, and the payment status and timestamps. Niko never receives or stores card numbers, bank details, wallet private keys, or seed phrases.
 • **Staff mail** — mail sent to a Niko address on our own domain, and our replies, are stored so the team can read and answer them from one mailbox.
@@ -59,6 +60,7 @@ Retention is deliberate, not incidental. Every category has a stated lifetime an
 | Verification challenges | Pending alt-account verification state | Minutes | Solved or expired, then swept |
 | Temporary blacklists and timeouts | Active restriction with an expiry date | Until the expiry date | Automatic deletion at expiry |
 | Permanent blacklists, warnings, mutes, moderation cases, giveaway bans, abuse strikes, ticket transcripts, logging records | The evidence behind moderation decisions | No automatic expiry, while needed to protect communities | Formal legal process only |
+| Echo messages, reports, and warnings | Echoed text, message/server/channel/sender IDs, timestamps, report status and reviewer ID | No automatic expiry; the message record remains after the Discord message is removed | Formal legal process only |
 | Scam-image reports and confirmed fingerprints | The report, perceptual hash, and stored image copy | No automatic expiry while useful for detection | Formal legal process only |
 | Premium image moderation verdicts | Score, file name, and action — never the image | As long as the subscription record exists | Server deletion request |
 | Payment and billing records | Order and payment references, payer and server IDs, amount, asset, deposit address, status | Long enough for accounting, tax, fraud prevention, refunds, and chargeback windows | Expiry of those obligations, then deletion or anonymisation |
@@ -71,7 +73,7 @@ Retention is deliberate, not incidental. Every category has a stated lifetime an
 
 **What ends retention early.** A completed account deletion request removes the personal and configuration data listed on the data removal page; a completed server request does the same for a server you own. `/clearhistory` erases your AI memory immediately. Turning off a feature stops new collection at once. A restart clears the snipe cache. Expiry dates delete temporary restrictions without anyone asking.
 
-**What survives a deletion request, and why.** Moderation and safety records survive on purpose. They are the evidence that protects other communities: bot-level blacklists, warnings, mutes, moderation cases, logs and ticket transcripts, giveaway bans, abuse strikes, and scam-image reports. A deletion request never lifts a restriction, restores access, or erases evidence of abuse, and using one to try is a violation of the Terms of Service. Data removal requests themselves are kept as the audit trail described above.
+**What survives a deletion request, and why.** Moderation and safety records survive on purpose. They are the evidence that protects other communities: bot-level blacklists, warnings, mutes, moderation cases, logs and ticket transcripts, giveaway bans, abuse strikes, scam-image reports, echo messages, echo reports, and echo warnings. A deletion request never lifts a restriction, restores access, or erases evidence of abuse, and using one to try is a violation of the Terms of Service. Data removal requests themselves are kept as the audit trail described above.
 
 **Legal holds.** If a record is needed for an active investigation, an appeal, a payment dispute, a chargeback, or actual or threatened legal proceedings, its retention is extended until the matter is closed — including records that would otherwise have expired. Once the hold ends, the normal schedule applies again.
 
@@ -81,7 +83,7 @@ Retention is deliberate, not incidental. Every category has a stated lifetime an
 
 **5. How we use it, and our legal bases**
 
-All data is used to run the features a server has enabled, to keep communities safe (automod, scam detection, moderation cases, blacklist enforcement, appeals), to answer support and staff mail, to keep payment and accounting records accurate, to fix bugs, and to decide which commands, fixes, and translations to work on next. We never sell, share, or transfer your data to third parties for advertising or profiling.
+All data is used to run the features a server has enabled, to keep communities safe (automod, scam detection, moderation cases, blacklist enforcement, appeals, echo-report review, and warning enforcement), to answer support and staff mail, to keep payment and accounting records accurate, to fix bugs, and to decide which commands, fixes, and translations to work on next. We never sell, share, or transfer your data to third parties for advertising or profiling.
 
 Where European data-protection law applies, we rely on: performance of a contract or your request (running enabled features, answering your mail); our legitimate interests (protecting communities from scams and abuse, preventing fraud, securing and improving the service); compliance with legal obligations (accounting, tax, valid legal process); and consent where a feature asks for it. You may object to processing based on legitimate interests at any time, and we will stop unless we have an overriding legal ground — which, for preserved safety records, is usually the protection of other users.
 

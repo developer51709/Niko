@@ -63,7 +63,7 @@
   "policy.preserved.title": "Qué se conserva siempre",
   "policy.preserved.bodyBefore": "Los registros de moderación y seguridad",
   "policy.preserved.not": "no",
-  "policy.preserved.bodyAfter": "se borran con una solicitud de cuenta o de servidor. Esto incluye listas negras a nivel de bot, advertencias, silenciamientos, casos de moderación, registros y transcripciones de tickets, vetos de sorteos, strikes por abuso y denuncias de imágenes de estafa. Borrar todo lo demás no levanta una restricción, no restaura el acceso ni elimina pruebas de abuso.",
+  "policy.preserved.bodyAfter": "se borran con una solicitud de cuenta o de servidor. Esto incluye listas negras a nivel de bot, advertencias, silenciamientos, casos de moderación, registros y transcripciones de tickets, vetos de sorteos, strikes por abuso denuncias de imágenes de estafa, mensajes echo y sus denuncias y advertencias. Borrar todo lo demás no levanta una restricción, no restaura el acceso ni elimina pruebas de abuso.",
   "policy.legal.title": "Eliminación legal o por orden judicial",
   "policy.legal.bodyBefore": "Si una ley exige eliminar un registro de moderación o seguridad conservado, no uses este formulario. Envía una solicitud legal formal directamente al propietario del bot por correo a",
   "policy.legal.bodyAfter": "Debe incluir un registro judicial o un documento legal firmado y los datos de contacto de un representante legal oficial para poder verificar su autenticidad. Estas solicitudes se atienden personalmente y de forma confidencial. Las solicitudes ordinarias nunca reciben un trato especial, y la revisión estricta protege a la comunidad de quienes intentan borrar las consecuencias de un abuso.",

@@ -8,7 +8,7 @@ import { navigate } from "../router";
 //: last changed, not when the document was first written. Rendered by the
 //: Discord markdown renderer, so every reader sees the date in their own locale
 //: and timezone exactly as they would inside Discord.
-const LAST_UPDATED = "<t:1793491200:F>";
+const LAST_UPDATED = "<t:1794614400:F>";
 //: The owner's Discord account, credited on every legal page.
 const OWNER_USER_ID = "1052690741874401360";
 

@@ -1,6 +1,6 @@
 ### Data removal policy
 
-**Effective date:** 2026-10-20
+**Effective date:** 2026-11-14
 
 This is the repository copy of the policy published at
 https://niko.sryze.cc/data-removal. Keep it in sync with
@@ -43,6 +43,7 @@ Moderation and safety records are not deleted by an account or server request:
 - moderation logs and ticket transcripts;
 - giveaway bans;
 - abuse strikes and safety investigations;
+- echo messages and their reports and warnings;
 - scam-image reports and confirmed scam-image fingerprints.
 
 Deleting everything else does not lift a restriction, restore access, or remove
