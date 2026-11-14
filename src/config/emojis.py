@@ -362,6 +362,30 @@ def _configured_emoji(emoji_name: str):
     if emoji_name == "status_streaming":
         return "<:status_streaming:1564762696795291850>"
 
+    # Discord's account-age badges. The player and the profile popups only draw
+    # the highest tier an account has reached; scripts/build-badge-art.mjs
+    # rasterises the popup SVGs into these application emojis.
+    if emoji_name == "account_age_seed":
+        return "<:account_age_seed:1569000000000000001>"
+    if emoji_name == "account_age_sprout":
+        return "<:account_age_sprout:1569000000000000002>"
+    if emoji_name == "account_age_bud":
+        return "<:account_age_bud:1569000000000000003>"
+    if emoji_name == "account_age_sapling":
+        return "<:account_age_sapling:1569000000000000004>"
+    if emoji_name == "account_age_blossom":
+        return "<:account_age_blossom:1569000000000000005>"
+    if emoji_name == "account_age_redwood":
+        return "<:account_age_redwood:1569000000000000006>"
+    if emoji_name == "account_age_sequoia":
+        return "<:account_age_sequoia:1569000000000000007>"
+    if emoji_name == "account_age_bristlecone":
+        return "<:account_age_bristlecone:1569000000000000008>"
+    if emoji_name == "account_age_stromatolite":
+        return "<:account_age_stromatolite:1569000000000000009>"
+    if emoji_name == "account_age_primordial":
+        return "<:account_age_primordial:1569000000000000010>"
+
     # ==========================================================================
     # Niko role badges
     # ==========================================================================

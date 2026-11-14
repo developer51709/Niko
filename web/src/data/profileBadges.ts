@@ -43,6 +43,19 @@ const CATALOG: Record<string, { src: string; label: string; description: string 
   "certified_moderator": { src: "/assets/badges/certified_moderator.svg", label: "Moderator Programs Alumni", description: "Took part in Discord's Moderator Programs." },
   "supports_commands": { src: "/assets/badges/supports_commands.svg", label: "Supports Commands", description: "This app supports slash commands." },
   "active_developer": { src: "/assets/badges/active_developer.svg", label: "Active Developer", description: "Ran a slash command in the past 30 days." },
+  // Discord's account-age badges, from github.com/mezotv/discord-badges (MIT).
+  // The API sends only the highest tier the account has reached, so the popup
+  // draws one of these at a time.
+  "account_age_seed": { src: "/assets/badges/account_age_seed.svg", label: "Seed", description: "Has been on Discord for 1 year." },
+  "account_age_sprout": { src: "/assets/badges/account_age_sprout.svg", label: "Sprout", description: "Has been on Discord for 2 years." },
+  "account_age_bud": { src: "/assets/badges/account_age_bud.svg", label: "Bud", description: "Has been on Discord for 3 years." },
+  "account_age_sapling": { src: "/assets/badges/account_age_sapling.svg", label: "Sapling", description: "Has been on Discord for 4 years." },
+  "account_age_blossom": { src: "/assets/badges/account_age_blossom.svg", label: "Blossom", description: "Has been on Discord for 5 years." },
+  "account_age_redwood": { src: "/assets/badges/account_age_redwood.svg", label: "Redwood", description: "Has been on Discord for 6 years." },
+  "account_age_sequoia": { src: "/assets/badges/account_age_sequoia.svg", label: "Sequoia", description: "Has been on Discord for 7 years." },
+  "account_age_bristlecone": { src: "/assets/badges/account_age_bristlecone.svg", label: "Bristlecone", description: "Has been on Discord for 8 years." },
+  "account_age_stromatolite": { src: "/assets/badges/account_age_stromatolite.svg", label: "Stromatolite", description: "Has been on Discord for 9 years." },
+  "account_age_primordial": { src: "/assets/badges/account_age_primordial.svg", label: "Primordial", description: "Has been on Discord for 10+ years." },
   // ── Niko's own role badges ────────────────────────────────────────────────
   "niko_owner": { src: "/assets/badges/niko_owner.svg", label: "Niko Owner", description: "Owns and runs Niko." },
   "niko_staff": { src: "/assets/badges/niko_staff.svg", label: "Niko Staff", description: "Part of the Niko team." },
@@ -69,6 +82,13 @@ export const DISCORD_BADGE_KEYS = [
   "staff", "partner", "hypesquad_events", "bug_hunter_level_1", "hypesquad_bravery",
   "hypesquad_brilliance", "hypesquad_balance", "early_supporter", "bug_hunter_level_2",
   "early_verified_developer", "certified_moderator", "supports_commands", "active_developer",
+];
+
+/** Discord's account-age tiers, ascending. Only the highest reached is shown. */
+export const ACCOUNT_AGE_BADGE_KEYS = [
+  "account_age_seed", "account_age_sprout", "account_age_bud", "account_age_sapling",
+  "account_age_blossom", "account_age_redwood", "account_age_sequoia", "account_age_bristlecone",
+  "account_age_stromatolite", "account_age_primordial",
 ];
 
 /** The tiers of Discord's server-boosting badge, ascending. */
@@ -98,6 +118,11 @@ export const BADGE_GROUPS: { title: string; blurb: string; keys: string[] }[] = 
     title: "Discord badges",
     blurb: "Discord's own profile badges, read from the member's public flags.",
     keys: DISCORD_BADGE_KEYS,
+  },
+  {
+    title: "Discord account age",
+    blurb: "Discord derives these from the account's creation date and draws only the highest tier reached.",
+    keys: ACCOUNT_AGE_BADGE_KEYS,
   },
   {
     title: "Discord boosting tiers",

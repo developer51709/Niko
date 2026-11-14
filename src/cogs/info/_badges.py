@@ -7,7 +7,7 @@ userinfo card and the website's profile popovers can never disagree.
 from discord.ext import commands
 
 from config.emojis import get_emoji
-from utils.member_badges import boosting_badge_key, niko_badge_keys
+from utils.member_badges import account_age_badge_key, boosting_badge_key, niko_badge_keys
 
 # Niko badge key (utils.member_badges.NIKO_BADGE_ORDER) -> emoji name in
 # config/emojis.py. Both lists are checked against each other in the tests, so a
@@ -75,6 +75,11 @@ def _get_discord_badges(target) -> list[str]:
             continue
         seen.add(ekey)
         badges.append(get_emoji(ekey))
+    # Account age is not a public flag: Discord derives it from the creation
+    # date, and only the highest tier the account has reached is drawn.
+    age = account_age_badge_key(getattr(target, "created_at", None))
+    if age:
+        badges.append(get_emoji(age))
     # Discord draws the boosting badge last, for any active boost streak, and
     # every tier has its own artwork, so the streak picks the badge.
     boosting = boosting_badge_key(getattr(target, "premium_since", None))

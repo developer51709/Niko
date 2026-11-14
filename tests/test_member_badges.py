@@ -199,6 +199,46 @@ def _months_before(now, count):
     return datetime(year, month + 1, min(now.day, 28), tzinfo=now.tzinfo)
 
 
+def test_account_age_picks_the_highest_whole_year_tier():
+    from datetime import datetime, timezone
+
+    from utils.member_badges import ACCOUNT_AGE_BADGES, account_age_badge_key
+
+    now = datetime(2026, 11, 14, 12, tzinfo=timezone.utc)
+    assert [threshold for threshold, _, _ in ACCOUNT_AGE_BADGES] == list(range(1, 11))
+    # An account one day short of its first birthday has no badge yet.
+    assert account_age_badge_key(datetime(2025, 11, 15, tzinfo=timezone.utc), now=now) is None
+    assert account_age_badge_key(datetime(2025, 11, 14, tzinfo=timezone.utc), now=now) == "account_age_seed"
+    assert account_age_badge_key(datetime(2023, 11, 14, tzinfo=timezone.utc), now=now) == "account_age_bud"
+    # Ten years and older share Discord's final tier.
+    assert account_age_badge_key(datetime(2016, 11, 14, tzinfo=timezone.utc), now=now) == "account_age_primordial"
+    assert account_age_badge_key(datetime(2016, 11, 15, tzinfo=timezone.utc), now=now) == "account_age_stromatolite"
+    assert account_age_badge_key(None, now=now) is None
+
+
+def test_every_account_age_tier_has_emoji_art_and_a_web_asset():
+    from utils.member_badges import ACCOUNT_AGE_BADGES
+
+    for _years, key, _label in ACCOUNT_AGE_BADGES:
+        token = get_emoji(key)
+        assert token and f":{key}:" in token, key
+        assert (ROOT / "src" / "assets" / "emojis" / f"{key}.png").exists(), key
+        assert (ROOT / "web" / "public" / "assets" / "badges" / f"{key}.svg").exists(), key
+
+
+def test_the_userinfo_card_draws_the_account_age_emoji():
+    from datetime import datetime, timezone
+
+    from cogs.info._badges import _get_discord_badges
+
+    target = SimpleNamespace(
+        public_flags=0,
+        created_at=datetime(2010, 1, 1, tzinfo=timezone.utc),
+    )
+
+    assert _get_discord_badges(target) == [get_emoji("account_age_primordial")]
+
+
 def test_the_boosting_badge_picks_the_tier_the_streak_has_reached():
     from datetime import datetime, timezone
 
@@ -234,6 +274,8 @@ def test_the_bot_card_and_the_web_api_share_one_boosting_lookup():
 
     assert "boosting_badge_key(" in cog
     assert "boosting_badge_key(" in routes
+    assert "account_age_badge_key(" in cog
+    assert "account_age_badge_key(" in routes
     # The one hardcoded badge the card used to draw for every streak is gone.
     assert 'get_emoji("boosting_badge")' not in cog
 
@@ -244,6 +286,9 @@ _WEB_DISCORD_BADGE_KEYS = {
     "staff", "partner", "hypesquad_events", "bug_hunter_level_1", "hypesquad_bravery",
     "hypesquad_brilliance", "hypesquad_balance", "early_supporter", "bug_hunter_level_2",
     "early_verified_developer", "certified_moderator", "supports_commands", "active_developer",
+    "account_age_seed", "account_age_sprout", "account_age_bud", "account_age_sapling",
+    "account_age_blossom", "account_age_redwood", "account_age_sequoia", "account_age_bristlecone",
+    "account_age_stromatolite", "account_age_primordial",
 }
 
 

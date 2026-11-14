@@ -578,6 +578,14 @@ def test_profile_badges_combine_user_and_member_flags():
     assert routes._profile_badges(user, member) == ["staff", "bug_hunter_level_2"]
 
 
+def test_profile_badges_add_the_account_age_tier():
+    user = SimpleNamespace(public_flags=0, created_at=datetime(2010, 1, 1, tzinfo=timezone.utc))
+
+    assert routes._account_age_badge(user, None) == "account_age_primordial"
+    assert routes._profile_badges(user, None) == ["account_age_primordial"]
+    assert routes._account_age_badge(SimpleNamespace(), None) is None
+
+
 def test_profile_badges_add_the_boosting_tier_for_a_long_streak():
     since = datetime.now(timezone.utc) - timedelta(days=300)
     member = SimpleNamespace(public_flags=0, premium_since=since)

@@ -158,6 +158,18 @@ _PROFILE_BADGE_FILES = {
     ),
     "supports_commands": ("badges/supports_commands.svg", "Supports Commands", "This app supports slash commands."),
     "active_developer": ("badges/active_developer.svg", "Active Developer", "Ran a slash command in the past 30 days."),
+    # Discord's account-age tiers. The profile API sends only the highest tier
+    # the account reached, so an exported popup draws one of these at a time.
+    "account_age_seed": ("badges/account_age_seed.svg", "Seed", "Has been on Discord for 1 year."),
+    "account_age_sprout": ("badges/account_age_sprout.svg", "Sprout", "Has been on Discord for 2 years."),
+    "account_age_bud": ("badges/account_age_bud.svg", "Bud", "Has been on Discord for 3 years."),
+    "account_age_sapling": ("badges/account_age_sapling.svg", "Sapling", "Has been on Discord for 4 years."),
+    "account_age_blossom": ("badges/account_age_blossom.svg", "Blossom", "Has been on Discord for 5 years."),
+    "account_age_redwood": ("badges/account_age_redwood.svg", "Redwood", "Has been on Discord for 6 years."),
+    "account_age_sequoia": ("badges/account_age_sequoia.svg", "Sequoia", "Has been on Discord for 7 years."),
+    "account_age_bristlecone": ("badges/account_age_bristlecone.svg", "Bristlecone", "Has been on Discord for 8 years."),
+    "account_age_stromatolite": ("badges/account_age_stromatolite.svg", "Stromatolite", "Has been on Discord for 9 years."),
+    "account_age_primordial": ("badges/account_age_primordial.svg", "Primordial", "Has been on Discord for 10+ years."),
     # Niko's own role badges, next to Discord's the way the bot's card lists
     # them. Every key here also exists in utils/member_badges.py.
     "niko_owner": ("badges/niko_owner.svg", "Niko Owner", "Owns and runs Niko."),

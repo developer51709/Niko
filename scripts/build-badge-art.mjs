@@ -173,6 +173,12 @@ const EMOJI_ART = {
   early_supporter_badge: "badges/early_supporter.svg",
   certified_moderator_badge: "badges/certified_moderator.svg",
   supports_commands_badge: "badges/supports_commands.svg",
+  // Discord's account-age tiers. Their SVGs come from the official badge set;
+  // the bot and the popups draw only the highest tier the account reached.
+  ...Object.fromEntries(
+    ["seed", "sprout", "bud", "sapling", "blossom", "redwood", "sequoia", "bristlecone", "stromatolite", "primordial"]
+      .map((name) => [`account_age_${name}`, `badges/account_age_${name}.svg`]),
+  ),
   // Discord draws a different boosting badge for every tier, and the bot and
   // the popups pick the one the streak has reached.
   ...Object.fromEntries(

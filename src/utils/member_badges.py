@@ -1,7 +1,8 @@
-"""Niko's own profile badges.
+"""Shared profile-badge decisions for Discord and Niko.
 
-One module decides which Niko badges an account carries, so the bot's profile
-card and the website's profile popovers can never disagree.
+One module decides which badges an account carries, including Discord's
+account-age tier, so the bot's profile card and the website's profile popovers
+can never disagree.
 
 Every lookup is best effort: a missing database, guild or role means "no
 badge", never an error, because the badges are decoration on top of whatever
@@ -31,6 +32,21 @@ STAFF_BADGE_ROLES = (
     ("partnership_manager", "niko_partnership_manager"),
 )
 
+#: Discord's account-age badges, ascending. Only the highest tier reached is
+#: drawn, and an account younger than a year carries none of them.
+ACCOUNT_AGE_BADGES = (
+    (1, "account_age_seed", "Seed"),
+    (2, "account_age_sprout", "Sprout"),
+    (3, "account_age_bud", "Bud"),
+    (4, "account_age_sapling", "Sapling"),
+    (5, "account_age_blossom", "Blossom"),
+    (6, "account_age_redwood", "Redwood"),
+    (7, "account_age_sequoia", "Sequoia"),
+    (8, "account_age_bristlecone", "Bristlecone"),
+    (9, "account_age_stromatolite", "Stromatolite"),
+    (10, "account_age_primordial", "Primordial"),
+)
+
 #: The server-boosting tiers Discord draws its own badge for, ascending.
 BOOSTING_TIERS = (1, 2, 3, 6, 9, 12, 15, 18, 24)
 
@@ -49,6 +65,28 @@ NIKO_BADGE_ORDER = (
     "niko_staff",
     *(badge for _, badge in COMMUNITY_BADGE_ROLES),
 )
+
+
+def account_age_badge_key(created_at, *, now=None) -> str | None:
+    """The highest Discord account-age badge an account has reached.
+
+    Discord counts whole years from the account's creation date, so an account
+    one day short of its second birthday still shows Seed. The website popups
+    and the bot's card call this same helper, which keeps the two surfaces from
+    disagreeing about the tier.
+    """
+    if created_at is None:
+        return None
+    created = created_at.date() if callable(getattr(created_at, "date", None)) else created_at
+    today = (now or datetime.now(timezone.utc)).date()
+    try:
+        years = today.year - created.year
+        if (today.month, today.day) < (created.month, created.day):
+            years -= 1
+    except (AttributeError, TypeError, ValueError):
+        return None
+    reached = [key for threshold, key, _label in ACCOUNT_AGE_BADGES if years >= threshold]
+    return reached[-1] if reached else None
 
 
 def boosting_badge_key(premium_since) -> str | None:

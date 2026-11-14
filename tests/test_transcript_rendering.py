@@ -330,7 +330,7 @@ def test_export_popup_matches_the_discord_layout():
 
 
 def test_export_inlines_every_profile_badge_and_sizes_them_bigger():
-    from utils.member_badges import NIKO_BADGE_ORDER
+    from utils.member_badges import ACCOUNT_AGE_BADGES, NIKO_BADGE_ORDER
     from utils.tickets import transcripts
 
     art = transcripts._profile_badge_art()
@@ -345,6 +345,7 @@ def test_export_inlines_every_profile_badge_and_sizes_them_bigger():
         "active_developer", "boosting_1_months", "boosting_2_months", "boosting_3_months",
         "boosting_6_months", "boosting_9_months", "boosting_12_months",
         "boosting_15_months", "boosting_18_months", "boosting_24_months",
+        *(key for _years, key, _label in ACCOUNT_AGE_BADGES),
         *NIKO_BADGE_ORDER,
     } == set(art)
 

@@ -8,7 +8,7 @@ from .. import server as _server
 from ..developer import portal
 from flask import jsonify, request
 
-from utils.member_badges import boosting_badge_key, niko_badge_keys
+from utils.member_badges import account_age_badge_key, boosting_badge_key, niko_badge_keys
 from utils.presence import is_mobile_presence
 
 globals().update({
@@ -20,12 +20,13 @@ globals().update({
 _MAX_FETCHES_PER_TYPE = 25
 _MAX_PARALLEL_FETCHES = 5
 
-# Every profile badge a bot can read is either a public user flag or, for
-# boosting, the member's ``premium_since``. The keys are also the artwork names
-# the popups own (``web/public/assets/hypesquad`` for the HypeSquad houses and
-# ``web/public/assets/badges`` for the rest), so the API only ever sends keys
-# and never a Discord CDN URL. Discord's verified-bot tag is left out: it is
-# drawn as a pill next to the name, not as one of these square badges.
+# Every profile badge a bot can read comes from a public user flag, the
+# account's ``created_at`` (age tiers) or, for boosting, ``premium_since``. The
+# keys are also the artwork names the popups own (``web/public/assets/hypesquad``
+# for the HypeSquad houses and ``web/public/assets/badges`` for the rest), so the
+# API only ever sends keys and never a Discord CDN URL. Discord's verified-bot
+# tag is left out: it is drawn as a pill next to the name, not as one of these
+# square badges.
 _VERIFIED_BOT_FLAG = 1 << 16
 _PROFILE_BADGES = (
     ("staff", 1 << 0),
@@ -74,6 +75,16 @@ def _public_flags(source):
         return None
 
 
+def _account_age_badge(user, member):
+    """Discord's account-age badge for the highest tier the account reached.
+
+    The user object is preferred because it always carries ``created_at``, but
+    a cached member repeats the same timestamp when the REST lookup failed.
+    """
+    created_at = getattr(user, "created_at", None) or getattr(member, "created_at", None)
+    return account_age_badge_key(created_at)
+
+
 def _boosting_badge(member):
     """Discord's server-boosting badge for the months a member has boosted.
 
@@ -113,6 +124,11 @@ def _profile_badges(user, member) -> list:
     """The profile badges an account carries, in the order Discord lists them."""
     value = _public_flag_value(user, member)
     badges = [name for name, bit in _PROFILE_BADGES if value & bit]
+    # Account age has no public flag; it comes from the account's creation date
+    # and only the highest reached tier is appended.
+    age = _account_age_badge(user, member)
+    if age:
+        badges.append(age)
     # The boosting badge follows the flag badges, the way Discord appends it.
     boosting = _boosting_badge(member)
     if boosting:
