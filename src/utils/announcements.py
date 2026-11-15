@@ -160,8 +160,12 @@ async def send_support_announcement(
         channel = await bot.fetch_channel(int(channel_id))
 
     mention = f"<@&{int(role_id)}>" if ping else None
+    # Components V2 messages cannot carry a separate ``content`` field. Put the
+    # role ping in the container text so the announcement can still notify the
+    # announcements role.
+    view_body = f"{mention}\n\n{body}" if mention else body
     kwargs = {
-        "view": build_broadcast_view(title, body, footer, accent, media),
+        "view": build_broadcast_view(title, view_body, footer, accent, media),
         "allowed_mentions": (
             discord.AllowedMentions(
                 roles=[discord.Object(id=int(role_id))], everyone=False, users=False,
@@ -169,8 +173,6 @@ async def send_support_announcement(
             if ping else discord.AllowedMentions.none()
         ),
     }
-    if mention:
-        kwargs["content"] = mention
     if media:
         kwargs["files"] = build_broadcast_files(media)
     message = await channel.send(**kwargs)

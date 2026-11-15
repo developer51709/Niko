@@ -57,7 +57,12 @@ def test_announcement_uses_the_support_channel_and_announcements_ping_role(monke
     ))
 
     sent = channel.sent[0]
-    assert sent["content"] == "<@&555>"
+    assert "content" not in sent
+    text = "\n".join(
+        item.content for item in sent["view"].walk_children()
+        if isinstance(item, discord.ui.TextDisplay)
+    )
+    assert "<@&555>" in text
     assert sent["allowed_mentions"].roles[0].id == 555
     assert sent["allowed_mentions"].everyone is False
     assert sent["allowed_mentions"].users is False
@@ -77,6 +82,11 @@ def test_announcement_can_skip_the_ping(monkeypatch):
 
     sent = channel.sent[0]
     assert "content" not in sent
+    text = "\n".join(
+        item.content for item in sent["view"].walk_children()
+        if isinstance(item, discord.ui.TextDisplay)
+    )
+    assert "<@&555>" not in text
     assert not sent["allowed_mentions"].roles
     assert result["pinged_role_id"] is None
 
