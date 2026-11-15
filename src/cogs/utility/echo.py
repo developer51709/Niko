@@ -25,8 +25,22 @@ from utils.stateless_views import CallbackOnlyButton, CallbackOnlyLayoutView
 
 ECHO_INFO_PREFIX = "echo:info:"
 ECHO_REPORT_PREFIX = "echo:report:"
+ECHO_CONFIRM_PREFIX = "echo:confirm:"
+ECHO_CANCEL_PREFIX = "echo:cancel:"
 ECHO_REVIEW_PREFIX = "echo:review:"
 MAX_ECHO_LENGTH = 1950
+_NO_MENTIONS = discord.AllowedMentions.none()
+
+REPORT_GUIDELINES = (
+    "**Reporting guidelines**\n"
+    "Reports are reviewed by Niko staff and are confidential. Only report a message "
+    "that you believe breaks Niko's policies — not one you simply disagree with.\n"
+    "- Staff can see your report; other members cannot.\n"
+    "- If staff confirm the report, the message is removed and the sender receives a warning.\n"
+    "- Repeated warnings can lead to a temporary or permanent blacklist.\n"
+    "- False or abusive reports may be ignored.\n"
+    "Select **Confirm** to submit, or **Cancel** to return."
+)
 
 
 def _message_url(echo: dict[str, Any]) -> str:
@@ -45,22 +59,17 @@ def _shorten(value: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _info_view(echo: dict[str, Any], reports: int) -> CallbackOnlyLayoutView:
+def _info_view(echo: dict[str, Any]) -> CallbackOnlyLayoutView:
     content = _shorten(echo.get("content") or "*No content stored.*", 1800)
     removed = "-# This echoed message has already been removed.\n" if echo.get("removed_at") else ""
     truncated = "-# The message was shortened when it was echoed.\n" if echo.get("truncated") else ""
     view = CallbackOnlyLayoutView(timeout=None)
     view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay(content="# Echoed message"),
-        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(
             content=(
                 f"**Sent by:** {_user_ref(echo['author_id'])}\n"
-                f"**Guild:** `{int(echo['guild_id'])}`\n"
-                f"**Channel:** <#{int(echo['channel_id'])}> (`{int(echo['channel_id'])}`)\n"
                 f"**Message:** [Jump to message]({_message_url(echo)})\n"
                 f"**Sent:** <t:{int(echo['created_at'])}:F>\n"
-                f"**Reports:** {int(reports)}\n"
                 f"{removed}{truncated}"
             )
         ),
@@ -73,15 +82,40 @@ def _info_view(echo: dict[str, Any], reports: int) -> CallbackOnlyLayoutView:
                 custom_id=f"{ECHO_REPORT_PREFIX}{echo['echo_id']}",
             )
         ),
-        accent_colour=discord.Color.blurple(),
     ))
+    return view
+
+
+def _report_guidelines_view(echo_id: str) -> CallbackOnlyLayoutView:
+    view = CallbackOnlyLayoutView(timeout=None)
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=REPORT_GUIDELINES),
+        discord.ui.ActionRow(
+            CallbackOnlyButton(
+                label="Confirm",
+                style=discord.ButtonStyle.danger,
+                custom_id=f"{ECHO_CONFIRM_PREFIX}{echo_id}",
+            ),
+            CallbackOnlyButton(
+                label="Cancel",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"{ECHO_CANCEL_PREFIX}{echo_id}",
+            ),
+        ),
+    ))
+    return view
+
+
+def _report_result_view(content: str) -> CallbackOnlyLayoutView:
+    view = CallbackOnlyLayoutView(timeout=None)
+    view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=content)))
     return view
 
 
 def _echo_button_view(echo_id: str) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
     view.add_item(CallbackOnlyButton(
-        emoji="ℹ️",
+        emoji=get_emoji("question"),
         style=discord.ButtonStyle.secondary,
         custom_id=f"{ECHO_INFO_PREFIX}{echo_id}",
     ))
@@ -207,7 +241,7 @@ class EchoReporter:
 
     async def send(self, ctx, message: str) -> None:
         if ctx.guild is None:
-            await ctx.send("Echo can only be used in a server.")
+            await ctx.send("Echo can only be used in a server.", allowed_mentions=_NO_MENTIONS)
             return
         echo_id = uuid.uuid4().hex
         truncated = len(message) > MAX_ECHO_LENGTH
@@ -217,7 +251,7 @@ class EchoReporter:
         sent = await ctx.send(
             content=content,
             view=_echo_button_view(echo_id),
-            allowed_mentions=discord.AllowedMentions.none(),
+            allowed_mentions=_NO_MENTIONS,
         )
         try:
             await store.record_echo_message(
@@ -238,33 +272,46 @@ class EchoReporter:
         if custom_id.startswith(ECHO_INFO_PREFIX):
             await self._show_info(interaction, custom_id[len(ECHO_INFO_PREFIX):])
         elif custom_id.startswith(ECHO_REPORT_PREFIX):
-            await self._submit_report(interaction, custom_id[len(ECHO_REPORT_PREFIX):])
+            echo_id = custom_id[len(ECHO_REPORT_PREFIX):]
+            await self._edit_ephemeral(interaction, view=_report_guidelines_view(echo_id))
+        elif custom_id.startswith(ECHO_CONFIRM_PREFIX):
+            await self._submit_report(interaction, custom_id[len(ECHO_CONFIRM_PREFIX):])
+        elif custom_id.startswith(ECHO_CANCEL_PREFIX):
+            await self._show_info(interaction, custom_id[len(ECHO_CANCEL_PREFIX):], edit=True)
         elif custom_id.startswith(ECHO_REVIEW_PREFIX):
             await self._review(interaction, custom_id[len(ECHO_REVIEW_PREFIX):])
 
-    async def _show_info(self, interaction: discord.Interaction, echo_id: str) -> None:
+    async def _show_info(
+        self, interaction: discord.Interaction, echo_id: str, *, edit: bool = False,
+    ) -> None:
+        respond = self._edit_ephemeral if edit else self._reply
         if self.pool is None:
-            return await self._reply(interaction, "This message's details are temporarily unavailable.")
+            return await respond(interaction, content="This message's details are temporarily unavailable.")
         try:
             echo = await store.get_echo_message(self.pool, echo_id)
             if echo is None:
-                return await self._reply(interaction, "This echoed message could not be found.")
-            reports = await store.report_count(self.pool, echo_id)
-            await self._reply(interaction, view=_info_view(echo, reports))
+                return await respond(interaction, content="This echoed message could not be found.")
+            await respond(interaction, view=_info_view(echo))
         except Exception as exc:
             logging.error("Echo", f"Could not open echoed message {echo_id}: {exc}")
-            await self._reply(interaction, "This message's details could not be loaded.")
+            await respond(interaction, content="This message's details could not be loaded.")
 
     async def _submit_report(self, interaction: discord.Interaction, echo_id: str) -> None:
         if self.pool is None:
-            return await self._reply(interaction, "Reports are temporarily unavailable.")
+            return await self._edit_ephemeral(
+                interaction, view=_report_result_view("Reports are temporarily unavailable.")
+            )
         try:
             echo = await store.get_echo_message(self.pool, echo_id)
             if echo is None:
-                return await self._reply(interaction, "This echoed message could not be found.")
+                return await self._edit_ephemeral(
+                    interaction, view=_report_result_view("This echoed message could not be found.")
+                )
             channel = await self._reports_channel()
             if channel is None:
-                return await self._reply(interaction, "Message reports are not configured yet.")
+                return await self._edit_ephemeral(
+                    interaction, view=_report_result_view("Message reports are not configured yet.")
+                )
             report, created = await store.create_echo_report(
                 self.pool,
                 echo_id=echo_id,
@@ -272,19 +319,25 @@ class EchoReporter:
                 reason="Reported from the echoed message info panel.",
             )
             if not created:
-                return await self._reply(interaction, "You already have a pending report for this message.")
+                return await self._edit_ephemeral(
+                    interaction, view=_report_result_view("You already have a pending report for this message.")
+                )
             try:
                 await channel.send(
                     view=_report_view(report, echo),
-                    allowed_mentions=discord.AllowedMentions.none(),
+                    allowed_mentions=_NO_MENTIONS,
                 )
             except Exception:
                 await store.delete_echo_report(self.pool, report["report_id"])
                 raise
-            await self._reply(interaction, "Report submitted. Staff will review the message.")
+            await self._edit_ephemeral(
+                interaction, view=_report_result_view("Report submitted. Staff will review the message.")
+            )
         except Exception as exc:
             logging.error("Echo", f"Could not submit report for {echo_id}: {exc}")
-            await self._reply(interaction, "The report could not be submitted right now.")
+            await self._edit_ephemeral(
+                interaction, view=_report_result_view("The report could not be submitted right now.")
+            )
 
     async def _review(self, interaction: discord.Interaction, payload: str) -> None:
         status, _, report_id = payload.partition(":")
@@ -402,7 +455,10 @@ class EchoReporter:
         try:
             user = self.bot.get_user(int(user_id)) or await self.bot.fetch_user(int(user_id))
             if user is not None:
-                await user.send(view=_dm_view(warning_count, blacklist))
+                await user.send(
+                    view=_dm_view(warning_count, blacklist),
+                    allowed_mentions=_NO_MENTIONS,
+                )
         except Exception as exc:
             logging.warning("Echo", f"Could not DM warning notice to {user_id}: {exc}")
 
@@ -416,12 +472,33 @@ class EchoReporter:
         if interaction.message is None:
             return
         try:
-            await interaction.message.edit(view=_report_view(report, echo, **kwargs))
+            await interaction.message.edit(
+                view=_report_view(report, echo, **kwargs),
+                allowed_mentions=_NO_MENTIONS,
+            )
         except Exception as exc:
             logging.warning("Echo", f"Could not update report message {report['report_id']}: {exc}")
 
+    async def _edit_ephemeral(self, interaction: discord.Interaction, *, view=None, content: str = "") -> None:
+        kwargs = {"allowed_mentions": _NO_MENTIONS}
+        if view is not None:
+            kwargs["view"] = view
+        if content:
+            kwargs["content"] = content
+        if interaction.response.is_done():
+            if interaction.message is not None:
+                await interaction.message.edit(**kwargs)
+            else:
+                await interaction.followup.send(ephemeral=True, **kwargs)
+        else:
+            await interaction.response.edit_message(**kwargs)
+
     async def _reply(self, interaction: discord.Interaction, content: str = "", **kwargs) -> None:
-        payload = {"ephemeral": True, **kwargs}
+        payload = {
+            "ephemeral": True,
+            "allowed_mentions": _NO_MENTIONS,
+            **kwargs,
+        }
         if content:
             payload["content"] = content
         if interaction.response.is_done():

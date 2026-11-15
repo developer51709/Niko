@@ -16,10 +16,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import database  # noqa: E402
+from config.emojis import get_emoji  # noqa: E402
 from config.ids import SUPPORT_GUILD  # noqa: E402
 from database import SQLitePool  # noqa: E402
 from cogs.utility import echo as echo_module  # noqa: E402
-from cogs.utility.echo import _echo_button_view, _info_view  # noqa: E402
+from cogs.utility.echo import (  # noqa: E402
+    _echo_button_view,
+    _info_view,
+    _report_guidelines_view,
+)
 from utils import echo_reports  # noqa: E402
 from utils.moderation.manager import BlacklistManager  # noqa: E402
 
@@ -60,24 +65,150 @@ async def _pool() -> SQLitePool:
     return SQLitePool(conn)
 
 
+def _assert_no_mentions(value):
+    assert value.everyone is False
+    assert value.users is False
+    assert value.roles is False
+    assert value.replied_user is False
+
+
 def test_the_echo_button_is_a_persistent_info_icon_without_a_label():
     view = _echo_button_view("echo-1")
     buttons = [item for item in view.children if isinstance(item, discord.ui.Button)]
     assert len(buttons) == 1
     assert buttons[0].label is None
-    assert str(buttons[0].emoji) == "ℹ️"
+    assert str(buttons[0].emoji) == get_emoji("question")
     assert buttons[0].custom_id == "echo:info:echo-1"
 
     info = _info_view({
         "echo_id": "echo-1", "message_id": 900, "guild_id": 10,
         "channel_id": 11, "author_id": 20, "content": "hello",
         "truncated": False, "created_at": time.time(), "removed_at": None,
-    }, 2)
+    })
+    info_text = "\n".join(
+        item.content for item in info.walk_children()
+        if isinstance(item, discord.ui.TextDisplay)
+    )
+    assert "# Echoed message" not in info_text
+    assert "Guild:" not in info_text
+    assert "Channel:" not in info_text
+    assert "Reports:" not in info_text
     report_buttons = [
         item for item in info.walk_children()
         if isinstance(item, discord.ui.Button) and item.custom_id == "echo:report:echo-1"
     ]
     assert len(report_buttons) == 1
+
+
+def test_echo_send_disables_mentions():
+    async def exercise():
+        pool = await _pool()
+        ctx = _Context()
+        reporter = echo_module.EchoReporter(SimpleNamespace(cxn=pool))
+        try:
+            await reporter.send(ctx, "@everyone hello")
+
+            assert len(ctx.messages) == 1
+            _assert_no_mentions(ctx.messages[0]["allowed_mentions"])
+            echo_id = ctx.messages[0]["view"].children[0].custom_id.rsplit(":", 1)[-1]
+            echo = await echo_reports.get_echo_message(pool, echo_id)
+            assert echo["message_id"] == 900
+        finally:
+            await pool._db.close()
+
+    asyncio.run(exercise())
+
+
+def test_the_report_button_shows_guidelines_with_confirm_and_cancel():
+    view = _report_guidelines_view("echo-1")
+    text = "\n".join(
+        item.content for item in view.walk_children()
+        if isinstance(item, discord.ui.TextDisplay)
+    )
+    buttons = {
+        item.custom_id: item for item in view.walk_children()
+        if isinstance(item, discord.ui.Button)
+    }
+
+    assert "Reporting guidelines" in text
+    assert "confidential" in text
+    assert set(buttons) == {"echo:confirm:echo-1", "echo:cancel:echo-1"}
+    assert buttons["echo:confirm:echo-1"].label == "Confirm"
+    assert buttons["echo:cancel:echo-1"].label == "Cancel"
+
+
+def test_confirming_a_report_edits_the_ephemeral_message_and_posts_to_staff():
+    async def exercise():
+        pool = await _pool()
+        await echo_reports.record_echo_message(
+            pool, echo_id="echo-1", message_id=900, guild_id=10, channel_id=11,
+            author_id=20, content="reported content", truncated=False,
+        )
+        channel = SimpleNamespace(send=AsyncMock())
+        interaction = _Interaction(21)
+        reporter = echo_module.EchoReporter(SimpleNamespace(cxn=pool))
+        reporter._reports_channel = AsyncMock(return_value=channel)
+        try:
+            await reporter._submit_report(interaction, "echo-1")
+
+            report = await pool.fetchrow(
+                "SELECT status FROM echo_reports WHERE echo_id = $1 AND reporter_id = $2",
+                "echo-1", 21,
+            )
+            assert report["status"] == "pending"
+            channel.send.assert_awaited_once()
+            _assert_no_mentions(channel.send.await_args.kwargs["allowed_mentions"])
+            assert len(interaction.response.edits) == 1
+            _assert_no_mentions(interaction.response.edits[0]["allowed_mentions"])
+            result = interaction.response.edits[0]["view"]
+            text = "\n".join(
+                item.content for item in result.walk_children()
+                if isinstance(item, discord.ui.TextDisplay)
+            )
+            assert "Report submitted" in text
+        finally:
+            await pool._db.close()
+
+    asyncio.run(exercise())
+
+
+def test_report_and_cancel_do_not_create_a_report():
+    async def exercise():
+        pool = await _pool()
+        await echo_reports.record_echo_message(
+            pool, echo_id="echo-1", message_id=900, guild_id=10, channel_id=11,
+            author_id=20, content="reported content", truncated=False,
+        )
+        reporter = echo_module.EchoReporter(SimpleNamespace(cxn=pool))
+        try:
+            report = _Interaction(21)
+            report.data = {"custom_id": "echo:report:echo-1"}
+            await reporter.on_interaction(report)
+            _assert_no_mentions(report.response.edits[0]["allowed_mentions"])
+            buttons = {
+                item.custom_id for item in report.response.edits[0]["view"].walk_children()
+                if isinstance(item, discord.ui.Button)
+            }
+            assert buttons == {"echo:confirm:echo-1", "echo:cancel:echo-1"}
+
+            cancel = _Interaction(21)
+            cancel.data = {"custom_id": "echo:cancel:echo-1"}
+            await reporter.on_interaction(cancel)
+            _assert_no_mentions(cancel.response.edits[0]["allowed_mentions"])
+            buttons = {
+                item.custom_id for item in cancel.response.edits[0]["view"].walk_children()
+                if isinstance(item, discord.ui.Button)
+            }
+            assert buttons == {"echo:report:echo-1"}
+
+            count = await pool.fetchval(
+                "SELECT COUNT(*) FROM echo_reports WHERE echo_id = $1", "echo-1",
+            )
+            assert count == 0
+        finally:
+            await pool._db.close()
+
+    asyncio.run(exercise())
 
 
 def test_an_echo_message_report_and_warning_are_persisted_once():
@@ -134,12 +265,17 @@ class _Response:
     def __init__(self):
         self.done = False
         self.messages = []
+        self.edits = []
 
     def is_done(self):
         return self.done
 
     async def send_message(self, **kwargs):
         self.messages.append(kwargs)
+        self.done = True
+
+    async def edit_message(self, **kwargs):
+        self.edits.append(kwargs)
         self.done = True
 
 
@@ -166,6 +302,7 @@ class _Interaction:
         self.response = _Response()
         self.followup = _Followup()
         self.message = _InteractionMessage()
+        self.data = {}
 
 
 class _PartialMessage:
@@ -192,6 +329,18 @@ class _User:
 
     async def send(self, **kwargs):
         self.messages.append(kwargs)
+
+
+class _Context:
+    def __init__(self):
+        self.guild = SimpleNamespace(id=10)
+        self.channel = SimpleNamespace(id=11)
+        self.author = SimpleNamespace(id=20)
+        self.messages = []
+
+    async def send(self, **kwargs):
+        self.messages.append(kwargs)
+        return SimpleNamespace(id=900)
 
 
 async def _report_fixture():
@@ -229,7 +378,9 @@ def test_invalid_staff_review_keeps_the_echo_and_creates_no_warning():
             assert user.messages == []
             blacklist.apply_warning_blacklist.assert_not_awaited()
             assert "invalid" in interaction.response.messages[0]["content"]
+            _assert_no_mentions(interaction.response.messages[0]["allowed_mentions"])
             assert len(interaction.message.edits) == 1
+            _assert_no_mentions(interaction.message.edits[0]["allowed_mentions"])
         finally:
             await pool._db.close()
 
@@ -269,7 +420,10 @@ def test_valid_staff_review_deletes_the_echo_warns_and_dms_the_sender():
             assert len(user.messages) == 1
             blacklist.apply_warning_blacklist.assert_awaited_once()
             assert "Warning #1" in interaction.response.messages[0]["content"]
+            _assert_no_mentions(interaction.response.messages[0]["allowed_mentions"])
             assert len(interaction.message.edits) == 1
+            _assert_no_mentions(interaction.message.edits[0]["allowed_mentions"])
+            _assert_no_mentions(user.messages[0]["allowed_mentions"])
         finally:
             await pool._db.close()
 
