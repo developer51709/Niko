@@ -50,6 +50,33 @@ def _catalogue_folders() -> list[Path]:
     return sorted((SRC / "cogs").glob("*/locales")) + sorted((SRC / "utils").glob("*/locales"))
 
 
+def test_status_locale_scan_is_bounded_to_catalogue_roots(monkeypatch):
+    """Status refresh must not walk the entire source tree for locale folders."""
+    from webapp import status
+
+    expected = (
+        sorted(Path("src/cogs").glob("*/locales"))
+        + sorted(Path("src/utils").glob("*/locales"))
+    )
+    patterns = []
+    original_glob = Path.glob
+
+    def recording_glob(self, pattern, *args, **kwargs):
+        patterns.append(pattern)
+        return original_glob(self, pattern, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "glob", recording_glob)
+
+    assert status._locale_dirs() == expected
+    assert patterns == [
+        "*/locales",
+        "*/*/locales",
+        "*/locales",
+        "*/*/locales",
+    ]
+    assert all("**" not in pattern for pattern in patterns)
+
+
 def _catalogue_folder_ids() -> list[str]:
     return [str(folder.relative_to(ROOT)) for folder in _catalogue_folders()]
 

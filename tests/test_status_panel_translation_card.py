@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -185,6 +186,58 @@ def test_collection_only_reads_coverage_while_the_switch_is_on(monkeypatch):
     on = asyncio.run(panel._collect_status(_status_bot()))
     assert on["translations"]["languages"] == 4
     assert calls == [True]
+
+
+def test_a_slow_translation_scan_runs_off_the_event_loop(monkeypatch):
+    """The status refresh must stay responsive while locale files are scanned."""
+
+    async def probe(_url):
+        return True
+
+    async def database(_bot):
+        return "mongodb", True
+
+    started = threading.Event()
+    release = threading.Event()
+    scanned_on = []
+
+    def slow_snapshot():
+        scanned_on.append(threading.current_thread() is threading.main_thread())
+        started.set()
+        release.wait(2)
+        return {
+            "languages": 4,
+            "bot": 50.0,
+            "site": 50.0,
+            "rows": [],
+            "mode": "local",
+            "age_seconds": 0,
+            "scanned_at": 0,
+        }
+
+    monkeypatch.setattr(panel, "_probe_http", probe)
+    monkeypatch.setattr(panel, "_check_database", database)
+    monkeypatch.setattr(panel, "_load_bot_stats_file", lambda: {})
+    monkeypatch.setattr(panel, "_translation_snapshot", slow_snapshot)
+    monkeypatch.setenv("PUBLIC_URL", "https://public.example")
+    monkeypatch.setitem(panel_settings._read(), "status_panel_translation_card", True)
+
+    async def run():
+        task = asyncio.create_task(panel._collect_status(_status_bot()))
+        assert await asyncio.to_thread(started.wait, 2)
+        # If the scan ran on the loop, this task could not reach the next line
+        # until the scan returned; reaching it with the task still pending
+        # proves the event loop stayed responsive.
+        await asyncio.sleep(0)
+        responsive = not task.done()
+        release.set()
+        return responsive, await task
+
+    responsive, status = asyncio.run(run())
+
+    assert responsive
+    assert scanned_on == [False]
+    assert status["translations"]["languages"] == 4
 
 
 def test_every_shipped_language_reaches_the_panel_card(monkeypatch):

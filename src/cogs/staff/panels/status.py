@@ -303,7 +303,7 @@ async def _collect_status(bot) -> dict:
 
         await panel_settings.ensure_loaded(bot)
         if panel_settings.show_translation_card():
-            status["translations"] = _translation_snapshot()
+            status["translations"] = await asyncio.to_thread(_translation_snapshot)
     except Exception:
         status["translations"] = None
 

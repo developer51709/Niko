@@ -148,10 +148,22 @@ def site_catalogue(folder: Path, code: str) -> tuple[dict, bytes]:
     return merged, b"".join(chunks)
 
 
+#: Locale folders only live beside cogs and shared utilities. Keeping this
+#: bounded avoids walking generated assets and build output on every status
+#: refresh — a full ``src/**/locales`` scan can stall the event loop on a slow
+#: or unexpectedly large checkout.
+_LOCALE_ROOTS = (Path("src/cogs"), Path("src/utils"))
+
+
 def _locale_dirs() -> list[Path]:
     """Every folder that holds a shipped ``<lang>.json`` catalogue."""
-    found = [path for path in Path("src").glob("**/locales") if path.is_dir()]
-    return sorted(found)
+    found: set[Path] = set()
+    for root in _LOCALE_ROOTS:
+        if not root.is_dir():
+            continue
+        found.update(root.glob("*/locales"))
+        found.update(root.glob("*/*/locales"))
+    return sorted(path for path in found if path.is_dir())
 
 
 #: A bot catalogue is addressed by the package that owns it, never by a path:
