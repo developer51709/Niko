@@ -121,12 +121,18 @@ def test_mcp_lists_deployment_and_diagnostics_tools():
         "niko_incidents",
         "niko_update_incident",
         "niko_announce",
+        "niko_edit_announcement",
+        "niko_delete_announcement",
         "niko_deploy",
     } <= tools
 
 
 def test_mcp_announce_tool_sends_the_callers_content(monkeypatch):
-    sender = AsyncMock(return_value={"message_id": 9001, "channel_id": 444})
+    sender = AsyncMock(return_value={
+        "message_id": 9001,
+        "channel_id": 444,
+        "message_url": "https://discord.com/channels/1/2/9001",
+    })
     monkeypatch.setattr(announcements, "send_support_announcement", sender)
     monkeypatch.setattr(mcp_server, "_bot", lambda: object())
     monkeypatch.setattr(mcp_server, "_authorised", lambda headers: True)
@@ -155,6 +161,7 @@ def test_mcp_announce_tool_sends_the_callers_content(monkeypatch):
     assert result["isError"] is False
     payload = json.loads(result["content"][0]["text"])
     assert payload["message_id"] == 9001
+    assert payload["message_url"] == "https://discord.com/channels/1/2/9001"
     sender.assert_awaited_once()
     assert sender.await_args.kwargs["title"] == "A release"
     assert sender.await_args.kwargs["body"] == "The details."
@@ -162,6 +169,69 @@ def test_mcp_announce_tool_sends_the_callers_content(monkeypatch):
     assert sender.await_args.kwargs["images"] == [
         {"data": "aGVsbG8=", "filename": "release.png"},
     ]
+
+
+def test_mcp_announcement_edit_and_delete_tools(monkeypatch):
+    editor = AsyncMock(return_value={
+        "edited": True,
+        "message_id": 9001,
+        "message_url": "https://discord.com/channels/1/2/9001",
+    })
+    deleter = AsyncMock(return_value={
+        "deleted": True,
+        "message_id": 9001,
+        "message_url": "https://discord.com/channels/1/2/9001",
+    })
+    monkeypatch.setattr(announcements, "edit_support_announcement", editor)
+    monkeypatch.setattr(announcements, "delete_support_announcement", deleter)
+    monkeypatch.setattr(mcp_server, "_bot", lambda: object())
+    monkeypatch.setattr(mcp_server, "_authorised", lambda headers: True)
+    monkeypatch.setattr(mcp_server, "_run", lambda coro, timeout=20: asyncio.run(coro))
+    owner_key = mcp_keys.local_rotate()["key"]
+    client = app.test_client()
+
+    edit_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 32,
+            "method": "tools/call",
+            "params": {
+                "name": "niko_edit_announcement",
+                "arguments": {
+                    "message_id": 9001,
+                    "title": "Corrected",
+                    "body": "Corrected body.",
+                    "images": [{"url": "https://cdn.example/fixed.png"}],
+                },
+            },
+        },
+        headers={"Authorization": f"Bearer {owner_key}"},
+    )
+    assert edit_response.get_json()["result"]["isError"] is False
+    editor.assert_awaited_once()
+    assert editor.await_args.kwargs["message_id"] == 9001
+    assert editor.await_args.kwargs["title"] == "Corrected"
+    assert editor.await_args.kwargs["images"] == [
+        {"url": "https://cdn.example/fixed.png"},
+    ]
+
+    delete_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 33,
+            "method": "tools/call",
+            "params": {
+                "name": "niko_delete_announcement",
+                "arguments": {"message_id": 9001},
+            },
+        },
+        headers={"Authorization": f"Bearer {owner_key}"},
+    )
+    assert delete_response.get_json()["result"]["isError"] is False
+    deleter.assert_awaited_once()
+    assert deleter.await_args.kwargs["message_id"] == 9001
 
 
 def test_mcp_announce_tool_schema_supports_image_assets():

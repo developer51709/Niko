@@ -123,6 +123,36 @@ def _schema(properties: dict, required: list[str] | None = None) -> dict:
     return value
 
 
+ANNOUNCEMENT_IMAGES_SCHEMA = {
+    "type": "array",
+    "maxItems": 10,
+    "description": "Up to 10 PNG, JPEG, GIF, or WebP images. Pass inline base64 data or a public image URL; Niko downloads URL images and uploads both kinds as Discord attachments so the announcement keeps its images even if an external link expires.",
+    "items": {
+        "type": "object",
+        "properties": {
+            "data": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Base64-encoded image bytes, or a base64 data URI. Use either data or url.",
+            },
+            "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Public http or https image URL. The host downloads it and uploads the bytes as an attachment. Use either data or url.",
+            },
+            "filename": {
+                "type": "string",
+                "maxLength": 120,
+                "description": "Optional filename stem. Niko adds a unique suffix and the detected extension.",
+            },
+            "spoiler": {"type": "boolean", "default": False},
+        },
+        "anyOf": [{"required": ["data"]}, {"required": ["url"]}],
+        "additionalProperties": False,
+    },
+}
+
+
 REPORT_STATUSES = (
     "awaiting_review",
     "under_review",
@@ -197,41 +227,41 @@ TOOLS: list[dict] = [
     },
     {
         "name": "niko_announce",
-        "description": "Send an announcement to the support server's announcements channel and ping its announcements role. The title and message are supplied by the caller; no announcement text is built into the bot. Optional images are delivered as real Discord attachments in a media gallery, like staff broadcasts.",
+        "description": "Send an announcement to the support server's announcements channel and ping its announcements role. The title and message are supplied by the caller; no announcement text is built into the bot. Optional images are delivered as real Discord attachments in a media gallery, like staff broadcasts. Returns the message ID and a jump URL.",
         "inputSchema": _schema({
             "title": {"type": "string", "minLength": 1, "maxLength": 160},
             "body": {"type": "string", "minLength": 1, "maxLength": 3800},
             "footer": {"type": "string", "maxLength": 120},
             "ping": {"type": "boolean", "default": True},
-            "images": {
-                "type": "array",
-                "maxItems": 10,
-                "description": "Up to 10 PNG, JPEG, GIF, or WebP images. Pass inline base64 data or a public image URL; Niko downloads URL images and uploads both kinds as Discord attachments so the announcement keeps its images even if an external link expires.",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "data": {
-                            "type": "string",
-                            "minLength": 1,
-                            "description": "Base64-encoded image bytes, or a base64 data URI. Use either data or url.",
-                        },
-                        "url": {
-                            "type": "string",
-                            "format": "uri",
-                            "description": "Public http or https image URL. The host downloads it and uploads the bytes as an attachment. Use either data or url.",
-                        },
-                        "filename": {
-                            "type": "string",
-                            "maxLength": 120,
-                            "description": "Optional filename stem. Niko adds a unique suffix and the detected extension.",
-                        },
-                        "spoiler": {"type": "boolean", "default": False},
-                    },
-                    "anyOf": [{"required": ["data"]}, {"required": ["url"]}],
-                    "additionalProperties": False,
-                },
-            },
+            "images": ANNOUNCEMENT_IMAGES_SCHEMA,
         }, ["title", "body"]),
+    },
+    {
+        "name": "niko_edit_announcement",
+        "description": "Edit a Niko announcement sent in the support announcements channel within the last 7 days. The title and body replace the full announcement text; omit images to keep the current attachments, or pass an array to replace them. The ping defaults to off so a correction does not notify the role again. Returns the updated message URL.",
+        "inputSchema": _schema({
+            "message_id": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The announcement message ID returned by niko_announce.",
+            },
+            "title": {"type": "string", "minLength": 1, "maxLength": 160},
+            "body": {"type": "string", "minLength": 1, "maxLength": 3800},
+            "footer": {"type": "string", "maxLength": 120},
+            "ping": {"type": "boolean", "default": False},
+            "images": ANNOUNCEMENT_IMAGES_SCHEMA,
+        }, ["message_id", "title", "body"]),
+    },
+    {
+        "name": "niko_delete_announcement",
+        "description": "Delete a Niko announcement sent in the support announcements channel within the last 7 days. Returns the deleted message ID and its former jump URL.",
+        "inputSchema": _schema({
+            "message_id": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The announcement message ID returned by niko_announce.",
+            },
+        }, ["message_id"]),
     },
     {
         "name": "niko_deploy_commit",
@@ -551,6 +581,41 @@ def _announce(args: dict) -> dict:
     )
 
 
+def _edit_announcement(args: dict) -> dict:
+    from utils.announcements import edit_support_announcement
+
+    title = str(args.get("title") or "").strip()
+    body = str(args.get("body") or "").strip()
+    footer = str(args.get("footer") or "").strip()
+    ping = args.get("ping", False)
+    if not isinstance(ping, bool):
+        raise ValueError("ping must be true or false.")
+    images = args.get("images")
+    if images is not None and not isinstance(images, list):
+        raise ValueError("images must be an array.")
+    return _run(
+        edit_support_announcement(
+            _bot(),
+            message_id=args.get("message_id"),
+            title=title,
+            body=body,
+            footer=footer or None,
+            ping=ping,
+            images=images,
+        ),
+        timeout=60,
+    )
+
+
+def _delete_announcement(args: dict) -> dict:
+    from utils.announcements import delete_support_announcement
+
+    return _run(
+        delete_support_announcement(_bot(), message_id=args.get("message_id")),
+        timeout=20,
+    )
+
+
 def _deploy(args: dict) -> dict:
     from .mcp_deploy import apply_payloads
 
@@ -586,6 +651,10 @@ def _call_tool(name: str, arguments: dict | None) -> dict:
         return _update_status()
     if name == "niko_announce":
         return _announce(arguments)
+    if name == "niko_edit_announcement":
+        return _edit_announcement(arguments)
+    if name == "niko_delete_announcement":
+        return _delete_announcement(arguments)
     if name == "niko_deploy":
         return _deploy(arguments)
     if name == "niko_deploy_commit":
@@ -734,7 +803,7 @@ ul{{list-style:none;padding:0;display:grid;gap:10px}}li{{display:grid;gap:3px;pa
 </style></head><body><main>
 <span class="eyebrow">Niko · owner automation</span>
 <h1>MCP Server.</h1>
-<p>A direct, authenticated control surface for the Niko bot. Connect it as a remote MCP server in Freebuff to deploy files, inspect logs, triage error reports, manage public incidents and send support announcements.</p>
+<p>A direct, authenticated control surface for the Niko bot. Connect it as a remote MCP server in Freebuff to deploy files, inspect logs, triage error reports, manage public incidents and send, edit or delete support announcements.</p>
 <span class="status {status_class}">{status}</span>
 <section><h2>Connection</h2><pre>URL: {html.escape(endpoint())}
 Header: {html.escape(AUTH_HEADER)}</pre><p>Generate or rotate the key on the owner's MCP Server staff page. Only a salted PBKDF2-SHA256 digest is stored, and rotation applies immediately without a restart.</p></section>

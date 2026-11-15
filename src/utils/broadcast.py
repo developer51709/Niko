@@ -130,13 +130,13 @@ def build_broadcast_view(
         discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
         discord.ui.TextDisplay(content=body),
     ]
-    gallery = [row for row in media if row.get("filename")]
+    gallery = [row for row in media if row.get("filename") or row.get("url")]
     if gallery:
         items.extend([
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.MediaGallery(*[
                 MediaGalleryItem(
-                    media=UnfurledMediaItem(url=_media_url(str(row["filename"]))),
+                    media=UnfurledMediaItem(url=_media_url(str(row["filename"])) if not row.get("url") else str(row["url"])),
                     spoiler=bool(row.get("spoiler")),
                 )
                 for row in gallery[:MAX_MEDIA_ITEMS]

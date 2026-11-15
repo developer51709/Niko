@@ -45,6 +45,21 @@ detected from the bytes, so `data` can also be a `data:image/...;base64,...`
 URI. The 8 MiB per-image and 20 MiB total limits match staff broadcasts, and
 URL downloads time out after 20 seconds. Announcement containers use no accent
 colour, and the optional announcements ping is rendered in the footer.
+`niko_announce` returns both `message_url` and `url` with the same Discord jump
+link so a send can be checked or corrected immediately.
+
+## Editing and deleting announcements
+
+`niko_edit_announcement` replaces the text of a Niko announcement posted in the
+announcements channel within the last 7 days. It requires `message_id`, `title`
+and `body`; `footer` and `ping` are optional, and `ping` defaults to `false` so
+a correction does not notify the role again. Omit `images` to keep the current
+attachments, pass an image array to replace them, or pass `[]` to remove them.
+
+`niko_delete_announcement` deletes a Niko announcement from the same channel
+within the same 7-day window. Both tools reject messages authored by anyone
+else and return the affected message URL. Message IDs come from the
+`message_id` field returned by `niko_announce`.
 
 `niko_deploy` still exists for small inline hotfixes, but it should not be used
 for large files: every byte has to be escaped into one JSON-RPC request and the

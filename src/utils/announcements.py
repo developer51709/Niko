@@ -14,6 +14,7 @@ import base64
 import os
 import re
 import uuid
+from datetime import timedelta
 from urllib.parse import urlparse
 
 import aiohttp
@@ -35,6 +36,9 @@ from utils.broadcast import (
 # Discord's combined attachment limit for one message. The broadcast studio
 # uses the same ceiling so a gallery cannot fail only at send time.
 MAX_TOTAL_MEDIA_BYTES = 20 * 1024 * 1024
+# Keep correction tools scoped to recent posts instead of allowing arbitrary
+# edits to the support server's announcement history.
+ANNOUNCEMENT_MANAGE_WINDOW = timedelta(days=7)
 _SAFE_STEM = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -157,23 +161,7 @@ async def _prepare_images(images) -> list[dict]:
     return media
 
 
-async def send_support_announcement(
-    bot,
-    *,
-    title: str,
-    body: str,
-    footer: str | None = None,
-    ping: bool = True,
-    accent: str | None = None,
-    images: list[dict] | None = None,
-) -> dict:
-    """Post one CV2 announcement in the configured support announcements channel.
-
-    ``ping`` defaults to the support server's announcements role. The role is
-    looked up from the persisted support configuration rather than a hardcoded
-    ID, and a missing channel or role raises an actionable error instead of
-    posting silently without the expected ping.
-    """
+def _validated_content(title, body, footer) -> tuple[str, str, str]:
     title = str(title or "").strip()
     body = str(body or "").strip()
     footer = str(footer or "").strip()
@@ -187,8 +175,10 @@ async def send_support_announcement(
         raise ValueError(f"The message must be {MAX_BODY} characters or fewer.")
     if len(footer) > MAX_FOOTER:
         raise ValueError(f"The footer must be {MAX_FOOTER} characters or fewer.")
-    media = await _prepare_images(images)
+    return title, body, footer
 
+
+async def _support_announcement_channel(bot):
     ids = await get_support_ids(bot)
     channel_id = (ids.get("channels") or {}).get("announcements")
     if not channel_id:
@@ -196,6 +186,96 @@ async def send_support_announcement(
             "The support announcements channel is not configured. "
             "Run `.staff supportupdate` in the support server."
         )
+    channel = bot.get_channel(int(channel_id))
+    if channel is None:
+        channel = await bot.fetch_channel(int(channel_id))
+    return channel, ids
+
+
+def _announcement_options(*, title, body, footer, ping, role_id, media) -> dict:
+    mention = f"<@&{int(role_id)}>" if ping else None
+    # Components V2 messages cannot carry a separate ``content`` field, so the
+    # role ping belongs in the footer subtext rather than the message body.
+    view_footer = f"{mention} {footer}".strip() if mention else footer
+    return {
+        "view": build_broadcast_view(title, body, view_footer, None, media),
+        "allowed_mentions": (
+            discord.AllowedMentions(
+                roles=[discord.Object(id=int(role_id))], everyone=False, users=False,
+            )
+            if ping else discord.AllowedMentions.none()
+        ),
+    }
+
+
+def _existing_media(message) -> list[dict]:
+    """Keep attachments in place while rebuilding an edited announcement view."""
+    media: list[dict] = []
+    for attachment in getattr(message, "attachments", []) or []:
+        filename = str(getattr(attachment, "filename", "") or "")
+        if not filename:
+            continue
+        media.append({
+            "filename": filename,
+            "url": f"attachment://{filename}",
+            "spoiler": False,
+        })
+    return media
+
+
+async def _recent_announcement(bot, message_id: int):
+    """Resolve one recent bot-authored message in the announcements channel."""
+    try:
+        parsed_id = int(message_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("message_id must be a positive integer.") from exc
+    if parsed_id <= 0:
+        raise ValueError("message_id must be a positive integer.")
+
+    channel, ids = await _support_announcement_channel(bot)
+    try:
+        message = await channel.fetch_message(parsed_id)
+    except discord.NotFound as exc:
+        raise ValueError(
+            "No announcement exists with that message ID in the announcements channel."
+        ) from exc
+    except discord.Forbidden as exc:
+        raise RuntimeError("Niko cannot read messages in the announcements channel.") from exc
+
+    bot_user_id = getattr(getattr(bot, "user", None), "id", None)
+    author_id = getattr(getattr(message, "author", None), "id", None)
+    if bot_user_id is None or author_id != bot_user_id:
+        raise ValueError("Only Niko's own announcements can be edited or deleted.")
+
+    created_at = getattr(message, "created_at", None)
+    if created_at is not None and discord.utils.utcnow() - created_at > ANNOUNCEMENT_MANAGE_WINDOW:
+        raise ValueError(
+            f"Only announcements from the last {ANNOUNCEMENT_MANAGE_WINDOW.days} days "
+            "can be edited or deleted."
+        )
+    return message, channel, ids
+
+
+async def send_support_announcement(
+    bot,
+    *,
+    title: str,
+    body: str,
+    footer: str | None = None,
+    ping: bool = True,
+    images: list[dict] | None = None,
+) -> dict:
+    """Post one CV2 announcement in the configured support announcements channel.
+
+    ``ping`` defaults to the support server's announcements role. The role is
+    looked up from the persisted support configuration rather than a hardcoded
+    ID, and a missing channel or role raises an actionable error instead of
+    posting silently without the expected ping.
+    """
+    title, body, footer = _validated_content(title, body, footer)
+    media = await _prepare_images(images)
+    channel, ids = await _support_announcement_channel(bot)
+    channel_id = (ids.get("channels") or {}).get("announcements")
 
     role_id = (ids.get("roles") or {}).get("announcements_ping")
     if ping and not role_id:
@@ -204,31 +284,89 @@ async def send_support_announcement(
             "Run `.staff supportupdate` in the support server."
         )
 
-    channel = bot.get_channel(int(channel_id))
-    if channel is None:
-        channel = await bot.fetch_channel(int(channel_id))
-
-    mention = f"<@&{int(role_id)}>" if ping else None
-    # Components V2 messages cannot carry a separate ``content`` field, so the
-    # role ping belongs in the footer subtext rather than the message body.
-    view_footer = f"{mention} {footer}".strip() if mention else footer
-    kwargs = {
-        "view": build_broadcast_view(title, body, view_footer, accent, media),
-        "allowed_mentions": (
-            discord.AllowedMentions(
-                roles=[discord.Object(id=int(role_id))], everyone=False, users=False,
-            )
-            if ping else discord.AllowedMentions.none()
-        ),
-    }
+    kwargs = _announcement_options(
+        title=title, body=body, footer=footer, ping=ping, role_id=role_id, media=media,
+    )
     if media:
         kwargs["files"] = build_broadcast_files(media)
     message = await channel.send(**kwargs)
+    jump_url = getattr(message, "jump_url", None)
     return {
         "message_id": message.id,
         "channel_id": int(channel_id),
         "guild_id": SUPPORT_GUILD,
         "pinged_role_id": int(role_id) if ping else None,
         "image_count": len(media),
-        "url": getattr(message, "jump_url", None),
+        "message_url": jump_url,
+        "url": jump_url,
+    }
+
+
+async def edit_support_announcement(
+    bot,
+    *,
+    message_id: int,
+    title: str,
+    body: str,
+    footer: str | None = None,
+    ping: bool = False,
+    images: list[dict] | None = None,
+) -> dict:
+    """Edit a recent Niko announcement in place.
+
+    Omit ``images`` to keep the current attachments. Pass a list to replace
+    them, including an empty list to remove all images.
+    """
+    message, _, ids = await _recent_announcement(bot, message_id)
+    title, body, footer = _validated_content(title, body, footer)
+
+    role_id = (ids.get("roles") or {}).get("announcements_ping")
+    if ping and not role_id:
+        raise RuntimeError(
+            "The announcements ping role is not configured. "
+            "Run `.staff supportupdate` in the support server."
+        )
+
+    if images is None:
+        media = _existing_media(message)
+        attachments = list(getattr(message, "attachments", []) or [])
+    elif isinstance(images, list):
+        media = await _prepare_images(images)
+        attachments = build_broadcast_files(media)
+    else:
+        raise ValueError("Images must be an array.")
+
+    kwargs = _announcement_options(
+        title=title, body=body, footer=footer, ping=ping, role_id=role_id, media=media,
+    )
+    # A Components V2 edit must explicitly clear the legacy content/embed
+    # fields. Passing the existing Attachment objects keeps preserved images.
+    edited = await message.edit(
+        content=None, embed=None, attachments=attachments, **kwargs,
+    )
+    jump_url = getattr(edited, "jump_url", None) or getattr(message, "jump_url", None)
+    return {
+        "edited": True,
+        "message_id": edited.id,
+        "channel_id": int((ids.get("channels") or {}).get("announcements")),
+        "guild_id": SUPPORT_GUILD,
+        "pinged_role_id": int(role_id) if ping else None,
+        "image_count": len(media),
+        "message_url": jump_url,
+        "url": jump_url,
+    }
+
+
+async def delete_support_announcement(bot, *, message_id: int) -> dict:
+    """Delete a recent Niko announcement from the announcements channel."""
+    message, _, ids = await _recent_announcement(bot, message_id)
+    jump_url = getattr(message, "jump_url", None)
+    await message.delete()
+    return {
+        "deleted": True,
+        "message_id": int(message.id),
+        "channel_id": int((ids.get("channels") or {}).get("announcements")),
+        "guild_id": SUPPORT_GUILD,
+        "message_url": jump_url,
+        "url": jump_url,
     }

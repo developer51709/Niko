@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import sys
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -23,17 +24,40 @@ PNG = base64.b64decode(
 )
 
 
+class FakeMessage:
+    def __init__(self, message_id=9001, *, author_id=777, created_at=None, attachments=None):
+        self.id = message_id
+        self.jump_url = f"https://discord.com/channels/1/2/{message_id}"
+        self.author = SimpleNamespace(id=author_id)
+        self.created_at = created_at or discord.utils.utcnow()
+        self.attachments = list(attachments or [])
+        self.edits = []
+        self.deleted = False
+
+    async def edit(self, **kwargs):
+        self.edits.append(kwargs)
+        return self
+
+    async def delete(self):
+        self.deleted = True
+
+
 class FakeChannel:
     def __init__(self):
         self.sent = []
+        self.messages = {}
 
     async def send(self, **kwargs):
         self.sent.append(kwargs)
-        return SimpleNamespace(id=9001, jump_url="https://discord.com/channels/1/2/9001")
+        return FakeMessage(9001)
+
+    async def fetch_message(self, message_id):
+        return self.messages[message_id]
 
 
 def _bot(channel):
     return SimpleNamespace(
+        user=SimpleNamespace(id=777),
         get_channel=lambda channel_id: channel,
         fetch_channel=AsyncMock(side_effect=AssertionError("cached channel should be used")),
     )
@@ -69,6 +93,8 @@ def test_announcement_uses_the_support_channel_and_announcements_ping_role(monke
     assert result["channel_id"] == 444
     assert result["guild_id"] == announcements.SUPPORT_GUILD
     assert result["pinged_role_id"] == 555
+    assert result["message_url"] == "https://discord.com/channels/1/2/9001"
+    assert result["url"] == result["message_url"]
 
 
 def test_announcement_can_skip_the_ping(monkeypatch):
@@ -242,6 +268,96 @@ def test_announcement_rejects_invalid_or_unsupported_images(monkeypatch):
                 "data": base64.b64encode(PNG).decode("ascii"),
                 "spoiler": "false",
             }],
+        ))
+
+
+def test_edit_announcement_preserves_existing_images_and_returns_url(monkeypatch):
+    channel = FakeChannel()
+    attachment = SimpleNamespace(id=11, filename="old-release.png")
+    message = FakeMessage(9001, attachments=[attachment])
+    channel.messages[9001] = message
+    _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
+
+    result = asyncio.run(announcements.edit_support_announcement(
+        _bot(channel), message_id=9001, title="Fixed title", body="Corrected body.",
+        footer="Official Niko update",
+    ))
+
+    edited = message.edits[0]
+    assert edited["content"] is None
+    assert edited["embed"] is None
+    assert edited["attachments"] == [attachment]
+    assert not edited["allowed_mentions"].roles
+    gallery = next(
+        item for item in edited["view"].walk_children()
+        if isinstance(item, discord.ui.MediaGallery)
+    )
+    assert gallery.items[0].media.url == "attachment://old-release.png"
+    assert result["edited"] is True
+    assert result["message_url"] == "https://discord.com/channels/1/2/9001"
+    assert result["image_count"] == 1
+
+
+def test_edit_announcement_replaces_images_and_can_ping(monkeypatch):
+    channel = FakeChannel()
+    old_attachment = SimpleNamespace(id=11, filename="old-release.png")
+    message = FakeMessage(9001, attachments=[old_attachment])
+    channel.messages[9001] = message
+    _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
+
+    result = asyncio.run(announcements.edit_support_announcement(
+        _bot(channel), message_id=9001, title="Fixed title", body="Corrected body.",
+        images=[{"data": base64.b64encode(PNG).decode("ascii"), "filename": "new.png"}],
+        ping=True,
+    ))
+
+    edited = message.edits[0]
+    assert len(edited["attachments"]) == 1
+    assert edited["attachments"][0].filename.startswith("new-")
+    assert edited["allowed_mentions"].roles[0].id == 555
+    gallery = next(
+        item for item in edited["view"].walk_children()
+        if isinstance(item, discord.ui.MediaGallery)
+    )
+    assert gallery.items[0].media.url.startswith("attachment://new-")
+    assert result["pinged_role_id"] == 555
+    assert result["image_count"] == 1
+
+
+def test_delete_announcement_removes_a_recent_bot_message(monkeypatch):
+    channel = FakeChannel()
+    message = FakeMessage(9001)
+    channel.messages[9001] = message
+    _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
+
+    result = asyncio.run(announcements.delete_support_announcement(
+        _bot(channel), message_id=9001,
+    ))
+
+    assert message.deleted is True
+    assert result["deleted"] is True
+    assert result["message_id"] == 9001
+    assert result["message_url"] == "https://discord.com/channels/1/2/9001"
+
+
+def test_announcement_management_rejects_other_authors_and_old_messages(monkeypatch):
+    channel = FakeChannel()
+    other_author = FakeMessage(9001, author_id=999)
+    channel.messages[9001] = other_author
+    _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
+
+    with pytest.raises(ValueError, match="Only Niko's own announcements"):
+        asyncio.run(announcements.delete_support_announcement(
+            _bot(channel), message_id=9001,
+        ))
+
+    old_message = FakeMessage(
+        9002, created_at=discord.utils.utcnow() - timedelta(days=8),
+    )
+    channel.messages[9002] = old_message
+    with pytest.raises(ValueError, match="last 7 days"):
+        asyncio.run(announcements.delete_support_announcement(
+            _bot(channel), message_id=9002,
         ))
 
 
