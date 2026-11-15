@@ -413,6 +413,36 @@ def test_proxy_forwards_hosts_and_overwrites_spoofed_forwarding_headers(supervis
     assert echoed["X-Forwarded-Proto"] == "http"
 
 
+def test_render_forwards_the_cloudflare_client_address_to_the_child(supervisor):
+    handle = supervisor("normal", env={"RENDER": "true"})
+    handle.wait_ready()
+
+    response = handle.request(
+        "/echo?mode=forwarded",
+        headers={
+            "X-Forwarded-For": "203.0.113.9",
+            "CF-Connecting-IP": "198.51.100.42",
+            "True-Client-IP": "198.51.100.99",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["headers"]["X-Forwarded-For"] == "198.51.100.42"
+
+
+def test_render_falls_back_to_the_peer_when_the_client_header_is_invalid(supervisor):
+    handle = supervisor("normal", env={"RENDER": "true"})
+    handle.wait_ready()
+
+    response = handle.request(
+        "/echo?mode=forwarded",
+        headers={"CF-Connecting-IP": "not-an-ip"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["headers"]["X-Forwarded-For"] == "127.0.0.1"
+
+
 def test_proxy_preserves_cookies_redirects_downloads_ranges_and_uploads(supervisor):
     handle = supervisor("normal")
     handle.wait_ready()

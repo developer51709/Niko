@@ -21,6 +21,7 @@ import contextlib
 import fcntl
 import hmac
 import importlib.util
+import ipaddress
 import json
 import logging
 import os
@@ -1686,6 +1687,28 @@ class Supervisor:
             self._write_status()
             return self._unavailable(f"{child.name} child request failed")
 
+    @staticmethod
+    def _trusted_client_ip(request: web.Request) -> str:
+        """The visitor address Cloudflare supplies to a Render service.
+
+        Render terminates public traffic behind Cloudflare, so the supervisor's
+        peer is Render's local proxy (often ``127.0.0.1``). Cloudflare overwrites
+        ``CF-Connecting-IP`` with the real visitor and Render forwards it; that
+        header is the only trusted source of the client address in this
+        deployment. Off Render the peer remains authoritative, so a direct
+        client cannot spoof a forwarded address.
+        """
+        if (os.environ.get("RENDER") or "").strip().lower() != "true":
+            return ""
+        for header in ("CF-Connecting-IP", "True-Client-IP"):
+            value = (request.headers.get(header) or "").strip()
+            try:
+                ipaddress.ip_address(value)
+            except ValueError:
+                continue
+            return value
+        return ""
+
     def _proxy_request_headers(self, request: web.Request) -> dict[str, str]:
         connection_tokens = {
             token.strip().lower()
@@ -1704,7 +1727,9 @@ class Supervisor:
         headers["Host"] = forwarded_host
         headers["X-Forwarded-Host"] = forwarded_host
         headers["X-Forwarded-Proto"] = request.scheme
-        headers["X-Forwarded-For"] = request.remote or ""
+        headers["X-Forwarded-For"] = (
+            self._trusted_client_ip(request) or request.remote or ""
+        )
         headers["X-Forwarded-Port"] = str(self.public_port or self.options.public_port)
         return headers
 
