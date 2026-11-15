@@ -108,7 +108,7 @@ def test_a_stub_emoji_id_is_marked_instead_of_drawn():
     from utils.emoji_sync import ParsedEmoji
 
     assert ParsedEmoji("log_kick", 9000001, False).is_placeholder
-    assert not ParsedEmoji("log_kick", 1564762780425265172, False).is_placeholder
+    assert not ParsedEmoji("log_kick", 1571272123111047318, False).is_placeholder
     # The stub ids in the config are exactly the ones the site marks.
     payload = {emoji["name"]: emoji for emoji in _emoji_api_payload()}
     for emoji in payload.values():

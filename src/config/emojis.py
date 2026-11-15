@@ -28,196 +28,196 @@ _EMOJI_REF = re.compile(r"<(a?):([A-Za-z0-9_]+):(\d+)>")
 _LIVE_IDS: dict[int, str] = {}
 
 # Seasonal variant names are literal strings so parse_config() can find
-# every one in the source file. The startup sync replaces these placeholder
-# ids with the live application-emoji ids. State indicators and log marks
-# stay unseasonal; the bases here are the general-purpose interface emojis.
+# every one in the source file. These are the production application-emoji
+# ids, so a fresh checkout and the live bot agree. State indicators and log
+# marks stay unseasonal; the bases here are the general-purpose emojis.
 _SEASONAL_EMOJI_IDS = {
-    "heart_christmas": "<:heart_christmas:9100001>",
-    "heart_halloween": "<:heart_halloween:9100011>",
-    "heart_valentine": "<:heart_valentine:9100021>",
-    "gift_christmas": "<:gift_christmas:9100002>",
-    "gift_halloween": "<:gift_halloween:9100012>",
-    "gift_valentine": "<:gift_valentine:9100022>",
-    "star_christmas": "<:star_christmas:9100003>",
-    "star_halloween": "<:star_halloween:9100013>",
-    "star_valentine": "<:star_valentine:9100023>",
-    "welcome_christmas": "<:welcome_christmas:9100004>",
-    "welcome_halloween": "<:welcome_halloween:9100014>",
-    "welcome_valentine": "<:welcome_valentine:9100024>",
-    "giveaway_christmas": "<:giveaway_christmas:9100005>",
-    "giveaway_halloween": "<:giveaway_halloween:9100015>",
-    "giveaway_valentine": "<:giveaway_valentine:9100025>",
-    "premium_christmas": "<:premium_christmas:9100006>",
-    "premium_halloween": "<:premium_halloween:9100016>",
-    "premium_valentine": "<:premium_valentine:9100026>",
-    "ticket_christmas": "<:ticket_christmas:9100007>",
-    "ticket_halloween": "<:ticket_halloween:9100017>",
-    "ticket_valentine": "<:ticket_valentine:9100027>",
-    "trophy_christmas": "<:trophy_christmas:9100008>",
-    "trophy_halloween": "<:trophy_halloween:9100018>",
-    "trophy_valentine": "<:trophy_valentine:9100028>",
-    "economy_christmas": "<:economy_christmas:9100009>",
-    "economy_halloween": "<:economy_halloween:9100019>",
-    "economy_valentine": "<:economy_valentine:9100029>",
-    "games_christmas": "<:games_christmas:9100010>",
-    "games_halloween": "<:games_halloween:9100020>",
-    "games_valentine": "<:games_valentine:9100030>",
-    "edit_christmas": "<:edit_christmas:9100031>",
-    "edit_halloween": "<:edit_halloween:9100093>",
-    "edit_valentine": "<:edit_valentine:9100155>",
-    "trash_christmas": "<:trash_christmas:9100032>",
-    "trash_halloween": "<:trash_halloween:9100094>",
-    "trash_valentine": "<:trash_valentine:9100156>",
-    "broom_christmas": "<:broom_christmas:9100033>",
-    "broom_halloween": "<:broom_halloween:9100095>",
-    "broom_valentine": "<:broom_valentine:9100157>",
-    "moderation_christmas": "<:moderation_christmas:9100034>",
-    "moderation_halloween": "<:moderation_halloween:9100096>",
-    "moderation_valentine": "<:moderation_valentine:9100158>",
-    "automod_christmas": "<:automod_christmas:9100035>",
-    "automod_halloween": "<:automod_halloween:9100097>",
-    "automod_valentine": "<:automod_valentine:9100159>",
-    "utility_christmas": "<:utility_christmas:9100036>",
-    "utility_halloween": "<:utility_halloween:9100098>",
-    "utility_valentine": "<:utility_valentine:9100160>",
-    "home_christmas": "<:home_christmas:9100037>",
-    "home_halloween": "<:home_halloween:9100099>",
-    "home_valentine": "<:home_valentine:9100161>",
-    "general_christmas": "<:general_christmas:9100038>",
-    "general_halloween": "<:general_halloween:9100100>",
-    "general_valentine": "<:general_valentine:9100162>",
-    "categories_christmas": "<:categories_christmas:9100039>",
-    "categories_halloween": "<:categories_halloween:9100101>",
-    "categories_valentine": "<:categories_valentine:9100163>",
-    "settings_christmas": "<:settings_christmas:9100040>",
-    "settings_halloween": "<:settings_halloween:9100102>",
-    "settings_valentine": "<:settings_valentine:9100164>",
-    "docs_christmas": "<:docs_christmas:9100041>",
-    "docs_halloween": "<:docs_halloween:9100103>",
-    "docs_valentine": "<:docs_valentine:9100165>",
-    "website_christmas": "<:website_christmas:9100042>",
-    "website_halloween": "<:website_halloween:9100104>",
-    "website_valentine": "<:website_valentine:9100166>",
-    "notepad_christmas": "<:notepad_christmas:9100043>",
-    "notepad_halloween": "<:notepad_halloween:9100105>",
-    "notepad_valentine": "<:notepad_valentine:9100167>",
-    "scroll_christmas": "<:scroll_christmas:9100044>",
-    "scroll_halloween": "<:scroll_halloween:9100106>",
-    "scroll_valentine": "<:scroll_valentine:9100168>",
-    "stats_christmas": "<:stats_christmas:9100045>",
-    "stats_halloween": "<:stats_halloween:9100107>",
-    "stats_valentine": "<:stats_valentine:9100169>",
-    "support_christmas": "<:support_christmas:9100046>",
-    "support_halloween": "<:support_halloween:9100108>",
-    "support_valentine": "<:support_valentine:9100170>",
-    "arrow_left_christmas": "<:arrow_left_christmas:9100047>",
-    "arrow_left_halloween": "<:arrow_left_halloween:9100109>",
-    "arrow_left_valentine": "<:arrow_left_valentine:9100171>",
-    "arrow_right_christmas": "<:arrow_right_christmas:9100048>",
-    "arrow_right_halloween": "<:arrow_right_halloween:9100110>",
-    "arrow_right_valentine": "<:arrow_right_valentine:9100172>",
-    "user_christmas": "<:user_christmas:9100049>",
-    "user_halloween": "<:user_halloween:9100111>",
-    "user_valentine": "<:user_valentine:9100173>",
-    "join_christmas": "<:join_christmas:9100050>",
-    "join_halloween": "<:join_halloween:9100112>",
-    "join_valentine": "<:join_valentine:9100174>",
-    "leave_christmas": "<:leave_christmas:9100051>",
-    "leave_halloween": "<:leave_halloween:9100113>",
-    "leave_valentine": "<:leave_valentine:9100175>",
-    "invite_christmas": "<:invite_christmas:9100052>",
-    "invite_halloween": "<:invite_halloween:9100114>",
-    "invite_valentine": "<:invite_valentine:9100176>",
-    "participants_christmas": "<:participants_christmas:9100053>",
-    "participants_halloween": "<:participants_halloween:9100115>",
-    "participants_valentine": "<:participants_valentine:9100177>",
-    "message_christmas": "<:message_christmas:9100054>",
-    "message_halloween": "<:message_halloween:9100116>",
-    "message_valentine": "<:message_valentine:9100178>",
-    "image_christmas": "<:image_christmas:9100055>",
-    "image_halloween": "<:image_halloween:9100117>",
-    "image_valentine": "<:image_valentine:9100179>",
-    "link_christmas": "<:link_christmas:9100056>",
-    "link_halloween": "<:link_halloween:9100118>",
-    "link_valentine": "<:link_valentine:9100180>",
-    "megaphone_christmas": "<:megaphone_christmas:9100057>",
-    "megaphone_halloween": "<:megaphone_halloween:9100119>",
-    "megaphone_valentine": "<:megaphone_valentine:9100181>",
-    "lightbulb_christmas": "<:lightbulb_christmas:9100058>",
-    "lightbulb_halloween": "<:lightbulb_halloween:9100120>",
-    "lightbulb_valentine": "<:lightbulb_valentine:9100182>",
-    "ai_christmas": "<:ai_christmas:9100059>",
-    "ai_halloween": "<:ai_halloween:9100121>",
-    "ai_valentine": "<:ai_valentine:9100183>",
-    "bot_christmas": "<:bot_christmas:9100060>",
-    "bot_halloween": "<:bot_halloween:9100122>",
-    "bot_valentine": "<:bot_valentine:9100184>",
-    "bug_christmas": "<:bug_christmas:9100061>",
-    "bug_halloween": "<:bug_halloween:9100123>",
-    "bug_valentine": "<:bug_valentine:9100185>",
-    "sad_christmas": "<:sad_christmas:9100062>",
-    "sad_halloween": "<:sad_halloween:9100124>",
-    "sad_valentine": "<:sad_valentine:9100186>",
-    "play_christmas": "<:play_christmas:9100063>",
-    "play_halloween": "<:play_halloween:9100125>",
-    "play_valentine": "<:play_valentine:9100187>",
-    "pause_christmas": "<:pause_christmas:9100064>",
-    "pause_halloween": "<:pause_halloween:9100126>",
-    "pause_valentine": "<:pause_valentine:9100188>",
-    "stop_christmas": "<:stop_christmas:9100065>",
-    "stop_halloween": "<:stop_halloween:9100127>",
-    "stop_valentine": "<:stop_valentine:9100189>",
-    "skip_christmas": "<:skip_christmas:9100066>",
-    "skip_halloween": "<:skip_halloween:9100128>",
-    "skip_valentine": "<:skip_valentine:9100190>",
-    "rewind_christmas": "<:rewind_christmas:9100067>",
-    "rewind_halloween": "<:rewind_halloween:9100129>",
-    "rewind_valentine": "<:rewind_valentine:9100191>",
-    "shuffle_christmas": "<:shuffle_christmas:9100068>",
-    "shuffle_halloween": "<:shuffle_halloween:9100130>",
-    "shuffle_valentine": "<:shuffle_valentine:9100192>",
-    "loop_christmas": "<:loop_christmas:9100069>",
-    "loop_halloween": "<:loop_halloween:9100131>",
-    "loop_valentine": "<:loop_valentine:9100193>",
-    "queue_christmas": "<:queue_christmas:9100070>",
-    "queue_halloween": "<:queue_halloween:9100132>",
-    "queue_valentine": "<:queue_valentine:9100194>",
-    "volume_down_christmas": "<:volume_down_christmas:9100071>",
-    "volume_down_halloween": "<:volume_down_halloween:9100133>",
-    "volume_down_valentine": "<:volume_down_valentine:9100195>",
-    "volume_up_christmas": "<:volume_up_christmas:9100072>",
-    "volume_up_halloween": "<:volume_up_halloween:9100134>",
-    "volume_up_valentine": "<:volume_up_valentine:9100196>",
-    "autoplay_christmas": "<:autoplay_christmas:9100073>",
-    "autoplay_halloween": "<:autoplay_halloween:9100135>",
-    "autoplay_valentine": "<:autoplay_valentine:9100197>",
-    "refresh_christmas": "<:refresh_christmas:9100074>",
-    "refresh_halloween": "<:refresh_halloween:9100136>",
-    "refresh_valentine": "<:refresh_valentine:9100198>",
-    "music_christmas": "<:music_christmas:9100075>",
-    "music_halloween": "<:music_halloween:9100137>",
-    "music_valentine": "<:music_valentine:9100199>",
-    "voicemaster_christmas": "<:voicemaster_christmas:9100076>",
-    "voicemaster_halloween": "<:voicemaster_halloween:9100138>",
-    "voicemaster_valentine": "<:voicemaster_valentine:9100200>",
-    "disconnect_christmas": "<:disconnect_christmas:9100077>",
-    "disconnect_halloween": "<:disconnect_halloween:9100139>",
-    "disconnect_valentine": "<:disconnect_valentine:9100201>",
-    "leveling_christmas": "<:leveling_christmas:9100078>",
-    "leveling_halloween": "<:leveling_halloween:9100140>",
-    "leveling_valentine": "<:leveling_valentine:9100202>",
-    "gambling_christmas": "<:gambling_christmas:9100079>",
-    "gambling_halloween": "<:gambling_halloween:9100141>",
-    "gambling_valentine": "<:gambling_valentine:9100203>",
-    "paint_christmas": "<:paint_christmas:9100080>",
-    "paint_halloween": "<:paint_halloween:9100142>",
-    "paint_valentine": "<:paint_valentine:9100204>",
-    "reminder_christmas": "<:reminder_christmas:9100081>",
-    "reminder_halloween": "<:reminder_halloween:9100143>",
-    "reminder_valentine": "<:reminder_valentine:9100205>",
-    "duration_christmas": "<:duration_christmas:9100082>",
-    "duration_halloween": "<:duration_halloween:9100144>",
-    "duration_valentine": "<:duration_valentine:9100206>",
+    "heart_christmas": "<:heart_christmas:1571269830923780096>",
+    "heart_halloween": "<:heart_halloween:1571269862297305270>",
+    "heart_valentine": "<:heart_valentine:1571269899559505990>",
+    "gift_christmas": "<:gift_christmas:1571269834115776622>",
+    "gift_halloween": "<:gift_halloween:1571269865749348482>",
+    "gift_valentine": "<:gift_valentine:1571269902436802591>",
+    "star_christmas": "<:star_christmas:1571269837668360202>",
+    "star_halloween": "<:star_halloween:1571269869268246550>",
+    "star_valentine": "<:star_valentine:1571269906043904031>",
+    "welcome_christmas": "<:welcome_christmas:1571269840809889812>",
+    "welcome_halloween": "<:welcome_halloween:1571269872522891374>",
+    "welcome_valentine": "<:welcome_valentine:1571269909097218238>",
+    "giveaway_christmas": "<:giveaway_christmas:1571269843930583060>",
+    "giveaway_halloween": "<:giveaway_halloween:1571269880127422626>",
+    "giveaway_valentine": "<:giveaway_valentine:1571269913891311806>",
+    "premium_christmas": "<:premium_christmas:1571269847034232912>",
+    "premium_halloween": "<:premium_halloween:1571269883268956323>",
+    "premium_valentine": "<:premium_valentine:1571269916999286885>",
+    "ticket_christmas": "<:ticket_christmas:1571269850108661851>",
+    "ticket_halloween": "<:ticket_halloween:1571269886166966296>",
+    "ticket_valentine": "<:ticket_valentine:1571269920006607041>",
+    "trophy_christmas": "<:trophy_christmas:1571269853367636178>",
+    "trophy_halloween": "<:trophy_halloween:1571269889522409514>",
+    "trophy_valentine": "<:trophy_valentine:1571269922934231162>",
+    "economy_christmas": "<:economy_christmas:1571269856312033360>",
+    "economy_halloween": "<:economy_halloween:1571269893012324493>",
+    "economy_valentine": "<:economy_valentine:1571269925992141012>",
+    "games_christmas": "<:games_christmas:1571269859507966012>",
+    "games_halloween": "<:games_halloween:1571269896396873809>",
+    "games_valentine": "<:games_valentine:1571269929284669622>",
+    "edit_christmas": "<:edit_christmas:1571277721835933736>",
+    "edit_halloween": "<:edit_halloween:1571277725224796161>",
+    "edit_valentine": "<:edit_valentine:1571277728940953631>",
+    "trash_christmas": "<:trash_christmas:1571277732904444215>",
+    "trash_halloween": "<:trash_halloween:1571277736104951983>",
+    "trash_valentine": "<:trash_valentine:1571277739472847088>",
+    "broom_christmas": "<:broom_christmas:1571277742484361257>",
+    "broom_halloween": "<:broom_halloween:1571277746162766004>",
+    "broom_valentine": "<:broom_valentine:1571277749270872215>",
+    "moderation_christmas": "<:moderation_christmas:1571277752303099924>",
+    "moderation_halloween": "<:moderation_halloween:1571277755113275445>",
+    "moderation_valentine": "<:moderation_valentine:1571277758330445936>",
+    "automod_christmas": "<:automod_christmas:1571277761354535094>",
+    "automod_halloween": "<:automod_halloween:1571277764735279236>",
+    "automod_valentine": "<:automod_valentine:1571277768170283038>",
+    "utility_christmas": "<:utility_christmas:1571277770905096308>",
+    "utility_halloween": "<:utility_halloween:1571277777070460998>",
+    "utility_valentine": "<:utility_valentine:1571277780077903974>",
+    "home_christmas": "<:home_christmas:1571277783114580109>",
+    "home_halloween": "<:home_halloween:1571277790089711807>",
+    "home_valentine": "<:home_valentine:1571277793646354593>",
+    "general_christmas": "<:general_christmas:1571277796657991682>",
+    "general_halloween": "<:general_halloween:1571277800063631481>",
+    "general_valentine": "<:general_valentine:1571277803473862847>",
+    "categories_christmas": "<:categories_christmas:1571277806497693756>",
+    "categories_halloween": "<:categories_halloween:1571277809559543960>",
+    "categories_valentine": "<:categories_valentine:1571277812642480298>",
+    "settings_christmas": "<:settings_christmas:1571277815670636685>",
+    "settings_halloween": "<:settings_halloween:1571277818854252635>",
+    "settings_valentine": "<:settings_valentine:1571277821664567378>",
+    "docs_christmas": "<:docs_christmas:1571277825191972945>",
+    "docs_halloween": "<:docs_halloween:1571277827825860619>",
+    "docs_valentine": "<:docs_valentine:1571277831084834969>",
+    "website_christmas": "<:website_christmas:1571277834478034944>",
+    "website_halloween": "<:website_halloween:1571277838471139449>",
+    "website_valentine": "<:website_valentine:1571277845299204258>",
+    "notepad_christmas": "<:notepad_christmas:1571277848503787540>",
+    "notepad_halloween": "<:notepad_halloween:1571277851511230664>",
+    "notepad_valentine": "<:notepad_valentine:1571277854669283408>",
+    "scroll_christmas": "<:scroll_christmas:1571277858599477389>",
+    "scroll_halloween": "<:scroll_halloween:1571277861875228812>",
+    "scroll_valentine": "<:scroll_valentine:1571277864966299771>",
+    "stats_christmas": "<:stats_christmas:1571277867994714252>",
+    "stats_halloween": "<:stats_halloween:1571277871111213116>",
+    "stats_valentine": "<:stats_valentine:1571277874348957736>",
+    "support_christmas": "<:support_christmas:1571277877087834215>",
+    "support_halloween": "<:support_halloween:1571277880477089832>",
+    "support_valentine": "<:support_valentine:1571277883484414063>",
+    "arrow_left_christmas": "<:arrow_left_christmas:1571277886474813520>",
+    "arrow_left_halloween": "<:arrow_left_halloween:1571277889763147796>",
+    "arrow_left_valentine": "<:arrow_left_valentine:1571277892896292934>",
+    "arrow_right_christmas": "<:arrow_right_christmas:1571277895928647791>",
+    "arrow_right_halloween": "<:arrow_right_halloween:1571277904120250368>",
+    "arrow_right_valentine": "<:arrow_right_valentine:1571277907287085211>",
+    "user_christmas": "<:user_christmas:1571277910420099182>",
+    "user_halloween": "<:user_halloween:1571277913461100586>",
+    "user_valentine": "<:user_valentine:1571277916611022949>",
+    "join_christmas": "<:join_christmas:1571277919878381588>",
+    "join_halloween": "<:join_halloween:1571277922915061920>",
+    "join_valentine": "<:join_valentine:1571277926429630554>",
+    "leave_christmas": "<:leave_christmas:1571277929902776602>",
+    "leave_halloween": "<:leave_halloween:1571277932671016982>",
+    "leave_valentine": "<:leave_valentine:1571277936001286204>",
+    "invite_christmas": "<:invite_christmas:1571277939104944181>",
+    "invite_halloween": "<:invite_halloween:1571277942871564579>",
+    "invite_valentine": "<:invite_valentine:1571277945874686094>",
+    "participants_christmas": "<:participants_christmas:1571277949393576030>",
+    "participants_halloween": "<:participants_halloween:1571277954854686720>",
+    "participants_valentine": "<:participants_valentine:1571277957996220416>",
+    "message_christmas": "<:message_christmas:1571277961083101234>",
+    "message_halloween": "<:message_halloween:1571277964463579196>",
+    "message_valentine": "<:message_valentine:1571277967525413025>",
+    "image_christmas": "<:image_christmas:1571277970499305564>",
+    "image_halloween": "<:image_halloween:1571277973598904360>",
+    "image_valentine": "<:image_valentine:1571277976987766935>",
+    "link_christmas": "<:link_christmas:1571277980087619735>",
+    "link_halloween": "<:link_halloween:1571277983014977671>",
+    "link_valentine": "<:link_valentine:1571277986739781752>",
+    "megaphone_christmas": "<:megaphone_christmas:1571277989881053256>",
+    "megaphone_halloween": "<:megaphone_halloween:1571277992833978488>",
+    "megaphone_valentine": "<:megaphone_valentine:1571277995883237467>",
+    "lightbulb_christmas": "<:lightbulb_christmas:1571277999121104946>",
+    "lightbulb_halloween": "<:lightbulb_halloween:1571278002191466656>",
+    "lightbulb_valentine": "<:lightbulb_valentine:1571278005630668810>",
+    "ai_christmas": "<:ai_christmas:1571278008797364387>",
+    "ai_halloween": "<:ai_halloween:1571278011859468410>",
+    "ai_valentine": "<:ai_valentine:1571278014770188439>",
+    "bot_christmas": "<:bot_christmas:1571278018138214472>",
+    "bot_halloween": "<:bot_halloween:1571278021296525352>",
+    "bot_valentine": "<:bot_valentine:1571278028993069086>",
+    "bug_christmas": "<:bug_christmas:1571278031979544707>",
+    "bug_halloween": "<:bug_halloween:1571278035347443913>",
+    "bug_valentine": "<:bug_valentine:1571278038765674628>",
+    "sad_christmas": "<:sad_christmas:1571278041475317934>",
+    "sad_halloween": "<:sad_halloween:1571278044868640799>",
+    "sad_valentine": "<:sad_valentine:1571278047997591612>",
+    "play_christmas": "<:play_christmas:1571278051462086718>",
+    "play_halloween": "<:play_halloween:1571278054632722442>",
+    "play_valentine": "<:play_valentine:1571278060295159941>",
+    "pause_christmas": "<:pause_christmas:1571278063486898216>",
+    "pause_halloween": "<:pause_halloween:1571278066314121371>",
+    "pause_valentine": "<:pause_valentine:1571278069774159912>",
+    "stop_christmas": "<:stop_christmas:1571278072815034549>",
+    "stop_halloween": "<:stop_halloween:1571278076149637131>",
+    "stop_valentine": "<:stop_valentine:1571278079261671424>",
+    "skip_christmas": "<:skip_christmas:1571278082642411712>",
+    "skip_halloween": "<:skip_halloween:1571278085742137520>",
+    "skip_valentine": "<:skip_valentine:1571278089084735488>",
+    "rewind_christmas": "<:rewind_christmas:1571278092142518472>",
+    "rewind_halloween": "<:rewind_halloween:1571278095346827505>",
+    "rewind_valentine": "<:rewind_valentine:1571278098358607972>",
+    "shuffle_christmas": "<:shuffle_christmas:1571278101164593397>",
+    "shuffle_halloween": "<:shuffle_halloween:1571278104385556521>",
+    "shuffle_valentine": "<:shuffle_valentine:1571278107845992529>",
+    "loop_christmas": "<:loop_christmas:1571278110844784680>",
+    "loop_halloween": "<:loop_halloween:1571278113944375326>",
+    "loop_valentine": "<:loop_valentine:1571278117845213274>",
+    "queue_christmas": "<:queue_christmas:1571278121141805277>",
+    "queue_halloween": "<:queue_halloween:1571278124140728471>",
+    "queue_valentine": "<:queue_valentine:1571278127605481535>",
+    "volume_down_christmas": "<:volume_down_christmas:1571278130746761318>",
+    "volume_down_halloween": "<:volume_down_halloween:1571278134068908303>",
+    "volume_down_valentine": "<:volume_down_valentine:1571278137097060594>",
+    "volume_up_christmas": "<:volume_up_christmas:1571278140032942222>",
+    "volume_up_halloween": "<:volume_up_halloween:1571278143027679352>",
+    "volume_up_valentine": "<:volume_up_valentine:1571278146232262668>",
+    "autoplay_christmas": "<:autoplay_christmas:1571278149176655902>",
+    "autoplay_halloween": "<:autoplay_halloween:1571278154994028594>",
+    "autoplay_valentine": "<:autoplay_valentine:1571278158454595644>",
+    "refresh_christmas": "<:refresh_christmas:1571278161772290219>",
+    "refresh_halloween": "<:refresh_halloween:1571278165161017504>",
+    "refresh_valentine": "<:refresh_valentine:1571278168478715936>",
+    "music_christmas": "<:music_christmas:1571278171847000145>",
+    "music_halloween": "<:music_halloween:1571278175432867960>",
+    "music_valentine": "<:music_valentine:1571278178461155458>",
+    "voicemaster_christmas": "<:voicemaster_christmas:1571278181476864190>",
+    "voicemaster_halloween": "<:voicemaster_halloween:1571278184480243863>",
+    "voicemaster_valentine": "<:voicemaster_valentine:1571278187445620909>",
+    "disconnect_christmas": "<:disconnect_christmas:1571278190893211852>",
+    "disconnect_halloween": "<:disconnect_halloween:1571278193749524701>",
+    "disconnect_valentine": "<:disconnect_valentine:1571278196710834228>",
+    "leveling_christmas": "<:leveling_christmas:1571278199680274555>",
+    "leveling_halloween": "<:leveling_halloween:1571278203371393164>",
+    "leveling_valentine": "<:leveling_valentine:1571278206466789437>",
+    "gambling_christmas": "<:gambling_christmas:1571278209453138030>",
+    "gambling_halloween": "<:gambling_halloween:1571278212565045268>",
+    "gambling_valentine": "<:gambling_valentine:1571278215610241054>",
+    "paint_christmas": "<:paint_christmas:1571278231032701088>",
+    "paint_halloween": "<:paint_halloween:1571278234434150480>",
+    "paint_valentine": "<:paint_valentine:1571278237076562044>",
+    "reminder_christmas": "<:reminder_christmas:1571278240553635870>",
+    "reminder_halloween": "<:reminder_halloween:1571278243548635167>",
+    "reminder_valentine": "<:reminder_valentine:1571278246513873019>",
+    "duration_christmas": "<:duration_christmas:1571278249873641643>",
+    "duration_halloween": "<:duration_halloween:1571278253069439080>",
+    "duration_valentine": "<:duration_valentine:1571278256190128128>",
 }
 
 def get_emoji(emoji_name: str):
@@ -274,27 +274,27 @@ def _configured_emoji(emoji_name: str):
     # Outcomes and labels. A pass is green, a failure or a removal red, a caution
     # orange; everything that only labels something is the one neutral ink.
     if emoji_name == "tick":
-        return "<:tick:1564762582282280990>"
+        return "<:tick:1571271785637220502>"
     if emoji_name == "cross":
-        return "<:cross:1564762429378793502>"
+        return "<:cross:1571271788602728518>"
     if emoji_name == "warning":
-        return "<:warning:1564762738826154057>"
+        return "<:warning:1571271791727353989>"
     if emoji_name == "danger":
-        return "<:danger:1564762432562270238>"
+        return "<:danger:1571271794839654531>"
     if emoji_name == "important":
-        return "<:important:1564762474979393578>"
+        return "<:important:1571271797889044612>"
     if emoji_name == "question":
-        return "<:question:1564762541064851516>"
+        return "<:question:1571271801936289933>"
     if emoji_name == "plus":
-        return "<:plus:1564762534769201284>"
+        return "<:plus:1571271805363294358>"
     if emoji_name == "minus":
-        return "<:minus:1564762513076133920>"
+        return "<:minus:1571271808403898610>"
     if emoji_name == "thumbs_up":
-        return "<:thumbs_up:1564762702444896417>"
+        return "<:thumbs_up:1571271811365339207>"
     if emoji_name == "thumbs_down":
-        return "<:thumbs_down:1564762699961860177>"
+        return "<:thumbs_down:1571271814624182382>"
     if emoji_name == "verified":
-        return "<:verified:1564762597784289372>"
+        return "<:verified:1571271818231160952>"
     if emoji_name == "enabled":
         return "<:disable_no:1564762961594290307><:enable_yes:1564762964760731729>"
     if emoji_name == "disabled":
@@ -306,29 +306,29 @@ def _configured_emoji(emoji_name: str):
     # The tools a moderator or an admin reaches for, and the spinner every command
     # shows while it works.
     if emoji_name == "moderation":
-        return "<:moderation:1564762517190869324>"
+        return "<:moderation:1571271821238599720>"
     if emoji_name == "automod":
         return "<:Automod:1564762255667765383>"
     if emoji_name == "ban":
-        return "<:ban:1564762413788700712>"
+        return "<:ban:1571271824216555681>"
     if emoji_name == "lock":
-        return "<:lock:1564762729577979995>"
+        return "<:lock:1571271827232395537>"
     if emoji_name == "unlock":
-        return "<:unlock:1564762736171290754>"
+        return "<:unlock:1571271830189379694>"
     if emoji_name == "hide":
-        return "<:hide:1564762725853298698>"
+        return "<:hide:1571271833259344024>"
     if emoji_name == "unhide":
-        return "<:unhide:1564762732966846495>"
+        return "<:unhide:1571271837369761822>"
     if emoji_name == "edit":
-        return "<:edit:1564762446604800180>"
+        return "<:edit:1571271840448647239>"
     if emoji_name == "trash":
-        return "<:trash:1564762588619743424>"
+        return "<:trash:1571271843040469015>"
     if emoji_name == "broom":
-        return "<:broom:1565386565730041866>"
+        return "<:broom:1571271846563815464>"
     if emoji_name == "utility":
-        return "<:utility:1564762591656542410>"
+        return "<:utility:1571271849495761178>"
     if emoji_name == "nsfw":
-        return "<:nsfw:1564762520726671391>"
+        return "<:nsfw:1571271852855136468>"
     if emoji_name == "loading":
         return "<a:loading:1564762500938076161>"
 
@@ -338,145 +338,144 @@ def _configured_emoji(emoji_name: str):
     # The help menu, the panels and the cards are built from these, so they are all
     # neutral: a menu of coloured icons reads as noise.
     if emoji_name == "home":
-        return "<:home:1564762465848397904>"
+        return "<:home:1571271855879229480>"
     if emoji_name == "general":
-        return "<:general:1564762456335843429>"
+        return "<:general:1571271858584821851>"
     if emoji_name == "categories":
-        return "<:categories:1564762426233069639>"
+        return "<:categories:1571271861935931482>"
     if emoji_name == "settings":
-        return "<:settings:1564762562762121307>"
+        return "<:settings:1571271864741793984>"
     if emoji_name == "docs":
-        return "<:docs:1564762438660792472>"
+        return "<:docs:1571271868369866762>"
     if emoji_name == "website":
         return "<:website:1565386636332896388>"
     if emoji_name == "notepad":
-        return "<:notepad:1564762617879335062>"
+        return "<:notepad:1571271871452680263>"
     if emoji_name == "scroll":
-        return "<:scroll:1564762670698336306>"
+        return "<:scroll:1571271874468384878>"
     if emoji_name == "stats":
-        return "<:stats:1564762573063069876>"
+        return "<:stats:1571271877467439198>"
     if emoji_name == "support":
-        return "<:support:1564762579102867536>"
+        return "<:support:1571271880717901985>"
     if emoji_name == "arrow_left":
-        return "<:arrow_left:1564762250055651478>"
+        return "<:arrow_left:1571271883633201242>"
     if emoji_name == "arrow_right":
-        return "<:arrow_right:1564762252987601056>"
+        return "<:arrow_right:1571271891040211099>"
 
     # ==========================================================================
     # People and members
     # ==========================================================================
     # People and members.
     if emoji_name == "user":
-        return "<:user:1564762594722578572>"
+        return "<:user:1571271894454374650>"
     if emoji_name == "join":
-        return "<:join:1564762483032326206>"
+        return "<:join:1571271897507700886>"
     if emoji_name == "leave":
-        return "<:leave:1564762486400622603>"
+        return "<:leave:1571271900720537740>"
     if emoji_name == "welcome":
-        return "<:welcome:1564762600816779445>"
+        return "<:welcome:1571271903815926000>"
     if emoji_name == "invite":
-        return "<:invite:1564762478469185657>"
+        return "<:invite:1571271909381767309>"
     if emoji_name == "participants":
-        return "<:participants:1565046580262993961>"
+        return "<:participants:1571271912489881810>"
 
     # ==========================================================================
     # Content and social
     # ==========================================================================
     # Content and social.
     if emoji_name == "message":
-        return "<:message:1564762510358224956>"
+        return "<:message:1571271915606384641>"
     if emoji_name == "image":
-        return "<:image:1564762472030674944>"
+        return "<:image:1571271918986723461>"
     if emoji_name == "link":
-        return "<:link:1564762497733361728>"
+        return "<:link:1571271921964687372>"
     if emoji_name == "megaphone":
-        return "<:megaphone:1564762507338322080>"
+        return "<:megaphone:1571271929959162047>"
     if emoji_name == "lightbulb":
-        return "<:lightbulb:1564762494684102736>"
+        return "<:lightbulb:1571271932987441333>"
     if emoji_name == "heart":
-        return "<:heart:1564762462442623166>"
+        return "<:heart:1571271935969468504>"
     if emoji_name == "star":
-        return "<:star:1564762680038793296>"
+        return "<:star:1571271939018854541>"
     if emoji_name == "ai":
-        return "<:ai:1564762410412155051>"
+        return "<:ai:1571271942110187550>"
     if emoji_name == "bot":
-        return "<:bot:1564762420260643008>"
+        return "<:bot:1571271945213710467>"
     if emoji_name == "bug":
-        return "<:bug:1564762423259439155>"
+        return "<:bug:1571271948191670272>"
     if emoji_name == "sad":
-        return "<:sad:1565046593122472006>"
+        return "<:sad:1571271951165423787>"
 
     # ==========================================================================
     # Media controls
     # ==========================================================================
     # The music and voicemaster panels post a whole row of these at once, so they are
-    # all neutral and share one weight. The ids here are stubs on a fresh checkout and
-    # live application-emoji ids after the first sync.
+    # all neutral and share one weight. These are the production application-emoji ids.
     if emoji_name == "play":
-        return "<:play:1564762531447181322>"
+        return "<:play:1571271954256625816>"
     if emoji_name == "pause":
-        return "<:pause:1564762526678253689>"
+        return "<:pause:1571271957565935767>"
     if emoji_name == "stop":
-        return "<:stop:1564762576074703138>"
+        return "<:stop:1571271960900403261>"
     if emoji_name == "skip":
-        return "<:skip:1564762569615351841>"
+        return "<:skip:1571271963895398653>"
     if emoji_name == "rewind":
-        return "<:rewind:1564762559100227664>"
+        return "<:rewind:1571271966587879456>"
     if emoji_name == "shuffle":
-        return "<:shuffle:1564762566927061144>"
+        return "<:shuffle:1571271969918291988>"
     if emoji_name == "loop":
-        return "<:loop:1564762503915901152>"
+        return "<:loop:1571271972883529808>"
     if emoji_name == "queue":
-        return "<:queue:1565046583332970656>"
+        return "<:queue:1571271976008294560>"
     if emoji_name == "volume_down":
-        return "<:volume_down:1565046586029908172>"
+        return "<:volume_down:1571271979015741490>"
     if emoji_name == "volume_up":
-        return "<:volume_up:1565046590035730502>"
+        return "<:volume_up:1571271981960134698>"
     if emoji_name == "autoplay":
-        return "<:autoplay:1565046573170167918>"
+        return "<:autoplay:1571271985470898303>"
     if emoji_name == "refresh":
-        return "<:refresh:1564762544160243826>"
+        return "<:refresh:1571271991120629900>"
     if emoji_name == "music":
-        return "<:music:1564762613790019675>"
+        return "<:music:1571271994467688559>"
     if emoji_name == "voicemaster":
-        return "<:voicemaster:1564762718290837575>"
+        return "<:voicemaster:1571271997537652807>"
     if emoji_name == "owner_icon":
-        return "<:owner_icon:1564762651609923638>"
+        return "<:owner_icon:1571272000712736929>"
     if emoji_name == "disconnect":
-        return "<:disconnect:1564762385171087501>"
+        return "<:disconnect:1571272003380453418>"
     if emoji_name == "pingpong":
-        return "<:pingpong:1564762657813168149>"
+        return "<:pingpong:1571272006681501806>"
 
     # ==========================================================================
     # Commands and rewards
     # ==========================================================================
     # One emoji per command family, plus the giveaway setup panel's own controls.
     if emoji_name == "premium":
-        return "<:premium:1564762537764069556>"
+        return "<:premium:1571272009726435358>"
     if emoji_name == "gift":
-        return "<:gift:1564762392112402523>"
+        return "<:gift:1571272017360191528>"
     if emoji_name == "giveaway":
-        return "<:giveaway:1564762459473182720>"
+        return "<:giveaway:1571272020426227742>"
     if emoji_name == "ticket":
-        return "<:ticket:1564762585373610146>"
+        return "<:ticket:1571272023345201152>"
     if emoji_name == "economy":
-        return "<:economy:1564762442339192943>"
+        return "<:economy:1571272026331685065>"
     if emoji_name == "leveling":
-        return "<:leveling:1564762491425390823>"
+        return "<:leveling:1571272029489995937>"
     if emoji_name == "gambling":
-        return "<:gambling:1564762453257224402>"
+        return "<:gambling:1571272032446845108>"
     if emoji_name == "games":
-        return "<:games:1564762450182668288>"
+        return "<:games:1571272035672522964>"
     if emoji_name == "roleplay":
-        return "<:roleplay:1564762550598504578>"
+        return "<:roleplay:1571272038671323320>"
     if emoji_name == "paint":
-        return "<:paint:1564762523603828857>"
+        return "<:paint:1571272052197949650>"
     if emoji_name == "reminder":
-        return "<:reminder:1564762547440189521>"
+        return "<:reminder:1571272055255465995>"
     if emoji_name == "duration":
-        return "<:duration:1565046576613687506>"
+        return "<:duration:1571272058267246653>"
     if emoji_name == "trophy":
-        return "<:trophy:1565046596293627966>"
+        return "<:trophy:1571272061370769408>"
     if emoji_name == "credit_card":
         return "<a:credit_card:1564762347082489889>"
 
@@ -484,9 +483,9 @@ def _configured_emoji(emoji_name: str):
     # Seasonal variants
     # ==========================================================================
     # Generated from the withicons-christmas / halloween / valentine sets and
-    # uploaded once. Short ids are placeholders: the startup sync replaces them
-    # with the live application-emoji ids. seasonal_variant() chooses the right
-    # one above, then falls back to the unsuffixed emoji outside its window.
+    # uploaded once. These are the production application-emoji ids.
+    # seasonal_variant() chooses the right one above, then falls back to the
+    # unsuffixed emoji outside its window.
     seasonal_emoji = _SEASONAL_EMOJI_IDS.get(emoji_name)
     if seasonal_emoji is not None:
         return seasonal_emoji
@@ -496,13 +495,13 @@ def _configured_emoji(emoji_name: str):
     # ==========================================================================
     # The status commands read these four in one block, so they keep one ink.
     if emoji_name == "cpu":
-        return "<:cpu:1564762344079495188>"
+        return "<:cpu:1571272064424222780>"
     if emoji_name == "ram":
-        return "<:ram:1564762664503091241>"
+        return "<:ram:1571272067381203028>"
     if emoji_name == "disk":
-        return "<:disk:1564762435632496841>"
+        return "<:disk:1571272070539645040>"
     if emoji_name == "host":
-        return "<:host:1564762468981678194>"
+        return "<:host:1571272073949479012>"
 
     # ==========================================================================
     # Numbers
@@ -535,8 +534,8 @@ def _configured_emoji(emoji_name: str):
     # Discord profile and badges
     # ==========================================================================
     # Discord's own profile badges and presence dots. Their artwork is generated from
-    # the badge SVGs by scripts/build-badge-art.mjs, and the ids are placeholders: the
-    # startup emoji sync uploads the PNGs and rewrites them with the live ids.
+    # the badge SVGs by scripts/build-badge-art.mjs; these are the production
+    # application-emoji ids, so a fresh checkout recognizes the live emojis.
     if emoji_name == "active_developer_badge":
         return "<:active_developer_badge:1564762177959759935>"
     if emoji_name == "verified_developer_badge":
@@ -604,38 +603,37 @@ def _configured_emoji(emoji_name: str):
     # Niko role badges
     # ==========================================================================
     # One per team role and community role, drawn by scripts/build-badge-art.mjs;
-    # the ids are placeholders the startup sync replaces once it uploads the PNGs.
-    # The community roles needed new names for their refreshed art, because the
-    # sync only uploads art for names it does not find yet and the originals were
-    # already live.
+    # these are the production application-emoji ids. The community roles needed
+    # new names for their refreshed art, because the sync only uploads art for
+    # names it does not find yet and the originals were already live.
     if emoji_name == "badge_owner":
-        return "<:badge_owner:1564762276135960659>"
+        return "<:badge_owner:1571272077007134820>"
     if emoji_name == "badge_head_admin":
-        return "<:badge_head_admin:1564762265775898744>"
+        return "<:badge_head_admin:1571272079980888156>"
     if emoji_name == "badge_head_support":
-        return "<:badge_head_support:1564762268963442820>"
+        return "<:badge_head_support:1571272083399516240>"
     if emoji_name == "badge_moderator":
-        return "<:badge_moderator:1564762273023664212>"
+        return "<:badge_moderator:1571272086536716419>"
     if emoji_name == "badge_event_coordinator":
-        return "<:badge_event_coordinator:1564762259131990106>"
+        return "<:badge_event_coordinator:1571272089476792420>"
     if emoji_name == "badge_graphic_designer":
-        return "<:badge_graphic_designer:1564762262047035447>"
+        return "<:badge_graphic_designer:1571272094883512538>"
     if emoji_name == "badge_partnership_manager":
-        return "<:badge_partnership_manager:1564762279486955623>"
+        return "<:badge_partnership_manager:1571272097878249572>"
     # Discord emoji names stop at 32 characters, so the Partnerships &
     # Promotions Lead badge uses the short name for the same artwork.
     if emoji_name == "badge_partnership_lead":
-        return "<:badge_partnership_lead:1564762282246799464>"
+        return "<:badge_partnership_lead:1571272100813996222>"
     if emoji_name == "badge_staff":
-        return "<:badge_staff:1564762285543526451>"
+        return "<:badge_staff:1571272103708332033>"
     if emoji_name == "badge_support":
-        return "<:badge_support:1564762288777334826>"
+        return "<:badge_support:1571272106669383852>"
     if emoji_name == "badge_supporter_role":
-        return "<:badge_supporter_role:1564762291788976128>"
+        return "<:badge_supporter_role:1571272109953384459>"
     if emoji_name == "badge_bug_hunter_role":
-        return "<:badge_bug_hunter_role:1564762294594961575>"
+        return "<:badge_bug_hunter_role:1571272113120350430>"
     if emoji_name == "badge_partner_role":
-        return "<:badge_partner_role:1564762297937698957>"
+        return "<:badge_partner_role:1571272115968024690>"
 
     # ==========================================================================
     # Server boosting
@@ -708,18 +706,16 @@ def _configured_emoji(emoji_name: str):
     # ==========================================================================
     # One emoji per log message type so no two entries in a log channel share an icon,
     # grouped the way the logging cog groups them. Generated artwork comes from the
-    # With Icons set; the log types with no clean match stay in review/. The ids here
-    # are short on purpose: they are stubs the startup emoji sync replaces
-    # with the live application-emoji id, and the website marks a short id as
-    # not-yet-uploaded instead of requesting it from Discord's CDN.
+    # With Icons set; the log types with no clean match stay in review/. These are
+    # the production application-emoji ids.
     if emoji_name == "log_kick":
-        return "<:log_kick:1564762780425265172>"
+        return "<:log_kick:1571272123111047318>"
     if emoji_name == "log_ban":
-        return "<:log_ban:1564762783537434816>"
+        return "<:log_ban:1571272126248525964>"
     if emoji_name == "log_unban":
-        return "<:log_unban:1564762786754601074>"
+        return "<:log_unban:1571272129368956978>"
     if emoji_name == "log_warn":
-        return "<:log_warn:1564762791490101268>"
+        return "<:log_warn:1571272132573270068>"
     if emoji_name == "log_clear_warnings":
         return "<:log_clear_warnings:1564762794727968988>"
     if emoji_name == "log_mute":
@@ -818,9 +814,9 @@ def _configured_emoji(emoji_name: str):
         return "<:log_sticker_updated:1564762943562850485>"
 
     if emoji_name == "log_giveaway_ban":
-        return "<:log_giveaway_ban:1565046599556800553>"
+        return "<:log_giveaway_ban:1571272135891222588>"
     if emoji_name == "log_giveaway_unban":
-        return "<:log_giveaway_unban:1565046603130343424>"
+        return "<:log_giveaway_unban:1571272143314882632>"
 
     if emoji_name == "log_voice_join":
         return "<:log_voice_join:1564762946859434055>"

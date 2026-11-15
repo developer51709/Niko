@@ -53,10 +53,10 @@ def test_get_emoji_switches_to_the_active_variant(monkeypatch):
         lambda name: "heart_christmas" if name == "heart" else None,
     )
 
-    assert get_emoji("heart") == "<:heart_christmas:9100001>"
+    assert get_emoji("heart") == "<:heart_christmas:1571269830923780096>"
     # A name that is not seasonal keeps its base id.
-    assert get_emoji("tick") == "<:tick:1564762582282280990>"
+    assert get_emoji("tick") == "<:tick:1571271785637220502>"
     # Callers can still ask for a specific variant explicitly.
-    assert get_emoji("heart_halloween") == "<:heart_halloween:9100011>"
-    assert get_emoji("arrow_left_christmas") == "<:arrow_left_christmas:9100047>"
-    assert get_emoji("bot_valentine") == "<:bot_valentine:9100184>"
+    assert get_emoji("heart_halloween") == "<:heart_halloween:1571269862297305270>"
+    assert get_emoji("arrow_left_christmas") == "<:arrow_left_christmas:1571277886474813520>"
+    assert get_emoji("bot_valentine") == "<:bot_valentine:1571278028993069086>"
