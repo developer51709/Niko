@@ -517,6 +517,23 @@ def test_the_masthead_carries_the_site_wordmark():
     assert 0.15 < coverage < 0.6
 
 
+def test_the_link_page_wears_the_same_lockup_as_the_cards():
+    # The link page and the cards have to show one brand mark, not two: the page
+    # inlines the same site SVG the cards draw, cropped to the same paths and
+    # filled in the page's ink instead of the brand red the file ships with.
+    from webapp import lastfm_page
+
+    page = lastfm_page.linked_page("someone")
+    assert 'aria-label="Last.fm"' in page
+    assert 'fill="currentColor"' in page
+    assert "#d51007" not in page
+    assert lastfm_page.error_page("nope").count('class="brand"') == 1
+
+    _, lock_w, lock_h = lastfm_card._wordmark_geometry()
+    _, _, box_w, box_h = (float(value) for value in lastfm_page._LOGO_VIEWBOX.split())
+    assert abs(box_w / box_h - lock_w / lock_h) < 0.01
+
+
 def test_the_fallback_header_tile_is_the_brand_red():
     assert lastfm_card._LOGO_ASSET.is_file()
 
