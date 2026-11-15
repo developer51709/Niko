@@ -141,7 +141,11 @@ def test_mcp_announce_tool_sends_the_callers_content(monkeypatch):
             "method": "tools/call",
             "params": {
                 "name": "niko_announce",
-                "arguments": {"title": "A release", "body": "The details."},
+                "arguments": {
+                    "title": "A release",
+                    "body": "The details.",
+                    "images": [{"data": "aGVsbG8=", "filename": "release.png"}],
+                },
             },
         },
         headers={"Authorization": f"Bearer {owner_key}"},
@@ -155,6 +159,24 @@ def test_mcp_announce_tool_sends_the_callers_content(monkeypatch):
     assert sender.await_args.kwargs["title"] == "A release"
     assert sender.await_args.kwargs["body"] == "The details."
     assert sender.await_args.kwargs["ping"] is True
+    assert sender.await_args.kwargs["images"] == [
+        {"data": "aGVsbG8=", "filename": "release.png"},
+    ]
+
+
+def test_mcp_announce_tool_schema_supports_image_assets():
+    owner_key = mcp_keys.local_rotate()["key"]
+    response = app.test_client().post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 31, "method": "tools/list"},
+        headers={"Authorization": f"Bearer {owner_key}"},
+    )
+
+    tools = {tool["name"]: tool for tool in response.get_json()["result"]["tools"]}
+    images = tools["niko_announce"]["inputSchema"]["properties"]["images"]
+    assert images["type"] == "array"
+    assert images["maxItems"] == 10
+    assert images["items"]["required"] == ["data"]
 
 
 def test_mcp_subdomain_is_a_known_site_host(monkeypatch):

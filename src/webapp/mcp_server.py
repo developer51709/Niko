@@ -197,12 +197,35 @@ TOOLS: list[dict] = [
     },
     {
         "name": "niko_announce",
-        "description": "Send an announcement to the support server's announcements channel and ping its announcements role. The title and message are supplied by the caller; no announcement text is built into the bot.",
+        "description": "Send an announcement to the support server's announcements channel and ping its announcements role. The title and message are supplied by the caller; no announcement text is built into the bot. Optional images are delivered as real Discord attachments in a media gallery, like staff broadcasts.",
         "inputSchema": _schema({
             "title": {"type": "string", "minLength": 1, "maxLength": 160},
             "body": {"type": "string", "minLength": 1, "maxLength": 3800},
             "footer": {"type": "string", "maxLength": 120},
             "ping": {"type": "boolean", "default": True},
+            "images": {
+                "type": "array",
+                "maxItems": 10,
+                "description": "Up to 10 PNG, JPEG, GIF, or WebP images. Each image is base64-encoded and uploaded as a Discord attachment, so the announcement keeps its images even if an external link expires.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Base64-encoded image bytes, or a base64 data URI. The image type is detected from the bytes.",
+                        },
+                        "filename": {
+                            "type": "string",
+                            "maxLength": 120,
+                            "description": "Optional filename stem. Niko adds a unique suffix and the detected extension.",
+                        },
+                        "spoiler": {"type": "boolean", "default": False},
+                    },
+                    "required": ["data"],
+                    "additionalProperties": False,
+                },
+            },
         }, ["title", "body"]),
     },
     {
@@ -511,11 +534,15 @@ def _announce(args: dict) -> dict:
     ping = args.get("ping", True)
     if not isinstance(ping, bool):
         raise ValueError("ping must be true or false.")
+    images = args.get("images") or []
+    if not isinstance(images, list):
+        raise ValueError("images must be an array.")
     return _run(
         send_support_announcement(
             _bot(), title=title, body=body, footer=footer or None, ping=ping,
+            images=images,
         ),
-        timeout=30,
+        timeout=60,
     )
 
 

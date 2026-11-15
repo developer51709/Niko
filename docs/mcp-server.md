@@ -22,6 +22,28 @@ runs.
 Use the optional `paths` argument to apply only part of a commit. Entire commit
 updates are refused above 250 files or 40 MiB, matching `niko_deploy`.
 
+## Announcements with images
+
+`niko_announce` accepts up to 10 optional `images`. Each image is an object
+with base64 `data`, an optional `filename` stem, and an optional per-image
+`spoiler` flag:
+
+```json
+{
+  "title": "A new release",
+  "body": "The details live here.",
+  "images": [
+    {"data": "<base64 PNG, JPEG, GIF, or WebP>", "filename": "release.png"}
+  ]
+}
+```
+
+The image type is detected from the bytes, so `data` can also be a
+`data:image/...;base64,...` URI. Niko uploads the images as real Discord
+attachments and renders them in the announcement's media gallery, so they keep
+working after the original source disappears. The 8 MiB per-image and 20 MiB
+total limits match staff broadcasts.
+
 `niko_deploy` still exists for small inline hotfixes, but it should not be used
 for large files: every byte has to be escaped into one JSON-RPC request and the
 whole request has to fit in the client's context.
