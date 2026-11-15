@@ -115,7 +115,7 @@ def build_broadcast_view(
     title: str,
     body: str,
     footer: str,
-    accent: str,
+    accent: str | None,
     media: list[dict],
     spoiler: bool = False,
 ) -> discord.ui.LayoutView:
@@ -147,9 +147,10 @@ def build_broadcast_view(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
             discord.ui.TextDisplay(content=f"-# {footer}"),
         ])
-    view.add_item(discord.ui.Container(
-        *items, accent_colour=accent_colour(accent), spoiler=bool(spoiler),
-    ))
+    container_options = {"spoiler": bool(spoiler)}
+    if accent:
+        container_options["accent_colour"] = accent_colour(accent)
+    view.add_item(discord.ui.Container(*items, **container_options))
     return view
 
 

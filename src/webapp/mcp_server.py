@@ -206,14 +206,19 @@ TOOLS: list[dict] = [
             "images": {
                 "type": "array",
                 "maxItems": 10,
-                "description": "Up to 10 PNG, JPEG, GIF, or WebP images. Each image is base64-encoded and uploaded as a Discord attachment, so the announcement keeps its images even if an external link expires.",
+                "description": "Up to 10 PNG, JPEG, GIF, or WebP images. Pass inline base64 data or a public image URL; Niko downloads URL images and uploads both kinds as Discord attachments so the announcement keeps its images even if an external link expires.",
                 "items": {
                     "type": "object",
                     "properties": {
                         "data": {
                             "type": "string",
                             "minLength": 1,
-                            "description": "Base64-encoded image bytes, or a base64 data URI. The image type is detected from the bytes.",
+                            "description": "Base64-encoded image bytes, or a base64 data URI. Use either data or url.",
+                        },
+                        "url": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "Public http or https image URL. The host downloads it and uploads the bytes as an attachment. Use either data or url.",
                         },
                         "filename": {
                             "type": "string",
@@ -222,7 +227,7 @@ TOOLS: list[dict] = [
                         },
                         "spoiler": {"type": "boolean", "default": False},
                     },
-                    "required": ["data"],
+                    "anyOf": [{"required": ["data"]}, {"required": ["url"]}],
                     "additionalProperties": False,
                 },
             },

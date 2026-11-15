@@ -176,7 +176,7 @@ def test_mcp_announce_tool_schema_supports_image_assets():
     images = tools["niko_announce"]["inputSchema"]["properties"]["images"]
     assert images["type"] == "array"
     assert images["maxItems"] == 10
-    assert images["items"]["required"] == ["data"]
+    assert images["items"]["anyOf"] == [{"required": ["data"]}, {"required": ["url"]}]
 
 
 def test_mcp_subdomain_is_a_known_site_host(monkeypatch):

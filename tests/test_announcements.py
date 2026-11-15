@@ -58,11 +58,10 @@ def test_announcement_uses_the_support_channel_and_announcements_ping_role(monke
 
     sent = channel.sent[0]
     assert "content" not in sent
-    text = "\n".join(
-        item.content for item in sent["view"].walk_children()
-        if isinstance(item, discord.ui.TextDisplay)
-    )
-    assert "<@&555>" in text
+    container = sent["view"].children[0]
+    assert container.accent_colour is None
+    assert "<@&555>" not in container.children[2].content
+    assert "<@&555>" in container.children[-1].content
     assert sent["allowed_mentions"].roles[0].id == 555
     assert sent["allowed_mentions"].everyone is False
     assert sent["allowed_mentions"].users is False
@@ -87,6 +86,7 @@ def test_announcement_can_skip_the_ping(monkeypatch):
         if isinstance(item, discord.ui.TextDisplay)
     )
     assert "<@&555>" not in text
+    assert sent["view"].children[0].accent_colour is None
     assert not sent["allowed_mentions"].roles
     assert result["pinged_role_id"] is None
 
@@ -107,6 +107,7 @@ def test_announcement_attaches_images_as_a_broadcast_style_gallery(monkeypatch):
     ))
 
     sent = channel.sent[0]
+    assert sent["view"].children[0].accent_colour is None
     assert len(sent["files"]) == 1
     filename = sent["files"][0].filename
     assert filename.startswith("release-")
@@ -119,6 +120,31 @@ def test_announcement_attaches_images_as_a_broadcast_style_gallery(monkeypatch):
     assert gallery.items[0].media.url == f"attachment://{filename}"
     assert gallery.items[0].spoiler is True
     assert result["image_count"] == 1
+
+
+def test_announcement_downloads_an_image_url_and_uploads_it(monkeypatch):
+    channel = FakeChannel()
+    _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
+    download = AsyncMock(return_value=PNG)
+    monkeypatch.setattr(announcements, "_download_image", download)
+
+    result = asyncio.run(announcements.send_support_announcement(
+        _bot(channel),
+        title="URL image",
+        body="The host downloads it first.",
+        images=[{"url": "https://cdn.example/release.png?ex=123&hm=abc"}],
+    ))
+
+    download.assert_awaited_once_with("https://cdn.example/release.png?ex=123&hm=abc", 1)
+    sent = channel.sent[0]
+    assert len(sent["files"]) == 1
+    assert sent["files"][0].filename.startswith("release-")
+    assert result["image_count"] == 1
+
+
+def test_announcement_rejects_unsupported_image_urls():
+    with pytest.raises(ValueError, match="http or https"):
+        asyncio.run(announcements._download_image("ftp://cdn.example/image.png", 1))
 
 
 def test_announcement_accepts_a_base64_data_uri(monkeypatch):
@@ -187,6 +213,15 @@ def test_announcement_rejects_images_over_the_total_limit(monkeypatch):
 
 def test_announcement_rejects_invalid_or_unsupported_images(monkeypatch):
     _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
+
+    with pytest.raises(ValueError, match="exactly one of data or url"):
+        asyncio.run(announcements.send_support_announcement(
+            _bot(FakeChannel()), title="Title", body="Body",
+            images=[{
+                "data": base64.b64encode(PNG).decode("ascii"),
+                "url": "https://cdn.example/image.png",
+            }],
+        ))
 
     with pytest.raises(ValueError, match="not valid base64"):
         asyncio.run(announcements.send_support_announcement(

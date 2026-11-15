@@ -9,17 +9,19 @@ attachments, matching the staff broadcast gallery.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import re
 import uuid
+from urllib.parse import urlparse
 
+import aiohttp
 import discord
 
 from config.ids import SUPPORT_GUILD
 from cogs.staff.support_server import get_support_ids
 from utils.broadcast import (
-    DEFAULT_ACCENT,
     IMAGE_TYPES,
     MAX_BODY,
     MAX_FOOTER,
@@ -54,8 +56,46 @@ def _media_stem(value: str | None) -> str:
     return _SAFE_STEM.sub("-", stem).strip("-._")[:60]
 
 
-def _prepare_images(images) -> list[dict]:
-    """Validate caller images and turn them into broadcast-style media rows."""
+async def _download_image(url: str, index: int) -> bytes:
+    """Fetch one caller-supplied image with a hard size and time limit."""
+    url = str(url or "").strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError(f"Image {index} URL must be an http or https URL.")
+
+    timeout = aiohttp.ClientTimeout(total=20)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise ValueError(
+                        f"Image {index} could not be downloaded (HTTP {response.status})."
+                    )
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    size += len(chunk)
+                    if size > MAX_MEDIA_BYTES:
+                        raise ValueError(
+                            f"Image {index} is larger than {MAX_MEDIA_BYTES // (1024 * 1024)} MiB."
+                        )
+                    chunks.append(chunk)
+    except ValueError:
+        raise
+    except asyncio.TimeoutError as exc:
+        raise ValueError(f"Image {index} timed out while downloading.") from exc
+    except aiohttp.ClientError as exc:
+        raise ValueError(f"Image {index} could not be downloaded.") from exc
+    return b"".join(chunks)
+
+
+async def _prepare_images(images) -> list[dict]:
+    """Validate caller images and turn them into broadcast-style media rows.
+
+    Each image accepts either inline base64 ``data`` or a public ``url``. URL
+    images are downloaded here and then uploaded as ordinary attachments, so
+    the delivered message does not depend on the source URL staying alive.
+    """
     if images is None:
         return []
     if not isinstance(images, list):
@@ -69,19 +109,25 @@ def _prepare_images(images) -> list[dict]:
         if not isinstance(item, dict):
             raise ValueError(f"Image {index} must be an object.")
         encoded = str(item.get("data") or "").strip()
-        if encoded.startswith("data:"):
-            _, separator, encoded = encoded.partition(",")
-            if not separator:
-                raise ValueError(f"Image {index} has an invalid data URI.")
-        encoded = "".join(encoded.split())
-        # Base64 is 4 bytes for every 3 image bytes. Reject an obviously large
-        # payload before decoding it, rather than allocating the whole image.
-        if len(encoded) > 4 * ((MAX_MEDIA_BYTES + 2) // 3):
-            raise ValueError(f"Image {index} is larger than {MAX_MEDIA_BYTES // (1024 * 1024)} MiB.")
-        try:
-            payload = base64.b64decode(encoded, validate=True)
-        except Exception as exc:
-            raise ValueError(f"Image {index} is not valid base64.") from exc
+        url = str(item.get("url") or "").strip()
+        if bool(encoded) == bool(url):
+            raise ValueError(f"Image {index} needs exactly one of data or url.")
+        if url:
+            payload = await _download_image(url, index)
+        else:
+            if encoded.startswith("data:"):
+                _, separator, encoded = encoded.partition(",")
+                if not separator:
+                    raise ValueError(f"Image {index} has an invalid data URI.")
+            encoded = "".join(encoded.split())
+            # Base64 is 4 bytes for every 3 image bytes. Reject an obviously
+            # large payload before decoding it, rather than allocating it all.
+            if len(encoded) > 4 * ((MAX_MEDIA_BYTES + 2) // 3):
+                raise ValueError(f"Image {index} is larger than {MAX_MEDIA_BYTES // (1024 * 1024)} MiB.")
+            try:
+                payload = base64.b64decode(encoded, validate=True)
+            except Exception as exc:
+                raise ValueError(f"Image {index} is not valid base64.") from exc
         if not payload:
             raise ValueError(f"Image {index} is empty.")
         if len(payload) > MAX_MEDIA_BYTES:
@@ -97,7 +143,10 @@ def _prepare_images(images) -> list[dict]:
         spoiler = item.get("spoiler", False)
         if not isinstance(spoiler, bool):
             raise ValueError(f"Image {index} spoiler must be true or false.")
-        stem = _media_stem(item.get("filename")) or "announcement"
+        stem_source = item.get("filename")
+        if not stem_source and url:
+            stem_source = os.path.basename(urlparse(url).path)
+        stem = _media_stem(stem_source) or "announcement"
         media.append({
             "filename": f"{stem}-{uuid.uuid4().hex[:8]}.{IMAGE_TYPES[content_type]}",
             "content_type": content_type,
@@ -115,7 +164,7 @@ async def send_support_announcement(
     body: str,
     footer: str | None = None,
     ping: bool = True,
-    accent: str = DEFAULT_ACCENT,
+    accent: str | None = None,
     images: list[dict] | None = None,
 ) -> dict:
     """Post one CV2 announcement in the configured support announcements channel.
@@ -138,7 +187,7 @@ async def send_support_announcement(
         raise ValueError(f"The message must be {MAX_BODY} characters or fewer.")
     if len(footer) > MAX_FOOTER:
         raise ValueError(f"The footer must be {MAX_FOOTER} characters or fewer.")
-    media = _prepare_images(images)
+    media = await _prepare_images(images)
 
     ids = await get_support_ids(bot)
     channel_id = (ids.get("channels") or {}).get("announcements")
@@ -160,12 +209,11 @@ async def send_support_announcement(
         channel = await bot.fetch_channel(int(channel_id))
 
     mention = f"<@&{int(role_id)}>" if ping else None
-    # Components V2 messages cannot carry a separate ``content`` field. Put the
-    # role ping in the container text so the announcement can still notify the
-    # announcements role.
-    view_body = f"{mention}\n\n{body}" if mention else body
+    # Components V2 messages cannot carry a separate ``content`` field, so the
+    # role ping belongs in the footer subtext rather than the message body.
+    view_footer = f"{mention} {footer}".strip() if mention else footer
     kwargs = {
-        "view": build_broadcast_view(title, view_body, footer, accent, media),
+        "view": build_broadcast_view(title, body, view_footer, accent, media),
         "allowed_mentions": (
             discord.AllowedMentions(
                 roles=[discord.Object(id=int(role_id))], everyone=False, users=False,
