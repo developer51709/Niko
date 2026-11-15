@@ -24,6 +24,7 @@ from utils.i18n import make_flat_msg
 from utils.locales import load_locales
 from utils.premium import (
     KIND_GIFT,
+    PREMIUM_PRICE_CENTS,
     PREMIUM_REMINDER_DAYS,
     expire_lapsed,
     get_subscription,
@@ -272,7 +273,7 @@ class PremiumCog(commands.Cog, name="Premium"):
                             server=guild.name if guild else f"Server {guild_id}",
                             until=_expiry_label(row.get("expires_at"), ctx),
                             duration=_days(ctx, max(1, days_left)),
-                            price=price_label(int(row.get("price_cents") or 1500)),
+                            price=price_label(int(row.get("price_cents") or PREMIUM_PRICE_CENTS)),
                         )
                     )
                 ),
@@ -326,7 +327,7 @@ class PremiumCog(commands.Cog, name="Premium"):
                     f"**{msg(interaction, 'status_server')}:** {interaction.guild.name}\n"
                     f"**{msg(interaction, 'status_status')}:** {_status_line(row, interaction)}\n"
                     f"**{msg(interaction, 'status_plan')}:** "
-                    f"{msg(interaction, 'plan_price', price=price_label(int((row or {}).get('price_cents') or 1500)))}\n"
+                    f"{msg(interaction, 'plan_price', price=price_label(int((row or {}).get('price_cents') or PREMIUM_PRICE_CENTS)))}\n"
                     f"**{msg(interaction, 'status_ai_moderation')}:** "
                     f"{msg(interaction, 'status_enabled' if subscription_is_active(row) else 'status_paused')}"
                 )

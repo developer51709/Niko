@@ -5,10 +5,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
 import * as fontkit from "fontkit";
-import { CHANGELOG, type ChangelogEntry } from "./src/data/changelog";
+import { parseChangelogEntry, sortChangelog, type ChangelogEntry } from "./src/content/changelog/schema";
 
 const SITE_URL = "https://niko.sryze.cc";
 const DOC_CONTENT_DIRECTORY = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "src/content/docs");
+const CHANGELOG_CONTENT_DIRECTORY = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "src/content/changelog");
 const DOC_FRONTMATTER_FIELD = /^([a-z_]+):\s*(.*)$/;
 const DEFAULT_DESCRIPTION = "Niko is the warm, capable Discord companion for communities that care.";
 
@@ -139,6 +140,24 @@ function writeMachineReadableContent(dist: string) {
   ].join("\n");
   fs.writeFileSync(path.join(dist, "llms.txt"), index);
 }
+
+// The changelog is one JSON file per entry in `src/content/changelog/`, named
+// after its slug. The dashboard globs the same folder, so a new entry is a new
+// file on both sides and neither keeps a list to update.
+function changelogEntries(): ChangelogEntry[] {
+  return sortChangelog(
+    fs.readdirSync(CHANGELOG_CONTENT_DIRECTORY)
+      .filter((file: string) => file.endsWith(".json"))
+      .map((file: string) =>
+        parseChangelogEntry(
+          JSON.parse(fs.readFileSync(path.join(CHANGELOG_CONTENT_DIRECTORY, file), "utf8")),
+          file,
+        ),
+      ),
+  );
+}
+
+const CHANGELOG = changelogEntries();
 
 // `landing: true` marks the pages that pitch Niko itself — they carry the live
 // command, server, and member counts in their Discord embed.

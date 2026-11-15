@@ -1,0 +1,48 @@
+{
+  "slug": "economy-card-theme-refresh",
+  "title": "Economy & Leveling Cards Match the Website Theme",
+  "date": "2026-10-14",
+  "version": "2.16.1",
+  "tags": [
+    "economy",
+    "leveling",
+    "theme",
+    "cards",
+    "dashboard"
+  ],
+  "summary": "Every rendered economy and leveling image now uses the same graphite, steel and sage palette as the website and dashboard, retiring the warm café styling that outlived the site theme change.",
+  "highlights": [
+    {
+      "title": "One Palette Everywhere",
+      "description": "Balance, reward, leaderboard, shop, inventory, coinflip, blackjack and level cards are drawn from the website's own theme tokens, so a card finally looks like a panel of the dashboard.",
+      "icon": "paint"
+    },
+    {
+      "title": "The Café Look Is Gone",
+      "description": "The espresso gradients, gold borders, coffee-cup placeholder avatar and café banner are replaced by a near-black graphite canvas with a steel accent and sage for money earned.",
+      "icon": "guild_economy"
+    },
+    {
+      "title": "Discord Views Followed",
+      "description": "Economy and shop containers now use the same brand accent as every other Niko view instead of their own café brown, so commands and cards match again.",
+      "icon": "spark"
+    }
+  ],
+  "changes": [
+    {
+      "category": "improved",
+      "items": [
+        "Economy, gambling and leveling image cards use the website theme palette: graphite surfaces, a steel accent for numerals, sage for money earned and a muted red for losses",
+        "Card banners read “NIKO ECONOMY” and “NIKO LEVELING”, and the placeholder avatar is a neutral profile mark",
+        "Server-configured level card colours still take precedence over the defaults"
+      ]
+    },
+    {
+      "category": "fixed",
+      "items": [
+        "The card palettes could drift from the site theme unnoticed; a test now pins every card colour to the stylesheet tokens"
+      ]
+    }
+  ],
+  "commits": []
+}

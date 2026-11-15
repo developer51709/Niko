@@ -19,11 +19,29 @@ import { navigate } from "../router";
 /** One chain a currency can be paid on, as OxaPay names it. */
 type CryptoNetwork = { code: string; label: string };
 
+type PlanTerm = {
+  months: number;
+  price_cents: number;
+  price_label: string;
+  per_month_cents: number;
+  saving_cents: number;
+};
+
+/** One running sale window, as the server resolves it. */
+type PlanDiscount = {
+  label: string;
+  percent: number;
+  ends_at?: string | null;
+  first_term_only?: boolean;
+};
+
 type Plan = {
   price_cents: number;
   price_label: string;
   currencies: string[];
   networks?: Record<string, CryptoNetwork[]>;
+  terms?: PlanTerm[];
+  discount?: PlanDiscount | null;
   gift: { enabled: boolean; months: number[]; price_cents_per_month: number };
   methods: { crypto: { enabled: boolean } };
 };
@@ -132,9 +150,36 @@ export function GiftPremiumPage() {
   const activeNetworkLabel =
     networkOptions.find((option) => option.code === activeNetwork)?.label || activeNetwork;
 
-  const terms = plan?.gift.months?.length ? plan.gift.months : [1, 3, 6, 12];
-  const perMonthCents = plan?.gift.price_cents_per_month || plan?.price_cents || 1500;
-  const totalCents = perMonthCents * months;
+  const priceTerms = useMemo<PlanTerm[]>(() => {
+    if (plan?.terms?.length) return plan.terms;
+    // A server that has not been upgraded yet still renders honest totals from
+    // the flat monthly price rather than breaking the page.
+    const offered = plan?.gift.months?.length ? plan.gift.months : [1, 3, 6, 12];
+    const monthly = plan?.gift.price_cents_per_month || plan?.price_cents || 0;
+    return offered.map((count) => ({
+      months: count,
+      price_cents: monthly * count,
+      price_label: `$${((monthly * count) / 100).toFixed(2)}`,
+      per_month_cents: monthly,
+      saving_cents: 0,
+    }));
+  }, [plan]);
+  const termOptions = useMemo(() => priceTerms.map((term) => term.months), [priceTerms]);
+  const selectedTerm = useMemo(
+    () => priceTerms.find((term) => term.months === months) || priceTerms[0] || null,
+    [months, priceTerms],
+  );
+  // A sale is for the recipient's first term, so it only applies while the
+  // chosen server has never had premium. The charge is still decided by the
+  // server; this only keeps the displayed total honest.
+  const discount = plan?.discount ?? null;
+  const saleApplies = Boolean(discount) && selectedTarget !== null && selectedTarget.premium === null;
+  const listCents = selectedTerm?.price_cents ?? 0;
+  const discountPercent = saleApplies ? discount?.percent ?? 0 : 0;
+  const totalCents = listCents - Math.floor((listCents * discountPercent) / 100);
+  // Quote and checkout must name the same term, even if the plan payload no
+  // longer offers the month that was selected.
+  const termMonths = selectedTerm?.months ?? months;
 
   const loginHref = useMemo(
     () => `/auth/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
@@ -214,7 +259,7 @@ export function GiftPremiumPage() {
       const result = await api<Checkout>("/api/premium/gift/checkout", {
         method: "POST",
         headers: csrf ? { "X-CSRF-Token": csrf } : undefined,
-        body: JSON.stringify({ guild_id: guildId, months, pay_currency: currency, network: activeNetwork }),
+        body: JSON.stringify({ guild_id: guildId, months: termMonths, pay_currency: currency, network: activeNetwork }),
       });
       setCheckout(result);
       setStep("pay");
@@ -260,7 +305,7 @@ export function GiftPremiumPage() {
           {plan && (
             <div className="billing-price">
               <strong>{`$${(totalCents / 100).toFixed(2)}`}</strong>
-              <span>{t("price.forOneServer", { term: monthLabel(months, t) })}</span>
+              <span>{t("price.forOneServer", { term: monthLabel(termMonths, t) })}</span>
             </div>
           )}
 
@@ -315,7 +360,7 @@ export function GiftPremiumPage() {
               <div className="billing-field">
                 <span className="billing-label">{t("length.label")}</span>
                 <div className="billing-presets" role="radiogroup" aria-label={t("length.aria")}>
-                  {terms.map((option) => (
+                  {termOptions.map((option) => (
                     <button
                       key={option}
                       type="button"
@@ -329,7 +374,26 @@ export function GiftPremiumPage() {
                   ))}
                 </div>
                 {selectedTarget?.premium?.active && (
-                  <p className="billing-hint">{t("length.adds", { term: monthLabel(months, t) })}</p>
+                  <p className="billing-hint">{t("length.adds", { term: monthLabel(termMonths, t) })}</p>
+                )}
+                {selectedTerm && selectedTerm.saving_cents > 0 && (
+                  <p className="billing-hint">
+                    {t("price.saving", { amount: `$${(selectedTerm.saving_cents / 100).toFixed(2)}` })}
+                  </p>
+                )}
+                {discount && (
+                  <p className="billing-hint">
+                    {discount.ends_at
+                      ? t("price.sale", {
+                          label: discount.label,
+                          percent: discount.percent,
+                          date: formatDate(discount.ends_at) || "",
+                        })
+                      : t("price.saleOngoing", {
+                          label: discount.label,
+                          percent: discount.percent,
+                        })}
+                  </p>
                 )}
               </div>
 

@@ -18,5 +18,6 @@ Start here for the current web stack:
 - [AI provider compatibility](ai-providers.md)
 - [Intent verification](intent-verification.md)
 - [Discovery listing](discovery/README.md)
+- [Premium audit and upgrade strategy](premium-growth-audit.md)
 # Niko Documentation
 > This is where you can find information about how the bot works and even how to host it yourself.

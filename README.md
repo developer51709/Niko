@@ -252,7 +252,7 @@ Guidelines:
 
 - Keep changes focused and match the existing Python and React conventions.
 - Add or update tests when behavior changes.
-- Update `web/src/data/changelog.ts` for user-visible updates.
+- Add a JSON file per user-visible release to `web/src/content/changelog/`, named after its slug (for example `premium-terms-and-sales.json`). The folder is the index: no list needs updating. Shape and checks live in `web/src/content/changelog/schema.ts`.
 - Rebuild `src/website/dist/` when the frontend changes; do not edit generated assets by hand.
 - Never commit tokens, `.env` files, or other credentials.
 

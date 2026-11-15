@@ -1048,7 +1048,6 @@ export type PremiumSubscription = {
   source?: string;
   gifted_by?: string | null;
   gifted_by_name?: string | null;
-  auto_renew?: boolean;
 };
 
 export type StaffBillingPayment = {

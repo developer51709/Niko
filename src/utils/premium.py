@@ -13,6 +13,8 @@ on both the SQLite and MongoDB backends.
 
 from __future__ import annotations
 
+import json
+import os
 from datetime import datetime, timedelta, timezone
 
 # ── Plan ─────────────────────────────────────────────────────────────────────
@@ -31,6 +33,24 @@ PERKS = [
         "description": "Every image posted in your server is scored by fal.ai's NSFW model and removed automatically.",
     },
 ]
+
+# ── Terms and pricing ────────────────────────────────────────────────────────
+
+#: Every term a subscription or a gift can be bought for, shortest first.
+TERM_MONTHS = (1, 3, 6, 12)
+
+#: List price of each term. The monthly price stays the anchor, so a longer
+#: term is cheaper per month rather than merely longer.
+TERM_PRICES_CENTS = {
+    1: PREMIUM_PRICE_CENTS,   # $15.00 / month
+    3: 3900,                  # $13.00 / month
+    6: 7200,                  # $12.00 / month
+    12: 13200,                # $11.00 / month
+}
+
+#: Optional seasonal sale. Configured rather than coded so a campaign needs no
+#: deploy: PREMIUM_SALE={"percent":25,"starts_at":"2026-12-20","ends_at":"2027-01-03","label":"Winter sale"}
+SALE_ENV_VAR = "PREMIUM_SALE"
 
 STATUS_ACTIVE = "active"
 STATUS_EXPIRED = "expired"
@@ -132,6 +152,128 @@ def price_label(cents: int = PREMIUM_PRICE_CENTS, currency: str = PREMIUM_CURREN
     return f"${cents / 100:,.2f} {currency}"
 
 
+def term_months(value) -> int | None:
+    """One of the offered terms from arbitrary input, or None."""
+    try:
+        months = int(value)
+    except (TypeError, ValueError):
+        return None
+    return months if months in TERM_MONTHS else None
+
+
+def term_price_cents(months: int) -> int:
+    """List price of one term; an unsupported term is refused, never guessed."""
+    try:
+        return TERM_PRICES_CENTS[int(months)]
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("That subscription length is not available.") from None
+
+
+def term_per_month_cents(months: int) -> int:
+    """Whole cents per month for a term, for display next to the total."""
+    months = int(months)
+    return term_price_cents(months) // months
+
+
+def term_saving_cents(months: int) -> int:
+    """What a term saves against paying the monthly price every month."""
+    return max(0, PREMIUM_PRICE_CENTS * int(months) - term_price_cents(months))
+
+
+def terms_payload() -> list[dict]:
+    """Every term for the checkout pages, priced from this one place."""
+    return [
+        {
+            "months": months,
+            "price_cents": TERM_PRICES_CENTS[months],
+            "price_label": price_label(TERM_PRICES_CENTS[months]),
+            "per_month_cents": term_per_month_cents(months),
+            "saving_cents": term_saving_cents(months),
+        }
+        for months in TERM_MONTHS
+    ]
+
+
+def parse_sale(raw) -> dict | None:
+    """Read a sale window; anything unreadable means "no sale", never an error."""
+    if not raw:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(raw, dict):
+        return None
+    try:
+        percent = int(raw.get("percent") or 0)
+    except (TypeError, ValueError):
+        return None
+    if not 0 < percent < 100:
+        return None
+    starts = parse_ts(raw.get("starts_at"))
+    ends = parse_ts(raw.get("ends_at"))
+    if starts and ends and ends <= starts:
+        return None
+    label = str(raw.get("label") or "Sale").strip() or "Sale"
+    return {"percent": percent, "label": label, "starts_at": starts, "ends_at": ends}
+
+
+def sale_is_active(sale, now: datetime | None = None) -> bool:
+    """True inside the sale's own window; a missing date means open-ended."""
+    if not sale:
+        return False
+    moment = now or utcnow()
+    if sale.get("starts_at") and moment < sale["starts_at"]:
+        return False
+    if sale.get("ends_at") and moment >= sale["ends_at"]:
+        return False
+    return True
+
+
+def active_sale(now: datetime | None = None, raw=None) -> dict | None:
+    """The configured sale, but only while it is actually running."""
+    sale = parse_sale(os.getenv(SALE_ENV_VAR) if raw is None else raw)
+    return sale if sale_is_active(sale, now) else None
+
+
+def sale_view(now: datetime | None = None) -> dict | None:
+    """The sale as the checkout pages need it, or None when none is running."""
+    sale = active_sale(now)
+    if sale is None:
+        return None
+    return {
+        "label": sale["label"],
+        "percent": sale["percent"],
+        "ends_at": to_iso(sale["ends_at"]) if sale.get("ends_at") else None,
+        "first_term_only": True,
+    }
+
+
+def quote(months: int, *, first_term: bool = True, now: datetime | None = None) -> dict:
+    """Price one term. The browser may choose a term, never an amount.
+
+    A sale applies to a server's first term only, so a campaign cannot turn
+    into a permanent discount on renewals.
+    """
+    months = int(months)
+    list_cents = term_price_cents(months)
+    sale = active_sale(now) if first_term else None
+    percent = int(sale["percent"]) if sale else 0
+    discount_cents = list_cents * percent // 100
+    amount_cents = list_cents - discount_cents
+    return {
+        "months": months,
+        "list_cents": list_cents,
+        "amount_cents": amount_cents,
+        "discount_cents": discount_cents,
+        "discount_percent": percent,
+        "per_month_cents": amount_cents // months,
+        "sale_label": sale["label"] if sale else None,
+        "sale_ends_at": to_iso(sale["ends_at"]) if sale and sale.get("ends_at") else None,
+    }
+
+
 def subscription_view(row) -> dict | None:
     """Shape a subscription row for the dashboard and bot embeds."""
     if not row:
@@ -150,7 +292,6 @@ def subscription_view(row) -> dict | None:
         "source": row.get("source", KIND_PURCHASE),
         "gifted_by": str(row["gifted_by"]) if row.get("gifted_by") else None,
         "gifted_by_name": row.get("gifted_by_name"),
-        "auto_renew": bool(row.get("auto_renew", 1)),
     }
 
 
@@ -166,7 +307,7 @@ async def get_subscription(pool, guild_id: int) -> dict | None:
     pool = _require_pool(pool)
     row = await pool.fetchrow(
         "SELECT guild_id, plan, status, price_cents, currency, started_at, expires_at, "
-        "auto_renew, source, gifted_by, gifted_by_name, owner_id, reminder_sent_at, updated_at "
+        "source, gifted_by, gifted_by_name, owner_id, reminder_sent_at, updated_at "
         "FROM premium_subscriptions WHERE guild_id = $1",
         int(guild_id),
     )
@@ -215,8 +356,8 @@ async def activate_subscription(
         await pool.execute(
             "INSERT INTO premium_subscriptions "
             "(guild_id, plan, status, price_cents, currency, started_at, expires_at, "
-            " auto_renew, source, gifted_by, gifted_by_name, owner_id, reminder_sent_at, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8, $9, $10, $11, NULL, $12)",
+            " source, gifted_by, gifted_by_name, owner_id, reminder_sent_at, updated_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, $12)",
             guild_id, PREMIUM_PLAN, STATUS_ACTIVE, PREMIUM_PRICE_CENTS, PREMIUM_CURRENCY,
             started_at, expires_at, source, gifted_by, gifted_by_name,
             owner_id if owner_id is not None else keep_owner, to_iso(moment),
@@ -301,17 +442,21 @@ async def record_payment(
     qr_code: str | None = None,
     expires_at: int | None = None,
     status: str = "Waiting",
+    list_cents: int | None = None,
+    promo: str | None = None,
 ) -> None:
     """Persist a checkout before the payer is sent to their wallet."""
     pool = _require_pool(pool)
     await pool.execute(
         "INSERT INTO premium_payments "
         "(order_id, track_id, guild_id, payer_id, kind, months, amount_cents, currency, "
-        " pay_currency, address, pay_amount, qr_code, status, created_at, expires_at) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+        " pay_currency, address, pay_amount, qr_code, status, created_at, expires_at, "
+        " list_cents, promo) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
         str(order_id), str(track_id), int(guild_id), int(payer_id), kind, int(months),
         int(amount_cents), currency, pay_currency, address, pay_amount, qr_code,
         status, now_iso(), expires_at,
+        int(list_cents if list_cents is not None else amount_cents), promo or None,
     )
 
 
@@ -363,7 +508,7 @@ async def recent_payments(pool, limit: int = 50) -> list[dict]:
     rows = await pool.fetch(
         "SELECT order_id, track_id, guild_id, payer_id, kind, months, amount_cents, currency, "
         "pay_currency, address, pay_amount, status, issue_status, issue_note, resolved_by, "
-        "resolved_at, created_at, paid_at, expires_at FROM premium_payments "
+        "resolved_at, created_at, paid_at, expires_at, list_cents, promo FROM premium_payments "
         "ORDER BY created_at DESC, order_id DESC LIMIT $1",
         int(limit),
     )
@@ -418,7 +563,7 @@ async def list_subscriptions(pool, limit: int = 100) -> list[dict]:
     pool = _require_pool(pool)
     rows = await pool.fetch(
         "SELECT guild_id, plan, status, price_cents, currency, started_at, expires_at, "
-        "auto_renew, source, gifted_by, gifted_by_name, owner_id, reminder_sent_at, updated_at "
+        "source, gifted_by, gifted_by_name, owner_id, reminder_sent_at, updated_at "
         "FROM premium_subscriptions ORDER BY expires_at DESC LIMIT $1",
         int(limit),
     )
@@ -433,14 +578,19 @@ async def billing_totals(pool) -> dict:
     return {"paid_count": len(rows), "paid_cents": total}
 
 
-# ── Bot-wide premium grants ─────────────────────────────────────────────────
+# ── Bot-wide beta access ────────────────────────────────────────────────────
+#
+# A per-user grant that has nothing to do with the paid server subscription
+# above. It is deliberately named for what it is (staff-granted access) so the
+# two concepts cannot be confused in support, and the table keeps its old name
+# because renaming it would mean migrating every existing deployment.
 
-class PremiumManager:
-    """Read and update legacy bot-wide premium grants in the primary database."""
+class BetaAccess:
+    """Read and update bot-wide beta-access grants (table ``premium_users``)."""
 
     @classmethod
-    async def is_premium(cls, pool, user_id: int) -> bool:
-        """Return whether *user_id* has been granted premium."""
+    async def is_granted(cls, pool, user_id: int) -> bool:
+        """Return whether *user_id* has been granted beta access."""
         pool = _require_pool(pool)
         return await pool.fetchval(
             "SELECT user_id FROM premium_users WHERE user_id = $1", int(user_id)
@@ -448,10 +598,10 @@ class PremiumManager:
 
     @classmethod
     async def add(cls, pool, user_id: int) -> bool:
-        """Grant premium; return False when the user already has it."""
+        """Grant beta access; return False when the user already has it."""
         pool = _require_pool(pool)
         user_id = int(user_id)
-        if await cls.is_premium(pool, user_id):
+        if await cls.is_granted(pool, user_id):
             return False
         await pool.execute(
             "INSERT OR IGNORE INTO premium_users (user_id) VALUES ($1)", user_id
@@ -460,10 +610,10 @@ class PremiumManager:
 
     @classmethod
     async def remove(cls, pool, user_id: int) -> bool:
-        """Revoke premium; return False when the user had no grant."""
+        """Revoke beta access; return False when the user had no grant."""
         pool = _require_pool(pool)
         user_id = int(user_id)
-        if not await cls.is_premium(pool, user_id):
+        if not await cls.is_granted(pool, user_id):
             return False
         await pool.execute(
             "DELETE FROM premium_users WHERE user_id = $1", user_id
@@ -472,7 +622,7 @@ class PremiumManager:
 
     @classmethod
     async def list_users(cls, pool) -> list[int]:
-        """Return all premium user IDs."""
+        """Return every granted user ID."""
         pool = _require_pool(pool)
         rows = await pool.fetch("SELECT user_id FROM premium_users ORDER BY user_id")
         return [int(row["user_id"]) for row in rows]

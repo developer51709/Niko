@@ -627,6 +627,9 @@ async def _create_tables(bot):
         )
     """)
 
+    # `auto_renew` is a legacy column: premium is manual, and no code reads or
+    # writes it. It stays in the schema for databases created before the flag
+    # was dropped from the API, and is never selected again.
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS premium_subscriptions (
             guild_id        INTEGER PRIMARY KEY,
@@ -670,6 +673,18 @@ async def _create_tables(bot):
             expires_at     INTEGER
         )
     """)
+    # A discounted checkout records what the term would have cost, so campaign
+    # performance stays separable from a mispriced payment.
+    for column, definition in (
+        ("list_cents", "INTEGER"),
+        ("promo", "TEXT"),
+    ):
+        try:
+            await bot.cxn.execute(
+                f"ALTER TABLE premium_payments ADD COLUMN {column} {definition}"
+            )
+        except Exception:
+            pass  # already present, or MongoDB has no ALTER TABLE
 
     # ── Guild ownership history ─────────────────────────────────────────────
     # A server owner must still be able to request deletion of their server's

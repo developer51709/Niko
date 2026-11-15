@@ -143,7 +143,6 @@ const labStyles = `
 .render-lab-sample>h4{margin:0 0 8px;color:#dce1e8;font-size:11px;font-weight:650}
 .render-lab-source{max-height:150px;margin:0 0 10px;padding:9px 10px;overflow:auto;color:#8f96a1;background:#08090b;border:1px solid #22242a;border-radius:6px;font:11px/1.5 "Space Mono",monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 .render-lab-render{padding:10px;color:#dbdee1;background:#313338;border-radius:8px;font-size:13.5px}
-.render-lab-render .discord-md-block-code{margin:6px 0}
 .render-lab-badge-group{margin-top:18px}
 .render-lab-badge-group>p{margin-bottom:0}
 .render-lab-emoji-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:6px;margin:14px 0 0;padding:0;list-style:none}

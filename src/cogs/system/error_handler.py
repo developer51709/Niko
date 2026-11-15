@@ -91,11 +91,11 @@ def under_development(feature = None):
         return True
     return commands.check(predicate)
 
-def is_premium():
-    """Check whether the invoking user has been granted premium by an owner."""
+def beta_access():
+    """Check whether an owner has granted the invoking user beta access."""
     async def predicate(ctx):
-        from utils.premium import PremiumManager
-        if await PremiumManager.is_premium(ctx.bot.cxn, ctx.author.id):
+        from utils.premium import BetaAccess
+        if await BetaAccess.is_granted(ctx.bot.cxn, ctx.author.id):
             return True
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
