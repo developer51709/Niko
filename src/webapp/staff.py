@@ -11,7 +11,7 @@ from config.ids import OWNER_IDS, is_owner_id
 from flask import session
 from utils.member_badges import STAFF_BADGE_ROLES, discord_badge_keys
 from utils.presence import is_mobile_presence
-from . import database, runtime
+from . import database, runtime, test_access
 
 
 _staff_user_identity_cache: dict[str, tuple[float, dict[str, str | None]]] = {}
@@ -556,12 +556,19 @@ def _is_owner() -> bool:
 
     This is an id check against configuration, not a database read, so it can be
     answered on every auth status request to decide whether the owner devtools
-    button is rendered at all.
+    button is rendered at all. A test session can deliberately assume a lower
+    role even though it acts through the owner's developer identity.
     """
+    test = test_access.current()
+    if test is not None:
+        return test.get("role") == "owner"
     return is_owner_id(session.get("user", {}).get("id"))
 
 
 def _current_staff_role() -> str | None:
+    test = test_access.current()
+    if test is not None:
+        return str(test.get("role") or "") or None
     user_id = str(session.get("user", {}).get("id", ""))
     if not user_id:
         return None

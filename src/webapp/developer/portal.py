@@ -31,6 +31,7 @@ from config.ids import is_owner_id
 from utils import logging
 
 from ..api_errors import error_response
+from ..client_ip import normalise_ip, request_client_ip
 from .. import security as security_store
 from . import store
 
@@ -508,6 +509,9 @@ def public_key(key: dict) -> dict:
         "created_at": key.get("created_at"),
         "last_used_at": key.get("last_used_at"),
         "revoked_at": key.get("revoked_at"),
+        "test": bool(key.get("test")),
+        "ip": str(key.get("ip") or "") or None,
+        "expires_at": key.get("expires_at"),
     }
 
 
@@ -577,6 +581,59 @@ def create_key(user_id: str, name: str, scopes, *, application_id: str = "") -> 
         "created_at": now,
         "last_used_at": None,
         "revoked_at": None,
+    }
+    with _LOCK:
+        store = _load()
+        store["keys"][key_id] = record
+        _save(store)
+    return public_key(record), raw_key
+
+
+def create_test_key(user_id: str, name: str, scopes, *, expires_at, ip) -> tuple[dict, str]:
+    """Create an owner-only key restricted to one address and expiry.
+
+    The regular portal flow deliberately cannot create these keys. They are for
+    the owner MCP server's short-lived testing path, so all scopes are allowed
+    without a reviewed application, but the key stops working at the exact
+    address/expiry recorded here.
+    """
+    user_id = str(user_id or "").strip()
+    if not developer_is_owner(user_id):
+        raise PermissionError("Only the bot owner can create test access.")
+    cleaned = _clean_scopes(scopes)
+    if not cleaned:
+        raise ValueError("Choose at least one API permission.")
+    address = normalise_ip(ip)
+    if not address:
+        raise ValueError("A valid IPv4 or IPv6 address is required.")
+    try:
+        expiry = float(expires_at)
+    except (TypeError, ValueError):
+        raise ValueError("A valid expiry is required.")
+    if expiry <= _now():
+        raise ValueError("A test key must expire in the future.")
+    clean_name = " ".join(str(name or "").split()).strip()
+    if not clean_name:
+        raise ValueError("Give the key a name so you can recognise it later.")
+    if len(clean_name) > 60:
+        raise ValueError("Key names must be 60 characters or fewer.")
+
+    raw_key = f"niko_dev_{secrets.token_urlsafe(32)}"
+    key_id = secrets.token_hex(8)
+    record = {
+        "id": key_id,
+        "user_id": user_id,
+        "name": clean_name,
+        "prefix": raw_key[:18],
+        "hash": _hash_key(raw_key),
+        "scopes": cleaned,
+        "application_id": None,
+        "created_at": _now(),
+        "last_used_at": None,
+        "revoked_at": None,
+        "test": True,
+        "ip": address,
+        "expires_at": expiry,
     }
     with _LOCK:
         store = _load()
@@ -875,6 +932,20 @@ def authenticate(token: str, *, allow_suspended: bool = False) -> dict | None:
             stored = str(key.get("hash") or "")
             if not stored or not hmac.compare_digest(stored, digest):
                 continue
+            raw_bound_ip = str(key.get("ip") or "").strip()
+            bound_ip = normalise_ip(raw_bound_ip)
+            if raw_bound_ip and (
+                not bound_ip or request_client_ip() != bound_ip
+            ):
+                continue
+            raw_expiry = key.get("expires_at")
+            if raw_expiry not in (None, "", 0):
+                try:
+                    expires_at = float(raw_expiry)
+                except (TypeError, ValueError):
+                    continue
+                if expires_at <= _now():
+                    continue
             user_id = str(key.get("user_id") or "")
             access = developer_access(user_id)
             application = None
@@ -939,11 +1010,11 @@ def authenticate(token: str, *, allow_suspended: bool = False) -> dict | None:
 def _client_ip() -> str:
     """The source address used for the external per-IP allowance.
 
-    ``remote_addr`` is the connection's peer. A proxy deployment should preserve
-    the client address at that layer rather than trusting a spoofable header in
-    the application.
+    The supervisor replaces client-supplied forwarding headers with the address
+    it trusts before the web child sees the request. Falling back to the peer
+    keeps direct local requests and tests working.
     """
-    return str(request.remote_addr or "unknown").strip() or "unknown"
+    return request_client_ip() or "unknown"
 
 
 def check_ip_rate_limit() -> dict:

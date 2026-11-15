@@ -3,6 +3,7 @@
 from utils import logging
 
 from .. import server as _server
+from .. import test_access
 
 globals().update({
     name: value
@@ -266,10 +267,26 @@ def auth_callback():
     response = redirect(_oauth_destination(str(sign_in.get("r") or ""), str(sign_in.get("n") or "/dashboard")))
     return _drop_legacy_session_cookie(response)
 
+@app.route("/auth/test-session")
+def auth_test_session():
+    """Turn a short-lived, IP-bound MCP link into a browser test session."""
+    try:
+        payload = test_access.accept_login(request.args.get("token") or "")
+    except PermissionError as error:
+        return jsonify({"error": str(error)}), 403
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 403
+    test_access.install(payload)
+    response = redirect(payload["next"])
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.route("/auth/logout")
 def auth_logout():
+    is_test = bool(session.get(test_access.SESSION_KEY))
     token = session.get("access_token")
-    if token:
+    if token and not is_test:
         try:
             discord_request(
                 "POST",

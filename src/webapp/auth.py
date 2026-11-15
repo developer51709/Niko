@@ -8,7 +8,7 @@ from functools import wraps
 
 from flask import jsonify, request, session
 
-from . import config, discord_api, leaderboard_cache, runtime
+from . import config, discord_api, leaderboard_cache, runtime, test_access
 
 
 def _load_blacklist_manager():
@@ -76,6 +76,10 @@ def ensure_access_token(force: bool = False) -> bool:
     reliable signal that the token was revoked, because the stored expiry can
     still be hours away when another session refreshed it first.
     """
+    # A test login is already authenticated by its signed, expiring marker and
+    # its bound address. It has no Discord token to refresh.
+    if test_access.current() is not None:
+        return True
     if "user" not in session:
         return False
     expires_at = float(session.get("token_exp", 0))

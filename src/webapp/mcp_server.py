@@ -18,13 +18,16 @@ import html
 import json
 import os
 import secrets
+import time
+from datetime import datetime, timezone
 from typing import Any
 
 from flask import Response, has_request_context, jsonify, request
 
-from utils import mcp_keys
+from utils import logging, mcp_keys
 
-from . import config, runtime, updates
+from . import config, runtime, test_access, updates
+from .developer import portal
 
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -265,6 +268,53 @@ TOOLS: list[dict] = [
                 "description": "The announcement message ID returned by niko_announce.",
             },
         }, ["message_id"]),
+    },
+    {
+        "name": "niko_create_test_access",
+        "description": (
+            "Create a short-lived, IP-bound credential for testing authenticated "
+            "pages or API endpoints. Use kind=session with a staff role for a "
+            "short-lived login link, or kind=api_key with developer scopes for a "
+            "bearer key. The IP is the exact public egress address of the test "
+            "browser or machine, checked on every use. Raw credentials are "
+            "returned once and expire; never use them outside testing."
+        ),
+        "inputSchema": _schema({
+            "kind": {"type": "string", "enum": ["api_key", "session"]},
+            "ip": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 45,
+                "description": "Exact IPv4 or IPv6 address allowed to use the credential.",
+            },
+            "role": {
+                "type": "string",
+                "enum": list(test_access.roles()),
+                "description": "Staff role to assume for kind=session. Ignored for API keys.",
+            },
+            "scopes": {
+                "type": "array",
+                "items": {"type": "string", "enum": list(portal.ALL_SCOPES)},
+                "minItems": 1,
+                "description": "Developer API scopes for kind=api_key.",
+            },
+            "ttl_seconds": {
+                "type": "integer",
+                "minimum": test_access.MIN_TTL_SECONDS,
+                "maximum": test_access.MAX_TTL_SECONDS,
+                "default": test_access.DEFAULT_TTL_SECONDS,
+            },
+            "name": {
+                "type": "string",
+                "maxLength": 60,
+                "description": "Label for an API key; it appears in the portal's key list.",
+            },
+            "next": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Relative page to open after a session login, e.g. /dashboard/staff.",
+            },
+        }, ["kind", "ip"]),
     },
     {
         "name": "niko_deploy_commit",
@@ -619,6 +669,97 @@ def _delete_announcement(args: dict) -> dict:
     )
 
 
+def _iso_time(timestamp: float) -> str:
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat(
+        timespec="seconds"
+    )
+
+
+def _create_test_access(args: dict) -> dict:
+    """Mint an owner-only, expiring credential bound to one client address."""
+    kind = str(args.get("kind") or "").strip().lower()
+    address = test_access.normalise_ip(args.get("ip"))
+    if not address:
+        raise ValueError("ip must be a valid IPv4 or IPv6 address.")
+    ttl = test_access.clean_ttl(args.get("ttl_seconds"))
+    expires_at = time.time() + ttl
+
+    if kind == "session":
+        role = test_access.clean_role(args.get("role"))
+        issued = test_access.issue_login(
+            role=role,
+            ip=address,
+            ttl_seconds=ttl,
+            next_path=test_access.clean_next_path(args.get("next")),
+            user_id=test_access.owner_id(),
+        )
+        logging.info(
+            "TestAccess",
+            f"Issued a {role} session login bound to {address} for {ttl}s.",
+        )
+        return {
+            "kind": "session",
+            "login_url": issued["login_url"],
+            "role": role,
+            "ip": address,
+            "expires_at": issued["expires_at"],
+            "expires_at_iso": _iso_time(issued["expires_at"]),
+            "ttl_seconds": ttl,
+            "note": (
+                "Open the URL from the bound IP. It sets a test-only browser "
+                "session and redirects to next. The link and session stop "
+                "working at expiry or from any other address."
+            ),
+        }
+
+    if kind == "api_key":
+        raw_scopes = args.get("scopes")
+        if not isinstance(raw_scopes, list) or not raw_scopes:
+            raise ValueError("scopes must name at least one developer API scope.")
+        scopes = [
+            scope
+            for scope in portal.ALL_SCOPES
+            if str(scope) in {str(item).strip() for item in raw_scopes}
+        ]
+        unknown = [
+            str(item).strip()
+            for item in raw_scopes
+            if str(item).strip() not in portal.ALL_SCOPES
+        ]
+        if unknown:
+            raise ValueError(f"Unknown developer API scope: {unknown[0]}.")
+        key, raw_key = portal.create_test_key(
+            test_access.owner_id(),
+            str(args.get("name") or "MCP test access"),
+            scopes,
+            expires_at=expires_at,
+            ip=address,
+        )
+        logging.info(
+            "TestAccess",
+            f"Issued developer API key {key['prefix']} bound to {address} for {ttl}s.",
+        )
+        return {
+            "kind": "api_key",
+            "key": raw_key,
+            "key_prefix": key["prefix"],
+            "authorization": f"Bearer {raw_key}",
+            "scopes": key["scopes"],
+            "ip": address,
+            "expires_at": expires_at,
+            "expires_at_iso": _iso_time(expires_at),
+            "ttl_seconds": ttl,
+            "api_base": "/api/v1",
+            "note": (
+                "Send this as Authorization: Bearer <key> or X-API-Key: <key> "
+                "from the bound IP. The key expires and is rejected from any "
+                "other address."
+            ),
+        }
+
+    raise ValueError("kind must be api_key or session.")
+
+
 def _deploy(args: dict) -> dict:
     from .mcp_deploy import apply_payloads
 
@@ -658,6 +799,8 @@ def _call_tool(name: str, arguments: dict | None) -> dict:
         return _edit_announcement(arguments)
     if name == "niko_delete_announcement":
         return _delete_announcement(arguments)
+    if name == "niko_create_test_access":
+        return _create_test_access(arguments)
     if name == "niko_deploy":
         return _deploy(arguments)
     if name == "niko_deploy_commit":
