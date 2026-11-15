@@ -2490,3 +2490,13 @@ button.transcript-author-button:hover { text-decoration: underline; }
   .devdocs-endpoint-head > span { padding-left: 2px; }
   .devdocs-article-footer { align-items: flex-start; flex-direction: column; }
 }
+
+/* Searchable dashboard select: the search field stays pinned above the list
+   so a long personality catalogue stays quick to filter. */
+.dash-select-list { max-height: 340px; }
+.dash-select-search { position: sticky; top: -5px; z-index: 1; display: flex; align-items: center; gap: 7px; margin: -1px -1px 5px; padding: 8px 9px; color: var(--dim); background: rgba(18, 20, 23, .96); border-bottom: 1px solid var(--line-soft); }
+.dash-select-search input { width: 100%; min-width: 0; padding: 0; color: var(--ink); background: transparent; border: 0; outline: 0; font: inherit; font-size: 12px; }
+.dash-select-search input::placeholder { color: var(--dim); }
+.dash-select-option-copy { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.dash-select-option-copy small { overflow: hidden; color: var(--dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.dash-select-empty { padding: 10px 9px; color: var(--dim); font-size: 11px; }

@@ -94,6 +94,8 @@
   "pickers.chooseRole": "Elige un rol",
   "pickers.chooseChannel": "Elige un canal",
   "pickers.chooseOption": "Elige una opción",
+  "pickers.search": "Buscar",
+  "pickers.noResults": "No se encontraron resultados",
   "pickers.savedRole": "Rol guardado · {id}",
   "pickers.savedChannel": "Canal guardado · {id}",
   "pickers.unavailableRole": "Rol no disponible ({id})",

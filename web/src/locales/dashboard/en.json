@@ -96,6 +96,8 @@
   "pickers.chooseRole": "Choose a role",
   "pickers.chooseChannel": "Choose a channel",
   "pickers.chooseOption": "Choose an option",
+  "pickers.search": "Search",
+  "pickers.noResults": "No matches found",
   "pickers.savedRole": "Saved role · {id}",
   "pickers.savedChannel": "Saved channel · {id}",
   "pickers.unavailableRole": "Unavailable role ({id})",

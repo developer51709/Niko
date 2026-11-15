@@ -94,6 +94,8 @@
   "pickers.chooseRole": "Choisis un rôle",
   "pickers.chooseChannel": "Choisis un salon",
   "pickers.chooseOption": "Choisis une option",
+  "pickers.search": "Rechercher",
+  "pickers.noResults": "Aucun résultat",
   "pickers.savedRole": "Rôle enregistré · {id}",
   "pickers.savedChannel": "Salon enregistré · {id}",
   "pickers.unavailableRole": "Rôle indisponible ({id})",

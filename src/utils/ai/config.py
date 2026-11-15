@@ -14,6 +14,7 @@ import time
 from typing import Optional, Union
 
 from utils import logging
+from utils.ai.prompts import PERSONALITY_KEYS
 
 DEFAULT_CONFIG = {
     "personality": "cafe",
@@ -24,7 +25,8 @@ DEFAULT_CONFIG = {
     "multimodal_experiment": "False",
 }
 _BOOLEAN_FIELDS = {"enabled", "ai_actions_experiment", "better_context_experiment", "multimodal_experiment"}
-_PERSONALITIES = {"cafe", "normal"}
+PERSONALITIES = tuple(PERSONALITY_KEYS)
+_PERSONALITIES = set(PERSONALITIES)
 
 #: How long a loaded guild config is trusted before it is read again. Saves
 #: update the cache immediately, so a change is visible before this expires.
@@ -199,7 +201,9 @@ async def save_config(
         value = "True" if _as_bool_int(value) else "False"
     elif key == "personality":
         if value not in _PERSONALITIES:
-            raise ValueError("Personality must be cafe or normal.")
+            raise ValueError(
+                "Personality must be one of: " + ", ".join(PERSONALITIES) + "."
+            )
     elif key == "ai_name":
         raw = str(value).strip()
         if len(raw) < MIN_AI_NAME_LENGTH:

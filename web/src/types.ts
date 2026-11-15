@@ -1223,6 +1223,7 @@ export type GuildConfig = {
   server: ServerConfig;
   ai: {
     personality?: string;
+    personalities?: string[];
     enabled?: string | boolean;
     ai_actions_experiment?: string | boolean;
     better_context_experiment?: string | boolean;

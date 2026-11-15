@@ -6,6 +6,7 @@ from config.emojis import get_emoji
 from utils import logging
 from utils.ai.config import (
     MIN_AI_NAME_LENGTH,
+    PERSONALITIES,
     load_config,
     preload_all,
     save_config,
@@ -211,8 +212,8 @@ class BotPersonalitySelect(discord.ui.Select):
         super().__init__(
             placeholder=msg(ctx, "personality_placeholder"),
             options=[
-                discord.SelectOption(label=msg(ctx, "personality_normal"), value="normal"),
-                discord.SelectOption(label=msg(ctx, "personality_cafe"), value="cafe"),
+                discord.SelectOption(label=msg(ctx, f"personality_{key}"), value=key)
+                for key in PERSONALITIES
             ],
         )
         self.bot = bot

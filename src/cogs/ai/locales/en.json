@@ -58,6 +58,7 @@
     "personality_placeholder": "Select a personality",
     "personality_normal": "Normal",
     "personality_cafe": "Café",
+    "personality_subject_delta": "Subject Delta",
     "name_modal_title": "Rename the AI",
     "name_label": "AI name",
     "name_placeholder": "Niko",

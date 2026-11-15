@@ -334,7 +334,8 @@ def api_guild_config(guild_id):
     # never be persisted alongside it.
     modcfg  = {**get_runtime_moderation_config(guild_id), "preset_filters": _preset_filter_catalog()}
     premium_cfg = _guild_premium_view(guild_id)
-    aicfg   = cached_ai_config(int(guild_id))
+    from utils.ai.config import PERSONALITIES
+    aicfg   = {**cached_ai_config(int(guild_id)), "personalities": list(PERSONALITIES)}
     level_cfg = get_runtime_level_config(guild_id)
 
     try:
@@ -1148,7 +1149,7 @@ def api_save_profile(guild_id):
 @require_csrf
 def api_save_ai(guild_id):
     """Persist all AI settings through the database-backed config helper."""
-    from utils.ai.config import MIN_AI_NAME_LENGTH
+    from utils.ai.config import MIN_AI_NAME_LENGTH, PERSONALITIES
 
     body = request.get_json(silent=True) or {}
     allowed = {
@@ -1159,8 +1160,10 @@ def api_save_ai(guild_id):
     unknown = set(body) - allowed
     if unknown:
         return jsonify({"error": f"Unsupported AI fields: {', '.join(sorted(unknown))}"}), 400
-    if "personality" in body and body["personality"] not in {"cafe", "normal"}:
-        return jsonify({"error": "Personality must be cafe or normal."}), 400
+    if "personality" in body and body["personality"] not in PERSONALITIES:
+        return jsonify({
+            "error": "Personality must be one of: " + ", ".join(PERSONALITIES) + "."
+        }), 400
     if "ai_name" in body:
         name = str(body["ai_name"]).strip()
         if len(name) > 32:

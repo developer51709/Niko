@@ -13,7 +13,7 @@ import re
 from utils import logging
 from utils.ai.config import load_config
 from utils.ai.openai_client import generate_reply_openai
-from utils.ai.prompts import SYSTEM_PROMPT_CAFE, SYSTEM_PROMPT_NORMAL
+from utils.ai.prompts import PERSONALITY_PROMPTS, SYSTEM_PROMPT_CAFE
 
 # Discord refuses a message over 2000 characters. Replies longer than that are
 # sent as consecutive messages instead of being truncated mid-sentence.
@@ -127,7 +127,7 @@ async def generate_reply(
 
     ai_name = str(config.get("ai_name") or "Niko").strip() or "Niko"
     personality = config.get("personality")
-    system_prompt = SYSTEM_PROMPT_NORMAL if personality == "normal" else SYSTEM_PROMPT_CAFE
+    system_prompt = PERSONALITY_PROMPTS.get(personality, SYSTEM_PROMPT_CAFE)
     system_prompt += (
         f"\n\nYour configured name in this server is {ai_name}. "
         f"Respond as {ai_name} and recognize that name when addressed."
