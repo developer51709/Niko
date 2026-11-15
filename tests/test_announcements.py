@@ -25,12 +25,13 @@ PNG = base64.b64decode(
 
 
 class FakeMessage:
-    def __init__(self, message_id=9001, *, author_id=777, created_at=None, attachments=None):
+    def __init__(self, message_id=9001, *, author_id=777, created_at=None, attachments=None, components=None):
         self.id = message_id
         self.jump_url = f"https://discord.com/channels/1/2/{message_id}"
         self.author = SimpleNamespace(id=author_id)
         self.created_at = created_at or discord.utils.utcnow()
         self.attachments = list(attachments or [])
+        self.components = list(components or [])
         self.edits = []
         self.deleted = False
 
@@ -271,31 +272,82 @@ def test_announcement_rejects_invalid_or_unsupported_images(monkeypatch):
         ))
 
 
-def test_edit_announcement_preserves_existing_images_and_returns_url(monkeypatch):
+def test_edit_announcement_preserves_existing_ping_and_image_spoilers(monkeypatch):
     channel = FakeChannel()
-    attachment = SimpleNamespace(id=11, filename="old-release.png")
-    message = FakeMessage(9001, attachments=[attachment])
+    first = SimpleNamespace(id=11, filename="old-release.png")
+    second = SimpleNamespace(id=12, filename="old-preview.png")
+    existing_view = announcements.build_broadcast_view(
+        "Old title", "Old body", "<@&555> Official Niko update", None,
+        [
+            {"filename": "old-release.png", "spoiler": True},
+            {"filename": "old-preview.png", "spoiler": False},
+        ],
+    )
+    existing_gallery = next(
+        item for item in existing_view.walk_children()
+        if isinstance(item, discord.ui.MediaGallery)
+    )
+    for item, attachment in zip(existing_gallery.items, (first, second)):
+        item.media.attachment_id = attachment.id
+    message = FakeMessage(
+        9001, attachments=[first, second], components=existing_view.children,
+    )
     channel.messages[9001] = message
     _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
 
     result = asyncio.run(announcements.edit_support_announcement(
         _bot(channel), message_id=9001, title="Fixed title", body="Corrected body.",
-        footer="Official Niko update",
     ))
 
     edited = message.edits[0]
     assert edited["content"] is None
     assert edited["embed"] is None
-    assert edited["attachments"] == [attachment]
-    assert not edited["allowed_mentions"].roles
+    assert edited["attachments"] == [first, second]
+    assert edited["allowed_mentions"].roles[0].id == 555
+    footer = next(
+        item.content for item in edited["view"].walk_children()
+        if isinstance(item, discord.ui.TextDisplay) and item.content.startswith("-# ")
+    )
+    assert "<@&555>" in footer
     gallery = next(
         item for item in edited["view"].walk_children()
         if isinstance(item, discord.ui.MediaGallery)
     )
-    assert gallery.items[0].media.url == "attachment://old-release.png"
+    assert [item.media.url for item in gallery.items] == [
+        "attachment://old-release.png",
+        "attachment://old-preview.png",
+    ]
+    assert [item.spoiler for item in gallery.items] == [True, False]
     assert result["edited"] is True
     assert result["message_url"] == "https://discord.com/channels/1/2/9001"
-    assert result["image_count"] == 1
+    assert result["image_count"] == 2
+
+
+def test_edit_announcement_can_remove_the_preserved_ping(monkeypatch):
+    channel = FakeChannel()
+    attachment = SimpleNamespace(id=11, filename="old-release.png")
+    existing_view = announcements.build_broadcast_view(
+        "Old title", "Old body", "<@&555> Official Niko update", None,
+        [{"filename": "old-release.png", "spoiler": True}],
+    )
+    message = FakeMessage(
+        9001, attachments=[attachment], components=existing_view.children,
+    )
+    channel.messages[9001] = message
+    _config(monkeypatch, {"announcements": 444}, {"announcements_ping": 555})
+
+    asyncio.run(announcements.edit_support_announcement(
+        _bot(channel), message_id=9001, title="Quiet edit", body="No ping this time.",
+        ping=False,
+    ))
+
+    edited = message.edits[0]
+    assert not edited["allowed_mentions"].roles
+    text = "\n".join(
+        item.content for item in edited["view"].walk_children()
+        if isinstance(item, discord.ui.TextDisplay)
+    )
+    assert "<@&555>" not in text
 
 
 def test_edit_announcement_replaces_images_and_can_ping(monkeypatch):

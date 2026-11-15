@@ -212,6 +212,7 @@ def test_mcp_announcement_edit_and_delete_tools(monkeypatch):
     editor.assert_awaited_once()
     assert editor.await_args.kwargs["message_id"] == 9001
     assert editor.await_args.kwargs["title"] == "Corrected"
+    assert editor.await_args.kwargs["ping"] is None
     assert editor.await_args.kwargs["images"] == [
         {"url": "https://cdn.example/fixed.png"},
     ]

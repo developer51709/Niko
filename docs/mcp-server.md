@@ -52,9 +52,10 @@ link so a send can be checked or corrected immediately.
 
 `niko_edit_announcement` replaces the text of a Niko announcement posted in the
 announcements channel within the last 7 days. It requires `message_id`, `title`
-and `body`; `footer` and `ping` are optional, and `ping` defaults to `false` so
-a correction does not notify the role again. Omit `images` to keep the current
-attachments, pass an image array to replace them, or pass `[]` to remove them.
+and `body`; `footer` is optional. Omit `ping` to keep the existing role ping,
+or set it to `true`/`false` to override it. Omit `images` to keep the current
+attachments and each image's spoiler flag, pass an image array to replace them,
+or pass `[]` to remove them.
 
 `niko_delete_announcement` deletes a Niko announcement from the same channel
 within the same 7-day window. Both tools reject messages authored by anyone

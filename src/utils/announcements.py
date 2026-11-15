@@ -208,19 +208,66 @@ def _announcement_options(*, title, body, footer, ping, role_id, media) -> dict:
     }
 
 
+def _message_children(message):
+    for component in getattr(message, "components", []) or []:
+        yield from (getattr(component, "children", None) or [component])
+
+
+def _existing_ping(message, role_id) -> bool:
+    """Read the announcements role mention from the existing footer."""
+    if not role_id:
+        return False
+    mention = f"<@&{int(role_id)}>"
+    found = False
+    for child in _message_children(message):
+        content = getattr(child, "content", None)
+        if isinstance(content, str) and content.startswith("-# "):
+            found = mention in content
+    return found
+
+
 def _existing_media(message) -> list[dict]:
-    """Keep attachments in place while rebuilding an edited announcement view."""
+    """Rebuild preserved images from the existing gallery in display order."""
+    attachments = {
+        attachment.id: attachment
+        for attachment in getattr(message, "attachments", []) or []
+        if getattr(attachment, "id", None) is not None
+    }
     media: list[dict] = []
-    for attachment in getattr(message, "attachments", []) or []:
-        filename = str(getattr(attachment, "filename", "") or "")
-        if not filename:
-            continue
-        media.append({
-            "filename": filename,
-            "url": f"attachment://{filename}",
-            "spoiler": False,
-        })
-    return media
+    seen: set = set()
+    for child in _message_children(message):
+        for item in getattr(child, "items", []) or []:
+            media_item = getattr(item, "media", None)
+            media_url = str(getattr(media_item, "url", "") or "")
+            attachment = attachments.get(getattr(media_item, "attachment_id", None))
+            filename = str(getattr(attachment, "filename", "") or "")
+            if not filename:
+                filename = (
+                    media_url.removeprefix("attachment://")
+                    if media_url.startswith("attachment://")
+                    else os.path.basename(urlparse(media_url).path)
+                )
+            if not filename or filename in seen:
+                continue
+            if attachment is None:
+                attachment = next(
+                    (a for a in attachments.values() if a.filename == filename), None,
+                )
+            seen.add(filename)
+            media.append({
+                "filename": filename,
+                "url": f"attachment://{filename}" if attachment else media_url,
+                "spoiler": bool(getattr(item, "spoiler", False)),
+            })
+    if media:
+        return media
+
+    # A legacy text-only or unparseable message has no gallery to recover.
+    return [
+        {"filename": attachment.filename, "spoiler": False}
+        for attachment in getattr(message, "attachments", []) or []
+        if getattr(attachment, "filename", None)
+    ]
 
 
 async def _recent_announcement(bot, message_id: int):
@@ -253,7 +300,7 @@ async def _recent_announcement(bot, message_id: int):
             f"Only announcements from the last {ANNOUNCEMENT_MANAGE_WINDOW.days} days "
             "can be edited or deleted."
         )
-    return message, channel, ids
+    return message, ids
 
 
 async def send_support_announcement(
@@ -309,18 +356,21 @@ async def edit_support_announcement(
     title: str,
     body: str,
     footer: str | None = None,
-    ping: bool = False,
+    ping: bool | None = None,
     images: list[dict] | None = None,
 ) -> dict:
     """Edit a recent Niko announcement in place.
 
-    Omit ``images`` to keep the current attachments. Pass a list to replace
-    them, including an empty list to remove all images.
+    Omit ``images`` to keep the current attachments and their spoiler flags.
+    Pass a list to replace them, including an empty list to remove all images.
+    Omit ``ping`` to keep the existing footer role mention.
     """
-    message, _, ids = await _recent_announcement(bot, message_id)
+    message, ids = await _recent_announcement(bot, message_id)
     title, body, footer = _validated_content(title, body, footer)
 
     role_id = (ids.get("roles") or {}).get("announcements_ping")
+    if ping is None:
+        ping = _existing_ping(message, role_id)
     if ping and not role_id:
         raise RuntimeError(
             "The announcements ping role is not configured. "
@@ -353,20 +403,18 @@ async def edit_support_announcement(
         "pinged_role_id": int(role_id) if ping else None,
         "image_count": len(media),
         "message_url": jump_url,
-        "url": jump_url,
     }
 
 
 async def delete_support_announcement(bot, *, message_id: int) -> dict:
     """Delete a recent Niko announcement from the announcements channel."""
-    message, _, ids = await _recent_announcement(bot, message_id)
+    message, ids = await _recent_announcement(bot, message_id)
     jump_url = getattr(message, "jump_url", None)
     await message.delete()
     return {
         "deleted": True,
-        "message_id": int(message.id),
+        "message_id": message.id,
         "channel_id": int((ids.get("channels") or {}).get("announcements")),
         "guild_id": SUPPORT_GUILD,
         "message_url": jump_url,
-        "url": jump_url,
     }

@@ -238,7 +238,7 @@ TOOLS: list[dict] = [
     },
     {
         "name": "niko_edit_announcement",
-        "description": "Edit a Niko announcement sent in the support announcements channel within the last 7 days. The title and body replace the full announcement text; omit images to keep the current attachments, or pass an array to replace them. The ping defaults to off so a correction does not notify the role again. Returns the updated message URL.",
+        "description": "Edit a Niko announcement sent in the support announcements channel within the last 7 days. The title and body replace the full announcement text. Omit images to keep the current attachments and their per-image spoiler flags, or pass an array to replace them. Omit ping to preserve the existing role ping, or set it explicitly. Returns the updated message URL.",
         "inputSchema": _schema({
             "message_id": {
                 "type": "integer",
@@ -248,7 +248,10 @@ TOOLS: list[dict] = [
             "title": {"type": "string", "minLength": 1, "maxLength": 160},
             "body": {"type": "string", "minLength": 1, "maxLength": 3800},
             "footer": {"type": "string", "maxLength": 120},
-            "ping": {"type": "boolean", "default": False},
+            "ping": {
+                "type": "boolean",
+                "description": "Omit to preserve the existing role ping. Set true or false to override it.",
+            },
             "images": ANNOUNCEMENT_IMAGES_SCHEMA,
         }, ["message_id", "title", "body"]),
     },
@@ -587,8 +590,8 @@ def _edit_announcement(args: dict) -> dict:
     title = str(args.get("title") or "").strip()
     body = str(args.get("body") or "").strip()
     footer = str(args.get("footer") or "").strip()
-    ping = args.get("ping", False)
-    if not isinstance(ping, bool):
+    ping = args.get("ping")
+    if ping is not None and not isinstance(ping, bool):
         raise ValueError("ping must be true or false.")
     images = args.get("images")
     if images is not None and not isinstance(images, list):
