@@ -62,3 +62,6 @@ Thumbs.db
 
 # Node Modules
 node_modules
+
+# Screenshots and review artefacts saved by tooling
+artifacts/
