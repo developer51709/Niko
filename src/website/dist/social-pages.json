@@ -820,6 +820,20 @@
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/economy-leveling-overhaul.png"
     },
+    "/changelog/moderation-logging-dashboard": {
+      "title": "Logging, Moderation & Documentation — Niko changelog",
+      "description": "Logging got two major improvements: deleted message logs now show image attachments in a MediaGallery component, and the Member category now tracks avatar changes using a Section with Thumbnail accessory. The documentation page was fully rebuilt with search, filters, and a card-based layout.",
+      "section": "Changelog · v2.4.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/moderation-logging-dashboard.png"
+    },
+    "/changelog/roleplay-music-status": {
+      "title": "Roleplay, Music & Status Rotation — Niko changelog",
+      "description": "The roleplay cog was completely rewritten to use nekos.best API GIFs with CV2 layout messages and a persistent 'hug back' button. The music cog was restructured with a ghost queue feature and fixed autoplay/Spotify playback. A status message rotation system was added with a configurable timer.",
+      "section": "Changelog · v2.5.0",
+      "landing": false,
+      "image": "https://niko.sryze.cc/og/changelog/roleplay-music-status.png"
+    },
     "/changelog/database-migration": {
       "title": "Database Migration to MongoDB — Niko changelog",
       "description": "Every major system has been migrated from SQLite to MongoDB. The migration covered economy, leveling, moderation, tickets, birthdays, AFK, sticky messages, warns, mutes, and the blacklist — with a custom interpreter that translates SQLite-style writes to MongoDB operations.",
@@ -833,20 +847,6 @@
       "section": "Changelog · v2.6.0",
       "landing": false,
       "image": "https://niko.sryze.cc/og/changelog/ticket-system-transcripts.png"
-    },
-    "/changelog/roleplay-music-status": {
-      "title": "Roleplay, Music & Status Rotation — Niko changelog",
-      "description": "The roleplay cog was completely rewritten to use nekos.best API GIFs with CV2 layout messages and a persistent 'hug back' button. The music cog was restructured with a ghost queue feature and fixed autoplay/Spotify playback. A status message rotation system was added with a configurable timer.",
-      "section": "Changelog · v2.5.0",
-      "landing": false,
-      "image": "https://niko.sryze.cc/og/changelog/roleplay-music-status.png"
-    },
-    "/changelog/moderation-logging-dashboard": {
-      "title": "Logging, Moderation & Documentation — Niko changelog",
-      "description": "Logging got two major improvements: deleted message logs now show image attachments in a MediaGallery component, and the Member category now tracks avatar changes using a Section with Thumbnail accessory. The documentation page was fully rebuilt with search, filters, and a card-based layout.",
-      "section": "Changelog · v2.4.0",
-      "landing": false,
-      "image": "https://niko.sryze.cc/og/changelog/moderation-logging-dashboard.png"
     },
     "/changelog/website-launch-donation": {
       "title": "Website, Donation System & API — Niko changelog",

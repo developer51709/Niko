@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,12 +10,17 @@ from events.startup.writers import VERSION
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CHANGELOG = ROOT / "web/src/data/changelog.ts"
+CHANGELOG = ROOT / "web/src/content/changelog"
 
 
 def _changelog_versions() -> list[str]:
-    text = CHANGELOG.read_text(encoding="utf-8")
-    return re.findall(r'^\s+version: "([^"]+)",$', text, re.MULTILINE)
+    """Every version announced by an entry; each entry is one JSON file."""
+    versions = []
+    for path in sorted(CHANGELOG.glob("*.json")):
+        entry = json.loads(path.read_text(encoding="utf-8"))
+        if entry.get("version"):
+            versions.append(str(entry["version"]))
+    return versions
 
 
 def _newest_first(version: str) -> tuple[int, ...]:
@@ -27,9 +31,9 @@ def test_the_bot_reports_the_newest_changelog_version():
     versions = _changelog_versions()
 
     assert versions, "the changelog should carry version numbers"
-    # Entries are newest first, so the first one is the release this build is
-    # part of, and nothing may be numbered above it.
-    assert versions[0] == VERSION
+    # The build ships the newest release the changelog announces, so it has to
+    # be recorded there and nothing may be numbered above it.
+    assert VERSION in versions
     assert VERSION == max(versions, key=_newest_first)
 
 

@@ -1,0 +1,28 @@
+{
+  "slug": "ticket-panel-accent-color",
+  "title": "The Ticket Panel Now Wears Its Accent Color",
+  "date": "2026-10-16",
+  "version": "2.19.2",
+  "tags": [
+    "tickets",
+    "dashboard",
+    "fixed"
+  ],
+  "summary": "Saved accent color for the ticket panel is applied to the panel itself again. It used to be printed as a `#RRGGBB` code next to the panel title, so a color picked in the dashboard looked like a stray hex code instead of a colored panel.",
+  "highlights": [
+    {
+      "title": "A Color, Not a Caption",
+      "description": "The accent color you save on the Tickets tab colors the panel card itself, and it applies the same way whether you post the panel from Discord or update it from the dashboard. A panel with no color saved simply has no accent.",
+      "icon": "paint"
+    }
+  ],
+  "changes": [
+    {
+      "category": "fixed",
+      "items": [
+        "The ticket panel's saved accent color is applied as the panel's accent bar instead of being appended to the title as a hex code"
+      ]
+    }
+  ],
+  "commits": []
+}

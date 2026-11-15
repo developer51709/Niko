@@ -1,0 +1,36 @@
+{
+  "slug": "guild-server-pulse-stats",
+  "title": "Guild Server Pulse Stats",
+  "date": "2026-09-24",
+  "version": "2.10.1",
+  "tags": [
+    "dashboard",
+    "guild",
+    "analytics",
+    "stats"
+  ],
+  "summary": "Guild settings now include a Server pulse analytics card with an at-a-glance view of server size and recent community activity.",
+  "highlights": [
+    {
+      "title": "Server Activity at a Glance",
+      "description": "The card summarizes member count, messages, and new members over the last 14 days, with interactive views for message trends, member joins and departures, and the server's members, channels, and roles.",
+      "icon": "chart"
+    },
+    {
+      "title": "Community Analytics",
+      "description": "Daily activity charts make it easier to spot changes in conversation and membership, with activity tracking noted from the time it is enabled.",
+      "icon": "users"
+    }
+  ],
+  "changes": [
+    {
+      "category": "added",
+      "items": [
+        "Server pulse analytics card in guild settings",
+        "14-day daily message activity and member join/leave charts",
+        "Server layout view for member, channel, and role counts"
+      ]
+    }
+  ],
+  "commits": []
+}
