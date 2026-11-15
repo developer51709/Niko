@@ -88,6 +88,24 @@ def test_a_stalled_child_api_gets_a_bounded_503(supervisor):
         os.kill(pid, signal.SIGCONT)
 
 
+def test_healthz_stays_available_when_the_child_is_wedged(supervisor):
+    """Render's liveness probe must not depend on the proxied child."""
+    handle = _start(supervisor)
+    handle.wait_ready(timeout=35)
+    pid = handle.status()["child"]["pid"]
+
+    os.kill(pid, signal.SIGSTOP)
+    try:
+        started = time.monotonic()
+        response = handle.request("/healthz", timeout=2)
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+        assert time.monotonic() - started < 1.0
+    finally:
+        os.kill(pid, signal.SIGCONT)
+
+
 def test_killing_the_supervisor_takes_the_real_child_with_it(supervisor):
     handle = _start(supervisor)
     first = handle.wait_ready(timeout=35)

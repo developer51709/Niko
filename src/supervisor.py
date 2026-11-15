@@ -525,6 +525,7 @@ class Supervisor:
 
     async def _start_public_server(self) -> None:
         app = web.Application(client_max_size=1024**3)
+        app.router.add_get("/healthz", self._healthz)
         app.router.add_get("/health", self._health)
         app.router.add_get("/ready", self._ready)
         app.router.add_get("/supervisor/status", self._public_status)
@@ -557,6 +558,10 @@ class Supervisor:
         )
         os.chmod(path, 0o600)
         LOG.info("control socket listening on %s", path)
+
+    async def _healthz(self, _request: web.Request) -> web.Response:
+        """Cheap liveness for the platform; never proxy or inspect a child."""
+        return web.json_response({"status": "ok"})
 
     async def _health(self, _request: web.Request) -> web.Response:
         return web.json_response(
