@@ -9,6 +9,22 @@ import { navigate } from "../router";
 
 type Perk = { key: string; title: string; description: string };
 
+type PlanTerm = {
+  months: number;
+  price_cents: number;
+  price_label: string;
+  per_month_cents: number;
+  saving_cents: number;
+};
+
+/** One running sale window, as the server resolves it. */
+type PlanDiscount = {
+  label: string;
+  percent: number;
+  ends_at?: string | null;
+  first_term_only?: boolean;
+};
+
 /** One chain a currency can be paid on, as OxaPay names it. */
 type CryptoNetwork = { code: string; label: string };
 
@@ -20,6 +36,8 @@ type Plan = {
   currency: string;
   months: number;
   perks: Perk[];
+  terms?: PlanTerm[];
+  discount?: PlanDiscount | null;
   renewal_notice_days: number;
   currencies: string[];
   networks?: Record<string, CryptoNetwork[]>;
@@ -131,6 +149,7 @@ export function BillingPage() {
   // never leave a network selected that the new coin cannot use.
   const [network, setNetwork] = useState("");
   const [guildId, setGuildId] = useState(guildParam);
+  const [months, setMonths] = useState(1);
   const [targets, setTargets] = useState<PlanGuild[] | null>(null);
   const [targetsError, setTargetsError] = useState("");
   const [meta, setMeta] = useState<DonationMeta | null>(null);
@@ -149,6 +168,24 @@ export function BillingPage() {
     () => targets?.find((target) => target.id === guildId) || null,
     [targets, guildId],
   );
+
+  const terms = useMemo(() => plan?.terms ?? [], [plan]);
+  const selectedTerm = useMemo(
+    () => terms.find((term) => term.months === months) || terms[0] || null,
+    [months, terms],
+  );
+  // The sale is for a server's first term only, so it is only shown once a
+  // server with no subscription is selected. The charge is decided by the
+  // server either way; this keeps the page from promising a price it will not
+  // honour on a renewal.
+  const saleApplies = Boolean(plan?.discount) && selectedTarget !== null && selectedTarget.premium === null;
+  const listCents = selectedTerm?.price_cents ?? plan?.price_cents ?? 0;
+  const discountPercent = saleApplies ? plan?.discount?.percent ?? 0 : 0;
+  const totalCents = listCents - Math.floor((listCents * discountPercent) / 100);
+  // The term the page quotes is the term it sends: if the plan payload ever
+  // stops offering the chosen month, both the price and the checkout follow
+  // the term that is actually on screen.
+  const termMonths = selectedTerm?.months ?? months;
 
   const networkOptions = useMemo<CryptoNetwork[]>(() => {
     const map = isDonation ? meta?.networks : plan?.networks;
@@ -268,7 +305,7 @@ export function BillingPage() {
         : await api<Checkout>("/api/premium/checkout", {
             method: "POST",
             headers: csrf ? { "X-CSRF-Token": csrf } : undefined,
-            body: JSON.stringify({ guild_id: guildId, pay_currency: currency, network: activeNetwork }),
+            body: JSON.stringify({ guild_id: guildId, months: termMonths, pay_currency: currency, network: activeNetwork }),
           });
       setCheckout(result);
       setStep("pay");
@@ -321,9 +358,12 @@ export function BillingPage() {
 
           {!isDonation && plan && (
             <div className="billing-price">
-              <strong>{plan.price_label}</strong>
-              <span>{t("price.perMonth")}</span>
+              <strong>{formatUsd(totalCents || plan.price_cents)}</strong>
+              <span>{termMonths === 1 ? t("price.perMonth") : t("price.forTerm", { months: termMonths })}</span>
             </div>
+          )}
+          {!isDonation && discountPercent > 0 && (
+            <p className="billing-hint">{t("price.was", { amount: formatUsd(listCents) })}</p>
           )}
 
           {loading && <div className="billing-loading"><span className="loading-ring" /><p>{t("loading")}</p></div>}
@@ -374,6 +414,45 @@ export function BillingPage() {
                     <p className="billing-hint">
                       {t("server.giftHint")}{" "}
                       <a href={`/billing/gift${guildId ? `?guild=${guildId}` : ""}`}>{t("server.giftLink")}</a>.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {!isDonation && plan && terms.length > 1 && (
+                <div className="billing-field">
+                  <span className="billing-label">{t("term.label")}</span>
+                  <div className="billing-presets" role="radiogroup" aria-label={t("term.aria")}>
+                    {terms.map((term) => (
+                      <button
+                        key={term.months}
+                        type="button"
+                        role="radio"
+                        aria-checked={months === term.months}
+                        className={`billing-preset${months === term.months ? " is-selected" : ""}`}
+                        onClick={() => setMonths(term.months)}
+                      >
+                        {t(term.months === 1 ? "term.one" : "term.many", { count: term.months })}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedTerm && selectedTerm.saving_cents > 0 && (
+                    <p className="billing-hint">
+                      {t("term.saving", { amount: formatUsd(selectedTerm.saving_cents) })}
+                    </p>
+                  )}
+                  {plan.discount && (
+                    <p className="billing-hint">
+                      {plan.discount.ends_at
+                        ? t("term.sale", {
+                            label: plan.discount.label,
+                            percent: plan.discount.percent,
+                            date: formatDate(plan.discount.ends_at) || "",
+                          })
+                        : t("term.saleOngoing", {
+                            label: plan.discount.label,
+                            percent: plan.discount.percent,
+                          })}
                     </p>
                   )}
                 </div>
@@ -493,7 +572,11 @@ export function BillingPage() {
               <div className="billing-summary">
                 <div>
                   <span className="billing-label">{t("step.paying")}</span>
-                  <strong>{isDonation ? `$${Number.parseFloat(amount).toFixed(2)} USD` : plan?.price_label}</strong>
+                  <strong>
+                    {isDonation
+                      ? `$${Number.parseFloat(amount).toFixed(2)} USD`
+                      : formatUsd(totalCents || plan?.price_cents || 0)}
+                  </strong>
                 </div>
                 <div>
                   <span className="billing-label">{isDonation ? t("step.to") : t("server.label")}</span>

@@ -1,4 +1,4 @@
-"""``.staff blacklist`` and ``.staff premium``: the two owner moderation groups."""
+"""``.staff blacklist`` and ``.staff beta``: the two owner moderation groups."""
 
 import discord
 from discord.ext import commands
@@ -8,11 +8,11 @@ from config.emojis import get_emoji
 from cogs.staff.base import CMDS, StaffCommands, _resolve_prefix
 from utils.moderation.manager import BlacklistManager
 from utils.paginator import PaginatedView, paginate
-from utils.premium import PremiumManager
+from utils.premium import BetaAccess
 
 
 class ModerationCommands:
-    """Blacklist and premium management."""
+    """Blacklist and beta access management."""
 
     # -------------------------------
     # Blacklist commands
@@ -354,39 +354,42 @@ class ModerationCommands:
             await ctx.send(view=view)
 
     # -------------------------------
-    # Premium management commands
+    # Beta access commands
     # -------------------------------
+    # This is the per-user staff grant, not the paid server subscription. The
+    # two used to share the name "premium", which made support answers guess
+    # which one a member meant.
     @StaffCommands.staff.group(
-        name="premium",
-        help=CMDS.help("premium"),
+        name="beta",
+        help=CMDS.help("beta"),
         invoke_without_command=True,
         hidden=True,
     )
-    async def premium(self, ctx):
-        """Shows premium subcommand usage."""
+    async def beta(self, ctx):
+        """Shows beta access subcommand usage."""
         prefix = await _resolve_prefix(self.bot, ctx)
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
                 content=(
-                    f"### {get_emoji('badge_owner')} Premium Management\n"
-                    f"`{prefix}premium add <user>` — grant premium\n"
-                    f"`{prefix}premium remove <user>` — revoke premium\n"
-                    f"`{prefix}premium list` — list all premium users"
+                    f"### {get_emoji('badge_owner')} Beta Access Management\n"
+                    f"`{prefix}beta add <user>` — grant beta access\n"
+                    f"`{prefix}beta remove <user>` — revoke beta access\n"
+                    f"`{prefix}beta list` — list everyone with beta access"
                 )
             ),
             accent_colour=discord.Color.gold(),
         ))
         await ctx.send(view=view)
 
-    @premium.command(name="add", help=CMDS.help("premium.add"))
-    async def premium_add(self, ctx, user: discord.User):
-        added = await PremiumManager.add(self.bot.cxn, user.id)
+    @beta.command(name="add", help=CMDS.help("beta.add"))
+    async def beta_add(self, ctx, user: discord.User):
+        added = await BetaAccess.add(self.bot.cxn, user.id)
         if added:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('tick')} **{user}** (`{user.id}`) has been granted premium."
+                    content=f"{get_emoji('tick')} **{user}** (`{user.id}`) has been granted beta access."
                 ),
                 accent_colour=discord.Color.green(),
             ))
@@ -394,20 +397,20 @@ class ModerationCommands:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('important')} **{user}** already has premium."
+                    content=f"{get_emoji('important')} **{user}** already has beta access."
                 ),
                 accent_colour=discord.Color.blurple(),
             ))
         await ctx.send(view=view)
 
-    @premium.command(name="remove", help=CMDS.help("premium.remove"))
-    async def premium_remove(self, ctx, user: discord.User):
-        removed = await PremiumManager.remove(self.bot.cxn, user.id)
+    @beta.command(name="remove", help=CMDS.help("beta.remove"))
+    async def beta_remove(self, ctx, user: discord.User):
+        removed = await BetaAccess.remove(self.bot.cxn, user.id)
         if removed:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('tick')} Premium revoked from **{user}** (`{user.id}`)."
+                    content=f"{get_emoji('tick')} Beta access revoked from **{user}** (`{user.id}`)."
                 ),
                 accent_colour=discord.Color.green(),
             ))
@@ -415,20 +418,20 @@ class ModerationCommands:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('cross')} **{user}** does not have premium."
+                    content=f"{get_emoji('cross')} **{user}** does not have beta access."
                 ),
                 accent_colour=discord.Color.red(),
             ))
         await ctx.send(view=view)
 
-    @premium.command(name="list", help=CMDS.help("premium.list"))
-    async def premium_list(self, ctx):
-        user_ids = await PremiumManager.list_users(self.bot.cxn)
+    @beta.command(name="list", help=CMDS.help("beta.list"))
+    async def beta_list(self, ctx):
+        user_ids = await BetaAccess.list_users(self.bot.cxn)
         if not user_ids:
             view = discord.ui.LayoutView()
             view.add_item(discord.ui.Container(
                 discord.ui.TextDisplay(
-                    content=f"{get_emoji('important')} No premium users yet."
+                    content=f"{get_emoji('important')} Nobody has beta access yet."
                 ),
                 accent_colour=discord.Color.blurple(),
             ))
@@ -447,7 +450,7 @@ class ModerationCommands:
 
         pages = paginate(lines, per_page=10)
         view = PaginatedView(
-            title=f"⭐ Premium Users — {len(user_ids)} total",
+            title=f"⭐ Beta Access — {len(user_ids)} total",
             pages=pages,
         )
         await ctx.send(view=view)

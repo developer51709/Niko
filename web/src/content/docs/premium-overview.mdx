@@ -47,7 +47,22 @@ The checkout is one page with a glass card and a payment-method screen:
 - **Crypto** — powered by OxaPay's white-label checkout. Niko shows the exact address, amount, network, QR code, and a countdown, then confirms automatically when the network settles the payment.
 - **Card** — visible but disabled while it is being prepared. It will appear here first.
 
-Premium is **monthly and manual**: there is no automatic charge on the card everyone forgot about. Three days before a term ends, the owner receives a DM with a renewal link. If nobody renews, premium pauses and the server's settings and history stay intact. Your own servers appear on the billing page; communities you only belong to belong on the gift page.
+Premium is **manual**: there is no automatic charge on the card everyone forgot about. Three days before a term ends, the owner receives a DM with a renewal link. If nobody renews, premium pauses and the server's settings and history stay intact. Your own servers appear on the billing page; communities you only belong to belong on the gift page.
+
+## Terms and seasonal sales
+
+A subscription can be bought for **1, 3, 6, or 12 months**, and a longer term costs less per month:
+
+| Term | Price | Per month |
+|---|---|---|
+| 1 month | $15.00 | $15.00 |
+| 3 months | $39.00 | $13.00 |
+| 6 months | $72.00 | $12.00 |
+| 12 months | $132.00 | $11.00 |
+
+Gifts use the same ladder, so a year bought for a community is cheaper than twelve monthly payments.
+
+Twice a year a sale window can take a percentage off a server's **first** term, with the date it ends shown on the page. A sale never applies to a renewal: when it ends, the standard price is what the page shows again. The amount is always worked out on the server from the chosen term, so the page can choose a length but never a price.
 
 ## Gifting premium
 
@@ -57,7 +72,7 @@ Gifting is its own checkout, not a checkbox on the subscription page. Any member
 /premium gift [server_id]
 ```
 
-That opens **/billing/gift**, where you pick from every server you and Niko are both in and a length of **1, 3, 6, or 12 months**. The full price is quoted up front from the plan price, so the term is the only thing you choose.
+That opens **/billing/gift**, where you pick from every server you and Niko are both in and a length of **1, 3, 6, or 12 months**. The full price is quoted up front from the term price, so the term is the only thing you choose.
 
 Gifting needs server membership, not Manage Server, and the gifter pays. The server owner receives a DM naming the gifter and the date the new term ends. Gifts extend an active term instead of replacing it, so no paid days are lost.
 

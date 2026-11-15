@@ -87,7 +87,9 @@ class SqlitePool:
                 resolved_at    TEXT,
                 created_at     TEXT NOT NULL DEFAULT (datetime('now')),
                 paid_at        TEXT,
-                expires_at     INTEGER
+                expires_at     INTEGER,
+                list_cents     INTEGER,
+                promo          TEXT
             );
             """
         )
@@ -430,9 +432,9 @@ def test_a_gift_uses_the_gift_page_and_costs_the_term(monkeypatch, pool):
     status, payload, captured = _gift_route(monkeypatch, pool, months=3)
 
     assert status == 200
-    assert captured["amount"] == premium.PREMIUM_PRICE_CENTS * 3 / 100
+    assert captured["amount"] == premium.term_price_cents(3) / 100
     assert payload["months"] == 3
-    assert payload["amount_cents"] == premium.PREMIUM_PRICE_CENTS * 3
+    assert payload["amount_cents"] == premium.term_price_cents(3)
     assert payload["status_url"] == f"/api/premium/gift/orders/{payload['order_id']}"
     payment = asyncio.run(premium.get_payment(pool, order_id=payload["order_id"]))
     assert payment["kind"] == premium.KIND_GIFT
@@ -442,7 +444,7 @@ def test_a_gift_uses_the_gift_page_and_costs_the_term(monkeypatch, pool):
 def test_gifting_needs_membership_not_manage_server(monkeypatch, pool):
     status, _, captured = _gift_route(monkeypatch, pool, member=True, managed=())
     assert status == 200
-    assert captured["amount"] == premium.PREMIUM_PRICE_CENTS / 100
+    assert captured["amount"] == premium.term_price_cents(1) / 100
 
     refused, _, captured = _gift_route(monkeypatch, pool, member=False, managed=("42",))
     assert refused == 403

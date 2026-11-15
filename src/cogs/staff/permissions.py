@@ -29,7 +29,7 @@ OWNER_ONLY_COMMANDS = {
 STAFF_ONLY_COMMANDS = {"help"}
 
 HEAD_ADMIN_COMMANDS = {
-    "blacklist", "premium", "servers", "serverinvite",
+    "blacklist", "beta", "servers", "serverinvite",
 }
 SUPPORT_COMMANDS = {"ping", "latency", "uptime", "getreport"}
 GRAPHIC_DESIGNER_COMMANDS = SUPPORT_COMMANDS | {"mem", "tasks", "guild", "channels", "roles", "members"}
@@ -84,7 +84,7 @@ def command_allowed_for_role(role: str | None, command_name: str) -> bool:
 
     Deny by default: a command is available only when the role lists it, so an
     unknown or empty role reaches nothing. Owner-reserved tooling stays reserved
-    for the owner, and Head Admin tooling (blacklist, premium, invites) is
+    for the owner, and Head Admin tooling (blacklist, beta access, invites) is
     never inherited by the other staff roles.
     """
     if command_name in OWNER_ONLY_COMMANDS:

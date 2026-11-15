@@ -16,6 +16,7 @@ import json
 import re
 import sqlite3
 import sys
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -75,8 +76,11 @@ class SqlitePool:
                 resolved_at    TEXT,
                 created_at     TEXT NOT NULL DEFAULT (datetime('now')),
                 paid_at        TEXT,
-                expires_at     INTEGER
+                expires_at     INTEGER,
+                list_cents     INTEGER,
+                promo          TEXT
             );
+            CREATE TABLE premium_users (user_id INTEGER PRIMARY KEY);
             """
         )
 
@@ -175,6 +179,135 @@ def test_reminder_fires_once_inside_the_window():
 def test_price_is_fifteen_dollars_a_month():
     assert premium.PREMIUM_PRICE_CENTS == 1500
     assert premium.price_label() == "$15.00 USD"
+
+
+def test_longer_terms_cost_less_per_month():
+    assert [premium.term_per_month_cents(m) for m in premium.TERM_MONTHS] == [1500, 1300, 1200, 1100]
+    assert premium.term_saving_cents(1) == 0
+    assert premium.term_saving_cents(12) == 1500 * 12 - 13200
+    # Every term is on the ladder, and its list price is the one we publish.
+    for months in premium.TERM_MONTHS:
+        assert premium.term_price_cents(months) == premium.TERM_PRICES_CENTS[months]
+
+
+def test_an_unsupported_term_is_refused_rather_than_guessed():
+    assert premium.term_months(3) == 3
+    assert premium.term_months("6") == 6
+    assert premium.term_months(2) is None
+    assert premium.term_months("nope") is None
+    with pytest.raises(ValueError):
+        premium.term_price_cents(7)
+
+
+def test_the_plan_payload_prices_every_offered_term():
+    payload = premium.terms_payload()
+    assert [term["months"] for term in payload] == list(premium.TERM_MONTHS)
+    assert all(term["price_label"].startswith("$") for term in payload)
+    assert payload[0]["saving_cents"] == 0
+
+
+def test_the_plans_route_carries_the_terms_the_pages_read(monkeypatch):
+    """Both billing pages price themselves from this payload."""
+    from webapp.routes import premium_routes
+
+    monkeypatch.delenv(premium.SALE_ENV_VAR, raising=False)
+    payload = premium_routes.app.test_client().get("/api/premium/plans").get_json()
+    assert [term["months"] for term in payload["terms"]] == list(premium.TERM_MONTHS)
+    assert payload["price_cents"] == premium.PREMIUM_PRICE_CENTS
+    assert payload["discount"] is None
+
+
+def test_the_plans_route_reports_a_running_sale(monkeypatch):
+    from webapp.routes import premium_routes
+
+    monkeypatch.setenv(
+        premium.SALE_ENV_VAR,
+        json.dumps({"percent": 25, "label": "Winter sale", "ends_at": "2099-01-03"}),
+    )
+    payload = premium_routes.app.test_client().get("/api/premium/plans").get_json()
+    assert payload["discount"]["percent"] == 25
+    assert payload["discount"]["label"] == "Winter sale"
+    assert payload["discount"]["first_term_only"] is True
+
+
+def test_a_sale_reduces_a_first_term_and_never_a_renewal(monkeypatch):
+    monkeypatch.setenv(premium.SALE_ENV_VAR, json.dumps({"percent": 25, "label": "Winter sale"}))
+    first = premium.quote(6, first_term=True)
+    renewal = premium.quote(6, first_term=False)
+    assert first["list_cents"] == 7200
+    assert first["amount_cents"] == 5400
+    assert first["discount_cents"] == 1800
+    assert first["sale_label"] == "Winter sale"
+    assert renewal["amount_cents"] == 7200
+    assert renewal["discount_percent"] == 0
+
+
+def test_a_sale_only_runs_inside_its_window(monkeypatch):
+    monkeypatch.setenv(
+        premium.SALE_ENV_VAR,
+        json.dumps({"percent": 20, "starts_at": "2026-12-20", "ends_at": "2027-01-03"}),
+    )
+    assert premium.active_sale(datetime(2026, 12, 19, 23, 0, 0)) is None
+    assert premium.active_sale(datetime(2027, 1, 3, 0, 0, 0)) is None
+    inside = datetime(2026, 12, 25, 12, 0, 0)
+    assert premium.active_sale(inside)["percent"] == 20
+    assert premium.quote(1, now=inside)["amount_cents"] == 1200
+
+
+def test_an_unreadable_sale_is_ignored(monkeypatch):
+    # A value we cannot read is no sale, never an exception at checkout time.
+    # A missing or unreadable *date* is an open-ended sale, so it is not here.
+    for value in (
+        "",
+        "not json",
+        '{"percent": 0}',
+        '{"percent": 140}',
+        '{"percent": "lots"}',
+        '"a string"',
+        '{"percent": 20, "starts_at": "2027-01-02", "ends_at": "2027-01-01"}',
+    ):
+        monkeypatch.setenv(premium.SALE_ENV_VAR, value)
+        assert premium.active_sale() is None, value
+
+
+def test_the_subscription_view_no_longer_advertises_auto_renew():
+    """Premium is manual, so the view must not claim a renewal setting."""
+    row = {
+        "guild_id": 42,
+        "status": "active",
+        "expires_at": (premium.utcnow() + timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S"),
+        "auto_renew": 1,
+    }
+    assert "auto_renew" not in premium.subscription_view(row)
+
+
+@async_test
+async def test_beta_access_is_granted_and_revoked(pool):
+    """The per-user grant no longer shares the paid product's name."""
+    assert await premium.BetaAccess.add(pool, 99) is True
+    assert await premium.BetaAccess.is_granted(pool, 99) is True
+    assert await premium.BetaAccess.add(pool, 99) is False
+    assert await premium.BetaAccess.remove(pool, 99) is True
+    assert await premium.BetaAccess.is_granted(pool, 99) is False
+
+
+@async_test
+async def test_a_discounted_payment_keeps_the_list_price(pool):
+    await premium.record_payment(
+        pool,
+        order_id="order-sale",
+        track_id="track-sale",
+        guild_id=42,
+        payer_id=7,
+        months=6,
+        amount_cents=5400,
+        list_cents=7200,
+        promo="Winter sale",
+    )
+    payment = await premium.get_payment(pool, order_id="order-sale")
+    assert payment["amount_cents"] == 5400
+    assert payment["list_cents"] == 7200
+    assert payment["promo"] == "Winter sale"
 
 
 # ── Storage ─────────────────────────────────────────────────────────────────
@@ -443,8 +576,8 @@ def test_an_attachment_is_classified_by_url():
 
 # ── OxaPay webhook signature ───────────────────────────────────────────────
 
-def test_checkout_ignores_a_client_supplied_price(monkeypatch, pool):
-    """The browser may choose a currency, never the amount or the term."""
+def _purchase_route(monkeypatch, pool, body):
+    """POST /api/premium/checkout with auth, CSRF and OxaPay faked."""
     from flask import session
 
     from webapp.routes import premium_routes
@@ -466,9 +599,11 @@ def test_checkout_ignores_a_client_supplied_price(monkeypatch, pool):
 
         async def create_white_label(self, **kwargs):
             captured.update(kwargs)
+            # One checkout per request; a repeated track id would trip the
+            # payments table's UNIQUE constraint instead of testing the price.
             return {
                 "success": True,
-                "trackId": "track-price",
+                "trackId": f"track-price-{uuid.uuid4().hex[:8]}",
                 "data": {
                     "address": "TQraad2MBFgYUYhTFYeXS5jVpaLZuBwr3w",
                     "pay_amount": 15.01,
@@ -488,21 +623,81 @@ def test_checkout_ignores_a_client_supplied_price(monkeypatch, pool):
         premium_routes, "run_on_bot_loop", lambda awaitable, timeout=8: asyncio.run(awaitable)
     )
 
-    with premium_routes.app.test_request_context(
-        json={"guild_id": "42", "pay_currency": "USDT", "amount": 0.01, "months": 12}
-    ):
+    with premium_routes.app.test_request_context(json=body):
         session["user"] = {"id": "7"}
-        response = premium_routes.api_premium_checkout.__wrapped__.__wrapped__()
+        answer = premium_routes.api_premium_checkout.__wrapped__.__wrapped__()
 
-    payload = response.get_json()
+    if isinstance(answer, tuple):
+        response, status = answer
+    else:
+        response, status = answer, 200
+    return status, response.get_json(), captured
+
+
+def test_checkout_ignores_a_client_supplied_price(monkeypatch, pool):
+    """The browser may pick a currency and an offered term, never an amount."""
+    status, payload, captured = _purchase_route(
+        monkeypatch, pool, {"guild_id": "42", "pay_currency": "USDT", "amount": 0.01}
+    )
+
+    assert status == 200
     assert captured["amount"] == 15.0
     assert captured["pay_currency"] == "USDT"
     assert captured["callback_url"] == "https://niko.test/api/premium/webhook"
     assert payload["amount_cents"] == 1500
+    assert payload["months"] == 1
     payment = asyncio.run(premium.get_payment(pool, order_id=payload["order_id"]))
     assert payment["amount_cents"] == 1500
     assert payment["months"] == 1
     assert payment["address"] == "TQraad2MBFgYUYhTFYeXS5jVpaLZuBwr3w"
+
+
+def test_a_whitelisted_term_prices_the_checkout(monkeypatch, pool):
+    status, payload, captured = _purchase_route(
+        monkeypatch, pool, {"guild_id": "42", "pay_currency": "USDT", "months": 3}
+    )
+
+    assert status == 200
+    assert captured["amount"] == premium.term_price_cents(3) / 100
+    assert payload["amount_cents"] == premium.term_price_cents(3)
+    assert payload["list_cents"] == premium.term_price_cents(3)
+    payment = asyncio.run(premium.get_payment(pool, order_id=payload["order_id"]))
+    assert payment["months"] == 3
+    assert payment["amount_cents"] == premium.term_price_cents(3)
+
+
+def test_a_term_outside_the_ladder_is_refused(monkeypatch, pool):
+    status, payload, captured = _purchase_route(
+        monkeypatch, pool, {"guild_id": "42", "pay_currency": "USDT", "months": 7}
+    )
+
+    assert status == 400
+    assert captured == {}
+    assert "subscription lengths" in payload["error"]
+
+
+def test_a_running_sale_discounts_a_first_term_only(monkeypatch, pool):
+    monkeypatch.setenv(premium.SALE_ENV_VAR, json.dumps({"percent": 25, "label": "Winter sale"}))
+
+    status, payload, captured = _purchase_route(
+        monkeypatch, pool, {"guild_id": "42", "pay_currency": "USDT", "months": 6}
+    )
+    assert status == 200
+    assert captured["amount"] == 54.0
+    assert payload["discount_cents"] == 1800
+    payment = asyncio.run(premium.get_payment(pool, order_id=payload["order_id"]))
+    assert payment["amount_cents"] == 5400
+    assert payment["list_cents"] == 7200
+    assert payment["promo"] == "Winter sale"
+
+    # A server that has held a term before is renewing, so it pays list price.
+    asyncio.run(premium.activate_subscription(pool, guild_id=42, months=1))
+    status, payload, captured = _purchase_route(
+        monkeypatch, pool, {"guild_id": "42", "pay_currency": "USDT", "months": 6}
+    )
+    assert status == 200, payload
+    assert captured["amount"] == 72.0
+    assert payload["discount_cents"] == 0
 
 
 def test_the_webhook_rejects_a_bad_signature(monkeypatch):

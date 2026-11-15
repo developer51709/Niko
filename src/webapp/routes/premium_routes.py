@@ -30,9 +30,10 @@ CRYPTO_CURRENCIES = ("USDT", "ETH", "BTC", "BNB", "LTC", "DOGE", "TRX", "XMR")
 PAYMENT_LIFETIME_MINUTES = 60
 MAX_STAFF_GRANT_MONTHS = 12
 
-#: Gift terms a page may ask for. The amount is always derived from these, never
+#: Terms a page may ask for. The amount is always derived from these, never
 #: from the request, so a browser cannot buy a year for the price of a month.
-GIFT_MONTH_OPTIONS = (1, 3, 6, 12)
+GIFT_MONTH_OPTIONS = billing.TERM_MONTHS
+SUBSCRIBE_MONTH_OPTIONS = billing.TERM_MONTHS
 
 
 def merchant_key() -> str:
@@ -63,13 +64,13 @@ def _crypto_valid(value: str) -> bool:
     return str(value or "").upper() in CRYPTO_CURRENCIES
 
 
-def _gift_months(value) -> int | None:
-    """One of the offered gift terms, or None for anything else."""
+def _offered_months(value, offered=GIFT_MONTH_OPTIONS) -> int | None:
+    """One of the offered terms, or None for anything else."""
     try:
         months = int(value)
     except (TypeError, ValueError):
         return None
-    return months if months in GIFT_MONTH_OPTIONS else None
+    return months if months in offered else None
 
 
 def _is_member(guild_id: int, user_id: int) -> bool:
@@ -97,15 +98,19 @@ def _is_member(guild_id: int, user_id: int) -> bool:
         return False
 
 
-def _checkout_payload(result: dict, *, order_id: str, amount_cents: int, months: int) -> dict:
+def _checkout_payload(result: dict, *, order_id: str, price: dict) -> dict:
     data = result.get("data") or {}
     return {
         "ok": True,
         "order_id": order_id,
         "track_id": result.get("trackId"),
-        "amount_cents": amount_cents,
-        "amount_label": billing.price_label(amount_cents),
-        "months": months,
+        "amount_cents": price["amount_cents"],
+        "amount_label": billing.price_label(price["amount_cents"]),
+        "list_cents": price["list_cents"],
+        "list_label": billing.price_label(price["list_cents"]),
+        "discount_cents": price["discount_cents"],
+        "discount_percent": price["discount_percent"],
+        "months": price["months"],
         "pay_currency": str(data.get("pay_currency") or "").upper() or None,
         "network": data.get("network"),
         "pay_amount": data.get("pay_amount"),
@@ -129,6 +134,10 @@ def api_premium_plans():
         "currency": billing.PREMIUM_CURRENCY,
         "months": 1,
         "perks": billing.PERKS,
+        # Every term with its list price, and the one running sale (if any), so
+        # both checkout pages render prices the server will actually charge.
+        "terms": billing.terms_payload(),
+        "discount": billing.sale_view(),
         "renewal_notice_days": billing.PREMIUM_REMINDER_DAYS,
         "currencies": list(CRYPTO_CURRENCIES),
         # The chains each currency can be paid on, so the page can let the
@@ -253,10 +262,14 @@ async def _create_checkout(
 ) -> dict:
     """Quote one OxaPay payment and record it before the payer sees an address.
 
-    The amount is always the plan price times a whitelisted term, never a value
-    from the request body, so the browser cannot choose what it pays.
+    The amount is always the price of a whitelisted term (less the active sale,
+    for a server's first term), never a value from the request body, so the
+    browser cannot choose what it pays.
     """
-    amount_cents = billing.PREMIUM_PRICE_CENTS * int(months)
+    bot = _billing_bot()
+    first_term = await billing.get_subscription(bot.cxn, guild_id) is None
+    price = billing.quote(months, first_term=first_term)
+    amount_cents = price["amount_cents"]
     # OxaPay rejects order ids over 50 characters, so the id is built to fit
     # rather than assembled by hand (the old form was 69 for a purchase).
     order_id = build_order_id("premium", kind, guild_id)
@@ -266,8 +279,10 @@ async def _create_checkout(
         f"Niko Premium {label} - {guild.name if guild else guild_id} - "
         f"{billing.price_label(amount_cents)}"
     )
-    if int(months) > 1:
-        description += f" ({months} months)"
+    if price["months"] > 1:
+        description += f" ({price['months']} months)"
+    if price["discount_percent"]:
+        description += f" ({price['discount_percent']}% {price['sale_label'] or 'sale'})"
 
     client = OxaPayClient(merchant_key())
     result = await client.create_white_label(
@@ -284,7 +299,6 @@ async def _create_checkout(
         raise RuntimeError(result.get("message", "OxaPay could not start the payment."))
 
     data = result.get("data") or {}
-    bot = _billing_bot()
     await billing.record_payment(
         bot.cxn,
         order_id=order_id,
@@ -292,7 +306,7 @@ async def _create_checkout(
         guild_id=guild_id,
         payer_id=payer_id,
         kind=kind,
-        months=int(months),
+        months=price["months"],
         amount_cents=amount_cents,
         currency=billing.PREMIUM_CURRENCY,
         pay_currency=pay_currency,
@@ -300,10 +314,10 @@ async def _create_checkout(
         pay_amount=data.get("pay_amount"),
         qr_code=data.get("qr_code"),
         expires_at=data.get("expired_at"),
+        list_cents=price["list_cents"],
+        promo=price["sale_label"],
     )
-    payload = _checkout_payload(
-        result, order_id=order_id, amount_cents=amount_cents, months=int(months)
-    )
+    payload = _checkout_payload(result, order_id=order_id, price=price)
     payload["guild_id"] = str(guild_id)
     return payload
 
@@ -312,7 +326,7 @@ async def _create_checkout(
 @require_auth
 @require_csrf
 def api_premium_checkout():
-    """Start the one-month upgrade for a server the member manages.
+    """Start an upgrade for a server the member manages.
 
     Gifts do not come through here; ``/api/premium/gift/checkout`` owns that
     flow so the membership rule and term options cannot drift apart.
@@ -325,6 +339,10 @@ def api_premium_checkout():
         return jsonify({"error": "Gifts are checked out from /billing/gift."}), 400
     if kind != billing.KIND_PURCHASE:
         return jsonify({"error": "Choose a valid premium purchase type."}), 400
+    months = _offered_months(body.get("months", 1), SUBSCRIBE_MONTH_OPTIONS)
+    if months is None:
+        offered = ", ".join(str(option) for option in SUBSCRIBE_MONTH_OPTIONS)
+        return jsonify({"error": f"Choose one of these subscription lengths: {offered} months."}), 400
     pay_currency = str(body.get("pay_currency") or "").upper()
     if not _crypto_valid(pay_currency):
         return jsonify({"error": "That cryptocurrency is not available."}), 400
@@ -354,7 +372,7 @@ def api_premium_checkout():
             payer_id=user_id,
             pay_currency=pay_currency,
             network=network,
-            months=1,
+            months=months,
         ))
     except Exception as error:
         return jsonify({"error": f"Could not start the payment: {error}"}), 503
@@ -373,7 +391,7 @@ def api_premium_gift_checkout():
     if not payment_configured():
         return jsonify({"error": "Payments are not configured yet."}), 503
     body = request.get_json(silent=True) or {}
-    months = _gift_months(body.get("months", 1))
+    months = _offered_months(body.get("months", 1), GIFT_MONTH_OPTIONS)
     if months is None:
         offered = ", ".join(str(month) for month in GIFT_MONTH_OPTIONS)
         return jsonify({"error": f"Choose one of these gift lengths: {offered} months."}), 400
@@ -606,6 +624,9 @@ def api_staff_billing():
     for payment in payments:
         payment["guild_name"] = _guild_label(payment.get("guild_id"))
         payment["amount_label"] = billing.price_label(int(payment.get("amount_cents") or 0))
+        payment["list_label"] = billing.price_label(
+            int(payment.get("list_cents") or payment.get("amount_cents") or 0)
+        )
         user = _discord_bot.get_user(int(payment["payer_id"])) if _discord_bot else None
         payment["payer_name"] = (
             getattr(user, "global_name", None) or getattr(user, "name", None) if user else None
