@@ -75,24 +75,29 @@ h1, h2, h3, p { margin-top: 0; }
 .discord-markdown h2.discord-md-heading { font-size: 1.2em; }
 .discord-markdown h3.discord-md-heading { font-size: 1.08em; }
 .discord-markdown h4.discord-md-heading { font-size: 1em; }
-.discord-md-codeblock { box-sizing: border-box; width: 100%; max-width: 100%; margin: 8px 0; overflow: hidden; background: #1e1e1e; border: 1px solid #34383f; border-radius: 8px; }
-.discord-md-codeblock-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; color: #9da5b4; background: #252526; border-bottom: 1px solid #34383f; font: 9px "Space Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
-.discord-md-block-code { box-sizing: border-box; width: 100%; max-width: 100%; margin: 0; padding: 12px 14px; overflow-x: auto; color: #d4d4d4; background: #1e1e1e; border: 0; border-radius: 0; font: 12.5px/1.55 "Space Mono", ui-monospace, monospace; white-space: pre; overflow-wrap: normal; word-break: normal; tab-size: 2; }
+/* Discord's fenced block: one flat panel with a hairline edge and a 4px
+   corner. There is no language header - the identifier after the opening
+   fence only chooses the highlighting, it is never printed. */
+.discord-md-codeblock { box-sizing: border-box; width: 100%; max-width: 100%; margin: 8px 0; overflow: hidden; background: #2b2d31; border: 1px solid #1e1f22; border-radius: 4px; }
+.discord-md-block-code { box-sizing: border-box; width: 100%; max-width: 100%; margin: 0; padding: 8px; overflow-x: auto; color: #dbdee1; background: transparent; border: 0; border-radius: 0; font: .875em/1.3 Consolas, "Andale Mono WT", "Andale Mono", "Lucida Console", "Lucida Sans Typewriter", "DejaVu Sans Mono", "Bitstream Vera Sans Mono", "Liberation Mono", "Nimbus Mono L", Monaco, "Courier New", Courier, monospace; white-space: pre; overflow-wrap: normal; word-break: normal; tab-size: 4; }
 .discord-md-block-code code { font: inherit; }
 .discord-code-token { font: inherit; }
-.discord-code-keyword { color: #569cd6; }
-.discord-code-control { color: #c586c0; }
-.discord-code-string { color: #ce9178; }
-.discord-code-comment { color: #6a9955; font-style: italic; }
-.discord-code-number { color: #b5cea8; }
-.discord-code-constant { color: #4fc1ff; }
-.discord-code-function { color: #dcdcaa; }
-.discord-code-property { color: #9cdcfe; }
-.discord-code-tag { color: #569cd6; }
-.discord-code-operator { color: #d4d4d4; }
-.discord-code-token.is-added { color: #b5cea8; }
-.discord-code-token.is-removed { color: #f48771; }
-.discord-code-token.is-hunk { color: #569cd6; }
+/* Discord highlights fenced blocks with a Solarized-derived theme: green
+   keywords, cyan strings, numbers and literals, blue functions and tags,
+   gold attributes, and grey comments without italics. */
+.discord-code-keyword { color: #859900; }
+.discord-code-control { color: #859900; }
+.discord-code-string { color: #2aa198; }
+.discord-code-comment { color: #586e75; }
+.discord-code-number { color: #2aa198; }
+.discord-code-constant { color: #2aa198; }
+.discord-code-function { color: #268bd2; }
+.discord-code-property { color: #b58900; }
+.discord-code-tag { color: #268bd2; }
+.discord-code-operator { color: inherit; }
+.discord-code-token.is-added { color: #859900; }
+.discord-code-token.is-removed { color: #dc322f; }
+.discord-code-token.is-hunk { color: #268bd2; }
 .discord-markdown .discord-md-code,
 .devdocs-content code { padding: 0 5px; color: #f2f3f5; background: #202226; border: 1px solid #34383f; border-radius: 4px; font: .92em monospace; }
 .discord-markdown .discord-md-link { color: #00a8fc; text-decoration: none; }

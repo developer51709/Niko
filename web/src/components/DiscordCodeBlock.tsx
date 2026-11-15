@@ -3,11 +3,14 @@ import type { ReactNode } from "react";
 /**
  * Discord fenced code with a small, dependency-free syntax highlighter.
  *
- * Discord itself highlights a fenced block when the fence names a language.
- * The site used to render every block as flat text, so pasted examples lost
- * the visual cues developers rely on. The palette below follows VS Code's
- * Dark+ theme: keywords are blue, strings orange, comments green, and
- * functions yellow. Unknown languages still render, just without colour.
+ * Discord itself highlights a fenced block when the fence names a language,
+ * and never prints that identifier: the block is one flat panel whose colours
+ * carry the meaning. The site used to render every block as flat text, so
+ * pasted examples lost the cues developers rely on. The palette below matches
+ * Discord's Solarized-derived theme — green keywords, cyan strings and
+ * numbers, blue functions, gold attributes, grey comments — and the block
+ * chrome (surface, hairline edge, corners, metrics) lives in styles.css.
+ * Unknown languages still render, just without colour.
  */
 
 type TokenKind =
@@ -251,10 +254,10 @@ function collectTokens(
 
 export function DiscordCodeBlock({ code, language = "" }: { code: string; language?: string }) {
   const spec = languageFor(language);
-  const hasLanguage = Boolean(language.trim());
+  // The fence's language selects the highlighting only. Discord does not print
+  // it, so the block is just the panel and the code.
   return (
-    <div className={`discord-md-codeblock${hasLanguage ? " has-language" : ""}`} data-language={spec.id}>
-      {hasLanguage && <div className="discord-md-codeblock-head"><span>{spec.label}</span></div>}
+    <div className="discord-md-codeblock" data-language={spec.id}>
       <pre className="discord-md-block-code"><code>{tokenSpans(code, spec)}</code></pre>
     </div>
   );
