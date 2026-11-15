@@ -136,7 +136,7 @@ class Giveaway(commands.Cog):
             accent_colour=discord.Color.purple()
         )
         view.add_item(container)
-        await ctx.send(view=view)
+        await ctx.send(view=view, allowed_mentions=ALLOWED_MENTIONS)
 
     @giveaway.command(name="start", help=CMDS.help("giveaway.start"))
     @commands.has_permissions(manage_guild=True)
@@ -144,7 +144,7 @@ class Giveaway(commands.Cog):
         """Open the interactive giveaway setup panel."""
         state = _SetupState(channel_id=ctx.channel.id)
         view  = _build_setup_view(self.bot, ctx, state, ctx.author.id)
-        sent  = await ctx.send(view=view)
+        sent  = await ctx.send(view=view, allowed_mentions=ALLOWED_MENTIONS)
         view.message = sent
 
     @giveaway.command(name="reroll", help=CMDS.help("giveaway.reroll"))
@@ -155,9 +155,13 @@ class Giveaway(commands.Cog):
             "SELECT prize, winners_count, ended FROM giveaways WHERE message_id = $1", message_id
         )
         if not giveaway:
-            return await ctx.send(msg(ctx, "reroll_not_found"))
+            return await ctx.send(
+                msg(ctx, "reroll_not_found"), allowed_mentions=ALLOWED_MENTIONS
+            )
         if not giveaway["ended"]:
-            return await ctx.send(msg(ctx, "reroll_not_ended"))
+            return await ctx.send(
+                msg(ctx, "reroll_not_ended"), allowed_mentions=ALLOWED_MENTIONS
+            )
 
         rows = await self.bot.cxn.fetch(
             "SELECT user_id FROM participants WHERE message_id = $1", message_id
@@ -166,11 +170,22 @@ class Giveaway(commands.Cog):
         banned = await self._banned_user_ids(ctx.guild.id if ctx.guild else None)
         participants = [uid for uid in participants if int(uid) not in banned]
         if not participants:
-            return await ctx.send(msg(ctx, "reroll_no_participants"))
+            return await ctx.send(
+                msg(ctx, "reroll_no_participants"), allowed_mentions=ALLOWED_MENTIONS
+            )
 
         new_winners     = random.sample(participants, 1)
         winner_mentions = ", ".join(f"<@{w}>" for w in new_winners)
-        await ctx.send(msg(ctx, "reroll_announce", prize=giveaway["prize"], mentions=winner_mentions))
+        # A reroll announces a winner, so it pings the new winner and nobody
+        # else: the prize text cannot pull in an extra mention.
+        await ctx.send(
+            msg(ctx, "reroll_announce", prize=giveaway["prize"], mentions=winner_mentions),
+            allowed_mentions=discord.AllowedMentions(
+                everyone=False,
+                roles=False,
+                users=[discord.Object(id=int(w)) for w in new_winners],
+            ),
+        )
 
     # ─── GIVEAWAY BANS ────────────────────────────────────────
 
@@ -255,7 +270,7 @@ class Giveaway(commands.Cog):
         if member.bot:
             return await ctx.send(view=_reply_card(
                 ok=False, title=msg(ctx, "ban_card_title"), body=msg(ctx, "join_bot")
-            ))
+            ), allowed_mentions=ALLOWED_MENTIONS)
 
         guild_id = ctx.guild.id
         existing = await self.bot.cxn.fetchval(
@@ -266,7 +281,7 @@ class Giveaway(commands.Cog):
             return await ctx.send(view=_reply_card(
                 ok=False, title=msg(ctx, "ban_card_title"),
                 body=msg(ctx, "ban_already", user=member.display_name),
-            ))
+            ), allowed_mentions=ALLOWED_MENTIONS)
 
         await self.bot.cxn.execute(
             "INSERT INTO giveaway_bans (guild_id, user_id, banned_by, created_at) "
@@ -280,7 +295,7 @@ class Giveaway(commands.Cog):
         await ctx.send(view=_reply_card(
             ok=True, title=msg(ctx, "ban_card_title"),
             body=msg(ctx, "ban_success", user=member.display_name, count=cleared),
-        ))
+        ), allowed_mentions=ALLOWED_MENTIONS)
         await self._log_ban_change(ctx, member, banned=True, cleared=cleared)
 
     @giveaway.command(name="unban", help=CMDS.help("giveaway.unban"))
@@ -296,7 +311,7 @@ class Giveaway(commands.Cog):
             return await ctx.send(view=_reply_card(
                 ok=False, title=msg(ctx, "unban_card_title"),
                 body=msg(ctx, "unban_not_banned", user=member.display_name),
-            ))
+            ), allowed_mentions=ALLOWED_MENTIONS)
 
         await self.bot.cxn.execute(
             "DELETE FROM giveaway_bans WHERE guild_id = $1 AND user_id = $2",
@@ -305,7 +320,7 @@ class Giveaway(commands.Cog):
         await ctx.send(view=_reply_card(
             ok=True, title=msg(ctx, "unban_card_title"),
             body=msg(ctx, "unban_success", user=member.display_name),
-        ))
+        ), allowed_mentions=ALLOWED_MENTIONS)
         await self._log_ban_change(ctx, member, banned=False)
 
     # ─── BACKGROUND TASK ─────────────────────────────────────
@@ -395,10 +410,15 @@ class Giveaway(commands.Cog):
             ended_view = _build_ended_view(guild, prize, host_id, winners=None)
             if giveaway_msg:
                 try:
-                    await giveaway_msg.edit(view=ended_view)
+                    await giveaway_msg.edit(
+                        view=ended_view, allowed_mentions=ALLOWED_MENTIONS
+                    )
                 except Exception:
                     pass
-            await channel.send(_guild_msg(guild, "no_participants_msg", prize=prize))
+            await channel.send(
+                _guild_msg(guild, "no_participants_msg", prize=prize),
+                allowed_mentions=ALLOWED_MENTIONS,
+            )
             return
 
         winner_count    = min(winners_count, len(participants))
@@ -408,7 +428,9 @@ class Giveaway(commands.Cog):
         ended_view = _build_ended_view(guild, prize, host_id, winners=winners)
         if giveaway_msg:
             try:
-                await giveaway_msg.edit(view=ended_view)
+                await giveaway_msg.edit(
+                    view=ended_view, allowed_mentions=ALLOWED_MENTIONS
+                )
             except Exception:
                 pass
 
@@ -419,9 +441,16 @@ class Giveaway(commands.Cog):
             guild, "reroll_hint",
             command=f"{await self._command_prefix(guild_id)}giveaway reroll {message_id}",
         )
+        # The draw is the one giveaway message that pings: exactly the winners
+        # it names, so a prize or hint cannot notify anyone else.
         await channel.send(
             _guild_msg(guild, "winner_announce", mentions=winner_mentions, prize=prize, url=msg_url)
-            + "\n" + reroll_hint
+            + "\n" + reroll_hint,
+            allowed_mentions=discord.AllowedMentions(
+                everyone=False,
+                roles=False,
+                users=[discord.Object(id=int(w)) for w in winners],
+            ),
         )
 
     @check_giveaways.before_loop
