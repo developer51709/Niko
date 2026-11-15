@@ -14,6 +14,11 @@ from utils.i18n import get_lang
 from utils.locales import load_locales
 from utils.stateless_views import CallbackOnlyButton
 
+# Every message this cog sends is silent: panels, replies and the giveaway post
+# itself name people, and none of them should notify anyone. The one exception
+# is the winner announcement in cog.py, which pings only the drawn winners.
+ALLOWED_MENTIONS = discord.AllowedMentions.none()
+
 
 # ─────────────────────────────────────────────────────────────
 #  BLACKLIST LOCKDOWN GUARDS
@@ -255,40 +260,40 @@ async def join_giveaway(interaction: discord.Interaction, message_id: int | None
         message_id,
     )
     if not giveaway:
-        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'no_exist')}", ephemeral=True)
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'no_exist')}", ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
     if giveaway["ended"]:
-        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_ended')}", ephemeral=True)
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_ended')}", ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
     # Blacklisted servers keep their giveaway rows but cannot take entries.
     if _giveaway_paused(giveaway, interaction.guild_id):
-        return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
+        return await interaction.response.send_message(paused_message(interaction), ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
     if user_id == giveaway["host_id"]:
-        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_host')}", ephemeral=True)
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_host')}", ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
     if interaction.user.bot:
-        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_bot')}", ephemeral=True)
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_bot')}", ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
     # A giveaway ban is set by the server's managers and wins over every
     # other check, so a banned member is told why instead of being asked to
     # meet requirements they will never satisfy.
     if await _giveaway_banned(bot, interaction.guild_id, user_id):
-        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_banned')}", ephemeral=True)
+        return await interaction.response.send_message(f"{get_emoji('cross')} {msg(interaction, 'join_banned')}", ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
 
     # Enforce host-configured requirements (account age, server age, roles, boost).
     reqs = _load_reqs(giveaway["requirements"])
     if isinstance(interaction.user, discord.Member):
         failure = _check_member_meets_reqs(interaction.user, reqs)
         if failure:
-            return await interaction.response.send_message(failure, ephemeral=True)
+            return await interaction.response.send_message(failure, ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
 
     existing = await bot.cxn.fetchval(
         "SELECT 1 FROM participants WHERE message_id = $1 AND user_id = $2",
         message_id, user_id
     )
     if existing:
-        return await interaction.response.send_message(msg(interaction, 'join_already'), ephemeral=True)
+        return await interaction.response.send_message(msg(interaction, 'join_already'), ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
 
     await bot.cxn.execute(
         "INSERT INTO participants (message_id, user_id) VALUES ($1, $2)", message_id, user_id
     )
-    await interaction.response.send_message(msg(interaction, 'join_success'), ephemeral=True)
+    await interaction.response.send_message(msg(interaction, 'join_success'), ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
 
 
 async def open_manage_panel(interaction: discord.Interaction, message_id: int | None = None) -> None:
@@ -304,21 +309,22 @@ async def open_manage_panel(interaction: discord.Interaction, message_id: int | 
         "FROM giveaways WHERE message_id = $1", message_id
     )
     if not giveaway:
-        return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True)
+        return await interaction.response.send_message(msg(interaction, "no_exist"), ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
     if giveaway["ended"]:
-        return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True)
+        return await interaction.response.send_message(msg(interaction, "join_ended"), ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
     if _giveaway_paused(None, giveaway.get("guild_id")):
-        return await interaction.response.send_message(paused_message(interaction), ephemeral=True)
+        return await interaction.response.send_message(paused_message(interaction), ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
 
     is_host  = interaction.user.id == giveaway["host_id"]
     is_admin = getattr(interaction.user.guild_permissions, "manage_guild", False)
     if not (is_host or is_admin):
         return await interaction.response.send_message(
-            msg(interaction, "no_perm_manage"), ephemeral=True
+            msg(interaction, "no_perm_manage"), ephemeral=True,
+            allowed_mentions=ALLOWED_MENTIONS,
         )
 
     panel = _build_manage_panel(bot, giveaway, interaction.guild)
-    await interaction.response.send_message(view=panel, ephemeral=True)
+    await interaction.response.send_message(view=panel, ephemeral=True, allowed_mentions=ALLOWED_MENTIONS)
 
 
 async def handle_component(interaction: discord.Interaction) -> bool:
@@ -366,7 +372,9 @@ class _MgmtEndBtn(discord.ui.Button):
             discord.ui.TextDisplay(content=msg(interaction, "end_confirmed")),
             accent_colour=discord.Color.green()
         ))
-        await interaction.response.edit_message(view=confirm_view)
+        await interaction.response.edit_message(
+            view=confirm_view, allowed_mentions=ALLOWED_MENTIONS
+        )
 
         giveaway_cog = self._bot.get_cog("Giveaway")
         if giveaway_cog:
@@ -405,7 +413,9 @@ class _MgmtSelectBtn(discord.ui.Button):
                 discord.ui.TextDisplay(content=msg(interaction, "select_no_entries")),
                 accent_colour=discord.Color.orange()
             ))
-            return await interaction.response.edit_message(view=empty_view)
+            return await interaction.response.edit_message(
+                view=empty_view, allowed_mentions=ALLOWED_MENTIONS
+            )
 
         winner      = random.choice(participants)
         result_view = discord.ui.LayoutView()
@@ -413,7 +423,9 @@ class _MgmtSelectBtn(discord.ui.Button):
             discord.ui.TextDisplay(content=msg(interaction, "select_result", mention=f"<@{winner}>")),
             accent_colour=discord.Color.green()
         ))
-        await interaction.response.edit_message(view=result_view)
+        await interaction.response.edit_message(
+            view=result_view, allowed_mentions=ALLOWED_MENTIONS
+        )
 
 
 class _MgmtParticipantsBtn(discord.ui.Button):
@@ -439,7 +451,9 @@ class _MgmtParticipantsBtn(discord.ui.Button):
                 ),
                 accent_colour=discord.Color.blurple()
             ))
-            return await interaction.response.edit_message(view=empty_view)
+            return await interaction.response.edit_message(
+                view=empty_view, allowed_mentions=ALLOWED_MENTIONS
+            )
 
         lines             = [f"**{i}.** <@{row['user_id']}>" for i, row in enumerate(rows, 1)]
         pages             = paginate(lines, per_page=15)
@@ -448,7 +462,9 @@ class _MgmtParticipantsBtn(discord.ui.Button):
             pages=pages,
             icon_url=interaction.guild.icon.url if interaction.guild and interaction.guild.icon else None,
         )
-        await interaction.response.edit_message(view=participants_view)
+        await interaction.response.edit_message(
+            view=participants_view, allowed_mentions=ALLOWED_MENTIONS
+        )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -660,7 +676,8 @@ class _DurationModal(discord.ui.Modal, title="Set Duration"):
         seconds = _parse_duration_str(self.duration.value)
         if seconds <= 0:
             return await interaction.response.send_message(
-                msg(interaction, "invalid_duration"), ephemeral=True
+                msg(interaction, "invalid_duration"), ephemeral=True,
+                allowed_mentions=ALLOWED_MENTIONS,
             )
         self._setup_view.state.duration_s = seconds
         await self._setup_view.refresh(interaction)
@@ -682,7 +699,8 @@ class _WinnersModal(discord.ui.Modal, title="Set Winners"):
         digits = "".join(ch for ch in self.winners.value if ch.isdigit())
         if not digits or int(digits) < 1:
             return await interaction.response.send_message(
-                msg(interaction, "min_one_winner"), ephemeral=True
+                msg(interaction, "min_one_winner"), ephemeral=True,
+                allowed_mentions=ALLOWED_MENTIONS,
             )
         self._setup_view.state.winners = int(digits)
         await self._setup_view.refresh(interaction)
@@ -739,7 +757,7 @@ class _SetupBtn(discord.ui.Button):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
                 msg(interaction, "setup_host_only"),
-                ephemeral=True,
+                ephemeral=True, allowed_mentions=ALLOWED_MENTIONS,
             )
         action = self.action
         if action == "prize":
@@ -766,7 +784,9 @@ class _SetupBtn(discord.ui.Button):
                 discord.ui.TextDisplay(content=msg(interaction, "setup_cancelled")),
                 accent_colour=discord.Color.red(),
             ))
-            await interaction.response.edit_message(view=cancelled)
+            await interaction.response.edit_message(
+                view=cancelled, allowed_mentions=ALLOWED_MENTIONS
+            )
             return self._setup_view.retire()
         if action == "start":
             return await self._setup_view.launch(interaction)
@@ -784,7 +804,8 @@ class _SetupChannelSelect(discord.ui.ChannelSelect):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
-                msg(interaction, "setup_host_only"), ephemeral=True
+                msg(interaction, "setup_host_only"), ephemeral=True,
+                allowed_mentions=ALLOWED_MENTIONS,
             )
         self._setup_view.state.channel_id = self.values[0].id
         await self._setup_view.refresh(interaction)
@@ -801,7 +822,8 @@ class _SetupRoleSelect(discord.ui.RoleSelect):
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self._setup_view.host_id:
             return await interaction.response.send_message(
-                msg(interaction, "setup_host_only"), ephemeral=True
+                msg(interaction, "setup_host_only"), 
+                ephemeral=True, allowed_mentions=ALLOWED_MENTIONS
             )
         self._setup_view.state.requirements["role_ids"] = [r.id for r in self.values]
         await self._setup_view.refresh(interaction)
@@ -831,7 +853,9 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         if permissions is not None and getattr(permissions, "manage_guild", False):
             return True
         await interaction.response.send_message(
-            msg(interaction, "setup_host_only"), ephemeral=True)
+            msg(interaction, "setup_host_only"), 
+            ephemeral=True, allowed_mentions=ALLOWED_MENTIONS
+        )
         return False
 
     # ── building ───────────────────────────────────────
@@ -897,7 +921,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
 
     async def refresh(self, interaction: discord.Interaction):
         self._build()
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(view=self, allowed_mentions=ALLOWED_MENTIONS)
 
     def retire(self):
         """A terminal card has replaced the panel, so nothing is left to time out.
@@ -918,7 +942,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
                 discord.ui.TextDisplay(content=msg(self.guild, "setup_timeout")),
                 accent_colour=discord.Color.greyple(),
             ))
-            await self.message.edit(view=timeout_view)
+            await self.message.edit(view=timeout_view, allowed_mentions=ALLOWED_MENTIONS)
         except discord.HTTPException:
             pass
 
@@ -936,19 +960,21 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         if problems:
             return await interaction.response.send_message(
                 msg(interaction, "launch_problems", problems="\n".join(problems)),
-                ephemeral=True,
+                ephemeral=True, allowed_mentions=ALLOWED_MENTIONS
             )
 
         guild   = interaction.guild
         channel = guild.get_channel(s.channel_id) if guild else None
         if channel is None:
             return await interaction.response.send_message(
-                msg(interaction, "launch_no_channel"), ephemeral=True
+                msg(interaction, "launch_no_channel"), 
+                ephemeral=True, allowed_mentions=ALLOWED_MENTIONS
             )
         me = guild.me if guild else None
         if me and not channel.permissions_for(me).send_messages:
             return await interaction.response.send_message(
-                msg(interaction, "launch_cant_send", channel=channel.mention), ephemeral=True
+                msg(interaction, "launch_cant_send", channel=channel.mention), 
+                ephemeral=True, allowed_mentions=ALLOWED_MENTIONS
             )
 
         end_time      = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=s.duration_s)
@@ -959,7 +985,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
         content_view = _build_content_view(
             s.prize, end_timestamp, s.winners, author_mention, guild
         )
-        sent = await channel.send(view=content_view)
+        sent = await channel.send(view=content_view, allowed_mentions=ALLOWED_MENTIONS)
 
         # Step 2: edit the buttons in. Their custom ids carry this message's
         # id, so nothing has to be registered or kept alive for them.
@@ -967,7 +993,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
             sent.id, s.prize, end_timestamp, s.winners,
             author_mention, guild,
         )
-        await sent.edit(view=active_view)
+        await sent.edit(view=active_view, allowed_mentions=ALLOWED_MENTIONS)
 
         # Step 3: persist everything to the DB, including requirements.
         await self.bot.cxn.execute(
@@ -995,7 +1021,7 @@ class _GiveawaySetupView(discord.ui.LayoutView):
             ),
             accent_colour=discord.Color.green(),
         ))
-        await interaction.response.edit_message(view=done_view)
+        await interaction.response.edit_message(view=done_view, allowed_mentions=ALLOWED_MENTIONS)
         self.retire()
 
 

@@ -35,12 +35,14 @@ FUTURE = "2999-01-01T00:00:00+00:00"
 class FakeChannel:
     def __init__(self):
         self.sent = []
+        self.sent_kwargs = []
 
     async def fetch_message(self, message_id):
         raise RuntimeError("the giveaway message is gone")
 
     async def send(self, content=None, **kwargs):
         self.sent.append(content)
+        self.sent_kwargs.append(kwargs)
 
 
 async def _memory_connection():
@@ -127,6 +129,30 @@ class GiveawayEndMessageTests(unittest.TestCase):
 
         self.assertIn("nobody", announcement.lower())
         self.assertNotIn("reroll", announcement.lower())
+
+    def test_the_announcement_pings_only_the_drawn_winner(self):
+        self._add_giveaway()
+        self._add_participant()
+
+        self._end()
+
+        # The draw is the one giveaway message that may notify anyone, and it
+        # notifies exactly the members it drew: nothing else in the announcement
+        # (the prize text, the reroll hint) can pull in a mention.
+        allowed = self.channel.sent_kwargs[-1]["allowed_mentions"]
+        self.assertEqual([user.id for user in allowed.users], [MEMBER])
+        self.assertFalse(allowed.everyone)
+        self.assertFalse(allowed.roles)
+
+    def test_a_giveaway_nobody_entered_is_announced_without_any_ping(self):
+        self._add_giveaway()
+
+        self._end()
+
+        allowed = self.channel.sent_kwargs[-1]["allowed_mentions"]
+        self.assertFalse(allowed.users)
+        self.assertFalse(allowed.everyone)
+        self.assertFalse(allowed.roles)
 
 
 if __name__ == "__main__":
