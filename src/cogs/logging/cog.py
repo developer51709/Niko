@@ -1657,6 +1657,14 @@ class ServerLogger(commands.Cog):
         added = after_roles - before_roles
         removed = before_roles - after_roles
 
+        # Deleting a role strips it from every member who had it, and Discord
+        # sends one member update for each: those are not role edits, and the
+        # deletion entry already says what happened. Left in, a role held by a
+        # few hundred members would bury the channel in "Roles Removed" lines
+        # for a change nobody made. A role that no longer resolves from the
+        # guild was deleted, so its disappearance is the deletion's doing.
+        removed = {role for role in removed if guild.get_role(role.id) is not None}
+
         # The Muted role is a mute control in its own right: a moderator putting
         # it on mutes, taking it off unmutes, and the dedicated entry says so.
         # Keeping it out of the generic role diff stops the same change being

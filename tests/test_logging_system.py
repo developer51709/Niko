@@ -79,6 +79,12 @@ class FakeGuild:
         self.default_role = SimpleNamespace(id=1, mention="@everyone")
         self.premium_subscription_count = 3
         self.premium_tier = 1
+        #: Like ``discord.Guild.roles``: a deleted role is gone from here, which
+        #: is how the cog tells a deletion's fallout from a real role edit.
+        self.roles = []
+
+    def get_role(self, role_id):
+        return next((role for role in self.roles if role.id == role_id), None)
 
     def audit_logs(self, *, limit=None, action=None):
         self.audit_calls.append(action)
@@ -487,6 +493,63 @@ class JoinRoleFoldingTests(unittest.TestCase):
 
         self.assertEqual(buffer, ["<@&5>"])
         self.cog.log_event.assert_not_awaited()
+
+
+class DeletedRoleTests(unittest.TestCase):
+    """A deleted role must not come back as one member update per member."""
+
+    def setUp(self):
+        self.cog = logging_cog.ServerLogger(_bot())
+        self.cog.log_event = mock.AsyncMock()
+        self.guild = FakeGuild()
+
+    def member(self, *roles):
+        return SimpleNamespace(
+            id=42, name="tester", mention="<@42>", guild=self.guild,
+            roles=list(roles), bot=False,
+            joined_at=discord.utils.utcnow() - timedelta(days=10),
+            created_at=discord.utils.utcnow() - timedelta(days=400),
+            nick=None, premium_since=None, timed_out_until=None,
+            guild_avatar=None,
+            display_avatar=SimpleNamespace(url="https://cdn.example/member.png"),
+        )
+
+    def test_a_deleted_role_is_not_replayed_as_a_member_update(self):
+        role = FakeRole(role_id=9, mention="<@&9>")
+        # The role is gone from the guild, so every member "losing" it is the
+        # deletion's doing rather than an edit by a moderator.
+        before = self.member(role)
+        after = self.member()
+
+        _runner(self.cog.on_member_update(before, after))
+
+        self.cog.log_event.assert_not_awaited()
+
+    def test_a_live_role_being_removed_is_still_logged(self):
+        role = FakeRole(role_id=9, mention="<@&9>")
+        self.guild.roles = [role]
+        before = self.member(role)
+        after = self.member()
+
+        _runner(self.cog.on_member_update(before, after))
+
+        self.cog.log_event.assert_awaited_once()
+        body = self.cog.log_event.call_args.args[3]
+        self.assertIn("**Roles Removed:** <@&9>", body)
+
+    def test_a_deleted_role_does_not_hide_a_real_role_removal(self):
+        gone = FakeRole(role_id=9, mention="<@&9>")
+        live = FakeRole(role_id=10, mention="<@&10>")
+        self.guild.roles = [live]
+        before = self.member(gone, live)
+        after = self.member()
+
+        _runner(self.cog.on_member_update(before, after))
+
+        self.cog.log_event.assert_awaited_once()
+        body = self.cog.log_event.call_args.args[3]
+        self.assertIn("<@&10>", body)
+        self.assertNotIn("<@&9>", body)
 
 
 class DashboardLoggingSyncTests(unittest.TestCase):
