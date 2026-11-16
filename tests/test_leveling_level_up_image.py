@@ -131,3 +131,76 @@ def test_a_rejected_message_without_an_image_is_not_retried(monkeypatch):
     asyncio.run(cog._grant_xp(guild, member, 999, cfg))
 
     channel.send.assert_awaited_once()
+
+
+# ── The dashboard's read and write paths ──────────────────────────────────
+
+class _Cxn:
+    """The half of the database pool the config helpers use."""
+
+    def __init__(self, row=None):
+        self.row = row
+        self.executed = []
+
+    async def fetchrow(self, _query, *_args):
+        return self.row
+
+    async def execute(self, query, *args):
+        self.executed.append((query, args))
+
+
+def _saved_row(**overrides):
+    row = {
+        "xp_enabled": 1,
+        "xp_multiplier": 1.0,
+        "xp_cooldown": 0,
+        "level_up_channel": None,
+        "level_up_message": None,
+        "level_up_image": None,
+        "level_roles": {},
+        "xp_excluded_channels": [],
+        "xp_vc_enabled": 0,
+        "card_accent": None,
+        "card_bg_top": None,
+        "card_bg_bottom": None,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_saving_the_config_writes_the_image_column():
+    cog = object.__new__(Leveling)
+    cog.bot = SimpleNamespace(cxn=_Cxn())
+    cfg = {"xp_enabled": True, "level_up_image": "https://cdn.example/banner.png"}
+
+    asyncio.run(cog._save_guild_cfg(111, cfg))
+
+    query, args = cog.bot.cxn.executed[0]
+    assert "level_up_image" in query
+    assert "https://cdn.example/banner.png" in args
+
+
+def test_the_config_read_returns_the_saved_image():
+    cog = object.__new__(Leveling)
+    cog.bot = SimpleNamespace(cxn=_Cxn(_saved_row(level_up_image="https://cdn.example/banner.png")))
+
+    assert asyncio.run(cog._guild_cfg(111))["level_up_image"] == "https://cdn.example/banner.png"
+
+
+def test_a_server_without_an_image_reads_as_none():
+    cog = object.__new__(Leveling)
+    cog.bot = SimpleNamespace(cxn=_Cxn(_saved_row()))
+
+    assert asyncio.run(cog._guild_cfg(111))["level_up_image"] is None
+
+
+def test_the_dashboard_payload_carries_the_image():
+    from webapp.database import _serialize_level_config
+
+    payload = _serialize_level_config({
+        "level_up_channel": 900,
+        "level_up_image": "https://cdn.example/banner.png",
+    })
+
+    assert payload["level_up_image"] == "https://cdn.example/banner.png"
+    assert payload["level_up_channel"] == "900"
