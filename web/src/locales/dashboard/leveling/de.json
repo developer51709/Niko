@@ -17,6 +17,8 @@
   "leveling.levelUpMessage": "Level-Up-Nachricht",
   "leveling.levelUpHint": "Verwende {mention}, {level}, {name} oder {guild}",
   "leveling.levelUpPlaceholder": "Leer lassen für Nikos Standardnachricht",
+  "leveling.levelUpImage": "Bild-URL für Level-Ups",
+  "leveling.levelUpImageHint": "Wird unter der Level-Up-Nachricht angezeigt",
   "leveling.previewGuild": "dein Server",
   "leveling.channelsLabel": "Kanäle & Sprache",
   "leveling.channelsTitle": "Wähle, wo XP zählen",

@@ -1235,6 +1235,7 @@ export type GuildConfig = {
     xp_cooldown?: number;
     level_up_channel?: string | null;
     level_up_message?: string;
+    level_up_image?: string | null;
     xp_excluded_channels?: string[];
     xp_vc_enabled?: boolean;
     /** Level number → role ID, both as strings so snowflakes stay exact in JS. */

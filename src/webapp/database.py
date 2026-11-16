@@ -397,7 +397,7 @@ def get_runtime_level_config(guild_id: str) -> dict:
                 "SELECT xp_enabled, xp_multiplier, xp_cooldown, "
                 "       level_up_channel, level_up_message, level_roles, "
                 "       xp_excluded_channels, xp_vc_enabled, "
-                "       card_accent, card_bg_top, card_bg_bottom "
+                "       card_accent, card_bg_top, card_bg_bottom, level_up_image "
                 "FROM level_config WHERE guild_id = ?",
                 (int(guild_id),),
             )
@@ -415,6 +415,7 @@ def get_runtime_level_config(guild_id: str) -> dict:
                     "card_accent": json.loads(row[8]) if row[8] else None,
                     "card_bg_top": json.loads(row[9]) if row[9] else None,
                     "card_bg_bottom": json.loads(row[10]) if row[10] else None,
+                    "level_up_image": row[11],
                 }
             conn.close()
         except Exception:

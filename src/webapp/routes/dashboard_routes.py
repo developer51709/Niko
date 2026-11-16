@@ -1193,7 +1193,7 @@ def api_save_leveling(guild_id):
     body = request.get_json(silent=True) or {}
     allowed_actions = {
         "xp_enabled", "xp_multiplier", "xp_cooldown", "level_up_channel",
-        "level_up_message", "xp_excluded_channels", "xp_vc_enabled",
+        "level_up_message", "level_up_image", "xp_excluded_channels", "xp_vc_enabled",
         "level_roles",
     }
     unknown = set(body) - allowed_actions
@@ -1214,6 +1214,15 @@ def api_save_leveling(guild_id):
     message = body.get("level_up_message")
     if message is not None and len(str(message)) > 1000:
         return jsonify({"error": "Level-up message must be 1000 characters or fewer."}), 400
+    # The announcement picture, like the welcome and goodbye ones, is a link
+    # Discord fetches: an empty value removes it.
+    image = body.get("level_up_image")
+    if image is not None:
+        image = str(image).strip() or None
+    if image is not None and len(image) > 500:
+        return jsonify({"error": "Level-up image URL must be 500 characters or fewer."}), 400
+    if image is not None and not image.startswith(("http://", "https://")):
+        return jsonify({"error": "Level-up image must be an http or https URL."}), 400
 
     excluded = None
     if body.get("xp_excluded_channels") is not None:
@@ -1264,6 +1273,7 @@ def api_save_leveling(guild_id):
                 "xp_cooldown": cooldown,
                 "level_up_channel": int(channel) if channel else None,
                 "level_up_message": message,
+                "level_up_image": image,
                 "xp_vc_enabled": bool(body.get("xp_vc_enabled", current.get("xp_vc_enabled", False))),
             })
             if excluded is not None:
@@ -1298,16 +1308,16 @@ def api_save_leveling(guild_id):
         conn.execute(
             "INSERT OR REPLACE INTO level_config "
             "(guild_id, xp_enabled, xp_multiplier, xp_cooldown, level_up_channel, level_up_message, "
-            " level_roles, xp_excluded_channels, xp_vc_enabled) "
+            " level_roles, xp_excluded_channels, xp_vc_enabled, level_up_image) "
             "VALUES (?, ?, ?, ?, ?, ?, "
             "        COALESCE((SELECT level_roles FROM level_config WHERE guild_id = ?), '{}'), "
             "        COALESCE((SELECT xp_excluded_channels FROM level_config WHERE guild_id = ?), '[]'), "
-            "        ?)",
+            "        ?, ?)",
             (
                 int(guild_id), int(bool(body.get("xp_enabled", True))),
                 multiplier, cooldown, int(channel) if channel else None, message,
                 int(guild_id), int(guild_id),
-                int(bool(body.get("xp_vc_enabled", False))),
+                int(bool(body.get("xp_vc_enabled", False))), image,
             ),
         )
         if excluded is not None:

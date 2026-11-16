@@ -537,6 +537,7 @@ async def _create_tables(bot):
             xp_cooldown      INTEGER DEFAULT 0,
             level_up_channel INTEGER,
             level_up_message TEXT,
+            level_up_image   TEXT,
             level_roles      TEXT,
             xp_excluded_channels TEXT,
             xp_vc_enabled    INTEGER DEFAULT 0,
@@ -553,6 +554,7 @@ async def _create_tables(bot):
         ("card_accent",    "TEXT"),
         ("card_bg_top",    "TEXT"),
         ("card_bg_bottom", "TEXT"),
+        ("level_up_image", "TEXT"),
     ]:
         try:
             await bot.cxn.execute(f"ALTER TABLE level_config ADD COLUMN {col_name} {col_def}")

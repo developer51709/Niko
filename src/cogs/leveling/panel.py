@@ -67,6 +67,8 @@ DEFAULT_GUILD_LEVEL_CONFIG = {
     "xp_cooldown":      0,
     "level_up_channel": None,
     "level_up_message": None,
+    #: One picture under the announcement, the way welcome/goodbye carry one.
+    "level_up_image":   None,
     "level_roles":      {},
     # Channels that never award XP. Ticket channels are excluded separately.
     "xp_excluded_channels": [],
@@ -127,6 +129,13 @@ def _lv_role_mention(guild: discord.Guild, role_id) -> str:
     return role.mention if role else msg(guild, "panel_deleted_role", role_id=role_id)
 
 
+def _lv_image_state(cfg: dict, guild: discord.Guild) -> str:
+    """Whether the level-up announcement carries a picture."""
+    if cfg.get("level_up_image"):
+        return msg(guild, "panel_image_set")
+    return msg(guild, "panel_image_none")
+
+
 def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
     lu_ch   = guild.get_channel(cfg.get("level_up_channel") or 0)
     lu_ch_s = lu_ch.mention if lu_ch else msg(guild, "panel_same_channel")
@@ -138,6 +147,7 @@ def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
     ) or msg(guild, "panel_no_roles")
     custom_msg = cfg.get("level_up_message")
     msg_s = f"`{custom_msg}`" if custom_msg else msg(guild, "panel_default_message")
+    image_s = _lv_image_state(cfg, guild)
 
     # Card style summary
     accent = cfg.get("card_accent")
@@ -153,6 +163,7 @@ def _lv_overview_text(cfg: dict, guild: discord.Guild) -> str:
         voice_state=_lv_icon(cfg.get("xp_vc_enabled", False)),
         levelup_channel=lu_ch_s,
         custom_message=msg_s,
+        image=image_s,
         roles=lr_s,
         accent=accent_s,
     )
@@ -179,6 +190,7 @@ def _lv_announcements_text(cfg: dict, guild: discord.Guild) -> str:
         msg(guild, "panel_announcements"),
         channel=lu_ch_s,
         message=msg_display,
+        image=_lv_image_state(cfg, guild),
     )
 
 
@@ -613,6 +625,69 @@ class _LvEditMessageBtn(discord.ui.Button):
             _LvMessageModal(self._cog, self._guild_id, cfg, interaction))
 
 
+class _LvImageModal(discord.ui.Modal):
+    """The URL of the picture shown under the level-up message."""
+
+    def __init__(self, cog, guild_id: int, cfg: dict, ctx):
+        super().__init__(title=msg(ctx, "panel_image_modal_title"))
+        self._cog      = cog
+        self._guild_id = guild_id
+        self.image = discord.ui.TextInput(
+            label=msg(ctx, "panel_image_label"),
+            placeholder=msg(ctx, "panel_image_placeholder"),
+            style=discord.TextStyle.short,
+            max_length=500,
+            required=False,
+        )
+        self.image.default = cfg.get("level_up_image") or ""
+        self.add_item(self.image)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        value = self.image.value.strip()
+        # Discord fetches the picture itself, so it has to be a link; an empty
+        # box removes the picture, like clearing the field on the dashboard.
+        if value and not value.startswith(("http://", "https://")):
+            return await interaction.response.send_message(
+                msg(interaction, "panel_image_invalid"),
+                ephemeral=True)
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        cfg["level_up_image"] = value or None
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "announcements", interaction.guild)
+        await interaction.response.edit_message(view=panel)
+
+
+class _LvEditImageBtn(discord.ui.Button):
+    def __init__(self, cog, guild_id, ctx):
+        self._cog      = cog
+        self._guild_id = guild_id
+        super().__init__(
+            label=msg(ctx, "panel_btn_edit_image"), style=discord.ButtonStyle.blurple,
+            emoji=get_emoji("edit"))
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        await interaction.response.send_modal(
+            _LvImageModal(self._cog, self._guild_id, cfg, interaction))
+
+
+class _LvResetImageBtn(discord.ui.Button):
+    def __init__(self, cog, guild_id, has_image: bool, ctx):
+        self._cog      = cog
+        self._guild_id = guild_id
+        super().__init__(
+            label=msg(ctx, "panel_btn_reset_image"),
+            style=discord.ButtonStyle.red, emoji=get_emoji("refresh"),
+            disabled=not has_image)
+
+    async def callback(self, interaction: discord.Interaction):
+        cfg = await self._cog._guild_cfg(self._guild_id)
+        cfg["level_up_image"] = None
+        await self._cog._save_guild_cfg(self._guild_id, cfg)
+        panel = await _build_level_panel(self._cog, self._guild_id, "announcements", interaction.guild)
+        await interaction.response.edit_message(view=panel)
+
+
 class _LvResetMessageBtn(discord.ui.Button):
     def __init__(self, cog, guild_id: int, has_custom: bool, ctx):
         self._cog      = cog
@@ -977,12 +1052,17 @@ async def _build_level_panel(cog, guild_id: int, section: str = "overview",
 
     elif section == "announcements":
         has_custom = bool(cfg.get("level_up_message"))
+        has_image  = bool(cfg.get("level_up_image"))
         container.add_item(discord.ui.ActionRow(
             _LvSetChannelBtn(cog, guild_id, guild),
         ))
         container.add_item(discord.ui.ActionRow(
             _LvEditMessageBtn(cog, guild_id, guild),
             _LvResetMessageBtn(cog, guild_id, has_custom, guild),
+        ))
+        container.add_item(discord.ui.ActionRow(
+            _LvEditImageBtn(cog, guild_id, guild),
+            _LvResetImageBtn(cog, guild_id, has_image, guild),
         ))
 
     elif section == "level_roles":

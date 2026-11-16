@@ -17,6 +17,8 @@
   "leveling.levelUpMessage": "Level-up message",
   "leveling.levelUpHint": "Use {mention}, {level}, {name}, or {guild}",
   "leveling.levelUpPlaceholder": "Leave blank for Niko's default message",
+  "leveling.levelUpImage": "Level-up image URL",
+  "leveling.levelUpImageHint": "Shown under the level-up message",
   "leveling.previewGuild": "your server",
   "leveling.channelsLabel": "Channels & voice",
   "leveling.channelsTitle": "Choose where XP counts",

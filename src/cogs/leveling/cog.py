@@ -183,6 +183,7 @@ class Leveling(commands.Cog):
             cfg["xp_cooldown"]      = row["xp_cooldown"]
             cfg["level_up_channel"] = row["level_up_channel"]
             cfg["level_up_message"] = row["level_up_message"]
+            cfg["level_up_image"] = row.get("level_up_image")
             cfg["level_roles"] = _json_mapping(row["level_roles"])
             cfg["xp_excluded_channels"] = _channel_id_list(row.get("xp_excluded_channels"))
             cfg["xp_vc_enabled"]        = bool(row.get("xp_vc_enabled", 0))
@@ -202,8 +203,8 @@ class Leveling(commands.Cog):
             "(guild_id, xp_enabled, xp_multiplier, xp_cooldown, "
             " level_up_channel, level_up_message, level_roles, "
             " xp_excluded_channels, xp_vc_enabled, "
-            " card_accent, card_bg_top, card_bg_bottom) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+            " card_accent, card_bg_top, card_bg_bottom, level_up_image) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
             gid,
             int(cfg.get("xp_enabled", True)),
             cfg.get("xp_multiplier", 1.0),
@@ -216,6 +217,7 @@ class Leveling(commands.Cog):
             json.dumps(cfg.get("card_accent"))    if cfg.get("card_accent")    else None,
             json.dumps(cfg.get("card_bg_top"))    if cfg.get("card_bg_top")    else None,
             json.dumps(cfg.get("card_bg_bottom")) if cfg.get("card_bg_bottom") else None,
+            cfg.get("level_up_image"),
         )
 
     async def _has_guild_cfg(self, guild_id) -> bool:
@@ -516,10 +518,46 @@ class Leveling(commands.Cog):
                     SimpleNamespace(guild=guild), "level_up",
                     mention=member.mention, level=current_level,
                 )
+            container = discord.ui.Container(discord.ui.TextDisplay(content=lu_text))
+            # The announcement can carry one picture under its text, the way
+            # the welcome and goodbye messages do: a banner, a GIF, a
+            # screenshot of the moment. Discord renders it from its URL, so
+            # the announcement stays a single Components-V2 message.
+            image = (cfg.get("level_up_image") or "").strip()
+            if image:
+                container.add_item(
+                    discord.ui.Separator(
+                        visible=True, spacing=discord.SeparatorSpacing.small
+                    )
+                )
+                container.add_item(
+                    discord.ui.MediaGallery(discord.MediaGalleryItem(media=image))
+                )
             view = discord.ui.LayoutView()
-            view.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
+            view.add_item(container)
             if lu_channel:
-                await lu_channel.send(view=view)
+                try:
+                    await lu_channel.send(view=view)
+                except discord.Forbidden:
+                    # Nothing about the picture caused this, and a retry without
+                    # it would hit the same wall.
+                    raise
+                except discord.HTTPException as exc:
+                    if not image:
+                        raise
+                    # Discord fetches the media itself, so it rejects a link it
+                    # cannot read: a dead URL, a page instead of a file, a
+                    # format it will not render. The level-up is the point and
+                    # the picture is decoration, so the announcement still goes
+                    # out — text only — and the bad URL is left in the log.
+                    log.warning(
+                        "Leveling",
+                        f"Discord rejected the level-up image {image!r} for {member} in "
+                        f"{guild.name} ({exc}); announced without it.",
+                    )
+                    plain = discord.ui.LayoutView()
+                    plain.add_item(discord.ui.Container(discord.ui.TextDisplay(content=lu_text)))
+                    await lu_channel.send(view=plain)
                 self.bot.dispatch("sticky_feature_message", guild.id, lu_channel.id)
             log.debug("Leveling", f"User {member} leveled up to {current_level} in {guild.name}")
         except (discord.Forbidden, discord.HTTPException):

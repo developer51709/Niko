@@ -17,6 +17,8 @@
   "leveling.levelUpMessage": "Message de passage de niveau",
   "leveling.levelUpHint": "Utilise {mention}, {level}, {name} ou {guild}",
   "leveling.levelUpPlaceholder": "Laisse vide pour le message par défaut de Niko",
+  "leveling.levelUpImage": "URL de l’image de montée de niveau",
+  "leveling.levelUpImageHint": "Affichée sous le message de montée de niveau",
   "leveling.previewGuild": "ton serveur",
   "leveling.channelsLabel": "Salons et vocal",
   "leveling.channelsTitle": "Choisis où l’XP compte",
