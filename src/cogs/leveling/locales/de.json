@@ -138,7 +138,18 @@
     "panel_accent_ph": "d96545",
     "leaderboard_panel_title": "### 🏆 Leveling-Bestenliste",
     "leaderboard_panel_body": "Die Live-Rangliste des Servers liegt auf der Website und aktualisiert sich, während Mitglieder XP sammeln.",
-    "leaderboard_panel_link": "[Server-Rangliste öffnen]({url})"
+    "leaderboard_panel_link": "[Server-Rangliste öffnen]({url})",
+    "reset_confirm_title": "## ⚠️ Alle Leveling-Daten zurücksetzen?",
+    "reset_confirm_body": "Das löscht XP und Level aller Mitglieder dieses Servers und nimmt die Reward-Rollen zurück, die sie verdient haben — **{members}** Mitgliedsdaten und **{roles}** Reward-Rollen.\n\n**Das kann nicht rückgängig gemacht werden.**",
+    "reset_confirm_note": "-# Deine Leveling-Einstellungen und Reward-Rollen bleiben eingerichtet. Gelöscht werden nur die gespeicherten XP und Level, und den Mitgliedern werden die Reward-Rollen entzogen.",
+    "reset_confirm_button": "Alles zurücksetzen",
+    "reset_cancel_button": "Abbrechen",
+    "reset_gate": "Nur die Person, die diesen Befehl ausgeführt hat, kann ihn bestätigen.",
+    "reset_cancelled": "Zurücksetzen abgebrochen — es wurde nichts geändert.",
+    "reset_working": "Leveling-Daten werden zurückgesetzt…",
+    "reset_done": "{tick} Leveling-Daten von **{members}** Mitglied(ern) gelöscht. Die Reward-Rollen werden jetzt entfernt — gedrosselt, um innerhalb der Rollen-Limits von Discord zu bleiben.",
+    "reset_failed": "{cross} Die Leveling-Daten konnten nicht gelöscht werden — es wurde nichts geändert. Versuche es gleich noch einmal.",
+    "reset_guild_only": "Dieser Befehl funktioniert nur auf einem Server."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Sekunden zwischen XP-Zugewinnen (0 deaktiviert den Cooldown).",
@@ -178,7 +189,9 @@
     "leveling.panel.help": "Leveling-Dashboard öffnen.",
     "leveling.rank.args.member": "Mitglied, das gezeigt wird (standardmäßig du).",
     "leveling.rank.description": "Prüfe deine Level-Statistik mit einer schönen Bildkarte",
-    "leveling.rank.help": "Zeigt deine Level-Statistiken."
+    "leveling.rank.help": "Zeigt deine Level-Statistiken.",
+    "leveling.reset.description": "Alle Leveling-Daten löschen und alle Reward-Rollen entfernen",
+    "leveling.reset.help": "Löscht XP und Level aller Mitglieder und entfernt alle Reward-Rollen. Nur für Administratoren, nicht rückgängig zu machen."
   },
   "migration": {
     "title": "### Danke, dass du Niko zu **{guild}** hinzugefügt hast",

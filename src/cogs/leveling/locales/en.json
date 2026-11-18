@@ -138,7 +138,18 @@
     "panel_accent_ph": "d96545",
     "leaderboard_panel_title": "### 🏆 Leveling Leaderboard",
     "leaderboard_panel_body": "The live server leaderboard lives on the website and keeps itself up to date as members earn XP.",
-    "leaderboard_panel_link": "[Open the server leaderboard]({url})"
+    "leaderboard_panel_link": "[Open the server leaderboard]({url})",
+    "reset_confirm_title": "## ⚠️ Reset all leveling data?",
+    "reset_confirm_body": "This deletes every member's XP and level in this server and takes back the reward roles they earned — **{members}** member record(s) and **{roles}** reward role(s).\n\n**This cannot be undone.**",
+    "reset_confirm_note": "-# Your leveling settings and reward roles stay configured. Only the stored XP and levels are deleted, and the reward roles members are holding are removed.",
+    "reset_confirm_button": "Reset everything",
+    "reset_cancel_button": "Cancel",
+    "reset_gate": "Only the person who ran this command can confirm it.",
+    "reset_cancelled": "Reset cancelled — nothing was changed.",
+    "reset_working": "Resetting leveling data…",
+    "reset_done": "{tick} Cleared the leveling data of **{members}** member(s). Their reward roles are being removed now, rate limited to stay inside Discord's role edits.",
+    "reset_failed": "{cross} The leveling data could not be cleared — nothing was changed. Try again in a moment.",
+    "reset_guild_only": "This command only works in a server."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Seconds between XP gains (0 disables the cooldown).",
@@ -178,7 +189,9 @@
     "leveling.panel.help": "Open the interactive leveling management panel",
     "leveling.rank.args.member": "Member to show (defaults to you).",
     "leveling.rank.description": "Check your level stats with a beautiful image card",
-    "leveling.rank.help": "Check your level stats"
+    "leveling.rank.help": "Check your level stats",
+    "leveling.reset.description": "Delete all leveling data and remove every reward role",
+    "leveling.reset.help": "Delete every member's XP and level and remove all reward roles. Administrator only, cannot be undone."
   },
   "migration": {
     "title": "### Thanks for adding Niko to **{guild}**",

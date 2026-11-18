@@ -138,7 +138,18 @@
     "panel_accent_ph": "d96545",
     "leaderboard_panel_title": "### 🏆 Tabla de niveles",
     "leaderboard_panel_body": "La clasificación en vivo del servidor está en la web y se actualiza sola a medida que los miembros ganan XP.",
-    "leaderboard_panel_link": "[Abrir la clasificación del servidor]({url})"
+    "leaderboard_panel_link": "[Abrir la clasificación del servidor]({url})",
+    "reset_confirm_title": "## ⚠️ ¿Restablecer todos los datos de niveles?",
+    "reset_confirm_body": "Esto borra la XP y el nivel de todos los miembros de este servidor y retira los roles de recompensa que ganaron — **{members}** registros de miembros y **{roles}** roles de recompensa.\n\n**Esta acción no se puede deshacer.**",
+    "reset_confirm_note": "-# Tu configuración de niveles y los roles de recompensa se mantienen. Solo se borran la XP y los niveles guardados, y se retiran los roles de recompensa que llevan los miembros.",
+    "reset_confirm_button": "Restablecer todo",
+    "reset_cancel_button": "Cancelar",
+    "reset_gate": "Solo la persona que ejecutó este comando puede confirmarlo.",
+    "reset_cancelled": "Restablecimiento cancelado: no se cambió nada.",
+    "reset_working": "Restableciendo los datos de niveles…",
+    "reset_done": "{tick} Se borraron los datos de niveles de **{members}** miembro(s). Ahora se están retirando sus roles de recompensa, con límite de velocidad para no superar los límites de Discord.",
+    "reset_failed": "{cross} No se pudieron borrar los datos de niveles: no se cambió nada. Inténtalo de nuevo en un momento.",
+    "reset_guild_only": "Este comando solo funciona en un servidor."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Segundos entre ganancias de XP (0 desactiva el enfriamiento).",
@@ -178,7 +189,9 @@
     "leveling.panel.help": "Abre el panel interactivo de gestión de niveles",
     "leveling.rank.args.member": "Miembro que mostrar (por defecto tú).",
     "leveling.rank.description": "Consulta tus estadísticas de nivel con una tarjeta de imagen",
-    "leveling.rank.help": "Consulta tus estadísticas de nivel"
+    "leveling.rank.help": "Consulta tus estadísticas de nivel",
+    "leveling.reset.description": "Borra todos los datos de niveles y quita todos los roles de recompensa",
+    "leveling.reset.help": "Borra la XP y el nivel de todos los miembros y quita todos los roles de recompensa. Solo administradores, no se puede deshacer."
   },
   "migration": {
     "title": "### Gracias por añadir a Niko en **{guild}**",

@@ -138,7 +138,18 @@
     "panel_accent_ph": "d96545",
     "leaderboard_panel_title": "### 🏆 Classement des niveaux",
     "leaderboard_panel_body": "Le classement en direct du serveur est sur le site et se met à jour au fil des XP gagnés par les membres.",
-    "leaderboard_panel_link": "[Ouvrir le classement du serveur]({url})"
+    "leaderboard_panel_link": "[Ouvrir le classement du serveur]({url})",
+    "reset_confirm_title": "## ⚠️ Réinitialiser toutes les données de niveaux ?",
+    "reset_confirm_body": "Cela supprime l'XP et le niveau de tous les membres de ce serveur et retire les rôles de récompense qu'ils ont gagnés — **{members}** fiches de membres et **{roles}** rôles de récompense.\n\n**Cette action est irréversible.**",
+    "reset_confirm_note": "-# Tes réglages de niveaux et tes rôles de récompense restent configurés. Seules les XP et les niveaux enregistrés sont supprimés, et les rôles de récompense portés par les membres sont retirés.",
+    "reset_confirm_button": "Tout réinitialiser",
+    "reset_cancel_button": "Annuler",
+    "reset_gate": "Seule la personne qui a lancé cette commande peut la confirmer.",
+    "reset_cancelled": "Réinitialisation annulée — rien n'a été modifié.",
+    "reset_working": "Réinitialisation des données de niveaux…",
+    "reset_done": "{tick} Données de niveaux de **{members}** membre(s) supprimées. Leurs rôles de récompense sont retirés maintenant, à un rythme limité pour respecter les limites de Discord.",
+    "reset_failed": "{cross} Impossible de supprimer les données de niveaux — rien n'a été modifié. Réessaie dans un instant.",
+    "reset_guild_only": "Cette commande ne fonctionne que dans un serveur."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Secondes entre chaque gain d'XP (0 désactive le délai).",
@@ -178,7 +189,9 @@
     "leveling.panel.help": "Ouvrir le panneau interactif de gestion des niveaux",
     "leveling.rank.args.member": "Membre à afficher (toi par défaut).",
     "leveling.rank.description": "Voir tes statistiques de niveau avec une jolie carte image",
-    "leveling.rank.help": "Voir tes statistiques de niveau"
+    "leveling.rank.help": "Voir tes statistiques de niveau",
+    "leveling.reset.description": "Supprime toutes les données de niveaux et retire les rôles de récompense",
+    "leveling.reset.help": "Supprime l'XP et le niveau de tous les membres et retire tous les rôles de récompense. Administrateurs uniquement, irréversible."
   },
   "migration": {
     "title": "### Merci d'avoir ajouté Niko à **{guild}**",

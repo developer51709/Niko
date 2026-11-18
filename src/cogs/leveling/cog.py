@@ -148,6 +148,106 @@ def _channel_id_list(value) -> list:
     return out
 
 
+#: How long the reset prompt stays clickable before it answers "expired".
+RESET_CONFIRM_TIMEOUT = 60.0
+
+
+def _notice_view(text: str, accent: discord.Colour = None) -> discord.ui.LayoutView:
+    """A one-line LayoutView, used for the reset command's status messages."""
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.Container(
+        discord.ui.TextDisplay(content=text),
+        accent_colour=accent or discord.Colour(ACCENT_BRAND),
+    ))
+    return view
+
+
+class _LevelResetConfirmView(discord.ui.LayoutView):
+    """Confirm/cancel buttons for ``/leveling reset``.
+
+    Deleting a server's XP and taking its reward roles back cannot be reversed,
+    so the prompt says so, only the person who ran the command can answer it,
+    and it expires on its own instead of waiting forever.
+    """
+
+    def __init__(self, *, invoker_id: int, locale, members: int, roles: int,
+                 timeout: float = RESET_CONFIRM_TIMEOUT):
+        super().__init__(timeout=timeout)
+        self.invoker_id = int(invoker_id)
+        self.confirmed: bool | None = None
+        self._locale = locale
+        self._answered = asyncio.Event()
+
+        self._confirm = discord.ui.Button(
+            label=msg(locale, "reset_confirm_button"),
+            style=discord.ButtonStyle.danger,
+            emoji=get_emoji("trash"),
+        )
+        self._cancel = discord.ui.Button(
+            label=msg(locale, "reset_cancel_button"),
+            style=discord.ButtonStyle.secondary,
+            emoji=get_emoji("cross"),
+        )
+        self._confirm.callback = self._on_confirm
+        self._cancel.callback = self._on_cancel
+
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=msg(locale, "reset_confirm_title")),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=msg(
+                locale, "reset_confirm_body", members=members, roles=roles)),
+            discord.ui.TextDisplay(content=msg(locale, "reset_confirm_note")),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.ActionRow(self._confirm, self._cancel),
+            accent_colour=discord.Colour.red(),
+        ))
+
+    def _disable(self) -> None:
+        self._confirm.disabled = True
+        self._cancel.disabled = True
+
+    async def _gate(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id == self.invoker_id:
+            return True
+        await interaction.response.send_message(
+            msg(self._locale, "reset_gate"), ephemeral=True)
+        return False
+
+    async def _on_confirm(self, interaction: discord.Interaction) -> None:
+        if not await self._gate(interaction):
+            return
+        self.confirmed = True
+        self._disable()
+        try:
+            await interaction.response.edit_message(view=self)
+        except discord.HTTPException:
+            pass
+        self._answered.set()
+
+    async def _on_cancel(self, interaction: discord.Interaction) -> None:
+        if not await self._gate(interaction):
+            return
+        self.confirmed = False
+        self._disable()
+        try:
+            await interaction.response.edit_message(
+                view=_notice_view(
+                    msg(interaction, "reset_cancelled"), discord.Colour.greyple()),
+            )
+        except discord.HTTPException:
+            pass
+        self._answered.set()
+
+    async def on_timeout(self) -> None:
+        if self.confirmed is None:
+            self.confirmed = False
+            self._answered.set()
+
+    async def wait_for_response(self) -> bool:
+        await self._answered.wait()
+        return bool(self.confirmed)
+
+
 class Leveling(commands.Cog):
     """Modern leveling system with image cards and slash commands."""
 
@@ -1021,6 +1121,82 @@ class Leveling(commands.Cog):
         await ctx.send(
             f"{get_emoji('tick')} " + msg(ctx, "cfg_reset_done", name=member.display_name)
         )
+
+    # ── RESET SUBCOMMAND ──────────────────────────
+
+    @leveling.command(
+        name="reset",
+        description=CMDS.text("leveling.reset.description"),
+        help=CMDS.help("leveling.reset"),
+    )
+    @discord.app_commands.default_permissions(administrator=True)
+    @commands.has_permissions(administrator=True)
+    async def leveling_reset(self, ctx):
+        """Delete every member's XP and level, then take back all reward roles.
+
+        Administrator-only and confirmed twice over: the prompt names what will
+        be lost and states that it cannot be undone, and only the member who ran
+        the command can answer it. The reward mapping itself is left configured,
+        so leveling keeps working for the server afterwards.
+        """
+        if ctx.guild is None:
+            return await ctx.send(msg(ctx, "reset_guild_only"))
+
+        guild = ctx.guild
+        guild_id = int(guild.id)
+        cfg = await self._guild_cfg(guild_id)
+        rewards = _level_role_map(cfg.get("level_roles") or {})
+
+        try:
+            tracked = int(await self.bot.cxn.fetchval(
+                "SELECT COUNT(*) FROM levels WHERE guild_id = $1", guild_id) or 0)
+        except Exception:
+            tracked = 0
+
+        prompt = _LevelResetConfirmView(
+            invoker_id=ctx.author.id,
+            locale=ctx,
+            members=tracked,
+            roles=len(set(rewards.values())),
+        )
+        if ctx.interaction:
+            await ctx.interaction.response.send_message(view=prompt, ephemeral=True)
+            status = await ctx.interaction.original_response()
+        else:
+            status = await ctx.send(view=prompt)
+
+        if not await prompt.wait_for_response():
+            return
+
+        async def show(text: str) -> None:
+            """Replace the prompt with a status line, wherever it was sent."""
+            view = _notice_view(text)
+            try:
+                if ctx.interaction:
+                    await ctx.interaction.edit_original_response(view=view)
+                else:
+                    await status.edit(view=view)
+            except discord.HTTPException:
+                pass
+
+        await show(msg(ctx, "reset_working"))
+
+        try:
+            await self.bot.cxn.execute(
+                "DELETE FROM levels WHERE guild_id = $1", guild_id)
+        except Exception as error:  # noqa: BLE001 - reported to the admin below
+            log.warning("Leveling", f"Could not clear leveling data for {guild_id}: {error}")
+            return await show(msg(ctx, "reset_failed"))
+
+        # Handing the sync an empty mapping is what turns it into a removal:
+        # every reward role the old mapping named is stripped from whoever is
+        # still holding one. Like every other reward edit, it is queued rather
+        # than awaited, so a large server's role edits never hold up the
+        # command — and it still waits on ``mass_role_limiter`` per member, the
+        # bucket a new reward goes through.
+        self._queue_level_role_sync(guild, {}, rewards)
+
+        await show(msg(ctx, "reset_done", members=tracked))
 
 
 async def setup(bot):
