@@ -147,9 +147,13 @@
     "reset_gate": "Seule la personne qui a lancé cette commande peut la confirmer.",
     "reset_cancelled": "Réinitialisation annulée — rien n'a été modifié.",
     "reset_working": "Réinitialisation des données de niveaux…",
-    "reset_done": "{tick} Données de niveaux de **{members}** membre(s) supprimées. Leurs rôles de récompense sont retirés maintenant, à un rythme limité pour respecter les limites de Discord.",
+    "reset_done": "{tick} Données de niveaux de **{members}** membre(s) supprimées.",
     "reset_failed": "{cross} Impossible de supprimer les données de niveaux — rien n'a été modifié. Réessaie dans un instant.",
-    "reset_guild_only": "Cette commande ne fonctionne que dans un serveur."
+    "reset_guild_only": "Cette commande ne fonctionne que dans un serveur.",
+    "reset_removing": "{tick} Données de niveaux de **{members}** membre(s) supprimées. Leurs rôles de récompense sont retirés maintenant — à un rythme limité, cela peut prendre un moment.",
+    "reset_roles_done": "Rôles de récompense retirés à **{removed}** membre(s).",
+    "reset_roles_none": "Aucun rôle de récompense ne restait à retirer.",
+    "reset_roles_failed": "**{failed}** membre(s) n'ont pas pu être mis à jour — vérifie que mon rôle est au-dessus des leurs et que je peux gérer les rôles."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Secondes entre chaque gain d'XP (0 désactive le délai).",

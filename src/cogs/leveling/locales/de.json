@@ -147,9 +147,13 @@
     "reset_gate": "Nur die Person, die diesen Befehl ausgeführt hat, kann ihn bestätigen.",
     "reset_cancelled": "Zurücksetzen abgebrochen — es wurde nichts geändert.",
     "reset_working": "Leveling-Daten werden zurückgesetzt…",
-    "reset_done": "{tick} Leveling-Daten von **{members}** Mitglied(ern) gelöscht. Die Reward-Rollen werden jetzt entfernt — gedrosselt, um innerhalb der Rollen-Limits von Discord zu bleiben.",
+    "reset_done": "{tick} Leveling-Daten von **{members}** Mitglied(ern) gelöscht.",
     "reset_failed": "{cross} Die Leveling-Daten konnten nicht gelöscht werden — es wurde nichts geändert. Versuche es gleich noch einmal.",
-    "reset_guild_only": "Dieser Befehl funktioniert nur auf einem Server."
+    "reset_guild_only": "Dieser Befehl funktioniert nur auf einem Server.",
+    "reset_removing": "{tick} Leveling-Daten von **{members}** Mitglied(ern) gelöscht. Die Reward-Rollen werden jetzt entfernt — gedrosselt, das kann einen Moment dauern.",
+    "reset_roles_done": "Reward-Rollen von **{removed}** Mitglied(ern) entfernt.",
+    "reset_roles_none": "Es waren keine Reward-Rollen mehr zu entfernen.",
+    "reset_roles_failed": "**{failed}** Mitglied(er) konnten nicht aktualisiert werden — prüfe, ob meine Rolle über ihren steht und ob ich Rollen verwalten darf."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Sekunden zwischen XP-Zugewinnen (0 deaktiviert den Cooldown).",

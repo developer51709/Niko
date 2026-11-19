@@ -115,6 +115,18 @@ Assign roles at specific levels:
 
 When a member reaches the configured level, the role is automatically assigned.
 
+## Reset a Server
+
+Wipe every stored XP and level in the server and take back the reward roles members earned:
+
+```
+/leveling reset
+```
+
+This is administrator-only, and it asks for confirmation first: the prompt shows how many member records and reward roles are affected and warns that the action cannot be undone, and only the person who ran the command can confirm it. Your leveling settings and your reward-role configuration are kept, so leveling keeps working afterwards.
+
+The wipe itself is immediate. Removing the reward roles members still hold continues in the background, rate limited to stay inside Discord's limits, and the message updates as it goes: it reports how many members were updated, and how many could not be, which usually points at a role-hierarchy or permission problem.
+
 ## Card Customisation
 
 The `/leveling rank` command renders an image card with Pillow, and the leaderboard page borrows the same server colours. Server admins can customise those colours through the management panel:

@@ -34,9 +34,10 @@ class FakeRole:
 
 
 class FakeMember:
-    def __init__(self, member_id, role_ids=()):
+    def __init__(self, member_id, role_ids=(), fail_removals=False):
         self.id = member_id
         self.bot = False
+        self.fail_removals = fail_removals
         self.roles = [FakeRole(role_id) for role_id in role_ids]
         self.added = []
         self.removed = []
@@ -47,6 +48,8 @@ class FakeMember:
             self.roles.append(role)
 
     async def remove_roles(self, *roles, reason=None):
+        if self.fail_removals:
+            raise RuntimeError("Missing Permissions")
         dropped = {role.id for role in roles}
         self.removed.extend(sorted(dropped))
         self.roles = [role for role in self.roles if role.id not in dropped]
@@ -157,10 +160,11 @@ def _texts(view) -> list[str]:
     return out
 
 
-def _run(monkeypatch, *, confirm=True):
+def _run(monkeypatch, *, confirm=True, failing_ids=()):
     """Run the command once and return everything a test can assert on."""
-    member = FakeMember(11, role_ids=[900, 901, UNRELATED_ROLE])
-    other = FakeMember(12, role_ids=[900])
+    member = FakeMember(
+        11, role_ids=[900, 901, UNRELATED_ROLE], fail_removals=11 in failing_ids)
+    other = FakeMember(12, role_ids=[900], fail_removals=12 in failing_ids)
     guild = FakeGuild([member, other])
     pool = FakePool({11: 12, 12: 6})
     limiter = CountingLimiter()
@@ -208,9 +212,15 @@ def test_the_wipe_deletes_every_level_row_for_the_guild(monkeypatch):
     assert deletes[0][1] == (GUILD_ID,)
     assert result.pool.rows == {}
 
+    # The message is edited before the removal starts, then again with counts.
+    progress = "\n".join(_texts(result.ctx.status.views[-2]))
+    assert "**2** member(s)" in progress
+    assert "Removing their reward roles now" in progress
+
     report = "\n".join(_texts(result.ctx.status.views[-1]))
     assert "**2** member(s)" in report
-    assert "reward roles are being removed now" in report
+    assert "Removed reward roles from **2** member(s)" in report
+    assert "could not be updated" not in report
 
 
 def test_reward_roles_come_off_through_the_shared_rate_limiter(monkeypatch):
@@ -224,6 +234,17 @@ def test_reward_roles_come_off_through_the_shared_rate_limiter(monkeypatch):
     assert UNRELATED_ROLE in [role.id for role in result.member.roles]
     # One wait per member update, on the same per-guild bucket /massrole uses.
     assert result.limiter.keys == [GUILD_ID, GUILD_ID]
+
+
+def test_failed_member_updates_are_reported(monkeypatch):
+    result = _run(monkeypatch, failing_ids=(12,))
+
+    report = "\n".join(_texts(result.ctx.status.views[-1]))
+    assert "Removed reward roles from **1** member(s)" in report
+    assert "**1** member(s) could not be updated" in report
+    # The member that failed keeps their role so a later retry can still take it.
+    assert result.member.removed == [900, 901]
+    assert result.other.removed == []
 
 
 def test_only_administrators_can_run_it():

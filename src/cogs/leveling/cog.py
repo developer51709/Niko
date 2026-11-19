@@ -429,6 +429,14 @@ class Leveling(commands.Cog):
                 failed += 1
         return updated, failed
 
+    @staticmethod
+    def _background(coro) -> None:
+        """Run a coroutine in the background when there is a loop for it."""
+        try:
+            asyncio.create_task(coro)
+        except RuntimeError:
+            pass
+
     def _queue_level_role_sync(
         self, guild, level_roles: dict, previous_roles: dict = None, members=None,
     ) -> None:
@@ -437,12 +445,9 @@ class Leveling(commands.Cog):
         The sync is rate limited, so a large server would otherwise make the
         command or panel interaction wait for every member update.
         """
-        try:
-            asyncio.create_task(
-                self._sync_level_roles(guild, level_roles, previous_roles, members)
-            )
-        except RuntimeError:
-            pass
+        self._background(
+            self._sync_level_roles(guild, level_roles, previous_roles, members)
+        )
 
     async def _get_user_data(self, guild_id, user_id) -> dict:
         row = await self.bot.cxn.fetchrow(
@@ -774,6 +779,7 @@ class Leveling(commands.Cog):
             f"**Status:** {enabled_s} • **Multiplier:** `{cfg.get('xp_multiplier', 1.0)}x` • "
             f"**Cooldown:** `{cfg.get('xp_cooldown', 0)}s`\n\n"
             "Use `/leveling rank`, `/leveling leaderboard`, `/leveling panel`, or `/leveling config`.\n"
+            "Server admins can start a server over with `/leveling reset`.\n"
             "-# Type `/leveling` to see this help, or use a subcommand."
         )
         view = discord.ui.LayoutView()
@@ -1193,10 +1199,29 @@ class Leveling(commands.Cog):
         # still holding one. Like every other reward edit, it is queued rather
         # than awaited, so a large server's role edits never hold up the
         # command — and it still waits on ``mass_role_limiter`` per member, the
-        # bucket a new reward goes through.
-        self._queue_level_role_sync(guild, {}, rewards)
+        # bucket a new reward goes through. The message tracks that work: it
+        # says the roles are coming off before the sync starts, then reports
+        # how many members were updated and how many could not be.
+        async def remove_reward_roles() -> None:
+            try:
+                await show(msg(ctx, "reset_removing", members=tracked))
+                removed, failed = await self._sync_level_roles(guild, {}, rewards)
 
-        await show(msg(ctx, "reset_done", members=tracked))
+                lines = [msg(ctx, "reset_done", members=tracked)]
+                if removed:
+                    lines.append(msg(ctx, "reset_roles_done", removed=removed))
+                elif not failed:
+                    lines.append(msg(ctx, "reset_roles_none"))
+                if failed:
+                    lines.append(msg(ctx, "reset_roles_failed", failed=failed))
+                await show("\n".join(lines))
+            except Exception as error:  # noqa: BLE001 - the command already replied
+                log.warning(
+                    "Leveling",
+                    f"Could not remove reward roles after resetting {guild_id}: {error}",
+                )
+
+        self._background(remove_reward_roles())
 
 
 async def setup(bot):

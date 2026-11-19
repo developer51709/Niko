@@ -147,9 +147,13 @@
     "reset_gate": "Only the person who ran this command can confirm it.",
     "reset_cancelled": "Reset cancelled — nothing was changed.",
     "reset_working": "Resetting leveling data…",
-    "reset_done": "{tick} Cleared the leveling data of **{members}** member(s). Their reward roles are being removed now, rate limited to stay inside Discord's role edits.",
+    "reset_done": "{tick} Cleared the leveling data of **{members}** member(s).",
     "reset_failed": "{cross} The leveling data could not be cleared — nothing was changed. Try again in a moment.",
-    "reset_guild_only": "This command only works in a server."
+    "reset_guild_only": "This command only works in a server.",
+    "reset_removing": "{tick} Cleared the leveling data of **{members}** member(s). Removing their reward roles now — this is rate limited, so it can take a moment.",
+    "reset_roles_done": "Removed reward roles from **{removed}** member(s).",
+    "reset_roles_none": "No reward roles were left to remove.",
+    "reset_roles_failed": "**{failed}** member(s) could not be updated — check that my role sits above theirs and that I can manage roles."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Seconds between XP gains (0 disables the cooldown).",

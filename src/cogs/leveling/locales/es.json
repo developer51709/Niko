@@ -147,9 +147,13 @@
     "reset_gate": "Solo la persona que ejecutó este comando puede confirmarlo.",
     "reset_cancelled": "Restablecimiento cancelado: no se cambió nada.",
     "reset_working": "Restableciendo los datos de niveles…",
-    "reset_done": "{tick} Se borraron los datos de niveles de **{members}** miembro(s). Ahora se están retirando sus roles de recompensa, con límite de velocidad para no superar los límites de Discord.",
+    "reset_done": "{tick} Se borraron los datos de niveles de **{members}** miembro(s).",
     "reset_failed": "{cross} No se pudieron borrar los datos de niveles: no se cambió nada. Inténtalo de nuevo en un momento.",
-    "reset_guild_only": "Este comando solo funciona en un servidor."
+    "reset_guild_only": "Este comando solo funciona en un servidor.",
+    "reset_removing": "{tick} Se borraron los datos de niveles de **{members}** miembro(s). Ahora se retiran sus roles de recompensa: con límite de velocidad, así que puede tardar un momento.",
+    "reset_roles_done": "Se retiraron los roles de recompensa de **{removed}** miembro(s).",
+    "reset_roles_none": "No quedaban roles de recompensa por retirar.",
+    "reset_roles_failed": "**{failed}** miembro(s) no se pudieron actualizar: comprueba que mi rol esté por encima de los suyos y que pueda gestionar roles."
   },
   "commands": {
     "leveling.config.cooldown.args.seconds": "Segundos entre ganancias de XP (0 desactiva el enfriamiento).",
