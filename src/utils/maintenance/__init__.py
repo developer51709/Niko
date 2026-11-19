@@ -32,6 +32,7 @@ from config.ids import OWNER_IDS
 from utils import logging
 from utils.i18n import make_flat_msg
 from utils.locales import load_locales
+from utils.prefix_alias import alias_of
 
 #: The table both backends understand; see ``events/startup/database.py``.
 TABLE = "maintenance_targets"
@@ -417,6 +418,19 @@ async def check_feature(bot, message: discord.Message, extension: str) -> bool:
     return True
 
 
+def _maintenance_target(bot, command):
+    """The command whose maintenance entry governs *command*.
+
+    A short prefix alias is a shortcut, not a command of its own: pausing
+    ``bank deposit`` has to pause ``.deposit`` too, or the pause is trivially
+    bypassed by typing the short name.
+    """
+    target = alias_of(command)
+    if not target:
+        return command
+    return getattr(bot, "get_command", lambda name: None)(target) or command
+
+
 async def check_message(bot, message: discord.Message, prefix: str) -> bool:
     """True when a prefix command was held in maintenance (already answered).
 
@@ -430,7 +444,7 @@ async def check_message(bot, message: discord.Message, prefix: str) -> bool:
     content = message.content[len(prefix):].strip()
     if not content:
         return False
-    command = _deepest_prefix_command(bot, content.split())
+    command = _maintenance_target(bot, _deepest_prefix_command(bot, content.split()))
     if command is None:
         return False
     await ensure_loaded(bot)
@@ -519,6 +533,10 @@ def _command_rows(bot) -> list[dict]:
     def add_prefix(command, parent_extension: str | None) -> None:
         """Prefix commands, including group subcommands, which the app tree alone
         cannot place when the app object has no binding."""
+        if alias_of(command):
+            # A short prefix alias is shown as its target's alias on the public
+            # page; listing it here too would offer a second toggle for it.
+            return
         extension = extension_of(_module_of(getattr(command, "cog", None))) or parent_extension
         add(
             getattr(command, "qualified_name", None) or getattr(command, "name", ""),

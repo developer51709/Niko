@@ -10,6 +10,7 @@ from utils.i18n import get_lang
 from utils.locales import load_locales
 
 from utils.command_locales import command_texts
+from utils.prefix_alias import prefix_alias
 
 CMDS = command_texts(__package__)
 
@@ -88,6 +89,11 @@ class BankMixin:
               amount=f"{amt:,}", vault=f"{data['bank']:,}", cap=f"{cap:,}"),
         ))
 
+    # The bank group exists to keep the slash tree inside Discord's 100-command
+    # budget; the prefix does not need the nesting, so ``.deposit`` is offered
+    # as a shortcut for ``.bank deposit``.
+    deposit = prefix_alias(bank_deposit)
+
 
     @bank.command(name="withdraw", description=CMDS.text("bank.withdraw.description"))
     async def bank_withdraw(self, ctx: commands.Context, amount: str):
@@ -121,6 +127,8 @@ class BankMixin:
             T(lang, "withdrawn_title"),
             T(lang, "withdrawn_body", amount=f"{amt:,}", wallet=f"{data['balance']:,}"),
         ))
+
+    withdraw = prefix_alias(bank_withdraw)
 
 
     @bank.command(name="upgrade", description=CMDS.text("bank.upgrade.description"))

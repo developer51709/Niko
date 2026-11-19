@@ -17,6 +17,7 @@ import asyncio
 
 import discord
 from utils import logging
+from utils.prefix_alias import is_prefix_alias
 
 from config import status as status_config
 
@@ -30,7 +31,11 @@ def _collect_status_variables(bot) -> dict[str, str]:
     command_count = getattr(bot, "_status_command_count", None)
     if command_count is None:
         try:
-            command_count = len(list(bot.walk_commands()))
+            # Short prefix aliases are shortcuts, not commands of their own.
+            command_count = sum(
+                1 for command in bot.walk_commands()
+                if not is_prefix_alias(command)
+            )
         except Exception:
             command_count = 0
 

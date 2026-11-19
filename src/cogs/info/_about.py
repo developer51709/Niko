@@ -11,6 +11,7 @@ from config.ids import OWNER_IDS
 from ._messages import msg
 
 from utils.command_locales import command_texts
+from utils.prefix_alias import is_prefix_alias
 
 CMDS = command_texts(__package__)
 
@@ -71,7 +72,10 @@ class AboutMixin:
         members = sum(guild.member_count or 0 for guild in self.bot.guilds)
         commands = (
             getattr(self.bot, "_status_command_count", None)
-            or len(self.bot.commands)
+            or sum(
+                1 for command in self.bot.commands
+                if not is_prefix_alias(command)
+            )
         )
         started = getattr(self.bot, "start_time", None)
         uptime = _human_uptime(time.time() - started, ctx) if started else "\u2014"

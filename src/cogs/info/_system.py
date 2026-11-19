@@ -13,6 +13,7 @@ from utils.paginator import PaginatedView, paginate
 from ._messages import cv2_text, msg
 
 from utils.command_locales import command_texts
+from utils.prefix_alias import is_prefix_alias
 
 CMDS = command_texts(__package__)
 
@@ -32,7 +33,9 @@ class SystemMixin:
         uptime_seconds = int(time.time() - self.bot.start_time)
         uptime = f"{uptime_seconds // 3600}h {(uptime_seconds % 3600) // 60}m {uptime_seconds % 60}s"
         ai_model = os.getenv("AI_MODEL", "Unknown")
-        command_count = len(self.bot.commands)
+        command_count = sum(
+            1 for command in self.bot.commands if not is_prefix_alias(command)
+        )
         ping_latency = round(self.bot.latency * 1000)
         try:
             cpu_usage = psutil.cpu_percent()

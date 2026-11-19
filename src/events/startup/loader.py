@@ -24,6 +24,7 @@ import os
 import importlib
 
 from utils import logging, maintenance
+from utils.prefix_alias import alias_of
 
 
 #: Names title-casing gets wrong, spelled the way the product spells them.
@@ -87,6 +88,10 @@ def _count_commands(bot, module_name: str) -> int:
     names = set()
     try:
         for command in bot.commands:
+            if alias_of(command):
+                # A short prefix alias shares its target's callback: counting it
+                # would report the cog as having a command it does not own.
+                continue
             if getattr(command, "cog", None) is cog:
                 names.add(command.qualified_name)
         for command in bot.tree.walk_commands():

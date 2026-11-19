@@ -8,6 +8,7 @@ import json
 import datetime
 
 from utils import logging
+from utils.prefix_alias import alias_of, is_prefix_alias
 
 #: The version this build reports: the console banner, ``data/bot_stats.json``,
 #: the public /status page and the support servers' status panel all read it from
@@ -25,7 +26,10 @@ def write_bot_stats(bot):
         command_count = getattr(bot, "_status_command_count", None)
         if command_count is None:
             try:
-                command_count = len(list(bot.walk_commands())) + len(bot.tree.get_commands())
+                command_count = sum(
+                    1 for command in bot.walk_commands()
+                    if not is_prefix_alias(command)
+                ) + len(bot.tree.get_commands())
             except Exception:
                 command_count = 76
         payload = {
@@ -99,6 +103,9 @@ def write_commands(bot):
         from utils.command_locales import argument_maps, description_map, help_map
         commands_data = []
         hybrid_names = set()
+        # Short prefix aliases (`deposit` for `bank deposit`) are not commands of
+        # their own: they are folded into the grouped command's alias list below.
+        prefix_aliases: dict[str, list[str]] = {}
         internal_cog_names = {"owner", "ownercog", "development", "staff", "staffcog"}
 
         def is_internal_cog(*values):
@@ -250,6 +257,10 @@ def write_commands(bot):
             name = getattr(cmd, "qualified_name", cmd.name)
             if is_internal_cog(cog_name, getattr(getattr(cmd, "callback", None), "__module__", None)):
                 continue
+            alias_target = alias_of(cmd)
+            if alias_target:
+                prefix_aliases.setdefault(alias_target, []).append(cmd.name)
+                continue
             if isinstance(cmd, (commands.HybridCommand, commands.HybridGroup)):
                 hybrid_names.add(name)
                 add_command(cmd, "hybrid", name, cog_name)
@@ -282,6 +293,15 @@ def write_commands(bot):
 
         for cmd in bot.tree.get_commands():
             process_app_command(cmd)
+
+        # Show the shortcuts on the card they belong to, the way the help dialog
+        # already renders aliases, instead of as extra prefix-only entries.
+        for record in commands_data:
+            short_names = prefix_aliases.get(record["name"])
+            if short_names:
+                record["aliases"] = list(dict.fromkeys(
+                    [*(record.get("aliases") or []), *short_names]
+                ))
 
         commands_data.sort(key=lambda x: (x["category"], x["type"], x["name"]))
 

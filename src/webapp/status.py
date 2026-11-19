@@ -36,6 +36,7 @@ except Exception:  # pragma: no cover - psutil is a hard dependency of the bot
 from utils import maintenance
 from utils.error_reports import list_public_incidents
 from utils.locales import SUPPORTED_LANGUAGES
+from utils.prefix_alias import is_prefix_alias
 
 from .commands import (
     _LEGACY_INTERNAL_COMMAND_NAMES,
@@ -410,10 +411,17 @@ def _registry_commands() -> list:
 
 
 def _live_command_count(bot) -> int:
-    """Every command the running bot registers, subcommands included."""
+    """Every command the running bot registers, subcommands included.
+
+    Short prefix aliases are left out: they are shortcuts for a grouped command
+    that is already counted, so counting them here would put the status page's
+    total above the commands page's for the same bot.
+    """
     count = 0
     try:
-        count += sum(1 for _ in bot.walk_commands())
+        count += sum(
+            1 for command in bot.walk_commands() if not is_prefix_alias(command)
+        )
     except Exception:
         pass
 

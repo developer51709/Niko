@@ -46,6 +46,11 @@ from utils.locales import (
 #: The namespace every cog keeps its command text in.
 NAMESPACE = "commands"
 
+#: ``extras`` key that points a command at another command's catalogue keys.
+#: A short prefix alias stands in for a grouped command, so its wording has to
+#: be read from the group's path (``bank deposit``) rather than its own name.
+PATH_OVERRIDE = "locale_path"
+
 HELP_SUFFIX = ".help"
 DESCRIPTION_SUFFIX = ".description"
 NAME_SUFFIX = ".name"
@@ -165,7 +170,16 @@ def help_mapping(value: Any) -> dict[str, str]:
 
 
 def command_path(command: Any) -> str:
-    """``slots play`` for a subcommand, as the catalogue key prefix."""
+    """``slots play`` for a subcommand, as the catalogue key prefix.
+
+    A command whose ``extras`` carry :data:`PATH_OVERRIDE` borrows another
+    command's path: a short prefix alias answers as ``deposit`` but has to read
+    the wording stored under ``bank.deposit``.
+    """
+    extras = getattr(command, "extras", None) or {}
+    override = extras.get(PATH_OVERRIDE)
+    if override:
+        return str(override)
     names: list[str] = []
     node = command
     while node is not None:
