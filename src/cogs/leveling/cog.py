@@ -15,6 +15,7 @@ from utils.loading_cards import loading_card_url
 
 from utils.command_locales import command_texts
 from utils.moderation.ratelimit import mass_role_limiter
+from utils.prefix_alias import prefix_alias
 
 CMDS = command_texts(__package__)
 
@@ -856,6 +857,10 @@ class Leveling(commands.Cog):
         )
         view.add_item(container)
         await edit_with_card(message, view=view, buffer=card_image, filename="level_card.png")
+
+    # `/leveling rank` is long to type with a prefix, so the prefix side gets
+    # `.rank`; the slash command stays where it is.
+    rank = prefix_alias(leveling_rank)
 
     # ── LEADERBOARD SUBCOMMAND ─────────────────────
 

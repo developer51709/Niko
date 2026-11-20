@@ -161,6 +161,23 @@ def test_help_deposit_renders_the_grouped_description():
     assert "deposit" in rendered
 
 
+def test_leveling_rank_has_a_short_prefix_alias():
+    from cogs.leveling.cog import Leveling
+
+    alias = Leveling.rank
+    target = Leveling.leveling_rank
+
+    assert alias.name == "rank"
+    assert alias.hidden is True
+    assert alias.callback is target.callback
+    assert alias_of(alias) == "leveling rank"
+    assert list(alias.clean_params) == list(target.clean_params) == ["member"]
+    # .help rank reads the grouped command's wording, in every language.
+    assert command_path(alias) == "leveling.rank"
+    assert description_map(alias) == description_map(target)
+    assert description_map(alias).get("en")
+
+
 def test_command_totals_do_not_count_the_shortcuts():
     bot = _bot()
 
