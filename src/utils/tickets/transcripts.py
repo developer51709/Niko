@@ -1970,7 +1970,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
       if (spotifyNode) spotifyNode.innerHTML = nextSpotify.html;
       bindSpotify(card, nextSpotify.timing);
     }};
-    if (/^\d{{1,22}}$/.test(profileId) && typeof window.fetch === "function" && location.protocol.indexOf("http") === 0) {{
+    if (/^\\d{{1,22}}$/.test(profileId) && typeof window.fetch === "function" && location.protocol.indexOf("http") === 0) {{
       const loadPresence = () => {{
         fetch("/api/discord/users/" + encodeURIComponent(profileId))
           .then((response) => (response.ok ? response.json() : null))

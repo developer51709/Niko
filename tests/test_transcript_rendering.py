@@ -498,6 +498,9 @@ def test_export_popup_refreshes_presence_while_the_card_is_open():
     # instead of firing requests at an origin that does not serve the API.
     assert 'location.protocol.indexOf("http") === 0' in page
     assert 'typeof window.fetch === "function"' in page
+    # The id guard has to stay a JavaScript regex: a lone \d in the f-string is
+    # an invalid Python escape that Python warns about.
+    assert "/^\\d{1,22}$/.test(profileId)" in page
     # A refresh replaces only the presence parts, so an open badge popup, the
     # "..." menu and the card's position all survive it.
     assert "head.innerHTML = renderProfileAvatar(next) + profileStatusBubble(next);" in page
