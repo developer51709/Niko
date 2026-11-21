@@ -1138,9 +1138,18 @@ async def _create_tables(bot):
             panel_channel_id  INTEGER,
             panel_message_id  INTEGER,
             support_roles     TEXT DEFAULT '[]',
-            open_tickets      TEXT DEFAULT '[]'
+            open_tickets      TEXT DEFAULT '[]',
+            auto_transcript   INTEGER DEFAULT 0
         )
     """)
+    # Auto transcripts arrived after the table shipped, so an existing SQLite
+    # table needs the column; MongoDB is schema-less and the ALTER is skipped.
+    try:
+        await bot.cxn.execute(
+            "ALTER TABLE ticket_config ADD COLUMN auto_transcript INTEGER DEFAULT 0"
+        )
+    except Exception:
+        pass  # column already exists
 
     await bot.cxn.execute("""
         CREATE TABLE IF NOT EXISTS transcripts (

@@ -973,6 +973,7 @@ export type TicketConfig = {
   panel_message_id?: string | null;
   support_roles?: string[];
   open_tickets?: TicketRow[];
+  auto_transcript?: boolean;
 };
 
 export type TicketRow = {

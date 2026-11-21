@@ -38,6 +38,7 @@ from utils.tickets.utils import (
     find_open_ticket,
 )
 from utils.tickets.config import TicketConfig
+from utils.tickets.auto import auto_capture_transcript
 from config.emojis import get_emoji
 from utils.i18n import get_lang
 from utils.locales import load_locales
@@ -685,6 +686,7 @@ class _TicketCloseButton(discord.ui.Button):
             pass
 
         ticket["status"] = "closed"
+        await auto_capture_transcript(interaction.client, interaction.guild.id, channel, ticket, cfg)
         await _persist_and_refresh(interaction, cfg, ticket)
         await _show_panel(
             interaction, ticket, cfg,
@@ -731,6 +733,10 @@ class _TicketDeleteYesButton(discord.ui.Button):
         if ticket is None:
             return
 
+        # Capture before the channel (and its history) is gone.
+        await auto_capture_transcript(
+            interaction.client, interaction.guild.id, interaction.channel, ticket, cfg
+        )
         cfg.open_tickets = [
             t for t in cfg.open_tickets
             if t.get("channel_id") != interaction.channel.id

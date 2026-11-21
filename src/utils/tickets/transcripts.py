@@ -122,6 +122,136 @@ def generate_transcript_id(guild_id: int, channel_id: int, timestamp: float) -> 
     return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
+async def transcript_exists(cxn, transcript_id: str) -> bool:
+    """Whether a transcript row with this ID is already stored."""
+    row = await cxn.fetchval(
+        "SELECT transcript_id FROM transcripts WHERE transcript_id = $1",
+        transcript_id,
+    )
+    return row is not None
+
+
+async def update_transcript(
+    cxn,
+    transcript_id: str,
+    *,
+    channel_name: str,
+    category: str,
+    claimed_by: Optional[int],
+    messages: List[Dict[str, Any]],
+) -> None:
+    """Rewrite a stored transcript's messages, keeping its ID and first-close time."""
+    await cxn.execute(
+        "UPDATE transcripts SET channel_name = $2, category = $3, claimed_by = $4, "
+        "message_count = $5, messages = $6 WHERE transcript_id = $1",
+        transcript_id,
+        channel_name,
+        category,
+        claimed_by,
+        len(messages),
+        json.dumps(messages),
+    )
+
+
+async def collect_channel_messages(channel, limit: int = 2000) -> List[Dict[str, Any]]:
+    """Serialize a ticket channel's history into transcript message payloads."""
+    messages: List[Dict[str, Any]] = []
+    async for m in channel.history(limit=limit, oldest_first=True):
+        attachments = [a.url for a in m.attachments] if m.attachments else []
+
+        embeds = []
+        for embed in m.embeds:
+            try:
+                embeds.append(embed.to_dict())
+            except Exception:
+                continue
+
+        # CV2 layout components (containers, text displays, media galleries,
+        # thumbnails, buttons, ...) are serialized into JSON-safe payloads.
+        components = []
+        for comp in m.components:
+            try:
+                components.append(comp.to_dict())
+            except Exception:
+                continue
+
+        stickers = []
+        for sticker in m.stickers:
+            try:
+                payload = sticker.to_dict()
+            except Exception:
+                payload = {
+                    "id": sticker.id,
+                    "name": sticker.name,
+                    "format_type": getattr(getattr(sticker, "format", None), "value", getattr(sticker, "format", None)),
+                }
+            # discord.py may omit the CDN URL from to_dict(); keep it when
+            # available so stored transcripts can render stickers later.
+            if not payload.get("url") and getattr(sticker, "url", None):
+                payload["url"] = str(sticker.url)
+            stickers.append(payload)
+
+        messages.append({
+            "timestamp": m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "author": str(m.author),
+            "author_id": m.author.id,
+            "content": m.content or "",
+            "attachments": attachments,
+            "embeds": embeds,
+            "components": components,
+            "stickers": stickers,
+        })
+    return messages
+
+
+async def capture_ticket_transcript(
+    cxn,
+    *,
+    guild_id: int,
+    channel,
+    ticket: Dict[str, Any],
+) -> Optional[str]:
+    """Create a ticket's transcript, or refresh the one it already has.
+
+    The ID is kept on the ticket entry, so a reopened ticket is captured again
+    into the same transcript instead of a second copy of the conversation.
+    """
+    messages = await collect_channel_messages(channel)
+    # Inline images before persistence so HTML downloads stay self-contained
+    # even if Discord later removes the source message or the channel.
+    await inline_transcript_images(messages)
+
+    channel_name = getattr(channel, "name", None) or f"ticket-{getattr(channel, 'id', '')}"
+    category = str(ticket.get("category") or "General")
+    claimed_by = ticket.get("claimed_by")
+    existing = ticket.get("transcript_id")
+
+    if existing and await transcript_exists(cxn, str(existing)):
+        await update_transcript(
+            cxn,
+            str(existing),
+            channel_name=channel_name,
+            category=category,
+            claimed_by=claimed_by,
+            messages=messages,
+        )
+        return str(existing)
+
+    transcript_id = generate_transcript_id(guild_id, getattr(channel, "id", 0), time.time())
+    await save_transcript(
+        cxn,
+        transcript_id=transcript_id,
+        guild_id=guild_id,
+        channel_id=getattr(channel, "id", 0),
+        channel_name=channel_name,
+        opener_id=int(ticket.get("opener_id") or 0),
+        category=category,
+        messages=messages,
+        claimed_by=claimed_by,
+    )
+    return transcript_id
+
+
 def _image_data_url(payload: bytes, content_type: str) -> str:
     """Encode downloaded image bytes for an offline HTML transcript."""
     media_type = content_type.split(";", 1)[0].strip().lower()

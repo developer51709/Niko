@@ -21,6 +21,10 @@ class TicketConfig:
     # in-ticket subcommands like add/remove/close/delete/claim
     support_roles: List[int] = field(default_factory=list)
 
+    # create a transcript automatically when a ticket is closed or deleted; a
+    # reopened ticket keeps its transcript id and the same row is updated
+    auto_transcript: bool = False
+
     # persistent open tickets — each entry:
     #   channel_id, message_id, category, opener_id, status,
     #   claimed_by (Optional[int])

@@ -52,6 +52,7 @@ def _serialize_ticket_config(cfg) -> dict:
         "panel_message_id": str(cfg.panel_message_id) if cfg.panel_message_id else None,
         "support_roles": [str(role_id) for role_id in (cfg.support_roles or [])],
         "open_tickets": tickets,
+        "auto_transcript": bool(cfg.auto_transcript),
     }
 
 

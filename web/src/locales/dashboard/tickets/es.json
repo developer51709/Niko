@@ -28,6 +28,8 @@
   "tickets.panelColorPicker": "Color de acento del panel de tickets",
   "tickets.panelImageLabel": "URL de la imagen del panel",
   "tickets.categoriesLabel": "Categorías de tickets",
+  "tickets.autoTranscript": "Transcripción automática al cerrar",
+  "tickets.autoTranscriptHint": "Guarda una transcripción automáticamente cuando se cierra o elimina un ticket. Un ticket reabierto actualiza la misma transcripción en lugar de crear otra.",
   "tickets.supportRolesLabel": "Roles de soporte",
   "tickets.queueLabel": "Cola en vivo",
   "tickets.queueTitle": "Tickets actuales",

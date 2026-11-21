@@ -437,6 +437,16 @@ def api_update_ticket_status(guild_id, channel_id):
             # The panel may be absent in older/partially migrated tickets;
             # channel permission/name changes remain the authoritative action.
             pass
+    if status == "closed" and _discord_bot is not None:
+        # Best-effort: the auto transcript helper logs and swallows its own
+        # failures so a transcript problem can never block the close.
+        try:
+            from utils.tickets.auto import auto_capture_transcript
+            run_on_bot_loop(
+                auto_capture_transcript(_discord_bot, guild_number, channel, ticket, cfg)
+            )
+        except Exception:
+            pass
     ticket["status"] = status
     try:
         run_on_bot_loop(async_update_ticket_config(guild_number, cfg))
@@ -914,6 +924,7 @@ def api_save_server(guild_id):
         allowed = {
             "panel_title", "panel_description", "panel_color", "panel_image",
             "panel_categories", "panel_channel_id", "support_roles",
+            "auto_transcript",
         }
         unknown = set(tickets_data) - allowed
         if unknown:
@@ -962,6 +973,11 @@ def api_save_server(guild_id):
                 tickets.panel_channel_id = int(value)
             else:
                 return jsonify({"error": "Ticket panel channel must be a valid channel ID."}), 400
+        if "auto_transcript" in tickets_data:
+            value = tickets_data["auto_transcript"]
+            if not isinstance(value, bool):
+                return jsonify({"error": "Auto transcript must be true or false."}), 400
+            tickets.auto_transcript = value
         if "support_roles" in tickets_data:
             roles = tickets_data["support_roles"]
             if not isinstance(roles, list) or any(not str(item).isdigit() for item in roles):

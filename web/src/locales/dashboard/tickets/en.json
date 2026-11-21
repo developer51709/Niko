@@ -29,6 +29,8 @@
   "tickets.panelImageLabel": "Panel image URL",
   "tickets.categoriesLabel": "Ticket categories",
   "tickets.supportRolesLabel": "Support roles",
+  "tickets.autoTranscript": "Auto transcript on close",
+  "tickets.autoTranscriptHint": "Save a transcript automatically when a ticket is closed or deleted. A reopened ticket updates the same transcript instead of creating another.",
   "tickets.queueLabel": "Live queue",
   "tickets.queueTitle": "Current tickets",
   "tickets.queueDetail": "Quickly reopen or close a ticket channel.",

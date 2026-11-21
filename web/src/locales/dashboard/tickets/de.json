@@ -28,6 +28,8 @@
   "tickets.panelColorPicker": "Akzentfarbe des Ticket-Panels",
   "tickets.panelImageLabel": "Bild-URL des Panels",
   "tickets.categoriesLabel": "Ticket-Kategorien",
+  "tickets.autoTranscript": "Automatisches Transcript beim Schließen",
+  "tickets.autoTranscriptHint": "Speichert beim Schließen oder Löschen eines Tickets automatisch ein Transcript. Ein wieder geöffnetes Ticket aktualisiert dasselbe Transcript statt ein weiteres anzulegen.",
   "tickets.supportRolesLabel": "Support-Rollen",
   "tickets.queueLabel": "Live-Warteschlange",
   "tickets.queueTitle": "Aktuelle Tickets",

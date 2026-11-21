@@ -39,6 +39,7 @@ def _row_to_config(row) -> TicketConfig:
         panel_message_id=row.get("panel_message_id"),
         support_roles=_list(row.get("support_roles")),
         open_tickets=_list(row.get("open_tickets")),
+        auto_transcript=bool(row.get("auto_transcript")),
     )
 
 
@@ -55,6 +56,7 @@ def _config_to_doc(cfg: TicketConfig) -> dict:
         "panel_message_id": cfg.panel_message_id,
         "support_roles": cfg.support_roles or [],
         "open_tickets": cfg.open_tickets or [],
+        "auto_transcript": bool(cfg.auto_transcript),
     }
 
 
@@ -65,12 +67,13 @@ def _config_to_doc(cfg: TicketConfig) -> dict:
 _UPSERT_SQL = (
     "INSERT INTO ticket_config "
     "(guild_id, panel_title, panel_description, panel_color, panel_image, "
-    "panel_categories, panel_channel_id, panel_message_id, support_roles, open_tickets) "
-    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
+    "panel_categories, panel_channel_id, panel_message_id, support_roles, open_tickets, "
+    "auto_transcript) "
+    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
     "ON CONFLICT (guild_id) DO UPDATE SET "
-    "panel_title = $11, panel_description = $12, panel_color = $13, panel_image = $14, "
-    "panel_categories = $15, panel_channel_id = $16, panel_message_id = $17, "
-    "support_roles = $18, open_tickets = $19"
+    "panel_title = $12, panel_description = $13, panel_color = $14, panel_image = $15, "
+    "panel_categories = $16, panel_channel_id = $17, panel_message_id = $18, "
+    "support_roles = $19, open_tickets = $20, auto_transcript = $21"
 )
 
 
@@ -98,6 +101,7 @@ async def _save_config_to_db(guild_id: int, cfg: TicketConfig) -> bool:
             cfg.panel_message_id,
             json.dumps(cfg.support_roles or []),
             json.dumps(cfg.open_tickets or []),
+            bool(cfg.auto_transcript),
             # second set of values for the ON CONFLICT DO UPDATE SET clause
             cfg.panel_title,
             cfg.panel_description,
@@ -108,6 +112,7 @@ async def _save_config_to_db(guild_id: int, cfg: TicketConfig) -> bool:
             cfg.panel_message_id,
             json.dumps(cfg.support_roles or []),
             json.dumps(cfg.open_tickets or []),
+            bool(cfg.auto_transcript),
         )
         return True
     except Exception as e:

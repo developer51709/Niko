@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from .views import *
 from utils.i18n import get_lang
+from utils.tickets.auto import auto_capture_transcript
 
 from utils.command_locales import command_texts
 
@@ -270,54 +271,10 @@ class Tickets(commands.Cog):
         if ctx.interaction and not ctx.interaction.response.is_done():
             await ctx.defer()
 
+        from utils.tickets.transcripts import collect_channel_messages
+
         # Collect messages
-        messages = []
-        async for m in ctx.channel.history(limit=2000, oldest_first=True):
-            attachments = [a.url for a in m.attachments] if m.attachments else []
-
-            # Serialize embeds into JSON-safe payloads
-            embeds = []
-            for embed in m.embeds:
-                try:
-                    embeds.append(embed.to_dict())
-                except Exception:
-                    continue
-
-            # Serialize CV2 layout components (containers, text displays,
-            # media galleries, thumbnails, buttons, ...) into JSON-safe payloads
-            components = []
-            for comp in m.components:
-                try:
-                    components.append(comp.to_dict())
-                except Exception:
-                    continue
-
-            stickers = []
-            for sticker in m.stickers:
-                try:
-                    payload = sticker.to_dict()
-                except Exception:
-                    payload = {
-                        "id": sticker.id,
-                        "name": sticker.name,
-                        "format_type": getattr(getattr(sticker, "format", None), "value", getattr(sticker, "format", None)),
-                    }
-                # discord.py may omit the CDN URL from to_dict(); keep it when
-                # available so stored transcripts can render stickers later.
-                if not payload.get("url") and getattr(sticker, "url", None):
-                    payload["url"] = str(sticker.url)
-                stickers.append(payload)
-
-            messages.append({
-                "timestamp": m.created_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
-                "author": str(m.author),
-                "author_id": m.author.id,
-                "content": m.content or "",
-                "attachments": attachments,
-                "embeds": embeds,
-                "components": components,
-                "stickers": stickers,
-            })
+        messages = await collect_channel_messages(ctx.channel)
 
         # Find ticket info for metadata
         ticket_info = is_ticket_channel(ctx)
@@ -441,6 +398,7 @@ class Tickets(commands.Cog):
             pass
 
         ticket["status"] = "closed"
+        await auto_capture_transcript(self.bot, ctx.guild.id, ctx.channel, ticket, cfg)
         await async_update_ticket_config(ctx.guild.id, cfg)
         await refresh_ticket_header(ctx, ctx.guild, ctx.channel, ticket, cfg)
 
@@ -465,6 +423,9 @@ class Tickets(commands.Cog):
         seconds = max(1, min(seconds, 30))
         await ctx.send(view=_cv2_text(ctx, "deleting", seconds=seconds))
         await asyncio.sleep(seconds)
+
+        # Capture before the channel (and its history) is gone.
+        await auto_capture_transcript(self.bot, ctx.guild.id, ctx.channel, ticket, cfg)
 
         # remove from open tickets list
         cfg.open_tickets = [t for t in cfg.open_tickets if t.get("channel_id") != ctx.channel.id]
