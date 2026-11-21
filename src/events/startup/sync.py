@@ -21,12 +21,20 @@ import hashlib
 import json
 import os
 
+import discord
+
 from utils import command_ids, logging
 from utils.command_localization import apply_command_localizations
 from utils.emoji_sync import sync_application_emojis
 
 _FINGERPRINT_KEY = "slash_command_fingerprint"
 _LEGACY_FINGERPRINT_FILE = "data/slash_command_fingerprint.json"
+
+#: Discord's Primary Entry Point command type. An app with an Activity owns one,
+#: Discord creates it itself, and a bulk overwrite that leaves it out is
+#: rejected with error code 50240 — so it has to be sent back with the tree.
+_ENTRY_POINT_COMMAND_TYPE = 4
+_MISSING_ENTRY_POINT_CODE = 50240
 
 
 def _command_to_dict(command, tree):
@@ -111,6 +119,29 @@ async def _db_store_fingerprint(bot, fingerprint: str) -> None:
         logging.warning("SlashSync", f"Could not store command fingerprint: {exc}")
 
 
+async def _sync_preserving_entry_point(bot):
+    """Bulk-overwrite the command tree without dropping Discord's Entry Point.
+
+    Discord refuses a bulk update that removes the app's Entry Point command,
+    and the bot's own tree never contains it. The registered command is fetched
+    and appended to the same payload Discord rejected, then the tree is re-sent.
+    """
+    tree = bot.tree
+    payload = [_command_to_dict(command, tree) for command in tree._get_all_commands()]
+    registered = await bot.http.get_global_commands(bot.application_id)
+    entry_points = [
+        command for command in registered or ()
+        if command.get("type") == _ENTRY_POINT_COMMAND_TYPE
+    ]
+    if not entry_points:
+        raise RuntimeError(
+            "Discord rejected the sync for a missing Entry Point command, "
+            "but none is registered."
+        )
+    await bot.http.bulk_upsert_global_commands(bot.application_id, payload=payload + entry_points)
+    return await tree.fetch_commands()
+
+
 async def run_slash_sync(bot):
     # Translations must be attached before the tree is hashed and sent.
     apply_command_localizations(bot.tree)
@@ -131,7 +162,16 @@ async def run_slash_sync(bot):
                 f"({command_count} command(s)).",
             )
             return
-        synced = await bot.tree.sync()
+        try:
+            synced = await bot.tree.sync()
+        except discord.HTTPException as exc:
+            if getattr(exc, "code", None) != _MISSING_ENTRY_POINT_CODE:
+                raise
+            logging.info(
+                "SlashSync",
+                "Bulk sync needs the app's Entry Point command — retrying with it.",
+            )
+            synced = await _sync_preserving_entry_point(bot)
         # Persist only after Discord accepted the sync so a rate-limited
         # attempt is retried on the next boot instead of being skipped.
         await _db_store_fingerprint(bot, fingerprint)
