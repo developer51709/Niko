@@ -82,7 +82,9 @@ function TicketCategoryList({ categories, onChange }: { categories: string[]; on
   const add = () => onChange([...categories, ""]);
   return <div className="settings-category-editor">
     <div className="settings-option-list">
-      {categories.map((category, index) => <div className="settings-option-row" key={`${category}-${index}`}>
+      {/* Rows are positional: keying by the typed value would remount the input
+          on every keystroke and drop the caret and focus with it. */}
+      {categories.map((category, index) => <div className="settings-option-row" key={index}>
         <input aria-label={t("tickets.categoryAria", { count: index + 1 })} value={category} maxLength={80} onChange={(event) => onChange(categories.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={t("tickets.categoryPlaceholder", { count: index + 1 })} />
         <button type="button" className="settings-option-remove" onClick={() => onChange(categories.filter((_, itemIndex) => itemIndex !== index))} aria-label={t("tickets.categoryRemoveAria", { count: index + 1 })}>{t("server.remove")}</button>
       </div>)}
