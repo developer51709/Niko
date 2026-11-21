@@ -228,8 +228,16 @@ def test_the_react_emoji_popup_matches_discord_and_gets_the_ticket_server():
     assert "useBotEmojis();" in markdown
     assert "BOT_EMOJIS" not in markdown
     assert 'data-emoji-app={isApplication ? "1" : "0"}' in markdown
-    assert "This emoji is from the Niko app" in markdown
-    assert "This emoji is from this server. Get Nitro to use it everywhere." in markdown
+    # The popup copy is catalogue copy, not English written into the component:
+    # the component asks for the key and the catalogue holds the wording, so a
+    # translated popup needs no component edit.
+    assert 't("emoji.application")' in markdown
+    assert 't("emoji.knownGuild")' in markdown
+    shared = json.loads(
+        (ROOT / "web" / "src" / "locales" / "shared" / "en.json").read_text(encoding="utf-8")
+    )
+    assert shared["emoji.application"] == "This emoji is from the Niko app"
+    assert shared["emoji.knownGuild"] == "This emoji is from this server. Get Nitro to use it everywhere."
     # The button uses Discord's own Nitro mark, not a hand-drawn placeholder.
     assert 'd="M13.32 21.978' in markdown
     # The popup is a fixed layer on the page, not a child clipped by the chat.
