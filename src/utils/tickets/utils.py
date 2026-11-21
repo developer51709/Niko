@@ -197,20 +197,22 @@ def update_ticket_config(guild_id: int, cfg: TicketConfig) -> None:
     """
     _ticket_configs[guild_id] = cfg
 
-    # Try to schedule the async save
+    coro = _save_config_to_db(guild_id, cfg)
     try:
-        loop = asyncio.get_running_loop()
-        asyncio.ensure_future(_save_config_to_db(guild_id, cfg))
+        asyncio.get_running_loop()
     except RuntimeError:
-        # No running loop — use a blocking helper
+        # No loop in this thread (Flask's worker): hand the write to the bot's
+        # loop. The shared database pool's HTTP session lives there, so running
+        # it on a fresh loop fails inside aiohttp with "Timeout context manager
+        # should be used inside a task".
         try:
-            loop = asyncio.new_event_loop()
-            try:
-                loop.run_until_complete(_save_config_to_db(guild_id, cfg))
-            finally:
-                loop.close()
+            from webapp.runtime import schedule_on_bot_loop
+
+            schedule_on_bot_loop(coro)
         except Exception:
-            pass
+            coro.close()
+    else:
+        asyncio.ensure_future(coro)
 
 
 # ── Async update (awaitable) ─────────────────────────────────────────────────

@@ -761,7 +761,7 @@ def api_save_server(guild_id):
     from utils.prefix_manager import DEFAULT_PREFIXES, PREFIX_OVERRIDE, set_prefixes
     from utils.onboarding.config import load_config, save_config
     from cogs.logging.formatters import _load_log_config, _guild_config, _save_guild_log_config, CATEGORIES
-    from utils.tickets.utils import get_ticket_config, update_ticket_config
+    from utils.tickets.utils import async_update_ticket_config, get_ticket_config
 
     try:
         numeric_guild_id = int(guild_id)
@@ -989,7 +989,10 @@ def api_save_server(guild_id):
             ):
                 return jsonify({"error": "Support roles contains a role from another server."}), 400
             tickets.support_roles = list(dict.fromkeys(int(item) for item in roles))
-        update_ticket_config(numeric_guild_id, tickets)
+        try:
+            run_on_bot_loop(async_update_ticket_config(numeric_guild_id, tickets))
+        except Exception:
+            return jsonify({"error": "Ticket settings could not be saved."}), 503
         if _discord_bot is not None:
             try:
                 run_on_bot_loop(_refresh_ticket_panel(numeric_guild_id))
