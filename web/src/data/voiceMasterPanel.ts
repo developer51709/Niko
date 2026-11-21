@@ -15,7 +15,7 @@
 // tests/test_voicemaster_panel.py checks that every string here still matches
 // the bot's locale files.
 
-export type PanelLanguage = "en" | "de" | "es" | "fr" | "ru" | "ja" | "zh" | "hi" | "ar";
+export type PanelLanguage = "en" | "de" | "es" | "fr" | "ru" | "ja" | "zh" | "hi";
 
 /** One button on the panel, in the panel's own order. */
 export type PanelAction =
@@ -60,7 +60,6 @@ export const PANEL_LANGUAGES: { value: PanelLanguage; label: string; code: strin
   { value: "ja", label: "日本語", code: "JA" },
   { value: "zh", label: "中文", code: "ZH" },
   { value: "hi", label: "हिन्दी", code: "HI" },
-  { value: "ar", label: "العربية", code: "AR" },
 ];
 
 /** The command names the panel writes next to each emoji. */
@@ -419,47 +418,6 @@ export const PANEL_STRINGS: Record<PanelLanguage, PanelStrings> = {
       placeholder: "डिस्कनेक्ट करने के लिए सदस्य चुनें...",
       option: "{user} को डिस्कनेक्ट करें",
       done: "डिस्कनेक्ट किए गए: {users}",
-    },
-  },
-  ar: {
-    title: "VoiceMaster | الواجهة",
-    legend: {
-      lock: "القناة الصوتية",
-      unlock: "القناة الصوتية",
-      hide: "القناة الصوتية",
-      reveal: "القناة الصوتية",
-      claim: "القناة الصوتية",
-      disconnect: "عضوًا",
-      view: "معلومات القناة",
-      increase: "حد الأعضاء",
-      decrease: "حد الأعضاء",
-    },
-    actions: {
-      lock: "تم قفل القناة الصوتية.",
-      unlock: "تم فتح القناة الصوتية.",
-      hide: "تم إخفاء القناة الصوتية.",
-      reveal: "أصبحت القناة الصوتية ظاهرة.",
-      claim: "تم الاستيلاء على القناة الصوتية.",
-      increase: "تم رفع حد الأعضاء.",
-      decrease: "تم خفض حد الأعضاء.",
-    },
-    info: {
-      owner: "المالك",
-      members: "الأعضاء",
-      limit: "الحد",
-      bitrate: "معدل البت",
-      region: "المنطقة",
-      status: "الحالة",
-      noLimit: "بلا حد",
-      automatic: "تلقائي",
-      open: "مفتوح",
-      locked: "مقفل",
-      hidden: "مخفي",
-    },
-    disconnect: {
-      placeholder: "اختر الأعضاء لفصلهم...",
-      option: "افصل {user}",
-      done: "تم فصل: {users}",
     },
   },
 };

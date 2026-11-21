@@ -35,7 +35,6 @@ LANGUAGE_NAMES = {
     "ja": "日本語",
     "zh": "中文",
     "hi": "हिन्दी",
-    "ar": "العربية",
 }
 
 #: A prefix user may type any of these to go back to Discord's choice.

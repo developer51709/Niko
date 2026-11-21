@@ -48,10 +48,10 @@ from .commands import (
 #: Taken from the bot's own list rather than copied, so a language added there
 #: is counted here (and published in the feed) without a second edit.
 LANGUAGES = SUPPORTED_LANGUAGES
-#: Names for the language codes the website can carry. Wider than :data:`LANGUAGES`
-#: on purpose: the site's landing page ships more languages than the bot speaks,
-#: and the feed labels whatever catalogue files it finds. A code without an entry
-#: still works — it is shown upper-cased.
+#: Names for the language codes the website can carry. The feed labels whatever
+#: catalogue files it finds, so this list follows those files rather than
+#: :data:`LANGUAGES`; a code without an entry still works — it is shown
+#: upper-cased.
 LANGUAGE_LABELS = {
     "en": "English",
     "de": "Deutsch",
@@ -61,7 +61,6 @@ LANGUAGE_LABELS = {
     "ja": "日本語",
     "zh": "中文",
     "hi": "हिन्दी",
-    "ar": "العربية",
 }
 
 #: The website's own per-page catalogues (``web/src/locales/<page>/<lang>.json``,
@@ -296,9 +295,9 @@ def _website_locale_status() -> list[dict]:
     stopped is still partial, however many keys it filled in.
     """
     total = 0
-    # The site can carry more languages than the bot speaks — the landing page
-    # ships Russian, Japanese, Chinese, Hindi and Arabic — so the rows follow the
-    # files on disk and the bot's four are only the starting order.
+    # The rows follow the language files on disk, and the bot's own list is only
+    # the starting order, so a language the site carries before the bot does is
+    # still counted.
     codes = list(LANGUAGES)
     translated: dict[str, int] = {}
     complete: dict[str, int] = {}

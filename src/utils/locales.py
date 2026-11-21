@@ -59,7 +59,7 @@ from typing import Any, Iterator
 #: English is the fallback for everything else. Adding a code here makes the
 #: language selectable everywhere; its wording then arrives catalogue by
 #: catalogue, and every key it does not carry yet is served in English.
-SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "de", "es", "fr", "ru", "ja", "zh", "hi", "ar")
+SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "de", "es", "fr", "ru", "ja", "zh", "hi")
 FALLBACK_LANGUAGE = "en"
 
 #: Folder name inside a cog package.
