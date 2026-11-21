@@ -1,0 +1,16 @@
+{
+  "title": "Médias signalés dans les entrées de journal — Niko",
+  "hero.eyebrow": "Journaux de messages",
+  "hero.title": "Pourquoi une image manque dans ce journal",
+  "hero.lead": "Les journaux de serveur de Niko conservent les messages supprimés pour la modération. Lorsque l'analyse automatique de contenu de Discord a signalé une image, le journal affiche un espace réservé à la place de l'image, et l'entrée renvoie ici.",
+  "type.explicit.name": "Contenu explicite",
+  "type.explicit.what": "Discord a classé l'image comme sexuellement explicite — le même contrôle que celui derrière son avertissement de contenu sensible.",
+  "type.gore.name": "Violence graphique",
+  "type.gore.what": "Discord a classé l'image comme violence graphique : blessures visibles, sang ou contenu choquant similaire.",
+  "type.self-harm.name": "Automutilation",
+  "type.self-harm.what": "Discord a classé l'image comme contenu d'automutilation.",
+  "note.notStored": "L'espace réservé n'est pas une copie floutée. Niko n'a jamais téléchargé l'image : rien de celle-ci n'est enregistré avec l'entrée de journal.",
+  "note.kept": "Le texte du message, l'auteur, le salon, l'horodatage et les noms des pièces jointes restent enregistrés.",
+  "support.before": "Une question sur une entrée précise ?",
+  "support.link": "Demande sur le serveur de support"
+}

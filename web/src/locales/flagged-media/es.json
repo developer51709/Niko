@@ -1,0 +1,16 @@
+{
+  "title": "Medios marcados en las entradas de registro — Niko",
+  "hero.eyebrow": "Registros de mensajes",
+  "hero.title": "Por qué falta una imagen en este registro",
+  "hero.lead": "Los registros del servidor de Niko guardan los mensajes eliminados para el equipo de moderación. Cuando el escaneo automático de contenido de Discord ha marcado una imagen, el registro muestra un marcador de posición en lugar de la imagen, y la entrada enlaza aquí.",
+  "type.explicit.name": "Contenido explícito",
+  "type.explicit.what": "Discord etiquetó la imagen como sexualmente explícita: la misma comprobación que hay detrás de su aviso de contenido sensible.",
+  "type.gore.name": "Violencia explícita",
+  "type.gore.what": "Discord etiquetó la imagen como violencia gráfica: lesiones visibles, sangre o contenido impactante similar.",
+  "type.self-harm.name": "Autolesión",
+  "type.self-harm.what": "Discord etiquetó la imagen como contenido de autolesión.",
+  "note.notStored": "El marcador de posición no es una copia difuminada. Niko nunca descargó la imagen, así que no se guarda nada de ella con la entrada de registro.",
+  "note.kept": "El texto del mensaje, el autor, el canal, la marca de tiempo y los nombres de los archivos adjuntos siguen registrándose.",
+  "support.before": "¿Tienes dudas sobre una entrada concreta?",
+  "support.link": "Pregunta en el servidor de soporte"
+}

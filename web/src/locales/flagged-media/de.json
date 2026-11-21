@@ -1,0 +1,16 @@
+{
+  "title": "Markierte Medien in Log-Einträgen — Niko",
+  "hero.eyebrow": "Nachrichten-Logs",
+  "hero.title": "Warum in diesem Log ein Bild fehlt",
+  "hero.lead": "Nikos Server-Logs bewahren gelöschte Nachrichten für Moderatorinnen und Moderatoren auf. Wenn Discords automatische Inhaltsprüfung ein Bild markiert hat, zeigt der Log statt des Bildes einen Platzhalter, und der Eintrag verlinkt hierher.",
+  "type.explicit.name": "Explizite Inhalte",
+  "type.explicit.what": "Discord hat das Bild als sexuell explizit eingestuft — dieselbe Prüfung, die hinter der Warnung für sensible Medien steht.",
+  "type.gore.name": "Gewaltdarstellung",
+  "type.gore.what": "Discord hat das Bild als grafische Gewalt eingestuft: sichtbare Verletzungen, Blut oder ähnliche schockierende Inhalte.",
+  "type.self-harm.name": "Selbstverletzung",
+  "type.self-harm.what": "Discord hat das Bild als Inhalt zu Selbstverletzung eingestuft.",
+  "note.notStored": "Der Platzhalter ist keine unscharfe Kopie. Niko hat das Bild nie heruntergeladen, es ist also nichts davon mit dem Log-Eintrag gespeichert.",
+  "note.kept": "Nachrichtentext, Autor, Kanal, Zeitstempel und Anhangsnamen werden weiterhin erfasst.",
+  "support.before": "Fragen zu einem bestimmten Eintrag?",
+  "support.link": "Frag im Support-Server"
+}
