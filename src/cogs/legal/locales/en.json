@@ -10,6 +10,9 @@
     "footer_terms": "Support & contact: {support_server}",
     "footer_community": "Full policy: {community}",
     "updated_by": "Updated by {owner_mention}",
+    "page_prev": "Previous",
+    "page_next": "Next",
+    "page_locked": "These pages belong to someone else — run the command yourself to read them.",
     "legal_overview": "Use `/legal privacy` for the **Privacy Policy**, `/legal terms` for the **Terms of Service**, or `/legal community` for the **Community Policy**. You can also read them online: {website}"
   },
   "commands": {

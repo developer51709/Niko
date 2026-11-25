@@ -10,6 +10,9 @@
     "footer_terms": "Support et contact : {support_server}",
     "footer_community": "Charte complète : {community}",
     "updated_by": "Mis à jour par {owner_mention}",
+    "page_prev": "Précédent",
+    "page_next": "Suivant",
+    "page_locked": "Ces pages appartiennent à quelqu'un d'autre — lance la commande toi-même pour les lire.",
     "legal_overview": "Utilise `/legal privacy` pour la **politique de confidentialité**, `/legal terms` pour les **conditions d'utilisation**, ou `/legal community` pour la **charte communautaire**. Tu peux aussi les lire en ligne : {website}"
   },
   "commands": {

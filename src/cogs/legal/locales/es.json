@@ -10,6 +10,9 @@
     "footer_terms": "Soporte y contacto: {support_server}",
     "footer_community": "Política completa: {community}",
     "updated_by": "Actualizado por {owner_mention}",
+    "page_prev": "Anterior",
+    "page_next": "Siguiente",
+    "page_locked": "Estas páginas son de otra persona: ejecuta el comando tú mismo para leerlas.",
     "legal_overview": "Usa `/legal privacy` para la **Política de Privacidad**, `/legal terms` para los **Términos de Servicio** o `/legal community` para la **Política de Comunidad**. En línea: {website}"
   },
   "commands": {
