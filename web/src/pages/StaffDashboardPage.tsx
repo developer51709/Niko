@@ -70,6 +70,9 @@ function reportStatus(status: string) {
 }
 
 const CARD_THEMES = selectOptions([["dark", "Dark"], ["light", "Light"]]);
+// ``compact`` is the card every README already embeds; ``profile`` follows the
+// website's Discord profile popup and carries the whole public profile.
+const CARD_STYLES = selectOptions([["compact", "Compact"], ["profile", "Full profile"]]);
 const BLACKLIST_TYPES = selectOptions([["user", "User"], ["guild", "Guild"]]);
 
 type StaffTab = "profile" | "analytics" | "global" | "guilds" | "blacklist" | "appeals" | "proxy-workers" | "lavalink" | "maintenance" | "honeypot" | "mcp" | "logs" | "team-recruitment" | "staff-management" | "broadcasts" | "billing" | "data-removal" | "reports";
@@ -151,6 +154,7 @@ export function StaffDashboardPage() {
     card_theme: "dark" as "dark" | "light",
     card_accent: CARD_ACCENT_FALLBACK,
     card_show_status: true,
+    card_style: "compact" as "compact" | "profile",
   });
   const [links, setLinks] = useState<PublicProfileLink[]>([]);
   // The card endpoint is never cached, so each tick pulls the current Discord
@@ -245,6 +249,7 @@ export function StaffDashboardPage() {
         card_theme: staffStatus.profile.card?.theme === "light" ? "light" : "dark",
         card_accent: staffStatus.profile.card?.accent ? `#${staffStatus.profile.card.accent}` : CARD_ACCENT_FALLBACK,
         card_show_status: staffStatus.profile.card?.show_status !== false,
+        card_style: staffStatus.profile.card?.style === "profile" ? "profile" : "compact",
       });
       setLinks(staffStatus.profile.public_links || []);
       if (staffStatus.role === "owner") {
@@ -336,7 +341,7 @@ export function StaffDashboardPage() {
   // is visible before the listing is saved. The embedded card caches for a
   // minute on GitHub and uses the saved values from the same profile row.
   const cardBaseUrl = `${window.location.origin}/staff/${staff.profile.id}/card.svg`;
-  const cardPreviewUrl = `${cardBaseUrl}?theme=${form.card_theme}&accent=${encodeURIComponent(form.card_accent.replace(/^#/, "").toUpperCase())}&status=${form.card_show_status ? 1 : 0}&t=${cardPreviewStamp}`;
+  const cardPreviewUrl = `${cardBaseUrl}?theme=${form.card_theme}&style=${form.card_style}&accent=${encodeURIComponent(form.card_accent.replace(/^#/, "").toUpperCase())}&status=${form.card_show_status ? 1 : 0}&t=${cardPreviewStamp}`;
   // The image itself is the link, so clicking the card on GitHub opens the
   // member's public staff profile instead of the raw SVG.
   // The shareable profile link is the username; the id link still resolves.
@@ -411,6 +416,7 @@ export function StaffDashboardPage() {
         card_theme: form.card_theme,
         card_accent: form.card_accent.replace(/^#/, "").toUpperCase(),
         card_show_status: form.card_show_status,
+        card_style: form.card_style,
       }, auth.csrf_token);
       notifySuccess(t("card.saved"), "staff-card-settings");
     } catch (reason) {
@@ -858,6 +864,7 @@ export function StaffDashboardPage() {
         </div>
         <div className="staff-card-controls">
           <div className="staff-card-fields">
+            <div className="form-field"><span className="form-label">{t("card.style")}</span><Select ariaLabel={t("card.style")} placeholder={null} options={CARD_STYLES} value={form.card_style} onChange={(value) => update("card_style", value)} /></div>
             <div className="form-field"><span className="form-label">{t("card.theme")}</span><Select ariaLabel={t("card.theme")} placeholder={null} options={CARD_THEMES} value={form.card_theme} onChange={(value) => update("card_theme", value)} /></div>
             <div className="form-field"><span className="form-label">{t("card.accent")}</span><ColorPicker label={t("card.accentAria")} value={form.card_accent} onChange={(hex) => update("card_accent", hex)} /></div>
           </div>

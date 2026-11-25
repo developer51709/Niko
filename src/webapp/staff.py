@@ -329,7 +329,7 @@ STAFF_STATUS_LABELS = {
     "former": "Former staff",
 }
 
-_STAFF_CARD_COLUMNS = ("card_theme", "card_accent", "card_show_status")
+_STAFF_CARD_COLUMNS = ("card_theme", "card_accent", "card_show_status", "card_style")
 
 _STAFF_ROW_COLUMNS = (
     "user_id", "role", "public_name", "public_bio", "public_avatar_url",
@@ -398,6 +398,7 @@ def _staff_row(row) -> dict:
             "theme": "light" if str(row.get("card_theme") or "").strip().lower() == "light" else "dark",
             "accent": str(row.get("card_accent") or "").strip().lstrip("#").upper() or None,
             "show_status": row.get("card_show_status") is None or bool(row.get("card_show_status")),
+            "style": "profile" if str(row.get("card_style") or "").strip().lower() == "profile" else "compact",
         },
         "staff_status": status,
         "staff_status_label": STAFF_STATUS_LABELS[status],

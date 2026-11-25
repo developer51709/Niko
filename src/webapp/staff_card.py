@@ -56,6 +56,19 @@ MOBILE_NOTCH_CORNER = 16 / 75
 # the two, so the artwork overhangs the picture by the same amount everywhere.
 DECORATION_SCALE = 1.2
 
+# Two card styles: the compact strip a README has always shown, and a full
+# profile card laid out like the website's Discord profile popup. ``compact``
+# stays the default so an existing embed never changes on its own.
+CARD_STYLES = ("compact", "profile")
+PROFILE_BANNER_HEIGHT = 116
+PROFILE_AVATAR_RADIUS = 48
+PROFILE_AVATAR_CENTRE = (40 + PROFILE_AVATAR_RADIUS, PROFILE_BANNER_HEIGHT)
+PROFILE_GUTTER = 40
+PROFILE_BODY_WIDTH = CARD_WIDTH - PROFILE_GUTTER * 2
+PROFILE_BADGE_SIZE = 22
+PROFILE_BIO_LIMIT = 86
+PROFILE_BIO_LINES = 4
+
 PALETTES = {
     "dark": {
         "top": "#181B21",
@@ -112,11 +125,25 @@ _SPOTIFY_MARK_PATHS = (
 )
 _spotify_mark_cache: dict[str, str | None] = {}
 _status_icon_cache: dict[str, str | None] = {}
+# Badges are 24px SVGs that ship with the site, so the profile card inlines
+# them the same way it inlines the status art.
+_BADGE_DIRS = (
+    Path(__file__).resolve().parents[1] / "website" / "dist" / "assets" / "badges",
+    Path(__file__).resolve().parents[2] / "web" / "public" / "assets" / "badges",
+)
+_badge_cache: dict[str, str | None] = {}
+_banner_cache: dict[str, tuple[float, str | None]] = {}
 
 
 def normalize_theme(value) -> str:
     """``dark`` or ``light``; anything else falls back to the dark card."""
     return "light" if str(value or "").strip().lower() == "light" else "dark"
+
+
+def normalize_style(value) -> str:
+    """``compact`` or ``profile``; anything else falls back to compact."""
+    key = str(value or "").strip().lower()
+    return key if key in CARD_STYLES else "compact"
 
 
 def accent_hex(value, fallback: str = DEFAULT_ACCENT) -> str:
@@ -291,11 +318,11 @@ def _activity_copy(activity: dict) -> tuple[str, str, str]:
     )
 
 
-def _activity_card(activity: dict, palette: dict) -> str:
+def _activity_card(activity: dict, palette: dict, *, top: float | None = None) -> str:
     """The activity card that sits at the bottom of the staff card."""
     kind = str(activity.get("kind") or "activity").strip().lower()
     label, title, subtitle = _activity_copy(activity)
-    top = CARD_HEIGHT - 40
+    top = CARD_HEIGHT - 40 if top is None else top
     art = activity_art_data_url(activity.get("image_url"))
     small_art = activity_art_data_url(activity.get("small_image_url")) if art and activity.get("small_image_url") else None
     text_x = 104 if art or kind == "spotify" else 40
@@ -343,34 +370,40 @@ def _activity_card(activity: dict, palette: dict) -> str:
     return "".join(parts)
 
 
-def _status_notch(mobile: bool) -> tuple[str, float]:
+def _status_notch(mobile: bool, *, centre: tuple[float, float] = (AVATAR_CENTER, AVATAR_CENTER),
+                  radius: float = AVATAR_RADIUS) -> tuple[str, float, float]:
     """The hole cut for the status art, and the art's own top-left corner.
 
     The notch grows out of the avatar's bottom-right corner exactly as the
     website places it, so the art sits the same distance from the picture on
     both axes and the card's background shows through the hole.
     """
-    corner = AVATAR_CENTER + AVATAR_RADIUS
-    icon_at = corner - STATUS_ICON_GAP - STATUS_ICON_SIZE
-    centre = icon_at + STATUS_ICON_SIZE / 2
+    corner_x = centre[0] + radius
+    corner_y = centre[1] + radius
+    icon_x = corner_x - STATUS_ICON_GAP - STATUS_ICON_SIZE
+    icon_y = corner_y - STATUS_ICON_GAP - STATUS_ICON_SIZE
+    notch_x = icon_x + STATUS_ICON_SIZE / 2
+    notch_y = icon_y + STATUS_ICON_SIZE / 2
     if mobile:
         width = MOBILE_NOTCH_WIDTH
         notch = (
-            f'<rect x="{centre - width / 2:.2f}" y="{corner - STATUS_NOTCH_SIZE:.2f}" '
+            f'<rect x="{notch_x - width / 2:.2f}" y="{corner_y - STATUS_NOTCH_SIZE:.2f}" '
             f'width="{width:.2f}" height="{STATUS_NOTCH_SIZE:.2f}" '
             f'rx="{width * MOBILE_NOTCH_CORNER:.2f}" fill="black"/>'
         )
     else:
         notch = (
-            f'<circle cx="{centre:.2f}" cy="{centre:.2f}" '
+            f'<circle cx="{notch_x:.2f}" cy="{notch_y:.2f}" '
             f'r="{STATUS_NOTCH_SIZE / 2:.2f}" fill="black"/>'
         )
-    return notch, icon_at
+    return notch, icon_x, icon_y
 
 
 def _avatar_block(avatar_data_url: str | None, decoration_data_url: str | None,
                   accent: str, palette: dict, initials: str,
-                  status_hole: str | None = None) -> str:
+                  status_hole: str | None = None, *,
+                  centre: tuple[float, float] = (AVATAR_CENTER, AVATAR_CENTER),
+                  radius: float = AVATAR_RADIUS) -> str:
     """Round avatar, or an initial when there is no image.
 
     ``status_hole`` is the shape of the status notch. The avatar and its
@@ -378,8 +411,9 @@ def _avatar_block(avatar_data_url: str | None, decoration_data_url: str | None,
     is cut out of both and the card's own background shows through the gap
     instead of a painted disc sitting on top of the art.
     """
+    cx, cy = centre
     defs = ('<defs><clipPath id="staff-avatar-clip">'
-            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}"/>'
+            f'<circle cx="{cx}" cy="{cy}" r="{radius}"/>'
             "</clipPath>")
     if status_hole:
         defs += ('<mask id="staff-avatar-hole">'
@@ -389,36 +423,248 @@ def _avatar_block(avatar_data_url: str | None, decoration_data_url: str | None,
 
     if not avatar_data_url:
         body = (
-            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}" '
+            f'<circle cx="{cx}" cy="{cy}" r="{radius}" '
             f'fill="{palette["chip"]}" stroke="{palette["line"]}" stroke-width="2"/>'
-            + _text(AVATAR_CENTER, AVATAR_CENTER + 11, initials, fill=palette["muted"],
-                    size=26, weight=800, anchor="middle")
+            + _text(cx, cy + radius * 0.26, initials, fill=palette["muted"],
+                    size=radius * 0.62, weight=800, anchor="middle")
         )
     else:
         body = (
-            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}" '
-            f'fill="{palette["chip"]}"/>'
-            f'<image href="{escape(avatar_data_url)}" x="{AVATAR_CENTER - AVATAR_RADIUS}" '
-            f'y="{AVATAR_CENTER - AVATAR_RADIUS}" width="{AVATAR_RADIUS * 2}" '
-            f'height="{AVATAR_RADIUS * 2}" preserveAspectRatio="xMidYMid slice" '
-            'clip-path="url(#staff-avatar-clip)"/>'
+            f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="{palette["chip"]}"/>'
+            f'<image href="{escape(avatar_data_url)}" x="{cx - radius}" '
+            f'y="{cy - radius}" width="{radius * 2}" height="{radius * 2}" '
+            'preserveAspectRatio="xMidYMid slice" clip-path="url(#staff-avatar-clip)"/>'
         )
         if decoration_data_url:
-            decoration_size = AVATAR_RADIUS * 2 * DECORATION_SCALE
+            decoration_size = radius * 2 * DECORATION_SCALE
             body += (
                 f'<image href="{escape(decoration_data_url)}" '
-                f'x="{AVATAR_CENTER - decoration_size / 2:.2f}" '
-                f'y="{AVATAR_CENTER - decoration_size / 2:.2f}" '
+                f'x="{cx - decoration_size / 2:.2f}" '
+                f'y="{cy - decoration_size / 2:.2f}" '
                 f'width="{decoration_size:.2f}" height="{decoration_size:.2f}" '
                 'preserveAspectRatio="xMidYMid meet"/>'
             )
         body += (
-            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}" '
-            f'fill="none" stroke="{accent}" stroke-width="2" opacity="0.55"/>'
+            f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="none" '
+            f'stroke="{accent}" stroke-width="2" opacity="0.55"/>'
         )
     if status_hole:
         body = f'<g mask="url(#staff-avatar-hole)">{body}</g>'
     return defs + body
+
+
+def badge_data_url(key) -> str | None:
+    """Inline one of the site's badge SVGs so the card can draw it inside GitHub."""
+    name = str(key or "").strip()
+    if not re.fullmatch(r"[a-z0-9_]+", name):
+        return None
+    if name in _badge_cache:
+        return _badge_cache[name]
+    data_url = None
+    for directory in _BADGE_DIRS:
+        try:
+            raw = (directory / f"{name}.svg").read_bytes()
+        except OSError:
+            continue
+        if raw:
+            data_url = f"data:image/svg+xml;base64,{base64.b64encode(raw).decode('ascii')}"
+            break
+    _badge_cache[name] = data_url
+    return data_url
+
+
+def profile_banner_data_url(url) -> str | None:
+    """Inline a public banner hosted where the card is allowed to fetch images.
+
+    Banners point at arbitrary hosts, and the card only fetches the image hosts
+    the rest of it already trusts: anything else falls back to the accent band
+    rather than turning this endpoint into a fetch-anything proxy.
+    """
+    return _image_data_url(url, _ALLOWED_AVATAR_HOSTS, _banner_cache, _AVATAR_TTL)
+
+
+def _wrap(text, limit: int, max_lines: int) -> list[str]:
+    """Split text into at most ``max_lines`` lines, marking a clipped tail."""
+    words = " ".join(str(text or "").split()).split()
+    lines: list[str] = []
+    current: list[str] = []
+    for word in words:
+        if current and len(" ".join([*current, word])) > limit:
+            lines.append(" ".join(current))
+            current = [word]
+            if len(lines) == max_lines:
+                if lines:
+                    lines[-1] = lines[-1][: limit - 1].rstrip() + "\u2026"
+                return lines
+            continue
+        current.append(word)
+    if current:
+        lines.append(" ".join(current))
+    return lines[:max_lines]
+
+
+def _profile_banner(banner_data_url: str | None, palette: dict, accent: str) -> str:
+    """The popup's banner, with the ring the avatar sits in cut out of it."""
+    height = PROFILE_BANNER_HEIGHT
+    cx, cy = PROFILE_AVATAR_CENTRE
+    outline = (
+        f'M 21 1 H {CARD_WIDTH - 21} A 20 20 0 0 1 {CARD_WIDTH - 1} 21 '
+        f'V {height} H 1 V 21 A 20 20 0 0 1 21 1 Z'
+    )
+    defs = (
+        "<defs>"
+        f'<clipPath id="staff-banner-clip"><path d="{outline}"/></clipPath>'
+        '<mask id="staff-banner-hole">'
+        f'<rect x="1" y="1" width="{CARD_WIDTH - 2}" height="{height - 1}" fill="white"/>'
+        f'<circle cx="{cx}" cy="{cy}" r="{PROFILE_AVATAR_RADIUS + 4}" fill="black"/>'
+        "</mask>"
+        '<linearGradient id="staff-banner-accent" x1="0" y1="0" x2="1" y2="1">'
+        f'<stop offset="0%" stop-color="{accent}" stop-opacity="0.5"/>'
+        f'<stop offset="100%" stop-color="{accent}" stop-opacity="0.1"/>'
+        "</linearGradient>"
+        "</defs>"
+    )
+    if banner_data_url:
+        art = (f'<image href="{escape(banner_data_url)}" x="0" y="0" width="{CARD_WIDTH}" '
+               f'height="{height}" preserveAspectRatio="xMidYMid slice"/>')
+    else:
+        art = f'<rect width="{CARD_WIDTH}" height="{height}" fill="url(#staff-banner-accent)"/>'
+    return (
+        defs
+        + f'<g clip-path="url(#staff-banner-clip)" mask="url(#staff-banner-hole)">{art}</g>'
+        + f'<path d="{outline}" fill="none" stroke="{palette["line"]}" stroke-width="1"/>'
+    )
+
+
+def _badge_row(badges, top: float) -> tuple[str, float]:
+    """The member's badges in one row, as the popup draws them."""
+    urls = [url for url in (badge_data_url(key) for key in (badges or [])[:8]) if url]
+    parts = []
+    x = PROFILE_GUTTER
+    for url in urls:
+        parts.append(f'<image href="{escape(url)}" x="{x}" y="{top:.2f}" '
+                     f'width="{PROFILE_BADGE_SIZE}" height="{PROFILE_BADGE_SIZE}"/>')
+        x += PROFILE_BADGE_SIZE + 6
+    return "".join(parts), top + PROFILE_BADGE_SIZE
+
+
+def _link_chips(links, palette: dict, top: float) -> tuple[str, float]:
+    """The profile's links as one row of chips, clipped to the card's width."""
+    parts = []
+    x = PROFILE_GUTTER
+    for link in (links or [])[:5]:
+        label = _clip(link.get("label"), 18)
+        if not label:
+            continue
+        width = int(len(label) * 6.4) + 20
+        if x + width > CARD_WIDTH - PROFILE_GUTTER:
+            break
+        parts.append(f'<rect x="{x:.1f}" y="{top:.2f}" width="{width}" height="24" rx="12" '
+                     f'fill="{palette["chip"]}" stroke="{palette["line"]}" stroke-width="1"/>')
+        parts.append(_text(x + 10, top + 16, label, fill=palette["muted"], size=9.5,
+                           weight=700, family="Space Mono, ui-monospace, monospace"))
+        x += width + 8
+    return "".join(parts), top + 24
+
+
+def _profile_card(
+    member: dict,
+    *,
+    palette: dict,
+    accent: str,
+    name: str,
+    handle: str,
+    role_label: str,
+    live: bool,
+    status: str,
+    mobile: bool,
+    status_icon: str | None,
+    activity: dict | None,
+    avatar_data_url: str | None,
+    avatar_decoration_data_url: str | None,
+    banner_data_url: str | None,
+) -> str:
+    """The full profile style: the popup's banner, avatar, badges and about."""
+    centre = PROFILE_AVATAR_CENTRE
+    radius = PROFILE_AVATAR_RADIUS
+    notch, icon_x, icon_y = (
+        _status_notch(mobile, centre=centre, radius=radius) if live else (None, 0.0, 0.0)
+    )
+
+    parts = [
+        _profile_banner(banner_data_url, palette, accent),
+        _avatar_block(avatar_data_url, avatar_decoration_data_url, accent, palette,
+                      name[:1].upper(), notch, centre=centre, radius=radius),
+    ]
+    if live:
+        if status_icon:
+            parts.append(f'<image href="{escape(status_icon)}" x="{icon_x:.2f}" '
+                         f'y="{icon_y:.2f}" width="{STATUS_ICON_SIZE}" '
+                         f'height="{STATUS_ICON_SIZE}"/>')
+        else:
+            parts.append(f'<circle cx="{icon_x + STATUS_ICON_SIZE / 2:.2f}" '
+                         f'cy="{icon_y + STATUS_ICON_SIZE / 2:.2f}" r="8" '
+                         f'fill="{STATUS_COLORS[status]}"/>')
+
+    # Identity block, in the popup's own order: name, role pill, handle, custom
+    # status, badges, then the about section and links.
+    y = centre[1] + radius + 34
+    parts.append(_text(PROFILE_GUTTER, y, name, fill=palette["ink"], size=26, weight=800))
+    pill = f"NIKO STAFF \u00b7 {role_label.upper()}"
+    pill_width = int(len(pill) * 6.9) + 20
+    pill_x = PROFILE_GUTTER + min(len(name) * 14.0, PROFILE_BODY_WIDTH - pill_width) + 12
+    if pill_x + pill_width <= CARD_WIDTH - PROFILE_GUTTER:
+        parts.append(f'<rect x="{pill_x:.1f}" y="{y - 16}" width="{pill_width}" height="20" '
+                     f'rx="10" fill="{accent}" opacity="0.16"/>')
+        parts.append(_text(pill_x + 10, y - 2, pill, fill=accent, size=9, weight=700,
+                           family="Space Mono, ui-monospace, monospace", spacing="1.0"))
+    y += 22
+    if handle:
+        parts.append(_text(PROFILE_GUTTER, y, f"@{handle}", fill=palette["dim"], size=12.5,
+                           family="Space Mono, ui-monospace, monospace"))
+    y += 24
+
+    detail = _status_detail(member) if live else None
+    if detail:
+        parts.append(_text(PROFILE_GUTTER, y, detail, fill=palette["muted"], size=12))
+        y += 22
+
+    badges, badges_bottom = _badge_row(member.get("badges") or [], y - 2)
+    if badges:
+        parts.append(badges)
+        y = badges_bottom + 12
+
+    bio_lines = _wrap(member.get("bio"), PROFILE_BIO_LIMIT, PROFILE_BIO_LINES)
+    if bio_lines:
+        parts.append(f'<line x1="{PROFILE_GUTTER}" y1="{y:.2f}" '
+                     f'x2="{CARD_WIDTH - PROFILE_GUTTER}" y2="{y:.2f}" '
+                     f'stroke="{palette["line"]}" stroke-width="1"/>')
+        y += 20
+        parts.append(_text(PROFILE_GUTTER, y, "ABOUT ME", fill=palette["dim"], size=9.5,
+                           weight=700, family="Space Mono, ui-monospace, monospace",
+                           spacing="1.2"))
+        y += 20
+        for line in bio_lines:
+            parts.append(_text(PROFILE_GUTTER, y, line, fill=palette["muted"], size=12.5))
+            y += 18
+        y += 2
+
+    chips, chips_bottom = _link_chips(member.get("public_links") or [], palette, y)
+    if chips:
+        parts.append(chips)
+        y = chips_bottom + 10
+
+    if activity:
+        parts.append(_activity_card(activity, palette, top=y))
+        y += 92 + 20
+
+    height = int(max(y + 18, PROFILE_BANNER_HEIGHT + 80))
+    parts.insert(0, f'<rect x="1" y="1" width="{CARD_WIDTH - 2}" height="{height - 2}" rx="21" '
+                    f'fill="none" stroke="{accent}" stroke-width="1.5" opacity="0.42"/>')
+    parts.insert(0, f'<rect width="{CARD_WIDTH}" height="{height}" rx="22" '
+                    'fill="url(#staff-card-bg)"/>')
+    return _document("".join(parts), CARD_WIDTH, height, palette,
+                     f"{name} \u2014 Niko staff profile card")
 
 
 def _hidden_card(palette: dict, accent: str) -> str:
@@ -460,16 +706,19 @@ def render_staff_card(
     theme=None,
     accent=None,
     show_status: bool | None = None,
+    style=None,
     avatar_data_url: str | None = None,
     avatar_decoration_data_url: str | None = None,
+    banner_data_url: str | None = None,
 ) -> str:
     """Render one staff card.
 
     ``member`` comes from the public roster (``_load_staff_rows``). ``None``
     means the profile is hidden, missing, or suspended, and yields a neutral
     card so a README never shows a broken image. ``avatar_data_url`` and
-    ``avatar_decoration_data_url`` are already-inlined images: the route resolves
-    them from the member's own URLs, and both are optional.
+    ``avatar_decoration_data_url`` and ``banner_data_url`` are already-inlined
+    images: the route resolves them from the member's own URLs, and all are
+    optional. ``style`` picks the layout; the saved setting is the default.
     """
     settings = (member or {}).get("card") or {}
     palette = PALETTES[normalize_theme(theme or settings.get("theme"))]
@@ -494,7 +743,26 @@ def render_staff_card(
     status_hole = None
     status_icon_at = 0.0
     if live:
-        status_hole, status_icon_at = _status_notch(mobile)
+        status_hole, status_icon_at, _ = _status_notch(mobile)
+
+    activity = _primary_activity(member) if live else None
+    if normalize_style(style or settings.get("style")) == "profile":
+        return _profile_card(
+            member,
+            palette=palette,
+            accent=accent_colour,
+            name=name,
+            handle=handle,
+            role_label=role_label,
+            live=live,
+            status=status,
+            mobile=mobile,
+            status_icon=status_icon,
+            activity=activity,
+            avatar_data_url=avatar_data_url,
+            avatar_decoration_data_url=avatar_decoration_data_url,
+            banner_data_url=banner_data_url,
+        )
 
     role_chip = f"NIKO STAFF \u00b7 {role_label.upper()}"
     chip_width = min(320, int(len(role_chip) * 7.2) + 24)
@@ -516,7 +784,6 @@ def render_staff_card(
                        f'fill="{STATUS_COLORS[status]}"/>')
 
     # A live activity grows the card by its own row; nothing else changes.
-    activity = _primary_activity(member) if live else None
     activity_markup = _activity_card(activity, palette) if activity else ""
     height = CARD_HEIGHT_WITH_ACTIVITY if activity_markup else CARD_HEIGHT
 

@@ -48,6 +48,7 @@
   "card.settings": "Karteneinstellungen",
   "card.previewAlt": "Vorschau der Niko-Staff-Karte für {name}",
   "card.previewCaption": "Live-Vorschau, alle 30 Sekunden aktualisiert · GitHub lädt die Karte neu, statt einen alten Status zu cachen. Die Karte folgt der Sichtbarkeit deiner Team-Seite.",
+  "card.style": "Kartenstil",
   "card.theme": "Karten-Theme",
   "card.accent": "Akzentfarbe",
   "card.accentAria": "Akzentfarbe der Staff-Karte",

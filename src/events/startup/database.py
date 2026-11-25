@@ -415,7 +415,8 @@ async def _create_tables(bot):
             status_changed_at REAL,
             card_theme TEXT,
             card_accent TEXT,
-            card_show_status INTEGER NOT NULL DEFAULT 1
+            card_show_status INTEGER NOT NULL DEFAULT 1,
+            card_style TEXT
         )
     """)
     # Keep existing installations compatible with the richer public staff profile
@@ -435,6 +436,7 @@ async def _create_tables(bot):
         ("card_theme", "TEXT"),
         ("card_accent", "TEXT"),
         ("card_show_status", "INTEGER NOT NULL DEFAULT 1"),
+        ("card_style", "TEXT"),
     ]:
         try:
             await bot.cxn.execute(f"ALTER TABLE staff_members ADD COLUMN {col_name} {col_def}")

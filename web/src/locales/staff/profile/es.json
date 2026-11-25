@@ -48,6 +48,7 @@
   "card.settings": "Ajustes de la tarjeta",
   "card.previewAlt": "Vista previa de la tarjeta del staff de Niko para {name}",
   "card.previewCaption": "Vista previa en vivo, actualizada cada 30 segundos · GitHub vuelve a pedir la tarjeta en lugar de guardar un estado antiguo. La tarjeta sigue la visibilidad de tu página del equipo.",
+  "card.style": "Estilo de la tarjeta",
   "card.theme": "Tema de la tarjeta",
   "card.accent": "Color de acento",
   "card.accentAria": "Color de acento de la tarjeta del staff",

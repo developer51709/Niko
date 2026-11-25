@@ -267,6 +267,18 @@ class CardRouteTests(unittest.TestCase):
         body = self.get("/staff/nobody/card.svg", [member(handle="nova")]).get_data(as_text=True)
         self.assertIn("This profile is not public right now.", body)
 
+    def test_the_profile_style_is_served_from_the_route(self):
+        body = self.get("/staff/42/card.svg?style=profile", [member(bio="About the member.")]).get_data(as_text=True)
+        self.assertIn("ABOUT ME", body)
+        self.assertIn("About the member.", body)
+
+    def test_the_saved_style_is_used_when_no_style_is_given(self):
+        saved = member(bio="About the member.", card={
+            "theme": "dark", "accent": None, "show_status": True, "style": "profile",
+        })
+        body = self.get("/staff/42/card.svg", [saved]).get_data(as_text=True)
+        self.assertIn("ABOUT ME", body)
+
     def test_the_card_inlines_the_avatar_decoration(self):
         roster = [member(
             avatar_url="https://cdn.discordapp.com/avatars/42/a.png",
@@ -439,6 +451,84 @@ class ActivityArtInliningTests(unittest.TestCase):
             staff_card.activity_art_data_url("https://i.scdn.co/image/def")
             staff_card.activity_art_data_url("https://i.scdn.co/image/def")
         self.assertEqual(fetch.call_count, 1)
+
+
+class ProfileStyleTests(unittest.TestCase):
+    """The full profile card, laid out like the website's profile popup."""
+
+    def render(self, **overrides):
+        data = dict(
+            badges=["niko_moderator", "partner"],
+            bio="Niko's support lead, usually buried in tickets.",
+            public_links=[{"type": "github", "label": "GitHub", "url": "https://example.test"}],
+            custom_status={"text": "building cards"},
+        )
+        data.update(overrides)
+        return staff_card.render_staff_card(
+            member(**data),
+            style="profile",
+            avatar_data_url="data:image/png;base64,AAAA",
+            avatar_decoration_data_url="data:image/png;base64,REVJ",
+        )
+
+    def test_compact_stays_the_default(self):
+        svg = staff_card.render_staff_card(member())
+        self.assertEqual(svg.count('<rect width="620" height="200"'), 1)
+        self.assertNotIn("staff-banner-hole", svg)
+
+    def test_the_profile_style_draws_the_popup_sections(self):
+        svg = self.render()
+        ElementTree.fromstring(svg)
+        self.assertIn("staff-banner-hole", svg)
+        self.assertIn("ABOUT ME", svg)
+        self.assertIn("Niko&#x27;s support lead", svg)
+        self.assertIn("building cards", svg)
+        self.assertIn("GitHub", svg)
+        self.assertEqual(svg.count(staff_card.badge_data_url("niko_moderator")), 1)
+        self.assertEqual(svg.count(staff_card.badge_data_url("partner")), 1)
+
+    def test_the_saved_style_is_used_without_a_query_override(self):
+        saved = member(card={"theme": "dark", "accent": None, "show_status": True,
+                             "style": "profile"}, bio="About the member.")
+        self.assertIn("ABOUT ME", staff_card.render_staff_card(saved))
+
+    def test_the_query_style_overrides_the_saved_one(self):
+        saved = member(card={"theme": "dark", "accent": None, "show_status": True,
+                             "style": "profile"})
+        svg = staff_card.render_staff_card(saved, style="compact")
+        self.assertNotIn("ABOUT ME", svg)
+
+    def test_an_unknown_style_falls_back_to_compact(self):
+        self.assertEqual(staff_card.normalize_style("neon"), "compact")
+        self.assertEqual(staff_card.normalize_style(None), "compact")
+        self.assertEqual(staff_card.normalize_style("PROFILE"), "profile")
+
+    def test_the_banner_is_inlined_when_the_route_supplies_one(self):
+        svg = staff_card.render_staff_card(
+            member(), style="profile", banner_data_url="data:image/png;base64,Qk5S",
+        )
+        self.assertIn('href="data:image/png;base64,Qk5S"', svg)
+
+    def test_without_a_banner_the_accent_band_is_drawn(self):
+        svg = self.render()
+        self.assertIn("staff-banner-accent", svg)
+
+    def test_the_profile_avatar_keeps_the_decoration_and_the_notch(self):
+        svg = self.render(status="online")
+        self.assertIn('href="data:image/png;base64,REVJ"', svg)
+        self.assertIn('<mask id="staff-avatar-hole">', svg)
+
+    def test_a_long_bio_is_wrapped_and_clipped(self):
+        svg = self.render(bio="word " * 400)
+        self.assertIn("\u2026", svg)
+
+    def test_badges_and_banners_only_come_from_their_own_sources(self):
+        self.assertIsNone(staff_card.badge_data_url("../secret"))
+        self.assertIsNone(staff_card.badge_data_url("no_such_badge"))
+        self.assertTrue(staff_card.badge_data_url("niko_staff").startswith("data:image/svg+xml;base64,"))
+        with patch.object(staff_card.req, "get") as fetch:
+            self.assertIsNone(staff_card.profile_banner_data_url("https://example.com/banner.png"))
+        fetch.assert_not_called()
 
 
 class AvatarDecorationTests(unittest.TestCase):

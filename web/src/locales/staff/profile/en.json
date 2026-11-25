@@ -48,6 +48,7 @@
   "card.settings": "Card settings",
   "card.previewAlt": "Niko staff card preview for {name}",
   "card.previewCaption": "Live preview, refreshed every 30 seconds · GitHub re-fetches the card instead of caching an old status. The card follows your Team page visibility.",
+  "card.style": "Card style",
   "card.theme": "Card theme",
   "card.accent": "Accent color",
   "card.accentAria": "Staff card accent color",

@@ -48,6 +48,7 @@
   "card.settings": "Réglages de la carte",
   "card.previewAlt": "Aperçu de la carte staff Niko de {name}",
   "card.previewCaption": "Aperçu en direct, rafraîchi toutes les 30 secondes · GitHub récupère la carte au lieu de mettre en cache un ancien statut. La carte suit la visibilité de ta page Équipe.",
+  "card.style": "Style de la carte",
   "card.theme": "Thème de la carte",
   "card.accent": "Couleur d’accent",
   "card.accentAria": "Couleur d’accent de la carte staff",

@@ -1304,6 +1304,8 @@ export type StaffMember = {
     theme: "dark" | "light";
     accent?: string | null;
     show_status?: boolean;
+    /** ``compact`` is the original strip; ``profile`` is the full popup layout. */
+    style?: "compact" | "profile";
   };
 };
 

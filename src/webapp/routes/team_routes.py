@@ -1,7 +1,13 @@
 """Flask routes for team."""
 
 from .. import server as _server
-from ..staff_card import avatar_data_url, render_staff_card, validate_accent
+from ..staff_card import (
+    CARD_STYLES,
+    avatar_data_url,
+    profile_banner_data_url,
+    render_staff_card,
+    validate_accent,
+)
 
 globals().update({
     name: value
@@ -67,8 +73,12 @@ def api_staff_card(profile_key):
         theme=request.args.get("theme"),
         accent=request.args.get("accent"),
         show_status=show_status,
+        style=request.args.get("style"),
         avatar_data_url=avatar,
         avatar_decoration_data_url=decoration,
+        banner_data_url=(
+            profile_banner_data_url(member.get("public_banner_url")) if member else None
+        ),
     )
     response = Response(svg, mimetype="image/svg+xml")
     # Presence is live, so no layer may reuse a rendered card. GitHub's image
@@ -662,7 +672,7 @@ def api_save_staff_profile():
     body = request.get_json(silent=True) or {}
     allowed = {
         "public_bio", "public_banner_url", "public_links", "public_visible",
-        "card_theme", "card_accent", "card_show_status",
+        "card_theme", "card_accent", "card_show_status", "card_style",
     }
     values = {key: body[key] for key in allowed if key in body}
     if "public_bio" in values and len(str(values["public_bio"] or "")) > 1200:
@@ -680,6 +690,11 @@ def api_save_staff_profile():
         values["card_accent"] = accent or None
     if "card_show_status" in values:
         values["card_show_status"] = 1 if values["card_show_status"] else 0
+    if "card_style" in values:
+        card_style = str(values["card_style"] or "").strip().lower()
+        if card_style not in CARD_STYLES:
+            return jsonify({"error": "Choose the compact or full profile card style."}), 400
+        values["card_style"] = card_style
     if "public_links" in values:
         raw_links = values["public_links"]
         if not isinstance(raw_links, list) or len(raw_links) > 10:
