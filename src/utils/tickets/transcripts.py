@@ -1317,7 +1317,14 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
   .discord-profile-status.is-clamped:hover {{ background: #313338; }}
   .discord-profile-status:focus-visible {{ outline: 2px solid #00a8fc; outline-offset: 2px; }}
   .discord-profile-status-text {{ display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }}
-  .discord-profile-status.is-expanded .discord-profile-status-text {{ display: block; -webkit-line-clamp: unset; }}
+  /* The hidden copy holds the bubble's clamped size while the real text floats. */
+  .discord-profile-status-ghost {{ display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; visibility: hidden; }}
+  /* A long status opens as an overlay: the bubble keeps its two-line footprint,
+     so the avatar and the rows below it never move. The negative offsets
+     cancel the bubble's padding, which is where an absolutely positioned
+     child is placed. */
+  .discord-profile-status.is-expanded {{ z-index: 4; }}
+  .discord-profile-status.is-expanded .discord-profile-status-text {{ position: absolute; z-index: 1; top: -10px; left: -12px; display: block; width: max-content; max-width: min(18rem, calc(100vw - 4rem)); max-height: 50vh; overflow-y: auto; padding: 10px 12px; background: inherit; border-radius: 10px; box-shadow: 0 18px 42px rgb(0 0 0 / .55); -webkit-line-clamp: unset; }}
   .discord-profile-status-emoji {{ display: inline-block; width: 16px; height: 16px; margin-right: 6px; object-fit: contain; vertical-align: -.2em; }}
   .discord-profile-status.is-emoji-only {{ display: grid; place-items: center; flex: 0 0 auto; width: 88px; height: 80px; padding: 0; border-radius: 12px; }}
   .discord-profile-status.is-emoji-only::before {{ top: -13px; left: 12px; width: 30px; height: 30px; }}
@@ -1643,6 +1650,14 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
     if (startExpanded) bubble.classList.add('is-expanded');
     const sync = () => {{
       const expanded = bubble.classList.contains('is-expanded');
+      // An expanded bubble floats its text, so a hidden clamped copy holds the
+      // two-line footprint and nothing around the avatar can be pushed.
+      const ghost = bubble.querySelector('.discord-profile-status-ghost');
+      if (expanded && !ghost) {{
+        text.insertAdjacentHTML('beforebegin', '<span class="discord-profile-status-ghost" aria-hidden="true">' + text.innerHTML + '</span>');
+      }} else if (!expanded && ghost) {{
+        ghost.remove();
+      }}
       const clamped = !expanded && text.scrollHeight > text.clientHeight + 1;
       bubble.classList.toggle('is-clamped', clamped);
       if (clamped || expanded) {{

@@ -481,6 +481,25 @@ def test_export_popup_draws_the_presence_dot_from_inlined_art():
     assert 'return statusArt[name] ? name : "offline";' in page
 
 
+def test_an_expanded_status_overlays_instead_of_resizing_the_transcript_card():
+    page = export_html(
+        [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],
+        {"channel_name": "ticket", "guild_name": "Server"},
+        {"user": {"456": "Live Nick"}},
+        {"456": {"id": "456", "username": "liveuser", "display_name": "Live Nick", "status": "online"}},
+    )
+
+    # The transcript carries its own copy of the popup stylesheet, so it needs
+    # the same overlay rule the website uses: the text floats, the bubble stays.
+    assert ".discord-profile-status.is-expanded { z-index: 4; }" in page
+    assert ".discord-profile-status.is-expanded .discord-profile-status-text { position: absolute;" in page
+    assert "top: -10px; left: -12px;" in page
+    assert ".discord-profile-status-ghost { display: -webkit-box;" in page
+    assert "visibility: hidden; }" in page
+    # The hidden clamped copy is what keeps the bubble (and the avatar) in place.
+    assert "text.insertAdjacentHTML('beforebegin', '<span class=\"discord-profile-status-ghost\"" in page
+
+
 def test_export_popup_refreshes_presence_while_the_card_is_open():
     page = export_html(
         [{"timestamp": "now", "author": "Staff", "author_id": 1, "content": "Hi <@!456>"}],

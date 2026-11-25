@@ -519,6 +519,9 @@ export function ProfileCustomStatus({ status }: { status: DiscordCustomStatus })
       toggle();
     } : undefined}
   >
+    {/* The expanded text is an overlay, so a hidden clamped copy keeps the
+        bubble's two-line footprint and nothing around it can be pushed. */}
+    {expanded && <span className="discord-profile-status-ghost" aria-hidden="true">{emoji}{text}</span>}
     <span ref={textRef} className="discord-profile-status-text">{emoji}{text}</span>
   </div>;
 }

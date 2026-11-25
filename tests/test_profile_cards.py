@@ -444,6 +444,26 @@ class ProfilePopupPresenceTests(unittest.TestCase):
         self.assertIn(".discord-profile-status.is-expanded .discord-profile-status-text", styles)
         self.assertIn("setExpanded((current) => !current)", self.source)
 
+    def test_an_expanded_status_overlays_instead_of_resizing_the_row(self):
+        styles = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
+        # Only the text lifts out of the flow; the bubble keeps its clamped
+        # footprint, so the avatar and everything under it stay where they were.
+        self.assertIn(".discord-profile-status.is-expanded { z-index: 4; }", styles)
+        self.assertIn(".discord-profile-status.is-expanded .discord-profile-status-text { position: absolute;", styles)
+        self.assertIn("top: -10px; left: -12px;", styles)
+        self.assertIn("max-height: 50vh; overflow-y: auto;", styles)
+        self.assertNotIn(".discord-profile-status.is-expanded { position: absolute;", styles)
+        # A hidden clamped copy stays in flow, so the bubble keeps its size and
+        # a long status cannot pull the avatar or the rows below it around.
+        self.assertIn(".discord-profile-status-ghost { display: -webkit-box;", styles)
+        self.assertIn("visibility: hidden;", styles)
+        self.assertIn('<span className="discord-profile-status-ghost" aria-hidden="true">{emoji}{text}</span>', self.source)
+        # The staff profile page renders the same component inside its header,
+        # so this one rule covers both surfaces.
+        team = (ROOT / "web" / "src" / "pages" / "TeamPage.tsx").read_text(encoding="utf-8")
+        self.assertIn("<ProfileStatusBubble member={member} />", team)
+        self.assertIn('className="team-profile-header">', team)
+
     def test_the_popup_dot_uses_the_live_status(self):
         # The popup passes the mobile flag through, so the avatar picks the
         # phone-shaped icon when the phone holds the presence.
