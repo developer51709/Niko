@@ -578,11 +578,11 @@ def _configured_emoji(emoji_name: str):
     # These stub ids let the sync adopt them if they exist and upload them if
     # not; until it has, the card falls back to the round dot.
     if emoji_name == "status_online_mobile":
-        return "<:status_online_mobile:9000001>"
+        return "<:status_online_mobile:1575209573252599931>"
     if emoji_name == "status_idle_mobile":
-        return "<:status_idle_mobile:9000002>"
+        return "<:status_idle_mobile:1575209577077801171>"
     if emoji_name == "status_dnd_mobile":
-        return "<:status_dnd_mobile:9000003>"
+        return "<:status_dnd_mobile:1575209580680585347>"
 
     # Discord's account-age badges. The player and the profile popups only draw
     # the highest tier an account has reached; scripts/build-badge-art.mjs
