@@ -156,7 +156,10 @@ class LegalPager(discord.ui.LayoutView):
             return
         self.page = min(max(self.page + step, 0), len(self.pages) - 1)
         self._render()
-        await interaction.response.edit_message(view=self)
+        # Discord notifies a mentioned member when an edit introduces the
+        # mention, so the owner credited in the footer would be pinged on the
+        # page that first shows it unless every page turn suppresses them too.
+        await interaction.response.edit_message(view=self, allowed_mentions=discord.AllowedMentions.none())
 
     async def _previous(self, interaction: discord.Interaction):
         await self._turn(interaction, -1)

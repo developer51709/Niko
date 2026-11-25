@@ -59,3 +59,39 @@ def test_pages_get_previous_a_counter_and_next():
     assert [button.label for button in buttons] == ["Previous", "1/3", "Next"]
     # The counter is informational, and the first page cannot go back.
     assert [button.disabled for button in buttons] == [True, True, False]
+
+
+class _Response:
+    def __init__(self):
+        self.edits: list[dict] = []
+
+    async def edit_message(self, **kwargs):
+        self.edits.append(kwargs)
+
+
+class _Interaction:
+    def __init__(self, user_id: int):
+        self.user = _User(user_id)
+        self.response = _Response()
+
+
+class _User:
+    def __init__(self, user_id: int):
+        self.id = user_id
+
+
+def test_turning_a_page_suppresses_mentions():
+    """The owner credit in the footer must not ping when it first appears."""
+    import asyncio
+
+    view = _pager(["one", "two"])
+    interaction = _Interaction(view.author_id)
+    asyncio.run(view._next(interaction))
+
+    edit = interaction.response.edits[-1]
+    allowed = edit["allowed_mentions"]
+    # Discord notifies on a mention introduced by an edit, so an edit without
+    # this would ping the owner as soon as the last page is opened.
+    assert allowed.everyone is False
+    assert allowed.users is False
+    assert allowed.roles is False
