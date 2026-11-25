@@ -8,6 +8,7 @@ import { Select, localizeOptions, selectOptions } from "./Select";
 import type { StaffApplicationQuestionType, GuildResources, StaffApplication, StaffApplicationSubmission } from "../../types";
 import { DashHeading } from "./DashboardViews";
 import { useStrings } from "../../i18n";
+import { siteHref } from "../../router";
 
 type Props = { guildId: string; resources: GuildResources | null; csrfToken?: string };
 type QuestionDraft = { id: string; prompt: string; required: boolean; type: StaffApplicationQuestionType; options: string[] };
@@ -120,7 +121,9 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
   };
 
   const copyLink = async (application: StaffApplication) => {
-    const link = `${window.location.origin}/apply/${guildId}/${application.id}`;
+    // The form is a page of the main site, so a copied link is made absolute
+    // against it rather than against whichever host the dashboard is on.
+    const link = new URL(siteHref(`/apply/${guildId}/${application.id}`), window.location.origin).href;
     try {
       await navigator.clipboard.writeText(link);
       setCopiedId(application.id); window.setTimeout(() => setCopiedId(""), 1800);
@@ -131,7 +134,7 @@ export function StaffApplicationsView({ guildId, resources, csrfToken }: Props) 
 
   return <>
     <DashHeading eyebrow={t("applications.eyebrow")} title={t("applications.title")} text={t("applications.text")} />
-    <div className="applications-intro"><span className="applications-intro-icon"><Icon name="users" /></span><div><span className="panel-kicker">{t("applications.kicker")}</span><strong>{t("applications.summary", { open: applications.filter((item) => item.status === "open").length, total: applications.length })}</strong><p>{t("applications.introText")}</p></div><a href={`/apply/${guildId}`} target="_blank" rel="noreferrer" className="button button-muted button-small">{t("applications.previewLink")} <Icon name="arrow" /></a></div>
+    <div className="applications-intro"><span className="applications-intro-icon"><Icon name="users" /></span><div><span className="panel-kicker">{t("applications.kicker")}</span><strong>{t("applications.summary", { open: applications.filter((item) => item.status === "open").length, total: applications.length })}</strong><p>{t("applications.introText")}</p></div><a href={siteHref(`/apply/${guildId}`)} target="_blank" rel="noreferrer" className="button button-muted button-small">{t("applications.previewLink")} <Icon name="arrow" /></a></div>
     <section className="applications-layout">
       <form className="dash-panel applications-editor" onSubmit={submit}>
         <div className="panel-heading"><div><span className="panel-kicker">{t(editingId ? "applications.editOpening" : "applications.newOpening")}</span><h3>{t(editingId ? "applications.updateTitle" : "applications.createTitle")}</h3><p>{t(editingId ? "applications.updateDetail" : "applications.createDetail")}</p></div><span className="panel-icon"><Icon name={editingId ? "settings" : "plus"} /></span></div>

@@ -23,7 +23,7 @@ import { ConfirmDialog } from "../components/dashboard/ConfirmDialog";
 import { Select, selectOptions } from "../components/dashboard/Select";
 import { SettingCard, SettingCards } from "../components/dashboard/SettingCards";
 import { AuthScreen, DiscordSignIn } from "../components/AuthScreen";
-import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate } from "../router";
+import { dashboardPath, dashboardServersPath, dashboardUserPath, navigate, siteHref } from "../router";
 import { useStrings } from "../i18n";
 import type { AuthStatus, BlacklistAppeal, BotStats, Guild, PublicProfileLink, TeamRecruitmentOpening, TeamRecruitmentSubmission, StaffBillingPayment, StaffBillingResponse, StaffBlacklistEntry, StaffDataRemovalRequest, StaffErrorReport, StaffGuild, StaffMaintenanceResponse, StaffMember, StaffRosterRole } from "../types";
 
@@ -340,12 +340,12 @@ export function StaffDashboardPage() {
   // The preview follows the unsaved draft, so a theme, accent, or status change
   // is visible before the listing is saved. The embedded card caches for a
   // minute on GitHub and uses the saved values from the same profile row.
-  const cardBaseUrl = `${window.location.origin}/staff/${staff.profile.id}/card.svg`;
+  const cardBaseUrl = new URL(siteHref(`/staff/${staff.profile.id}/card.svg`), window.location.origin).href;
   const cardPreviewUrl = `${cardBaseUrl}?theme=${form.card_theme}&style=${form.card_style}&accent=${encodeURIComponent(form.card_accent.replace(/^#/, "").toUpperCase())}&status=${form.card_show_status ? 1 : 0}&t=${cardPreviewStamp}`;
   // The image itself is the link, so clicking the card on GitHub opens the
-  // member's public staff profile instead of the raw SVG.
-  // The shareable profile link is the username; the id link still resolves.
-  const cardProfileUrl = `${window.location.origin}/team/${staff.profile.handle || staff.profile.id}`;
+  // member's public staff profile instead of the raw SVG. Both halves are made
+  // absolute against the main site, which is the only host that serves them.
+  const cardProfileUrl = new URL(siteHref(`/team/${staff.profile.handle || staff.profile.id}`), window.location.origin).href;
   const cardMarkdown = `[![Niko staff card](${cardBaseUrl})](${cardProfileUrl})`;
   const copyCardMarkdown = async () => {
     try {

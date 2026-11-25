@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { saveEconomyPrivacy } from "../../api";
 import { useStrings } from "../../i18n";
+import { siteHref } from "../../router";
 import { Icon } from "../Icon";
 import { formatNumber } from "../../utils/format";
 import { displayName } from "../../utils/format";
@@ -73,7 +74,9 @@ export function CoinLabel() {
 function ReferralCard({ referrals, userId }: { referrals: ReferralSummary | null; userId: string }) {
   const { t } = useStrings("dashboard");
   const [copied, setCopied] = useState(false);
-  const link = referrals?.link || `${window.location.origin}/discord?ref=${userId}`;
+  // Absolute against the main site: the invite page lives on the apex, not on
+  // a dashboard subdomain, so a relative fallback would land on the wrong host.
+  const link = referrals?.link || new URL(siteHref(`/discord?ref=${userId}`), window.location.origin).href;
   const invited = referrals?.invited ?? 0;
   const coins = referrals?.coins ?? 0;
   const reward = referrals?.reward ?? 0;

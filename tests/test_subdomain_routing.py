@@ -1,6 +1,7 @@
 """Section subdomains: ``dash.example.com/staff`` is ``/dashboard/staff``."""
 
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -23,18 +24,58 @@ def _shell(client, path: str, base_url: str = "https://dash.niko.sryze.cc"):
     return client.get(path, base_url=base_url, headers={"Accept": "text/html"})
 
 
+def _web_source(*parts: str) -> str:
+    return (Path(__file__).resolve().parents[1] / "web" / "src" / Path(*parts)).read_text(encoding="utf-8")
+
+
 def test_the_tickets_view_opens_transcripts_on_the_main_domain():
     # Transcripts are pages of the site, not of the dashboard, so on `dash.` the
     # link has to leave the section host. The API sends an apex path and the
     # client's siteHref turns that into the site's own origin.
-    settings = (Path(__file__).resolve().parents[1] / "web" / "src" / "components" / "dashboard" / "SettingsViews.tsx").read_text(encoding="utf-8")
+    settings = _web_source("components", "dashboard", "SettingsViews.tsx")
 
     assert 'href={siteHref(transcript.url)}' in settings
     assert 'href={transcript.url}' not in settings
-    router = (Path(__file__).resolve().parents[1] / "web" / "src" / "router.ts").read_text(encoding="utf-8")
+    router = _web_source("router.ts")
     # siteHref is what strips the section label: an apex path becomes absolute
     # against the site's own host, while the section's own subtree stays short.
     assert "return `${window.location.protocol}//${apexHost()}${path}`;" in router
+
+
+def test_dashboard_links_to_site_pages_leave_the_section_host():
+    # Every dashboard link to a page that only exists on the main site goes
+    # through siteHref, including the copied and embedded URLs, which are made
+    # absolute against the site rather than against the dashboard's own host.
+    applications = _web_source("components", "dashboard", "StaffApplicationsView.tsx")
+    assert 'href={siteHref(`/apply/${guildId}`)}' in applications
+    assert "new URL(siteHref(`/apply/${guildId}/${application.id}`), window.location.origin).href" in applications
+    assert "`${window.location.origin}/apply/" not in applications
+
+    views = _web_source("components", "dashboard", "DashboardViews.tsx")
+    assert "new URL(siteHref(`/discord?ref=${userId}`), window.location.origin).href" in views
+    assert "`${window.location.origin}/discord" not in views
+
+    staff = _web_source("pages", "StaffDashboardPage.tsx")
+    assert "new URL(siteHref(`/staff/${staff.profile.id}/card.svg`), window.location.origin).href" in staff
+    assert "new URL(siteHref(`/team/${staff.profile.handle || staff.profile.id}`), window.location.origin).href" in staff
+    assert "`${window.location.origin}/staff/" not in staff
+    assert "`${window.location.origin}/team/" not in staff
+
+
+def test_no_dashboard_link_is_written_against_the_apex():
+    # A root-relative href resolves against whatever host renders the dashboard,
+    # so a site page written this way silently points at `dash.`. Nothing in the
+    # dashboard may link to an apex path without siteHref.
+    root = Path(__file__).resolve().parents[1]
+    sources = list((root / "web" / "src" / "components" / "dashboard").glob("*.tsx"))
+    sources += [root / "web" / "src" / "pages" / "DashboardPage.tsx", root / "web" / "src" / "pages" / "StaffDashboardPage.tsx"]
+    site_pages = "apply|appeals|billing|changelog|commands|community|discord|docs|donate|help|leaderboard|levels|privacy|report|staff|status|support|team|terms|transcript"
+    offenders = []
+    for path in sources:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r'href=\{?["\'`]/(' + site_pages + r')[/"\'`?#]', line):
+                offenders.append(f"{path.name}:{number}")
+    assert offenders == []
 
 
 def test_the_switch_is_off_unless_it_is_set(monkeypatch):
