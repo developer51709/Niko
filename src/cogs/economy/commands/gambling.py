@@ -9,7 +9,7 @@ from ..data import (
     _info_view, _reply, _check_achievements, locale_t,
     COOLDOWN_CRIME, COOLDOWN_ROB,
     get_emoji,
-    ACCENT_GOLD, ACCENT_RED,
+    ACCENT_GOLD, ACCENT_RED, ACCENT_BROWN,
 )
 from utils.cooldown import cooldown_ready_at, cooldown_view
 from utils.economy.amount import resolve_amount
@@ -21,6 +21,76 @@ from utils.command_locales import command_texts
 CMDS = command_texts(__package__)
 
 T = locale_t(load_locales("cogs.economy", "gambling"))
+
+
+def _normalise_call(call: str) -> str | None:
+    """The canonical side for the accepted spellings, or ``None`` if invalid."""
+    call = str(call).strip().lower()
+    if call in ("heads", "h"):
+        return "heads"
+    if call in ("tails", "t"):
+        return "tails"
+    return None
+
+
+class _PromptContext:
+    """A command-context stand-in for a press on the call prompt.
+
+    The card helpers only read an author, a guild for the language and somewhere
+    to put their view. For a component interaction that somewhere is the prompt's
+    own message, so ``send`` edits it in place and ``interaction`` stays unset:
+    the shared helpers then take their "send a message" route, which here edits
+    the panel rather than posting a second message beside it.
+    """
+
+    interaction = None
+
+    def __init__(self, interaction: discord.Interaction):
+        self._interaction = interaction
+        self.author = interaction.user
+        self.guild = interaction.guild
+        self.channel = interaction.channel
+
+    async def send(self, *, view=None, **kwargs):
+        return await self._interaction.edit_original_response(view=view, **kwargs)
+
+
+class _CoinflipCallView(discord.ui.LayoutView):
+    """Heads-or-tails buttons, shown when ``coinflip`` has no call argument."""
+
+    def __init__(self, cog, user_id: int, amount: int, lang: str):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.user_id = user_id
+        self.amount = amount
+        self.lang = lang
+        heads = discord.ui.Button(
+            label=T(lang, "cf_heads").capitalize(), style=discord.ButtonStyle.primary)
+        tails = discord.ui.Button(
+            label=T(lang, "cf_tails").capitalize(), style=discord.ButtonStyle.secondary)
+        heads.callback = self._heads
+        tails.callback = self._tails
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(content=f"### {T(lang, 'cf_pick_title')}"),
+            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(content=T(lang, "cf_pick_body", amount=f"{amount:,}")),
+            discord.ui.ActionRow(heads, tails),
+            accent_colour=ACCENT_BROWN,
+        ))
+
+    async def _heads(self, interaction: discord.Interaction):
+        await self._pick(interaction, "heads")
+
+    async def _tails(self, interaction: discord.Interaction):
+        await self._pick(interaction, "tails")
+
+    async def _pick(self, interaction: discord.Interaction, call: str):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                T(self.lang, "private_panel"), ephemeral=True)
+        await interaction.response.defer()
+        self.stop()
+        await self.cog._play_coinflip(_PromptContext(interaction), self.amount, call)
 
 
 class GamblingMixin:
@@ -169,7 +239,7 @@ class GamblingMixin:
         description=CMDS.text("coinflip.description"),
         help=CMDS.help("coinflip"),
     )
-    async def coinflip(self, ctx: commands.Context, amount: str, call: str = "heads"):
+    async def coinflip(self, ctx: commands.Context, amount: str, call: str = None):
         if ctx.interaction:
             await ctx.interaction.response.defer()
 
@@ -186,11 +256,32 @@ class GamblingMixin:
                 ctx, T(lang, "no_cash_title"),
                 T(lang, "no_cash_body", amount=f"{amount:,}", balance=f"{data['balance']:,}"))
 
-        call = call.lower().strip()
-        if call not in ("heads", "h", "tails", "t"):
+        # With no call, ask with buttons instead of quietly betting heads.
+        if call is None:
+            panel = _CoinflipCallView(self, ctx.author.id, amount, lang)
+            if ctx.interaction:
+                return await ctx.interaction.followup.send(view=panel, ephemeral=True)
+            return await ctx.send(view=panel)
+
+        side = _normalise_call(call)
+        if side is None:
             return await self._send_err(
                 ctx, T(lang, "cf_bad_call_title"), T(lang, "cf_bad_call_body"))
-        call = "heads" if call in ("heads", "h") else "tails"
+        await self._play_coinflip(ctx, amount, side)
+
+    async def _play_coinflip(self, ctx, amount: int, call: str):
+        """Flip for a validated bet and post the reward card.
+
+        Shared by the command and the prompt's buttons, so a press turns the
+        prompt into the same card the command would have posted.
+        """
+        lang = get_lang(ctx)
+        data = await self.get_user_economy_data(ctx.author.id)
+        if int(data.get("balance", 0)) < amount:
+            return await self._send_err(
+                ctx, T(lang, "no_cash_title"),
+                T(lang, "no_cash_body", amount=f"{amount:,}", balance=f"{data['balance']:,}"))
+
         call_name = T(lang, "cf_heads" if call == "heads" else "cf_tails")
 
         effects = data.setdefault("effects", {})
