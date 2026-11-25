@@ -172,7 +172,9 @@ class LegalPager(discord.ui.LayoutView):
             button.disabled = True
         if self.message is not None:
             try:
-                await self.message.edit(view=self)
+                # The page on screen may be the one carrying the owner credit,
+                # and an edit that first introduces a mention notifies them.
+                await self.message.edit(view=self, allowed_mentions=discord.AllowedMentions.none())
             except discord.HTTPException:
                 pass
 

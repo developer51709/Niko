@@ -1,5 +1,6 @@
 """Legal pages are paged so a document fits Discord's message text cap."""
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -80,10 +81,29 @@ class _User:
         self.id = user_id
 
 
+class _Message:
+    def __init__(self):
+        self.edits: list[dict] = []
+
+    async def edit(self, **kwargs):
+        self.edits.append(kwargs)
+
+
+def test_timing_out_suppresses_mentions_too():
+    """Greyed-out buttons are an edit like any other page turn."""
+    view = _pager(["one", "two"])
+    view.message = _Message()
+    view.page = 1
+
+    asyncio.run(view.on_timeout())
+
+    edit = view.message.edits[-1]
+    assert edit["allowed_mentions"].users is False
+    assert all(button.disabled for button in view.nav_buttons)
+
+
 def test_turning_a_page_suppresses_mentions():
     """The owner credit in the footer must not ping when it first appears."""
-    import asyncio
-
     view = _pager(["one", "two"])
     interaction = _Interaction(view.author_id)
     asyncio.run(view._next(interaction))
