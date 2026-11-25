@@ -37,6 +37,25 @@ STATUS_COLORS = {
     "offline": "#80848E",
 }
 
+AVATAR_CENTER = 84
+AVATAR_RADIUS = 42
+# The status art follows the website's ``.discord-status-avatar`` rule: the
+# notch is the icon's silhouette grown by a 12% gap on every side and sits
+# flush with the avatar's bottom-right corner, so the gap between the picture
+# and the art is even. The art itself is the site's own 26px asset.
+STATUS_ICON_SIZE = 26
+STATUS_ICON_GAP = STATUS_ICON_SIZE * 0.12
+STATUS_NOTCH_SIZE = STATUS_ICON_SIZE + 2 * STATUS_ICON_GAP
+# A phone holding the presence replaces the dot, and Discord narrows the notch
+# to the phone's silhouette (the site's ``--status-shape-width: .665``) while
+# the square icon keeps its own transparent margin. The site's notch is a 75x100
+# rect with a 16px corner, so the card's corner scales with the notch's width.
+MOBILE_NOTCH_WIDTH = STATUS_ICON_SIZE * 0.665 + 2 * STATUS_ICON_GAP
+MOBILE_NOTCH_CORNER = 16 / 75
+# Discord draws an avatar decoration on a canvas 1.2x the avatar and centres
+# the two, so the artwork overhangs the picture by the same amount everywhere.
+DECORATION_SCALE = 1.2
+
 PALETTES = {
     "dark": {
         "top": "#181B21",
@@ -324,16 +343,43 @@ def _activity_card(activity: dict, palette: dict) -> str:
     return "".join(parts)
 
 
-def _avatar_block(avatar_data_url: str | None, accent: str, palette: dict,
-                  initials: str, status_hole: str | None = None) -> str:
+def _status_notch(mobile: bool) -> tuple[str, float]:
+    """The hole cut for the status art, and the art's own top-left corner.
+
+    The notch grows out of the avatar's bottom-right corner exactly as the
+    website places it, so the art sits the same distance from the picture on
+    both axes and the card's background shows through the hole.
+    """
+    corner = AVATAR_CENTER + AVATAR_RADIUS
+    icon_at = corner - STATUS_ICON_GAP - STATUS_ICON_SIZE
+    centre = icon_at + STATUS_ICON_SIZE / 2
+    if mobile:
+        width = MOBILE_NOTCH_WIDTH
+        notch = (
+            f'<rect x="{centre - width / 2:.2f}" y="{corner - STATUS_NOTCH_SIZE:.2f}" '
+            f'width="{width:.2f}" height="{STATUS_NOTCH_SIZE:.2f}" '
+            f'rx="{width * MOBILE_NOTCH_CORNER:.2f}" fill="black"/>'
+        )
+    else:
+        notch = (
+            f'<circle cx="{centre:.2f}" cy="{centre:.2f}" '
+            f'r="{STATUS_NOTCH_SIZE / 2:.2f}" fill="black"/>'
+        )
+    return notch, icon_at
+
+
+def _avatar_block(avatar_data_url: str | None, decoration_data_url: str | None,
+                  accent: str, palette: dict, initials: str,
+                  status_hole: str | None = None) -> str:
     """Round avatar, or an initial when there is no image.
 
-    ``status_hole`` is the shape of the status notch. It is cut out of the
-    avatar with a mask rather than painted over, so the card's own background
-    shows through the gap the way it does on the website.
+    ``status_hole`` is the shape of the status notch. The avatar and its
+    decoration share one masked group, as they do on the website, so the notch
+    is cut out of both and the card's own background shows through the gap
+    instead of a painted disc sitting on top of the art.
     """
     defs = ('<defs><clipPath id="staff-avatar-clip">'
-            '<circle cx="84" cy="84" r="42"/>'
+            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}"/>'
             "</clipPath>")
     if status_hole:
         defs += ('<mask id="staff-avatar-hole">'
@@ -343,19 +389,32 @@ def _avatar_block(avatar_data_url: str | None, accent: str, palette: dict,
 
     if not avatar_data_url:
         body = (
-            f'<circle cx="84" cy="84" r="42" fill="{palette["chip"]}" '
-            f'stroke="{palette["line"]}" stroke-width="2"/>'
-            + _text(84, 95, initials, fill=palette["muted"], size=26, weight=800,
-                    anchor="middle")
+            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}" '
+            f'fill="{palette["chip"]}" stroke="{palette["line"]}" stroke-width="2"/>'
+            + _text(AVATAR_CENTER, AVATAR_CENTER + 11, initials, fill=palette["muted"],
+                    size=26, weight=800, anchor="middle")
         )
     else:
         body = (
-            f'<circle cx="84" cy="84" r="42" fill="{palette["chip"]}"/>'
-            f'<image href="{escape(avatar_data_url)}" x="42" y="42" width="84" '
-            'height="84" preserveAspectRatio="xMidYMid slice" '
+            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}" '
+            f'fill="{palette["chip"]}"/>'
+            f'<image href="{escape(avatar_data_url)}" x="{AVATAR_CENTER - AVATAR_RADIUS}" '
+            f'y="{AVATAR_CENTER - AVATAR_RADIUS}" width="{AVATAR_RADIUS * 2}" '
+            f'height="{AVATAR_RADIUS * 2}" preserveAspectRatio="xMidYMid slice" '
             'clip-path="url(#staff-avatar-clip)"/>'
-            f'<circle cx="84" cy="84" r="42" fill="none" stroke="{accent}" '
-            'stroke-width="2" opacity="0.55"/>'
+        )
+        if decoration_data_url:
+            decoration_size = AVATAR_RADIUS * 2 * DECORATION_SCALE
+            body += (
+                f'<image href="{escape(decoration_data_url)}" '
+                f'x="{AVATAR_CENTER - decoration_size / 2:.2f}" '
+                f'y="{AVATAR_CENTER - decoration_size / 2:.2f}" '
+                f'width="{decoration_size:.2f}" height="{decoration_size:.2f}" '
+                'preserveAspectRatio="xMidYMid meet"/>'
+            )
+        body += (
+            f'<circle cx="{AVATAR_CENTER}" cy="{AVATAR_CENTER}" r="{AVATAR_RADIUS}" '
+            f'fill="none" stroke="{accent}" stroke-width="2" opacity="0.55"/>'
         )
     if status_hole:
         body = f'<g mask="url(#staff-avatar-hole)">{body}</g>'
@@ -402,12 +461,15 @@ def render_staff_card(
     accent=None,
     show_status: bool | None = None,
     avatar_data_url: str | None = None,
+    avatar_decoration_data_url: str | None = None,
 ) -> str:
     """Render one staff card.
 
     ``member`` comes from the public roster (``_load_staff_rows``). ``None``
     means the profile is hidden, missing, or suspended, and yields a neutral
-    card so a README never shows a broken image.
+    card so a README never shows a broken image. ``avatar_data_url`` and
+    ``avatar_decoration_data_url`` are already-inlined images: the route resolves
+    them from the member's own URLs, and both are optional.
     """
     settings = (member or {}).get("card") or {}
     palette = PALETTES[normalize_theme(theme or settings.get("theme"))]
@@ -430,26 +492,28 @@ def render_staff_card(
     mobile = bool(member.get("is_mobile")) and status != "offline"
     status_icon = status_icon_data_url(f"{status}_mobile" if mobile else status) if live else None
     status_hole = None
+    status_icon_at = 0.0
     if live:
-        # The phone art fills its canvas, so the notch is a little larger than
-        # the 26px art to keep the same 3px gap the round dot gets.
-        status_hole = (
-            '<rect x="104" y="100" width="24" height="32" rx="8" fill="black"/>'
-            if mobile
-            else '<circle cx="116" cy="116" r="16" fill="black"/>'
-        )
+        status_hole, status_icon_at = _status_notch(mobile)
 
     role_chip = f"NIKO STAFF \u00b7 {role_label.upper()}"
     chip_width = min(320, int(len(role_chip) * 7.2) + 24)
 
     # The status lives on the profile picture only — the same treatment as the
     # website — so the rest of the card stays free of status chrome.
-    avatar = _avatar_block(avatar_data_url, accent_colour, palette, initials, status_hole)
+    avatar = _avatar_block(avatar_data_url, avatar_decoration_data_url, accent_colour,
+                           palette, initials, status_hole)
     if live:
         if status_icon:
-            avatar += f'<image href="{escape(status_icon)}" x="103" y="103" width="26" height="26"/>'
+            # The art is drawn over the hole, not into it: the mask leaves the
+            # gap and the card's background, exactly as the website does.
+            avatar += (f'<image href="{escape(status_icon)}" x="{status_icon_at:.2f}" '
+                       f'y="{status_icon_at:.2f}" width="{STATUS_ICON_SIZE}" '
+                       f'height="{STATUS_ICON_SIZE}"/>')
         else:
-            avatar += f'<circle cx="116" cy="116" r="8" fill="{STATUS_COLORS[status]}"/>'
+            avatar += (f'<circle cx="{status_icon_at + STATUS_ICON_SIZE / 2:.2f}" '
+                       f'cy="{status_icon_at + STATUS_ICON_SIZE / 2:.2f}" r="8" '
+                       f'fill="{STATUS_COLORS[status]}"/>')
 
     # A live activity grows the card by its own row; nothing else changes.
     activity = _primary_activity(member) if live else None

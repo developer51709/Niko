@@ -57,12 +57,18 @@ def api_staff_card(profile_key):
     status_param = request.args.get("status")
     show_status = None if status_param is None else str(status_param).strip().lower() not in {"0", "false", "off", "no"}
 
+    # Both images are inlined here: GitHub's proxy renders the card inside an
+    # <img>, where the SVG cannot fetch them itself.
+    avatar = avatar_data_url(member.get("avatar_url")) if member else None
+    decoration = avatar_data_url(member.get("avatar_decoration_url")) if member else None
+
     svg = render_staff_card(
         member,
         theme=request.args.get("theme"),
         accent=request.args.get("accent"),
         show_status=show_status,
-        avatar_data_url=avatar_data_url(member.get("avatar_url")) if member else None,
+        avatar_data_url=avatar,
+        avatar_decoration_data_url=decoration,
     )
     response = Response(svg, mimetype="image/svg+xml")
     # Presence is live, so no layer may reuse a rendered card. GitHub's image

@@ -267,6 +267,21 @@ class CardRouteTests(unittest.TestCase):
         body = self.get("/staff/nobody/card.svg", [member(handle="nova")]).get_data(as_text=True)
         self.assertIn("This profile is not public right now.", body)
 
+    def test_the_card_inlines_the_avatar_decoration(self):
+        roster = [member(
+            avatar_url="https://cdn.discordapp.com/avatars/42/a.png",
+            avatar_decoration_url="https://cdn.discordapp.com/avatar-decoration-presets/a.png",
+        )]
+        inlined = {
+            "https://cdn.discordapp.com/avatars/42/a.png": "data:image/png;base64,AV",
+            "https://cdn.discordapp.com/avatar-decoration-presets/a.png": "data:image/png;base64,DECO",
+        }
+        with patch.object(staff_data, "_load_staff_rows", return_value=roster), \
+             patch.object(team_routes, "avatar_data_url", side_effect=inlined.get) as inline:
+            body = app.test_client().get("/staff/42/card.svg").get_data(as_text=True)
+        inline.assert_any_call("https://cdn.discordapp.com/avatar-decoration-presets/a.png")
+        self.assertIn('href="data:image/png;base64,DECO"', body)
+
     def test_activity_changes_between_requests(self):
         first_member = member(activities=[SPOTIFY_ACTIVITY])
         second_member = member(activities=[GAME_ACTIVITY])
@@ -332,8 +347,21 @@ class StatusIconTests(unittest.TestCase):
         # The notch is cut out of the avatar, not painted over it, and the phone
         # is narrower than the round dot it replaces.
         self.assertIn('<mask id="staff-avatar-hole">', svg)
-        self.assertIn('<rect x="104" y="100" width="24" height="32" rx="8" fill="black"/>', svg)
         self.assertIn('<g mask="url(#staff-avatar-hole)">', svg)
+        notch = re.search(
+            r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" '
+            r'rx="([\d.]+)" fill="black"/>', svg,
+        )
+        self.assertIsNotNone(notch)
+        x, y, width, height, radius = (float(value) for value in notch.groups())
+        corner = staff_card.AVATAR_CENTER + staff_card.AVATAR_RADIUS
+        # The site's proportions: 0.665 of the icon plus the 12% gap, and the
+        # notch still ends flush with the avatar's bottom-right corner.
+        self.assertAlmostEqual(width, staff_card.MOBILE_NOTCH_WIDTH, places=2)
+        self.assertAlmostEqual(height, staff_card.STATUS_NOTCH_SIZE, places=2)
+        self.assertAlmostEqual(radius, width * staff_card.MOBILE_NOTCH_CORNER, places=2)
+        self.assertAlmostEqual(x + width / 2, corner - staff_card.STATUS_ICON_GAP - staff_card.STATUS_ICON_SIZE / 2, places=2)
+        self.assertAlmostEqual(y + height, corner, places=2)
 
     def test_every_mobile_status_icon_is_inlined(self):
         for status in ("online", "idle", "dnd"):
@@ -342,7 +370,14 @@ class StatusIconTests(unittest.TestCase):
 
     def test_a_desktop_presence_keeps_the_round_notch(self):
         svg = staff_card.render_staff_card(member(status="online", is_mobile=False))
-        self.assertIn('<circle cx="116" cy="116" r="16" fill="black"/>', svg)
+        notch = re.search(r'<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)" fill="black"/>', svg)
+        self.assertIsNotNone(notch)
+        cx, cy, radius = (float(value) for value in notch.groups())
+        corner = staff_card.AVATAR_CENTER + staff_card.AVATAR_RADIUS
+        # 26px of art plus the website's 12% gap, tangent to the avatar corner.
+        self.assertAlmostEqual(radius, staff_card.STATUS_NOTCH_SIZE / 2, places=2)
+        self.assertAlmostEqual(cx + radius, corner, places=2)
+        self.assertAlmostEqual(cy + radius, corner, places=2)
         self.assertNotIn(staff_card.status_icon_data_url("online_mobile"), svg)
 
     def test_hiding_the_status_leaves_the_avatar_whole(self):
@@ -404,6 +439,47 @@ class ActivityArtInliningTests(unittest.TestCase):
             staff_card.activity_art_data_url("https://i.scdn.co/image/def")
             staff_card.activity_art_data_url("https://i.scdn.co/image/def")
         self.assertEqual(fetch.call_count, 1)
+
+
+class AvatarDecorationTests(unittest.TestCase):
+    """The decoration is drawn the way the website draws it, and cut with it."""
+
+    def render(self, member_data, **kwargs):
+        kwargs.setdefault("avatar_data_url", "data:image/png;base64,AAAA")
+        kwargs.setdefault("avatar_decoration_data_url", "data:image/png;base64,REVJ")
+        return staff_card.render_staff_card(member_data, **kwargs)
+
+    def test_decoration_is_drawn_on_discords_1_2x_canvas(self):
+        svg = self.render(member())
+        size = staff_card.AVATAR_RADIUS * 2 * staff_card.DECORATION_SCALE
+        self.assertIn('href="data:image/png;base64,REVJ"', svg)
+        self.assertIn(f'width="{size:.2f}" height="{size:.2f}"', svg)
+
+    def test_the_status_notch_is_cut_out_of_the_decoration_too(self):
+        svg = self.render(member(status="online"))
+        # The website masks the avatar and the decoration as one layer; the card
+        # does the same, so both end up inside the masked group.
+        group = svg.split('<g mask="url(#staff-avatar-hole)">', 1)[1].split("</g>", 1)[0]
+        self.assertIn('href="data:image/png;base64,AAAA"', group)
+        self.assertIn('href="data:image/png;base64,REVJ"', group)
+
+    def test_the_decoration_is_drawn_over_the_avatar(self):
+        svg = self.render(member())
+        self.assertLess(svg.index("base64,AAAA"), svg.index("base64,REVJ"))
+
+    def test_a_decoration_without_an_avatar_is_not_drawn(self):
+        svg = staff_card.render_staff_card(
+            member(), avatar_data_url=None, avatar_decoration_data_url="data:image/png;base64,REVJ",
+        )
+        self.assertNotIn("REVJ", svg)
+        self.assertIn(">N</text>", svg)
+
+    def test_no_decoration_leaves_a_single_image(self):
+        svg = staff_card.render_staff_card(
+            member(), avatar_data_url="data:image/png;base64,AAAA", show_status=False,
+        )
+        self.assertEqual(svg.count("<image "), 1)
+        self.assertNotIn('preserveAspectRatio="xMidYMid meet"', svg)
 
 
 class AvatarInliningTests(unittest.TestCase):
