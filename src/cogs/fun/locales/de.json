@@ -295,8 +295,7 @@
     "boring_hint": "-# Vielleicht probierst du `{prefix}notboring`?",
     "notboring_title": "### ☕ Ich habe gelogen.",
     "notboring_body": "Dieser Befehl ist tatsächlich ziemlich langweilig.",
-    "notboring_footer": "-# Bitte verzeih mir 😭",
-    "crazy_body": "### ☕ Verrückt?\nVerrückt? Ich war mal verrückt. Sie sperrten mich in einen Raum. Einen Gummiraum. Einen Gummiraum mit Ratten. Und Ratten machen mich verrückt.\n\nVerrückt? Ich war mal verrückt. Sie sperrten mich in einen Raum. Einen Gummiraum. Einen Gummiraum mit Ratten. Und Ratten machen mich verrückt.\n\nVerrückt? Ich war mal verrückt..."
+    "notboring_footer": "-# Bitte verzeih mir 😭"
   },
   "commands": {
     "Roleplay.name": "Rollenspiel",

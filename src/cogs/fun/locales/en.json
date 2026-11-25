@@ -295,8 +295,7 @@
     "boring_hint": "-# Maybe try `{prefix}notboring`?",
     "notboring_title": "### ☕ I lied.",
     "notboring_body": "This command is actually in fact quite boring.",
-    "notboring_footer": "-# Please forgive me 😭",
-    "crazy_body": "### ☕ Crazy?\nCrazy? I was crazy once. They locked me in a room. A rubber room. A rubber room with rats. And rats make me crazy.\n\nCrazy? I was crazy once. They locked me in a room. A rubber room. A rubber room with rats. And rats make me crazy.\n\nCrazy? I was crazy once..."
+    "notboring_footer": "-# Please forgive me 😭"
   },
   "commands": {
     "Roleplay.name": "Roleplay",

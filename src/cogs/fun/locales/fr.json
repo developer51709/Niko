@@ -46,8 +46,7 @@
     "boring_hint": "-# Essaie peut-être `{prefix}notboring` ?",
     "notboring_title": "### ☕ J'ai menti.",
     "notboring_body": "Cette commande est en fait assez ennuyeuse.",
-    "notboring_footer": "-# Pardonne-moi 😭",
-    "crazy_body": "### ☕ Fou ?\nFou ? Je l'ai été autrefois. Ils m'ont enfermé dans une pièce. Une pièce capitonnée. Une pièce capitonnée avec des rats. Et les rats me rendent fou.\n\nFou ? Je l'ai été autrefois. Ils m'ont enfermé dans une pièce. Une pièce capitonnée. Une pièce capitonnée avec des rats. Et les rats me rendent fou.\n\nFou ? Je l'ai été autrefois..."
+    "notboring_footer": "-# Pardonne-moi 😭"
   },
   "roleplay_strings": {
     "need_mention": "Tu dois mentionner quelqu'un pour lui appliquer cette commande !",

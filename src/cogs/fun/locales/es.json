@@ -295,8 +295,7 @@
     "boring_hint": "-# ¿Quizá pruebas `{prefix}notboring`?",
     "notboring_title": "### ☕ Te mentí.",
     "notboring_body": "Este comando es, de hecho, bastante aburrido.",
-    "notboring_footer": "-# Perdóname 😭",
-    "crazy_body": "### ☕ ¿Loco?\n¿Loco? Una vez estuve loco. Me encerraron en una habitación. Una habitación acolchada. Una habitación acolchada con ratas. Y las ratas me vuelven loco.\n\n¿Loco? Una vez estuve loco. Me encerraron en una habitación. Una habitación acolchada. Una habitación acolchada con ratas. Y las ratas me vuelven loco.\n\n¿Loco? Una vez estuve loco..."
+    "notboring_footer": "-# Perdóname 😭"
   },
   "commands": {
     "Roleplay.name": "Juego de rol",

@@ -17,6 +17,8 @@ msg = make_flat_msg(MESSAGES)
 # ephemeral "accept" response.
 NITRO_GIF_URL = "https://c.tenor.com/ARL3mp1NaXYAAAAd/tenor.gif"
 RICKROLL_GIF_URL = f"{WEBSITE}/assets/rick.gif"
+# `/crazy` answers with this looping transparent scroll instead of a text wall.
+CRAZY_GIF_URL = f"{WEBSITE}/assets/crazy.gif"
 
 
 class NitroAcceptButton(discord.ui.DynamicItem[discord.ui.Button], template=r"isitnitro"):
@@ -119,7 +121,9 @@ class FunCog(commands.Cog):
         """Crazy? I was crazy once..."""
         view = discord.ui.LayoutView()
         view.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(content=msg(ctx, "crazy_body"))
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(media=CRAZY_GIF_URL),
+            ),
         ))
         await ctx.send(view=view)
 
