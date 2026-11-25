@@ -1724,11 +1724,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .dashboard-layout .economy-headline { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line-soft); }
 .dashboard-layout .economy-headline strong { display: block; font-size: 30px; line-height: 1.1; letter-spacing: -.02em; }
 .dashboard-layout .economy-headline small { display: block; margin-top: 6px; color: var(--dim); font-size: 10px; }
-/* The two headline pills reuse the achievement chips at a smaller scale — they
-   sit beside the net-worth figure rather than carrying a row of their own. */
-.dashboard-layout .economy-headline .achievement-chip { gap: 5px; padding: 4px 9px; font-size: 9px; }
-.dashboard-layout .economy-headline .achievement-chip strong { font-size: 10px; }
-.dashboard-layout .economy-headline .achievement-chip .icon { width: 12px; height: 12px; }
+/* The two headline pills are the achievements page's stat pills: they sit
+   beside the net-worth figure, so their value opts out of the headline's own
+   display-size rule and keeps the chip's label-and-value scale. */
+.dashboard-layout .economy-headline .achievement-chip strong { display: inline; font-size: 12px; line-height: 1.45; letter-spacing: normal; }
 .dashboard-layout .economy-coin { color: var(--dim); font-size: 10px; font-weight: 500; letter-spacing: .02em; }
 .dashboard-layout .economy-panel-note { margin: 14px 0 16px; color: var(--dim); font-size: 10px; line-height: 1.65; }
 .dashboard-layout .economy-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 10px; margin-top: 16px; }

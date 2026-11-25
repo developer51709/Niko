@@ -118,8 +118,10 @@ export function EconomyView({ standing }: { standing: EconomyStanding }) {
             <small>{t("economy.walletSplit", { wallet: formatNumber(standing.balance), vault: formatNumber(standing.bank) })}</small>
           </div>
           <div className="achievement-summary-chips">
-            <span className="achievement-chip"><Icon name="chart" /><strong>{t("economy.globalRankChip", { rank: rankLabel(standing.global_rank, standing.account_count, t) })}</strong></span>
-            <span className="achievement-chip"><Icon name="guild_achievements" /><strong>{t("economy.badgesOf", { unlocked: formatNumber(standing.achievements_unlocked), total: formatNumber(standing.achievements_total) })}</strong></span>
+            {/* Same pill as the achievements page's top stats: a label beside a
+                bright value, so the two tabs read as one family. */}
+            <span className="achievement-chip"><Icon name="chart" />{t("economy.globalRank")} <AnimatedValue value={standing.global_rank ?? 0}>{rankLabel(standing.global_rank, standing.account_count, t)}</AnimatedValue></span>
+            <span className="achievement-chip"><Icon name="guild_achievements" />{t("economy.badgesLabel")} <AnimatedValue value={`${standing.achievements_unlocked}/${standing.achievements_total}`}>{formatNumber(standing.achievements_unlocked)} / {formatNumber(standing.achievements_total)}</AnimatedValue></span>
           </div>
         </div>
         <div className="economy-stat-grid">
