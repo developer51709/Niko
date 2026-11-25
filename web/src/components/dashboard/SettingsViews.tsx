@@ -17,7 +17,7 @@ import { clearToasts, notifyError, notifyLoading, notifySuccess } from "../../ut
 import { Trash2, X } from "lucide-react";
 import type { GlobalProfile, GuildConfig, GuildResources, GuildProfile, GuildTicketsResponse, PresetFilter } from "../../types";
 import { DashHeading } from "./DashboardViews";
-import { navigate } from "../../router";
+import { navigate, siteHref } from "../../router";
 import { useStrings } from "../../i18n";
 
 // Only the in-flight flag belongs in state now: every result is announced with a
@@ -183,7 +183,7 @@ export function TicketsView({ guildId, config, resources, csrfToken }: { guildId
         <SettingsSectionTitle label={t("tickets.historyLabel")} title={t("tickets.historyTitle")} detail={t("tickets.historyDetail")} icon="book" />
         {ticketError ? <div className="empty-state"><p>{t("tickets.transcriptsUnavailable")}</p></div>
           : loadingTickets ? <div className="empty-state"><p>{t("tickets.loadingTranscripts")}</p></div>
-          : data?.transcripts.length ? <div className="ticket-admin-list">{data.transcripts.map((transcript) => <article className="ticket-admin-row" key={transcript.transcript_id}><div><strong>#{transcript.channel_name}</strong><small>{t("tickets.transcriptMeta", { category: transcript.category, opener: transcript.opener_id, count: transcript.message_count, date: new Date(transcript.created_at).toLocaleString() })}</small></div><a className="button button-secondary button-small" href={transcript.url} target="_blank" rel="noreferrer">{t("tickets.viewTranscript")}</a></article>)}</div>
+          : data?.transcripts.length ? <div className="ticket-admin-list">{data.transcripts.map((transcript) => <article className="ticket-admin-row" key={transcript.transcript_id}><div><strong>#{transcript.channel_name}</strong><small>{t("tickets.transcriptMeta", { category: transcript.category, opener: transcript.opener_id, count: transcript.message_count, date: new Date(transcript.created_at).toLocaleString() })}</small></div><a className="button button-secondary button-small" href={siteHref(transcript.url)} target="_blank" rel="noreferrer">{t("tickets.viewTranscript")}</a></article>)}</div>
           : <div className="empty-state"><p>{t("tickets.noTranscripts")}</p></div>}
       </section>
     </form>

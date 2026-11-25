@@ -23,6 +23,20 @@ def _shell(client, path: str, base_url: str = "https://dash.niko.sryze.cc"):
     return client.get(path, base_url=base_url, headers={"Accept": "text/html"})
 
 
+def test_the_tickets_view_opens_transcripts_on_the_main_domain():
+    # Transcripts are pages of the site, not of the dashboard, so on `dash.` the
+    # link has to leave the section host. The API sends an apex path and the
+    # client's siteHref turns that into the site's own origin.
+    settings = (Path(__file__).resolve().parents[1] / "web" / "src" / "components" / "dashboard" / "SettingsViews.tsx").read_text(encoding="utf-8")
+
+    assert 'href={siteHref(transcript.url)}' in settings
+    assert 'href={transcript.url}' not in settings
+    router = (Path(__file__).resolve().parents[1] / "web" / "src" / "router.ts").read_text(encoding="utf-8")
+    # siteHref is what strips the section label: an apex path becomes absolute
+    # against the site's own host, while the section's own subtree stays short.
+    assert "return `${window.location.protocol}//${apexHost()}${path}`;" in router
+
+
 def test_the_switch_is_off_unless_it_is_set(monkeypatch):
     monkeypatch.setattr(config, "SUBDOMAIN_ROUTING", False)
     monkeypatch.setenv("PUBLIC_URL", "https://niko.sryze.cc")
