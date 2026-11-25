@@ -13,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import discord
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -122,16 +123,97 @@ def test_a_failed_creator_lookup_does_not_fall_back_to_a_mention():
     assert "**Developer:** Unavailable" in text
 
 
-def test_both_cards_accept_the_same_creator_lookup():
+@pytest.fixture(autouse=True)
+def _no_website_calls(monkeypatch):
+    """Never let a test reach the public team API."""
+
+    async def offline(_user_id):
+        return None
+
+    _about._staff_profile_cache.clear()
+    monkeypatch.setattr(_about, "_fetch_staff_profile", offline)
+    yield
+    _about._staff_profile_cache.clear()
+
+
+#: What `GET /api/team/<id>` returns for the creator's public profile.
+_PROFILE = {
+    "id": str(_about.CREATOR_ID),
+    "name": "! Soren",
+    "handle": "soren.xd",
+    "avatar_url": "https://cdn.example/avatar.png",
+    "role_label": "Owner",
+    "bio": "Hi, I'm Soren, the creator and lead developer of Niko.",
+    "visible": True,
+    "card": {"accent": "EAF6FF"},
+}
+
+
+def _creator_card(profile=None, *, creator=None):
+    """Render /creator with the staff profile the website would return."""
+    _about._staff_profile_cache[_about.CREATOR_ID] = (time.monotonic(), profile)
     cog = _about.AboutMixin()
-    cog.bot = _bot(_creator())
+    cog.bot = _bot(_creator() if creator is None else creator)
     ctx = _Ctx()
-
     asyncio.run(cog.creator.callback(cog, ctx))
+    return ctx.sent[-1]["view"]
 
-    creator_text = _text(ctx.sent[-1]["view"])
+
+def _buttons(view):
+    """Every button component in a rendered view."""
+    found = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("type") == 2:
+                found.append(node)
+            for child in node.get("components", []):
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(view.to_components())
+    return found
+
+
+def test_both_cards_accept_the_same_creator_lookup():
+    creator_text = _text(_creator_card(_PROFILE))
+    about_text = _text(_about_body(_creator()))
+
     assert "soren" in creator_text
-    assert f"`{_about.CREATOR_ID}`" in creator_text
+    assert "soren" in about_text
+
+
+def test_the_creator_card_shows_the_public_staff_profile():
+    text = _text(_creator_card(_PROFILE))
+
+    assert f"**Role:** {_PROFILE['role_label']}" in text
+    assert _PROFILE["bio"] in text
+    # The footer opens the same public page the team directory links to.
+    assert "[View staff profile](https://niko.sryze.cc/team/soren.xd)" in text
+
+
+def test_the_creator_card_has_no_social_link_buttons():
+    # The links live on the staff profile page, so the card only points there.
+    assert _buttons(_creator_card(_PROFILE)) == []
+
+
+def test_a_hidden_staff_profile_is_neither_shown_nor_linked():
+    text = _text(_creator_card({**_PROFILE, "visible": False}))
+
+    assert "soren" in text
+    assert _PROFILE["role_label"] not in text
+    assert _PROFILE["bio"] not in text
+    # Linking to a hidden profile would only land the reader on a 404.
+    assert "/team/" not in text
+
+
+def test_a_missing_profile_still_renders_the_creator():
+    text = _text(_creator_card(None))
+
+    assert "soren" in text
+    assert "/team/" not in text
 
 
 def test_the_about_card_reports_live_figures():

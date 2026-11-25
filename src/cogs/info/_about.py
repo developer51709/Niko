@@ -1,7 +1,9 @@
 """Info — the commands about Niko itself: /about, /creator, /invite."""
 
 import time
+from urllib.parse import quote
 
+import aiohttp
 import discord
 from discord.ext import commands
 
@@ -19,6 +21,65 @@ CMDS = command_texts(__package__)
 #: name on /about is always the same person /creator opens, and changing the
 #: owner does not leave one of the two cards pointing at somebody else.
 CREATOR_ID = sorted(OWNER_IDS)[0] if OWNER_IDS else 1052690741874401360
+
+
+#: How long one fetched profile is reused. /creator is a popular card, not a
+#: dashboard, so a few minutes of staleness keeps it off the public API without
+#: anyone noticing a profile change in the same breath as saving it.
+_STAFF_PROFILE_TTL = 300
+_staff_profile_cache: dict[int, tuple[float, dict | None]] = {}
+
+
+def _profile_accent(profile: dict | None) -> discord.Colour | None:
+    """The staff profile card's accent colour, or ``None`` for the default."""
+    accent = str(((profile or {}).get("card") or {}).get("accent") or "").strip().lstrip("#")
+    if len(accent) != 6:
+        return None
+    try:
+        return discord.Colour(int(accent, 16))
+    except ValueError:
+        return None
+
+
+def _profile_url(profile: dict) -> str:
+    """The public team page for a profile: its handle, or the permanent id."""
+    handle = quote(str(profile.get("handle") or CREATOR_ID), safe="._-~")
+    return f"{links.WEBSITE}/team/{handle}"
+
+
+async def _fetch_staff_profile(user_id: int) -> dict | None:
+    """The member's public staff profile, exactly as the team page shows it.
+
+    The website already owns the roster, the role labels and the privacy rules,
+    so the card reads the same public endpoint a visitor's browser does instead
+    of guessing at the database or hardcoding a second copy of the profile.
+    """
+    timeout = aiohttp.ClientTimeout(total=4)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(f"{links.WEBSITE}/api/team/{int(user_id)}") as response:
+                if response.status != 200:
+                    return None
+                profile = await response.json(content_type=None)
+    except Exception:
+        # A slow or unreachable site must not break a command about the bot.
+        return None
+    return profile if isinstance(profile, dict) else None
+
+
+async def resolve_staff_profile(user_id: int) -> dict | None:
+    """The creator's staff profile, reused briefly so every call is not a request.
+
+    A missing profile is cached too: when a member has hidden theirs, the
+    command should not ask the website again on every invocation.
+    """
+    now = time.monotonic()
+    cached = _staff_profile_cache.get(int(user_id))
+    if cached and now - cached[0] < _STAFF_PROFILE_TTL:
+        return cached[1]
+    profile = await _fetch_staff_profile(int(user_id))
+    _staff_profile_cache[int(user_id)] = (now, profile)
+    return profile
 
 
 def _human_uptime(seconds: float, ctx) -> str:
@@ -146,47 +207,51 @@ class AboutMixin:
     )
     async def creator(self, ctx):
         creator = await resolve_creator(self.bot)
-        if creator is None:
+        profile = await resolve_staff_profile(CREATOR_ID)
+
+        # The staff profile repeats Discord's identity, so either source can
+        # name the card; only when both are missing is there nothing to show.
+        name = (creator.display_name if creator else None) or (profile or {}).get("name")
+        if not name:
             return await ctx.send(msg(ctx, "creator_unavailable"))
-        avatar_url = creator.avatar.url if creator.avatar else None
 
-        text = (
-            f"### {msg(ctx, 'creator_title')}\n"
-            f"{msg(ctx, 'creator_desc', creator=creator.display_name)}\n\n"
-            f"**{msg(ctx, 'creator_tag')}:** {creator}\n"
-            f"**{msg(ctx, 'creator_id')}:** `{creator.id}`\n"
-            f"**{msg(ctx, 'creator_project')}:** Niko All-In-One Discord Bot"
+        avatar_url = (
+            (creator.avatar.url if creator and creator.avatar else None)
+            or (profile or {}).get("avatar_url")
         )
+        # A hidden profile has no public page to link to, and its bio and role
+        # are private, so the card falls back to just the introduction.
+        listed = bool(profile and profile.get("visible"))
+        role_label = str(profile.get("role_label") or "").strip() if listed else ""
+        bio = str(profile.get("bio") or "").strip() if listed else ""
 
-        view = discord.ui.LayoutView()
+        lines = [
+            f"### {msg(ctx, 'creator_title')}",
+            msg(ctx, "creator_desc", creator=name),
+        ]
+        if bio:
+            # Quoting keeps the profile's own words distinct from the card's.
+            lines.append("\n".join(f"> {line}".rstrip() for line in bio.splitlines()))
+        if role_label:
+            lines.append(f"**{msg(ctx, 'creator_role')}:** {role_label}")
+
         container = discord.ui.Container(
             discord.ui.Section(
-                discord.ui.TextDisplay(content=text),
-                accessory=discord.ui.Thumbnail(avatar_url) if avatar_url else discord.ui.TextDisplay(content=" ")
+                discord.ui.TextDisplay(content="\n\n".join(lines)),
+                accessory=discord.ui.Thumbnail(avatar_url) if avatar_url else discord.ui.TextDisplay(content=" "),
             ),
-            discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small),
-            discord.ui.ActionRow(
-                discord.ui.Button(
-                    label=msg(ctx, "link_discord_profile"),
-                    style=discord.ButtonStyle.link,
-                    emoji=get_emoji("discord"),
-                    url=f"https://discord.com/users/{creator.id}"
-                ),
-                discord.ui.Button(
-                    label=msg(ctx, "link_github"),
-                    style=discord.ButtonStyle.link,
-                    emoji=get_emoji("github"),
-                    url="https://github.com/developer51709"
-                ),
-                discord.ui.Button(
-                    label=msg(ctx, "link_website"),
-                    style=discord.ButtonStyle.link,
-                    emoji=get_emoji("website"),
-                    url="https://soren.is-a.dev"),
-            )
+            accent_colour=_profile_accent(profile) if listed else None,
         )
+        if listed:
+            container.add_item(discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.small))
+            container.add_item(discord.ui.TextDisplay(
+                content=f"-# [{msg(ctx, 'creator_profile')}]({_profile_url(profile)})"
+            ))
+
+        view = discord.ui.LayoutView()
         view.add_item(container)
-        await ctx.send(view=view)
+        # A bio is free text, so a mention typed into it must never ping.
+        await ctx.send(view=view, allowed_mentions=discord.AllowedMentions.none())
 
     # -------------------------------
     # INVITE
