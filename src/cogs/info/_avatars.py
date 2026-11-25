@@ -24,10 +24,10 @@ def _avatar_image_view(title: str, image_url: str) -> discord.ui.LayoutView:
     return view
 
 
-def _avatar_banners_view(title: str, banners: list[tuple[str, str]]) -> discord.ui.LayoutView:
-    """One container with a labelled gallery per banner the user has."""
+def _avatar_gallery_view(title: str, images: list[tuple[str, str]]) -> discord.ui.LayoutView:
+    """One container with a labelled gallery per picture the user has."""
     children = [discord.ui.TextDisplay(content=f"### {title}")]
-    for label, image_url in banners:
+    for label, image_url in images:
         children.append(_divider())
         children.append(discord.ui.TextDisplay(content=f"**{label}**"))
         children.append(discord.ui.MediaGallery(
@@ -125,21 +125,33 @@ class _UserAvatarButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        user = interaction.client.get_user(self.user_id)
-        if user is None:
-            try:
-                user = await interaction.client.fetch_user(self.user_id)
-            except discord.HTTPException:
-                user = None
+        user = await _full_user(interaction.client, self.user_id)
         if user is None:
             return await interaction.followup.send(
                 msg(interaction, "avatar_user_gone"), ephemeral=True
             )
-        # display_avatar is never empty, so a user without an uploaded picture
-        # still gets the default avatar Discord draws for them.
+        # The account's own picture and the one this server shows can differ,
+        # the same way the banner panel shows both. Read the member rather than
+        # trusting the interaction's copy, so a server picture set after the
+        # card was posted still turns up.
+        member = await _avatar_member(interaction, self.user_id)
+        avatars = []
+        server_avatar = getattr(getattr(member, "guild_avatar", None), "url", None)
+        if server_avatar:
+            avatars.append((msg(interaction, "avatar_pfp_server"), server_avatar))
+        if user.avatar:
+            avatars.append((msg(interaction, "avatar_pfp_global"), user.avatar.url))
+        if len(avatars) > 1:
+            return await interaction.followup.send(
+                view=_avatar_gallery_view(msg(interaction, "avatar_user_button"), avatars),
+                ephemeral=True,
+            )
+        # One picture, or none: display_avatar is never empty, so a user with no
+        # uploaded picture still gets the default one Discord draws for them.
         await interaction.followup.send(
             view=_avatar_image_view(
-                msg(interaction, "avatar_user_button"), user.display_avatar.url),
+                msg(interaction, "avatar_user_button"),
+                avatars[0][1] if avatars else user.display_avatar.url),
             ephemeral=True,
         )
 
@@ -186,7 +198,7 @@ class _UserBannerButton(discord.ui.DynamicItem[discord.ui.Button], template=_AVA
                 or getattr(user, "display_name", None)
                 or getattr(user, "name", ""))
         await interaction.followup.send(
-            view=_avatar_banners_view(
+            view=_avatar_gallery_view(
                 msg(interaction, "banner_title", user=name), banners),
             ephemeral=True,
         )

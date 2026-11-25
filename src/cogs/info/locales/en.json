@@ -61,6 +61,8 @@
     "avatar_no_banner": "This user doesn't have a server or global banner.",
     "avatar_banner_server": "Server Banner",
     "avatar_banner_global": "Global Banner",
+    "avatar_pfp_server": "Server Avatar",
+    "avatar_pfp_global": "Global Avatar",
     "spotify_open_button": "Open Spotify",
     "uptime_days": "{days}d {hours}h {minutes}m",
     "uptime_hours": "{hours}h {minutes}m",

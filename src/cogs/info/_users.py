@@ -1,5 +1,7 @@
 """Info — the commands about a person: /userinfo, /avatar, /banner."""
 
+import re
+
 import discord
 from discord.ext import commands
 
@@ -12,6 +14,56 @@ from utils.command_locales import command_texts
 from utils.presence import is_mobile_presence
 
 CMDS = command_texts(__package__)
+
+_STATUS_TEXT = {
+    discord.Status.online:  ("status_online",  "Online"),
+    discord.Status.idle:    ("status_idle",    "Idle"),
+    discord.Status.dnd:     ("status_dnd",     "Do Not Disturb"),
+    discord.Status.offline: ("status_offline", "Offline"),
+}
+
+#: An emoji reference whose id is shorter than a snowflake. The config holds one
+#: of these for art the emoji sync has not uploaded yet, and sending it draws
+#: the raw ``<:name:1>`` text instead of an emoji.
+_STUB_EMOJI = re.compile(r"<a?:[A-Za-z0-9_]+:\d{1,14}>")
+
+
+def _ready_emoji(emoji_name: str):
+    """The emoji for ``emoji_name``, or ``None`` while it is still a stub."""
+    emoji = get_emoji(emoji_name)
+    if emoji is None or _STUB_EMOJI.fullmatch(emoji):
+        return None
+    return emoji
+
+
+def _presence_source(ctx, target):
+    """The copy of ``target`` that carries presence.
+
+    A slash interaction's member payload has no presence fields, so the member
+    it hands over reads as offline even while the user is online on their
+    phone. The guild cache holds the statuses the gateway last sent.
+    """
+    guild = getattr(ctx, "guild", None)
+    cached = guild.get_member(getattr(target, "id", 0)) if guild is not None else None
+    return cached or target
+
+
+def _status_line(ctx, target) -> tuple[str | None, str]:
+    """The status emoji and label to draw for ``target``.
+
+    Only online, idle and DND have a phone-shaped counterpart, and a phone-only
+    presence is the only case Discord swaps the dot for it. The phone art is
+    optional: without it the round dot is drawn rather than nothing at all.
+    """
+    presence = _presence_source(ctx, target)
+    if any(isinstance(activity, discord.Streaming) for activity in presence.activities):
+        return _ready_emoji("status_streaming"), "Streaming"
+    key, text = _STATUS_TEXT.get(presence.status, ("status_offline", "Offline"))
+    if is_mobile_presence(presence) and key != "status_offline":
+        mobile = _ready_emoji(f"{key}_mobile")
+        if mobile is not None:
+            return mobile, text
+    return _ready_emoji(key), text
 
 
 class UserMixin:
@@ -36,23 +88,7 @@ class UserMixin:
         avatar_url = target.display_avatar.url
 
         # ── Status ────────────────────────────────────────────────────────
-        is_streaming = any(isinstance(a, discord.Streaming) for a in target.activities)
-        if is_streaming:
-            status_emoji = get_emoji("status_streaming")
-            status_text = "Streaming"
-        else:
-            _status_map = {
-                discord.Status.online:  ("status_online",  "Online"),
-                discord.Status.idle:    ("status_idle",    "Idle"),
-                discord.Status.dnd:     ("status_dnd",     "Do Not Disturb"),
-                discord.Status.offline: ("status_offline", "Offline"),
-            }
-            sk, status_text = _status_map.get(target.status, ("status_offline", "Offline"))
-            # Only online, idle and DND have a phone-shaped counterpart, and a
-            # phone-only presence is the only case Discord swaps the dot for it.
-            if is_mobile_presence(target) and sk != "status_offline":
-                sk = f"{sk}_mobile"
-            status_emoji = get_emoji(sk)
+        status_emoji, status_text = _status_line(ctx, target)
 
         # ── Badges ────────────────────────────────────────────────────────
         disc_badges = _get_discord_badges(target)

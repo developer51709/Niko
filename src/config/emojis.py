@@ -572,6 +572,17 @@ def _configured_emoji(emoji_name: str):
         return "<:status_offline:1564762688951812097>"
     if emoji_name == "status_streaming":
         return "<:status_streaming:1564762696795291850>"
+    # The phone-only variants Discord swaps its dot for. The art shipped in the
+    # asset tree before the config knew about it, so /userinfo asked for emojis
+    # that had never been uploaded and drew nothing (or the literal word None).
+    # These stub ids let the sync adopt them if they exist and upload them if
+    # not; until it has, the card falls back to the round dot.
+    if emoji_name == "status_online_mobile":
+        return "<:status_online_mobile:9000001>"
+    if emoji_name == "status_idle_mobile":
+        return "<:status_idle_mobile:9000002>"
+    if emoji_name == "status_dnd_mobile":
+        return "<:status_dnd_mobile:9000003>"
 
     # Discord's account-age badges. The player and the profile popups only draw
     # the highest tier an account has reached; scripts/build-badge-art.mjs

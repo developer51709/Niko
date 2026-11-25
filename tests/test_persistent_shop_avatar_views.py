@@ -193,11 +193,25 @@ def test_userinfo_buttons_are_secondary_and_the_avatar_panel_stays_green():
     ]
 
 
-def test_the_profile_picture_button_recovers_the_user_id_and_shows_the_picture():
-    user = SimpleNamespace(display_avatar=SimpleNamespace(url="https://cdn.example/pfp.png"))
-    interaction = _avatar_interaction(
-        client=SimpleNamespace(get_user=lambda user_id: user if user_id == 321 else None),
+def _pfp_interaction(user, member=None, guild=None):
+    async def fetch_user(user_id):
+        return user
+
+    return _avatar_interaction(
+        guild=guild,
+        client=SimpleNamespace(
+            get_user=lambda user_id: user if user_id == 321 else None,
+            fetch_user=fetch_user,
+        ),
     )
+
+
+def test_the_profile_picture_button_recovers_the_user_id_and_shows_the_picture():
+    user = SimpleNamespace(
+        avatar=None,
+        display_avatar=SimpleNamespace(url="https://cdn.example/pfp.png"),
+    )
+    interaction = _pfp_interaction(user)
     match = info._UserAvatarButton(0).template.fullmatch("avatar:user:321")
     assert match is not None
     item = asyncio.run(info._UserAvatarButton.from_custom_id(None, None, match))
@@ -209,6 +223,39 @@ def test_the_profile_picture_button_recovers_the_user_id_and_shows_the_picture()
     assert interaction.response.deferred == {"ephemeral": True}
     assert interaction.followup.kwargs["ephemeral"] is True
     assert "https://cdn.example/pfp.png" in _components(interaction.followup.kwargs["view"])
+
+
+def test_the_profile_picture_button_shows_the_server_picture_too():
+    """A server picture does not replace the account's own one; both are drawn."""
+    user = SimpleNamespace(
+        avatar=SimpleNamespace(url="https://cdn.example/global.png"),
+        display_avatar=SimpleNamespace(url="https://cdn.example/global.png"),
+    )
+    member = SimpleNamespace(guild_avatar=SimpleNamespace(url="https://cdn.example/server.png"))
+    guild = SimpleNamespace(get_member=lambda user_id: member if user_id == 321 else None)
+    interaction = _pfp_interaction(user, guild=guild)
+    match = info._UserAvatarButton(0).template.fullmatch("avatar:user:321")
+    item = asyncio.run(info._UserAvatarButton.from_custom_id(None, None, match))
+    asyncio.run(item.callback(interaction))
+    components = _components(interaction.followup.kwargs["view"])
+    assert "https://cdn.example/server.png" in components
+    assert "https://cdn.example/global.png" in components
+
+
+def test_the_profile_picture_button_needs_no_labels_for_one_picture():
+    user = SimpleNamespace(
+        avatar=SimpleNamespace(url="https://cdn.example/global.png"),
+        display_avatar=SimpleNamespace(url="https://cdn.example/global.png"),
+    )
+    member = SimpleNamespace(guild_avatar=None)
+    guild = SimpleNamespace(get_member=lambda user_id: member if user_id == 321 else None)
+    interaction = _pfp_interaction(user, guild=guild)
+    match = info._UserAvatarButton(0).template.fullmatch("avatar:user:321")
+    item = asyncio.run(info._UserAvatarButton.from_custom_id(None, None, match))
+    asyncio.run(item.callback(interaction))
+    components = _components(interaction.followup.kwargs["view"])
+    assert "https://cdn.example/global.png" in components
+    assert "Global Avatar" not in components
 
 
 def test_the_avatar_registry_registers_every_pattern_once():
