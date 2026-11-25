@@ -451,7 +451,11 @@ class ProfilePopupPresenceTests(unittest.TestCase):
         self.assertIn(".discord-profile-status.is-expanded { z-index: 4; }", styles)
         self.assertIn(".discord-profile-status.is-expanded .discord-profile-status-text { position: absolute;", styles)
         overlay = styles.split(".discord-profile-status.is-expanded .discord-profile-status-text {", 1)[1].split("}", 1)[0]
-        self.assertIn("top: -10px; left: -12px; right: -12px;", overlay)
+        # Zero offsets matter: the containing block already spans the bubble's
+        # whole card, so any negative inset would widen the panel beyond it.
+        self.assertIn("top: 0; left: 0; right: 0;", overlay)
+        self.assertNotIn("-10px", overlay)
+        self.assertNotIn("-12px", overlay)
         # Only the length grows: the overlay is pinned to the bubble's width, so
         # a longer status adds lines instead of inflating the box.
         self.assertNotIn("max-content", overlay)

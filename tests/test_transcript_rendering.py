@@ -494,7 +494,11 @@ def test_an_expanded_status_overlays_instead_of_resizing_the_transcript_card():
     assert ".discord-profile-status.is-expanded { z-index: 4; }" in page
     assert ".discord-profile-status.is-expanded .discord-profile-status-text { position: absolute;" in page
     overlay = page.split(".discord-profile-status.is-expanded .discord-profile-status-text {", 1)[1].split("}", 1)[0]
-    assert "top: -10px; left: -12px; right: -12px;" in overlay
+    # The containing block already spans the bubble's whole card, so zero offsets
+    # keep the panel exactly its width; negative insets would widen it.
+    assert "top: 0; left: 0; right: 0;" in overlay
+    assert "-10px" not in overlay
+    assert "-12px" not in overlay
     # The overlay is pinned to the bubble's width, so expanding adds lines only.
     assert "max-content" not in overlay
     assert ".discord-profile-status-ghost { display: -webkit-box;" in page
