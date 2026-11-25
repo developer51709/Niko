@@ -58,6 +58,38 @@ STAFF_ROLE_KEYS = (
 LOG_CHANNEL_KEYS = frozenset({"logs", "member_logs", "message_logs", "channel_logs", "automod_logs"})
 LOG_ROLE_KEYS = ("owner", "head_admin", "moderator", "head_support", "partnerships_promotions_lead")
 
+# The partnership channels have their own writers, handled separately below.
+PARTNERSHIP_CHANNEL_KEYS = frozenset({"partnership_info", "partnership_ad", "partners"})
+
+# Channels that are read-only for members. Each one lists the only team roles
+# allowed to post in it — everyone else on the team keeps read access but is
+# explicitly denied sending. Without this, the blanket staff grant below would
+# let the Support Team, Moderators and Partnership Managers write in
+# #announcements, #rules and #roles despite the member-level deny.
+READ_ONLY_POSTER_KEYS = {
+    # #rules and #roles are the server's fixed reference pages; only the owner
+    # edits them.
+    "rules": ("owner",),
+    "roles": ("owner",),
+    # Official Niko updates: the owner and whoever runs the server in their
+    # absence. Team leads post through their own channels (#partnership-ad,
+    # #events) instead of here.
+    "announcements": ("owner", "head_admin"),
+    "polls": ("owner", "head_admin"),
+    "status": ("owner", "head_admin"),
+    "staff_rules": ("owner", "head_admin"),
+    "staff_announcements": ("owner", "head_admin"),
+    # Channels the bot owns the content of, with the team that answers for it.
+    "welcome": ("owner", "head_admin", "head_support"),
+    "support_guide": ("owner", "head_admin", "head_support"),
+    "tickets": ("owner", "head_admin", "head_support"),
+    "voice_panel": ("owner", "head_admin"),
+    # Event and giveaway announcements belong to the events team.
+    "events": ("owner", "head_admin", "event_coordinator"),
+    "giveaways": ("owner", "head_admin", "event_coordinator"),
+    "lottery": ("owner", "head_admin", "event_coordinator"),
+}
+
 # A team lead is a low-ranking leadership position: enough moderation to keep
 # their own group in line and handle escalations, but no administrative power.
 _LEAD_PERMISSIONS = discord.Permissions(
@@ -471,13 +503,16 @@ def _staff_channel_overwrites(guild: discord.Guild, roles: dict, everyone: disco
     """Build explicit channel permissions so category grants cannot bypass read-only policy."""
     owner_id = roles.get("owner")
     owner_role = guild.get_role(int(owner_id)) if owner_id else None
-    is_partnership_channel = key in {"partnership_info", "partnership_ad", "partners"}
+    is_partnership_channel = key in PARTNERSHIP_CHANNEL_KEYS
     overwrites = {
         everyone: _everyone_channel_overwrite(key, staff_only),
         bot_member: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True, connect=True, speak=True),
     }
     if owner_role:
         overwrites[owner_role] = discord.PermissionOverwrite(view_channel=True, send_messages=not is_partnership_channel, read_message_history=True, manage_channels=True, manage_messages=True, connect=True, speak=True)
+    # Roles already given a narrower overwrite here are left alone by the
+    # read-only pass below.
+    restricted: set[str] = set()
     if key in LOG_CHANNEL_KEYS:
         # The Logs category grants every staff role access, so the roles that do
         # not need operational logs need an explicit deny on each log channel.
@@ -488,31 +523,41 @@ def _staff_channel_overwrites(guild: discord.Guild, roles: dict, everyone: disco
             role = guild.get_role(int(role_id)) if role_id else None
             if role:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=False)
-    restricted_posts = key in {"staff_rules", "staff_announcements"}
-    if key in LOG_CHANNEL_KEYS:
-        staff_keys = LOG_ROLE_KEYS
-    elif restricted_posts:
-        staff_keys = ("owner", "head_admin")
-    else:
-        staff_keys = STAFF_ROLE_KEYS
-    if key == "events":
-        staff_keys = ("owner", "head_admin", "event_coordinator")
+                restricted.add(staff_key)
     if is_partnership_channel:
+        # Partners post their own ads; nobody else on the team writes here.
         for staff_key in ("owner", "head_admin", "moderator", "head_support", "graphic_designer", "support", "event_coordinator"):
             role_id = roles.get(staff_key)
             role = guild.get_role(int(role_id)) if role_id else None
             if role:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True)
-        staff_keys = ("partnerships_promotions_lead", "partnership_manager")
+                restricted.add(staff_key)
+        poster_keys = ("partnerships_promotions_lead", "partnership_manager")
+    elif key in LOG_CHANNEL_KEYS:
+        poster_keys = LOG_ROLE_KEYS
+    else:
+        # Ordinary team channels take every staff role; the read-only ones only
+        # the roles they belong to.
+        poster_keys = READ_ONLY_POSTER_KEYS.get(key, STAFF_ROLE_KEYS)
     if key == "staff_announcements":
         staff_id = roles.get("staff")
         staff_role = guild.get_role(int(staff_id)) if staff_id else None
         if staff_role:
             overwrites[staff_role] = discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True)
-    for staff_key in staff_keys:
+    # Read access stays for the whole team; posting does not. A staff role that
+    # is not a poster is denied sending explicitly, because a role-level allow
+    # would otherwise win over the @everyone deny on a read-only channel.
+    for staff_key in STAFF_ROLE_KEYS:
+        if staff_key in poster_keys or staff_key in restricted:
+            continue
         role_id = roles.get(staff_key)
         role = guild.get_role(int(role_id)) if role_id else None
         if role:
+            overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True, connect=True, speak=True)
+    for staff_key in poster_keys:
+        role_id = roles.get(staff_key)
+        role = guild.get_role(int(role_id)) if role_id else None
+        if role and staff_key not in restricted:
             overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, connect=True, speak=True)
     if key == "partners":
         overwrites[everyone] = discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True)

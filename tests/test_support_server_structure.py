@@ -19,7 +19,7 @@ from cogs.staff.panels import status as status_module
 from cogs.staff.staff import StaffCog
 from cogs.staff.support_setup import _panel_channel_key, _save_support_panel_record, _save_voice_master_settings, _send_support_panels, _staff_rules_panel, _support_log_channels
 from webapp.routes import team_recruitment_routes
-from cogs.staff.support_server import AGE_GROUP_ROLE_KEYS, CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, LOG_CHANNEL_KEYS, LOG_ROLE_KEYS, PRONOUN_ROLE_KEYS, ROLE_ICON_ASSETS, ROLE_PERMISSIONS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SUPPORT_ROLE_MENUS, SupportGuidePanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available, support_role_menus
+from cogs.staff.support_server import AGE_GROUP_ROLE_KEYS, CHANNEL_RENAMES, CHANNEL_SPECS, CHANNEL_TOPICS, HELP_FORUM_TAGS, LOG_CHANNEL_KEYS, LOG_ROLE_KEYS, PARTNERSHIP_CHANNEL_KEYS, PRONOUN_ROLE_KEYS, READ_ONLY_POSTER_KEYS, ROLE_ICON_ASSETS, ROLE_PERMISSIONS, ROLE_SPECS, SUPPORT_GUILD_DESCRIPTION, SUPPORT_GUILD_NAME, SUPPORT_GUILD_TAGS, SUPPORT_ROLE_MENUS, SupportGuidePanel, _adopt_renamed_channel, _everyone_channel_overwrite, _move_channel_to_category_top, _reorder_support_category_channels, _reorder_support_categories, _reorder_support_roles, _staff_channel_overwrites, apply_role_icons, apply_support_guild_branding, assign_join_roles, assign_support_roles, create_support_invite, get_support_invite, persist_support_ids, role_icons_available, support_role_menus
 from cogs.automod import mrbeast_scam
 from database import MongoPool, SQLitePool
 
@@ -112,7 +112,8 @@ class SupportServerStructureTests(unittest.TestCase):
                 self.assertFalse(overwrites[everyone].send_messages)
         events = _staff_channel_overwrites(guild, role_map, everyone, bot_member, "events", False)
         self.assertFalse(events[everyone].send_messages)
-        self.assertNotIn(roles[5], events)
+        self.assertFalse(events[roles[5]].send_messages)
+        self.assertTrue(events[roles[5]].view_channel)
         self.assertTrue(events[roles[6]].send_messages)
         staff_posts = _staff_channel_overwrites(guild, role_map, everyone, bot_member, "staff_announcements", True)
         self.assertFalse(staff_posts[roles[7]].send_messages)
@@ -121,8 +122,50 @@ class SupportServerStructureTests(unittest.TestCase):
         guidelines = _staff_channel_overwrites(guild, role_map, everyone, bot_member, "staff_rules", True)
         self.assertTrue(guidelines[roles[1]].send_messages)
         self.assertTrue(guidelines[roles[2]].send_messages)
-        self.assertNotIn(roles[5], guidelines)
+        self.assertFalse(guidelines[roles[5]].send_messages)
         self.assertEqual(ROLE_SPECS["staff"][1:], (0, False))
+
+    def test_read_only_channels_only_allow_their_own_poster_roles(self):
+        role_ids = {key: index + 1 for index, key in enumerate(ROLE_SPECS)}
+        roles = {key: discord.Object(id=value) for key, value in role_ids.items()}
+        by_id = {role.id: role for role in roles.values()}
+        everyone = discord.Object(id=999)
+        bot_member = discord.Object(id=998)
+        guild = SimpleNamespace(get_role=lambda role_id: by_id.get(role_id))
+        team_keys = (
+            "head_admin", "moderator", "head_support", "graphic_designer", "support",
+            "event_coordinator", "partnerships_promotions_lead", "partnership_manager",
+        )
+
+        # #rules and #roles are the owner's reference pages; the team can read
+        # them but never write in them.
+        for channel in ("rules", "roles"):
+            with self.subTest(channel=channel):
+                overwrites = _staff_channel_overwrites(guild, role_ids, everyone, bot_member, channel, False)
+                self.assertTrue(overwrites[roles["owner"]].send_messages)
+                for role_key in team_keys:
+                    self.assertFalse(overwrites[roles[role_key]].send_messages, role_key)
+                    self.assertTrue(overwrites[roles[role_key]].view_channel, role_key)
+
+        announcements = _staff_channel_overwrites(guild, role_ids, everyone, bot_member, "announcements", False)
+        for role_key in team_keys:
+            if role_key == "head_admin":
+                continue
+            with self.subTest(role=role_key):
+                self.assertFalse(announcements[roles[role_key]].send_messages, role_key)
+        self.assertTrue(announcements[roles["owner"]].send_messages)
+        self.assertTrue(announcements[roles["head_admin"]].send_messages)
+
+        # A channel members cannot post in needs a poster list, otherwise the
+        # blanket staff grant hands it back to the whole team.
+        for channel, (_category, _name, _kind, staff_only) in CHANNEL_SPECS.items():
+            if _everyone_channel_overwrite(channel, staff_only).send_messages:
+                continue
+            with self.subTest(channel=channel):
+                self.assertTrue(
+                    channel in READ_ONLY_POSTER_KEYS or channel in PARTNERSHIP_CHANNEL_KEYS,
+                    f"{channel} is read-only but has no poster role list",
+                )
 
     def test_log_channels_exclude_support_team_and_partnership_managers(self):
         role_ids = {key: index for index, key in enumerate(ROLE_SPECS, 1)}
