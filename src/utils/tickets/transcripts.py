@@ -1324,7 +1324,7 @@ def export_html(messages: List[dict], metadata: dict, mention_names: dict | None
      cancel the bubble's padding, which is where an absolutely positioned
      child is placed. */
   .discord-profile-status.is-expanded {{ z-index: 4; }}
-  .discord-profile-status.is-expanded .discord-profile-status-text {{ position: absolute; z-index: 1; top: -10px; left: -12px; display: block; width: max-content; max-width: min(18rem, calc(100vw - 4rem)); max-height: 50vh; overflow-y: auto; padding: 10px 12px; background: inherit; border-radius: 10px; box-shadow: 0 18px 42px rgb(0 0 0 / .55); -webkit-line-clamp: unset; }}
+  .discord-profile-status.is-expanded .discord-profile-status-text {{ position: absolute; z-index: 1; top: -10px; left: -12px; right: -12px; display: block; max-height: 50vh; overflow-y: auto; padding: 10px 12px; background: inherit; border-radius: 10px; box-shadow: 0 18px 42px rgb(0 0 0 / .55); -webkit-line-clamp: unset; }}
   .discord-profile-status-emoji {{ display: inline-block; width: 16px; height: 16px; margin-right: 6px; object-fit: contain; vertical-align: -.2em; }}
   .discord-profile-status.is-emoji-only {{ display: grid; place-items: center; flex: 0 0 auto; width: 88px; height: 80px; padding: 0; border-radius: 12px; }}
   .discord-profile-status.is-emoji-only::before {{ top: -13px; left: 12px; width: 30px; height: 30px; }}

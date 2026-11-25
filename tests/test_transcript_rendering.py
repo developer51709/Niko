@@ -493,7 +493,10 @@ def test_an_expanded_status_overlays_instead_of_resizing_the_transcript_card():
     # the same overlay rule the website uses: the text floats, the bubble stays.
     assert ".discord-profile-status.is-expanded { z-index: 4; }" in page
     assert ".discord-profile-status.is-expanded .discord-profile-status-text { position: absolute;" in page
-    assert "top: -10px; left: -12px;" in page
+    overlay = page.split(".discord-profile-status.is-expanded .discord-profile-status-text {", 1)[1].split("}", 1)[0]
+    assert "top: -10px; left: -12px; right: -12px;" in overlay
+    # The overlay is pinned to the bubble's width, so expanding adds lines only.
+    assert "max-content" not in overlay
     assert ".discord-profile-status-ghost { display: -webkit-box;" in page
     assert "visibility: hidden; }" in page
     # The hidden clamped copy is what keeps the bubble (and the avatar) in place.

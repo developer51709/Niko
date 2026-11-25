@@ -450,8 +450,12 @@ class ProfilePopupPresenceTests(unittest.TestCase):
         # footprint, so the avatar and everything under it stay where they were.
         self.assertIn(".discord-profile-status.is-expanded { z-index: 4; }", styles)
         self.assertIn(".discord-profile-status.is-expanded .discord-profile-status-text { position: absolute;", styles)
-        self.assertIn("top: -10px; left: -12px;", styles)
-        self.assertIn("max-height: 50vh; overflow-y: auto;", styles)
+        overlay = styles.split(".discord-profile-status.is-expanded .discord-profile-status-text {", 1)[1].split("}", 1)[0]
+        self.assertIn("top: -10px; left: -12px; right: -12px;", overlay)
+        # Only the length grows: the overlay is pinned to the bubble's width, so
+        # a longer status adds lines instead of inflating the box.
+        self.assertNotIn("max-content", overlay)
+        self.assertIn("max-height: 50vh; overflow-y: auto;", overlay)
         self.assertNotIn(".discord-profile-status.is-expanded { position: absolute;", styles)
         # A hidden clamped copy stays in flow, so the bubble keeps its size and
         # a long status cannot pull the avatar or the rows below it around.
